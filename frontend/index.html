@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PitchLog — 유럽 클럽축구 데이터 플랫폼</title>
+    <meta name="description" content="EPL, La Liga, Bundesliga, Serie A, Ligue 1, Champions League 경기·팀·선수 통계를 한곳에서." />
+    <!-- 테마 깜빡임 방지: 저장된 다크 모드 설정을 JS 로드 전에 적용 -->
+    <script>
+      try {
+        if (localStorage.getItem('pitchlog-theme') === 'dark') {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) { /* 저장소 접근 불가 시 라이트 유지 */ }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ── 라이트 모드 (기본) ── */
+  :root {
+    --background:          210 20% 97%;   /* #f5f7fa */
+    --foreground:          222 47% 11%;   /* #0f172a */
+    --card:                0 0% 100%;
+    --card-foreground:     222 47% 11%;
+    --popover:             0 0% 100%;
+    --popover-foreground:  222 47% 11%;
+    --primary:             142 72% 29%;   /* green-700 — 흰 배경 대비 확보 */
+    --primary-foreground:  0 0% 100%;
+    --secondary:           210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted:               210 40% 96%;
+    --muted-foreground:    215 16% 47%;   /* #64748b */
+    --accent:              210 40% 94%;
+    --accent-foreground:   222 47% 11%;
+    --destructive:         0 72% 51%;     /* #dc2626 */
+    --destructive-foreground: 0 0% 100%;
+    --border:              214 32% 91%;   /* #e2e8f0 */
+    --input:               214 32% 91%;
+    --ring:                142 72% 29%;
+    --radius:              0.5rem;
+  }
+
+  /* ── 다크 모드 ── */
+  .dark {
+    --background:          222 47% 9%;
+    --foreground:          210 40% 98%;
+    --card:                222 47% 11%;
+    --card-foreground:     210 40% 98%;
+    --popover:             222 47% 9%;
+    --popover-foreground:  210 40% 98%;
+    --primary:             142 70% 45%;   /* green-500 */
+    --primary-foreground:  144 100% 5%;
+    --secondary:           217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted:               217 33% 17%;
+    --muted-foreground:    215 20% 65%;
+    --accent:              217 33% 20%;
+    --accent-foreground:   210 40% 98%;
+    --destructive:         0 84% 60%;     /* #ef4444 */
+    --destructive-foreground: 210 40% 98%;
+    --border:              215 28% 17%;
+    --input:               215 28% 17%;
+    --ring:                142 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+}
+
+@layer utilities {
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
