@@ -1,0 +1,31 @@
+# PowerPoint 생성·검수 임시 산출물
+.ppt-build/
+.tmp_*/
+tmp/
+*.inspect.ndjson
+slide-*.png
+
+# 운영체제 및 편집기 임시 파일
+.DS_Store
+Thumbs.db
+~$*.pptx
+*.tmp
+
+# 프론트엔드
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.next/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# 발표 자료 바이너리 (저장소 미포함, 로컬/Release 로 관리)
+*.pptx
+
+# 로컬 백업 아카이브
+_v.tgz
+*.tgz
+
+# 에이전트 로컬 설정
+.claude/settings.local.json
