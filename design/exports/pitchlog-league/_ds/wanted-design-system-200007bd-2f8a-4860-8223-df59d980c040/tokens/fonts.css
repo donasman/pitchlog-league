@@ -1,0 +1,36 @@
+/* Wanted Design System — webfonts.
+   The .fig references "Pretendard JP" (product UI) and "Wanted Sans" (brand / logotype).
+   No binaries ship inside the Figma file, so both are loaded from their official
+   open-source CDN builds. Family names match the .fig exactly.
+
+   Pretendard JP: the upstream dynamic-subset stylesheet works as published and is
+   imported as-is. Verified served, not falling back: with the subsets forced to
+   load, weights 300-800 each measure a different glyph advance from the fallback
+   stack (900 does fall back, but nothing in this system asks for it — no token or
+   component uses fontWeight 900). It stays an @import on purpose: the ~1071
+   unicode-range subsets load only the glyphs a page actually uses, whereas the
+   single complete variable binary
+   (packages/pretendard-jp/dist/web/variable/woff2/PretendardJPVariable.woff2) is
+   5.1 MB and would be pulled into every card and consumer page. The design-system
+   check therefore reports no local file for this family — that is the expected
+   "served by a remote stylesheet" case, not a missing font.
+
+   Wanted Sans Variable: the upstream stylesheet declares its source as
+   format("woff2-variations"), which Chrome and other Blink browsers reject — the
+   face silently never loads and the brand type falls back to system sans. So the
+   @font-face is declared here by hand against the same CDN binary with
+   format("woff2"), which loads correctly. Do NOT swap this back to the upstream
+   @import.
+
+   To self-host, point both rules at your own binaries and keep the family names
+   byte-identical. */
+
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-jp-dynamic-subset.min.css");
+
+@font-face{font-family:"Wanted Sans Variable";font-style:normal;font-display:swap;font-weight:400 1000;src:url("https://cdn.jsdelivr.net/gh/wanteddev/wanted-sans@v1.0.1/packages/wanted-sans/fonts/webfonts/variable/complete/woff2/WantedSansVariable.woff2") format("woff2")}
+
+:root{
+  --font-core:"Pretendard JP","Pretendard",-apple-system,BlinkMacSystemFont,system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-brand:"Wanted Sans Variable","Wanted Sans",var(--font-core);
+  --font-mono:"SF Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
