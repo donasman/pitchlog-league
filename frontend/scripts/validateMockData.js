@@ -22,7 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 async function loadMocks() {
   const base = path.join(__dirname, '../src/mocks')
   const toURL = f => pathToFileURL(path.join(base, f)).href
-  const [teams, matches, standings, players, competitions, matchStats, teamStats, lineups] = await Promise.all([
+  const [teams, matches, standings, players, competitions, matchStats, teamStats, lineups, overview, notifications, assistant] = await Promise.all([
     import(toURL('teams.js')),
     import(toURL('matches.js')),
     import(toURL('standings.js')),
@@ -31,8 +31,11 @@ async function loadMocks() {
     import(toURL('matchStats.js')),
     import(toURL('teamStats.js')),
     import(toURL('lineups.js')),
+    import(toURL('overview.js')),
+    import(toURL('notifications.js')),
+    import(toURL('assistant.js')),
   ])
-  return { teams, matches, standings, players, competitions, matchStats, teamStats, lineups }
+  return { teams, matches, standings, players, competitions, matchStats, teamStats, lineups, overview, notifications, assistant }
 }
 
 // ANSI 색상
@@ -65,7 +68,7 @@ function checkDuplicates(items, field, label) {
 async function main() {
   console.log('\n=== Mock Data 검증 시작 ===\n')
 
-  const { teams, matches, standings, players, competitions, matchStats, teamStats, lineups } = await loadMocks()
+  const { teams, matches, standings, players, competitions, matchStats, teamStats, lineups, overview, notifications, assistant } = await loadMocks()
 
   const TEAMS         = teams.TEAMS
   const MATCHES       = matches.MATCHES
@@ -410,6 +413,63 @@ async function main() {
     }
     const noLineup = MATCHES.length - Object.keys(LINEUPS).length
     if (bad === 0) pass(`라인업 ${Object.keys(LINEUPS).length}경기 정합성 정상 (라인업 없는 경기 ${noLineup}건 — 정상)`)
+  }
+
+  // ── 13. 새 화면 데이터 (홈 · 알림 · AI) ─────────────────────
+  console.log('\n13. 홈 · 알림 · AI 데이터 검사')
+  {
+    let bad = 0
+    const OV = overview.COMPETITION_OVERVIEW
+    const PULSE = overview.LIVE_PULSE
+
+    if (OV.length !== COMPETITIONS.length) { fail(`대회 현황 ${OV.length}건 != 대회 ${COMPETITIONS.length}개`); bad++ }
+    for (const c of OV) {
+      if (!compSlugs.has(c.slug)) { fail(`대회 현황에 없는 대회: ${c.slug}`); bad++ }
+      const realLive = MATCHES.filter(m => m.competitionSlug === c.slug &&
+                                      ['live','halftime'].includes(m.displayState)).length
+      if (c.liveCount !== realLive) { fail(`${c.slug} liveCount(${c.liveCount}) != 실제(${realLive})`); bad++ }
+      const table = STANDINGS[c.slug]
+      if (table && c.leader && c.leader.points !== table.entries[0].points) {
+        fail(`${c.slug} 선두 승점이 순위표와 다름`); bad++
+      }
+    }
+    const realPulse = MATCHES.filter(m => ['live','halftime'].includes(m.displayState)).length
+    if (PULSE.length !== realPulse) { fail(`라이브 펄스 ${PULSE.length}건 != 진행 중 경기 ${realPulse}건`); bad++ }
+    for (const p of PULSE) {
+      const m = MATCHES.find(x => x.id === p.matchId)
+      if (!m) { fail(`펄스에 없는 경기: ${p.matchId}`); bad++; continue }
+      if (p.home.score !== m.score.home || p.away.score !== m.score.away) {
+        fail(`${p.matchId} 펄스 스코어가 경기와 다름`); bad++
+      }
+    }
+
+    const NOTI = notifications.NOTIFICATIONS
+    const types = new Set(NOTI.map(n => n.type))
+    for (const t of ['kickoff','goal','fulltime','confirmed']) {
+      if (!types.has(t)) { fail(`알림 종류 누락: ${t} — 4종 모두 화면이 필요하다`); bad++ }
+    }
+    for (const n of NOTI) {
+      if (n.matchId && !matchIds.has(n.matchId)) { fail(`알림 ${n.id} 가 없는 경기 참조: ${n.matchId}`); bad++ }
+      if (n.competitionSlug && !compSlugs.has(n.competitionSlug)) { fail(`알림 ${n.id} 가 없는 대회 참조`); bad++ }
+    }
+    if (notifications.getUnreadCount() === 0) { warn('안 읽은 알림이 0건 — 배지 있는 상태를 확인할 수 없다') }
+
+    const AS = assistant.ASSISTANT_SAMPLES
+    const st = new Set(AS.map(a => a.dataStatus))
+    for (const need of ['confirmed','recheck','unanswerable']) {
+      if (!st.has(need)) { fail(`AI 샘플에 ${need} 상태가 없다 — 화면 확인 불가`); bad++ }
+    }
+    for (const a of AS) {
+      // 원칙: 숫자를 말하면 근거가 있어야 한다
+      if (a.cards.length > 0 && !a.evidence) { fail(`AI 샘플 ${a.id} 데이터 카드가 있는데 근거가 없다`); bad++ }
+      if (a.dataStatus === 'recheck' && !a.note) { fail(`AI 샘플 ${a.id} 재검증 상태인데 주의문이 없다`); bad++ }
+      if (a.dataStatus === 'unanswerable' && a.cards.length > 0) {
+        fail(`AI 샘플 ${a.id} 답할 수 없다면서 데이터 카드를 준다`); bad++
+      }
+    }
+    if (assistant.SUGGESTED_QUESTIONS.length < 3) { warn('빈 상태 예시 질문이 3개 미만') }
+
+    if (bad === 0) pass(`대회 현황 ${OV.length} · 알림 ${NOTI.length} · AI 샘플 ${AS.length} 정상`)
   }
 
   // ── 결과 ─────────────────────────────────────────────────────
