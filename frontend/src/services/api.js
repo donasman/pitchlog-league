@@ -15,6 +15,8 @@
 import { COMPETITION_OVERVIEW, LIVE_PULSE, NEXT_KICKOFF, DATA_AS_OF } from '@/mocks/overview'
 import { COMPETITIONS, SEASONS, getCompetitionBySlug } from '@/mocks/competitions'
 import { MATCHES, UCL_KNOCKOUT_TIES, getMatchById, getMatchesByCompetition, getMatchesByTeam } from '@/mocks/matches'
+import { MATCH_TEAM_STATS } from '@/mocks/matchStats'
+import { getLineup, getTopRated } from '@/mocks/lineups'
 import { STANDINGS, getStandings } from '@/mocks/standings'
 import { TEAMS, getTeamBySlug, getTeamsByCompetition } from '@/mocks/teams'
 import {
@@ -94,6 +96,21 @@ export async function fetchMatch(id) {
   const match = getMatchById(id)
   if (!match) throw new Error(`Match not found: ${id}`)
   return match
+}
+
+/**
+ * 경기 상세 + 팀 통계 + 라인업 + 평점 상위 선수
+ * 백엔드 연결 시 GET /api/matches/:id/detail 으로 대체
+ */
+export async function fetchMatchDetail(id) {
+  const match = getMatchById(id)
+  if (!match) throw new Error(`Match not found: ${id}`)
+  return {
+    match,
+    stats:    MATCH_TEAM_STATS[id] ?? null,
+    lineup:   getLineup(id),        // null = 라인업 미공개 (31경기)
+    topRated: getTopRated(id, 3),
+  }
 }
 
 // ─── 팀 ────────────────────────────────────────────────────────
