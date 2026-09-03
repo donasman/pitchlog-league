@@ -18,6 +18,7 @@ import TeamBadge from '@/components/ui/TeamBadge'
 import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
+import AskBar from '@/components/home/AskBar'
 import { toKSTTime } from '@/utils/dateFormat'
 
 /* ── 구역 색 (tokens.css --z-* 와 동일) ── */
@@ -143,18 +144,33 @@ function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
       <div className="hero-grid grid gap-6 lg:gap-10" style={{ alignItems: 'start' }}>
         {/* 왼쪽 — 말 */}
         <div style={{ display: 'grid', gap: 16, paddingTop: 8 }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 'clamp(28px, 4vw, 44px)',
-              lineHeight: 1.22,
-              fontWeight: 700,
-              letterSpacing: '-.028em',
-              color: 'var(--pl-text)',
-            }}
-          >
-            {t('home.heroHeadline')}
-          </h1>
+          {/* 워드마크 + h1 덩어리 (좁은 간격으로 한 덩어리처럼) */}
+          <div style={{ display: 'grid', gap: 6 }}>
+            <div
+              aria-hidden="true"
+              style={{
+                fontSize: 'clamp(34px, 5vw, 56px)',
+                fontWeight: 800,
+                letterSpacing: '-.03em',
+                lineHeight: 1.05,
+                color: 'var(--pl-text)',
+              }}
+            >
+              PitchLog
+            </div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 'clamp(28px, 4vw, 44px)',
+                lineHeight: 1.22,
+                fontWeight: 700,
+                letterSpacing: '-.028em',
+                color: 'var(--pl-text)',
+              }}
+            >
+              {t('home.heroHeadline')}
+            </h1>
+          </div>
           <p
             style={{
               margin: 0,
@@ -170,6 +186,8 @@ function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
             <Link to="/matches" className="pl-btn">{t('home.btnTodayMatches')}</Link>
             <Link to="/standings" className="pl-btn pl-btn-ghost">{t('home.standingsLabel')}</Link>
           </div>
+          {/* 질문하기 바 — 입력창처럼 생긴 button */}
+          <AskBar />
         </div>
 
         {/* 오른쪽 — 살아있음의 증거 */}
