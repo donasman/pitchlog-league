@@ -1,6 +1,6 @@
 # PitchLog 다음 작업 순서
 
-> 갱신: 2026-09-02 (회귀 수정 + i18n 11곳 + Mock stage 다국어화 완료)  
+> 갱신: 2026-09-03 (전체 페이지 i18n 완료 확인 · 문서 정합성 정리)  
 > 기준: 다국어 인프라(i18next) + Mock Data 균형화 + 홈/통계 UI 개선 + 브라우저 실측 회귀 수정
 
 ## 1. 현재 확인된 상태
@@ -60,18 +60,20 @@
 
 ## 3. 남은 i18n 작업
 
-다음 파일은 한국어 하드코딩이 남아 있음. 영어 전환 시 한국어가 노출됨.
+**한국어 하드코딩은 해소됨.** `npm run check:i18n` 1번 항목(한국어 문자 검출)이
+오류 0건으로 통과한다. 이전에 이 표에 있던 8개 파일(`MatchPage`, `CompetitionPage`,
+`TeamPage`, `PlayerPage`, `UCLKnockoutPage`, `MatchesPage`, `matchStatus.js`,
+`LoadingSkeleton`)은 모두 화이트리스트 대상이 아니며 검사를 통과한다.
 
-| 파일 | 적용할 키 |
-|---|---|
-| `src/pages/MatchPage.jsx` | `match.tabs.*`, `match.*` (22곳) |
-| `src/pages/CompetitionPage.jsx` | `competition.tabs.*` |
-| `src/pages/TeamPage.jsx` | `team.*` |
-| `src/pages/PlayerPage.jsx` | `player.*` |
-| `src/pages/UCLKnockoutPage.jsx` | `knockout.*` |
-| `src/pages/MatchesPage.jsx` | `match.*` |
-| `src/utils/matchStatus.js` | `STATUS_LABELS` 한국어 맵 → `MatchStatusBadge` 전역 영향 |
-| `src/components/ui/LoadingSkeleton.jsx` | `aria-label` |
+남은 것은 경고 57건이다. 빌드를 막지는 않지만 정리 대상이다.
+
+| 구분 | 건수 | 내용 |
+|---|---|---|
+| 미사용 키 (죽은 키) | 51 | `header.comingSoon`, `match.statusDesc_*` 9개, `standings.legend.*` 4개, `knockout.*` 9개, `player.*`, `team.*`, `home.quickLinks`(제거된 섹션의 잔여 키) 등 |
+| `entityNames` 누락 | 6 | `boniface`, `balogun`, `benganda`, `calhanoglu`, `harit`, `maruull` — 영어 이름만 노출됨 |
+
+미사용 키는 실제로 죽은 키인지 아직 붙이지 않은 화면의 키인지 구분해야 한다.
+`match.statusDesc_*`와 `standings.legend.*`는 후자일 가능성이 높으므로 삭제 전에 확인한다.
 
 ## 4. 발표 캡처 (다음 순서)
 
