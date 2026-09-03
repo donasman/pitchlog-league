@@ -1,0 +1,87 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>PitchLog — 홈 데스크톱 레이아웃 시안</title>
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/components/core/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/styles.css">
+<link rel="stylesheet" href="pitchlog.css">
+<style>body{margin:0;background:#EBECEE;font-family:var(--font)}
+.wrap{display:flex;gap:28px;flex-wrap:wrap;padding:20px 32px 48px;align-items:flex-start}
+.ab{display:grid;gap:8px;width:var(--w)}
+.ab h4{margin:0;font-size:14px;font-weight:700}
+.ab p{margin:0;font-size:12px;line-height:1.6;opacity:.7}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;padding:3px 7px;border-radius:5px;background:rgba(112,115,124,.16);margin-right:6px}
+</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/_ds_bundle.js"></script>
+<script type="text/babel" src="pitchlog-kit.jsx"></script>
+<script type="text/babel" src="parts-2.jsx"></script>
+<script type="text/babel" src="home-3.jsx"></script>
+<script type="text/babel" src="home-3-variants.jsx"></script>
+<script type="text/babel">
+const {useState,useEffect}=React;
+function Art({item,s,onOpen}){
+  return <div className="ab" style={{"--w":1440*s+"px"}}>
+    <h4><span className="tag">{item.k}</span>{item.label}</h4>
+    <div className="scr-btn" role="button" tabIndex={0} onClick={onOpen} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpen()}}} aria-label={item.label+" 크게 보기"}>
+      <div className="frame" style={{width:1440*s,height:900*s}}>
+        <div className="scaler" ref={n=>{if(n)n.setAttribute("inert","")}} aria-hidden="true" style={{transform:`scale(${s})`,width:1440,height:900,pointerEvents:"none"}}>{item.el}</div>
+      </div>
+    </div>
+    <p>{item.note}</p>
+    <p style={{opacity:.85}}><b>맞는 경우</b> · {item.fit}</p>
+  </div>;
+}
+function Lightbox({item,close}){
+  const [s,setS]=useState(1);
+  useEffect(()=>{
+    const fit=()=>setS(Math.min((window.innerHeight-110)/900,(window.innerWidth-64)/1440,1));
+    fit();window.addEventListener("resize",fit);
+    const k=e=>{if(e.key==="Escape")close()};window.addEventListener("keydown",k);
+    return()=>{window.removeEventListener("resize",fit);window.removeEventListener("keydown",k)};
+  },[item]);
+  return <div className="ov" onClick={e=>{if(e.target.classList.contains("ov")||e.target.classList.contains("ovbody"))close()}} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(10,10,12,.74)",display:"grid",gridTemplateRows:"auto 1fr"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",color:"#fff",fontSize:14}}>
+      <b>{item.k} · {item.label}</b><span style={{opacity:.7}}>1440×900</span>
+      <button onClick={close} style={{marginLeft:"auto",font:"600 13px/1 var(--font)",padding:"9px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.08)",color:"#fff",cursor:"pointer"}}>닫기 (Esc)</button>
+    </div>
+    <div className="ovbody" style={{display:"grid",placeItems:"center",overflow:"auto",padding:"0 20px 24px"}}>
+      <div className="frame" style={{width:1440*s,height:900*s}}><div className="scaler" style={{transform:`scale(${s})`,width:1440,height:900}}>{item.el}</div></div>
+    </div>
+  </div>;
+}
+function App(){
+  const [theme,setTheme]=useState("light");
+  const [lb,setLb]=useState(null);
+  const items=[
+    {k:"A",label:"현재안 — 히어로 + 보조 2",el:<HomeDesk theme={theme}/>,
+     note:"LIVE 한 경기를 크게 세우고 오른쪽에 보조 2건. 아래 오늘의 경기 8행, 사이드바 4블록.",
+     fit:"“지금 제일 큰 경기”가 분명할 때. 빅매치 하나에 트래픽이 몰리는 날."},
+    {k:"B",label:"목록 우선 — 히어로 가로 배너",el:<HomeB theme={theme}/>,
+     note:"히어로를 한 줄 배너로 눕혀 세로를 벌고, 오늘의 경기를 9행으로 늘렸다. 요약은 배너 아래.",
+     fit:"경기 수가 많은 주중 라운드. 스캔이 목적이고 특정 경기 편애가 없을 때."},
+    {k:"C",label:"3열 — 좌측 필터 레일",el:<HomeC theme={theme}/>,
+     note:"경기 필터를 좌측 체크박스 레일로 상설화하고, 히어로 대신 동급 카드 2장. 우측은 순위·득점·UCL.",
+     fit:"필터를 자주 바꾸는 사용자. 두 개의 대회 컨트롤이 물리적으로 가장 멀리 떨어진다."},
+    {k:"D",label:"대회별 보드 — 6개 균등",el:<HomeD theme={theme}/>,
+     note:"히어로 없이 6개 대회를 같은 무게의 카드로 편다. 각 카드에 오늘 경기 2건 + 전체 보기.",
+     fit:"여러 리그를 고루 보는 사용자. “EPL만 있는 화면”이 절대 안 나온다."}
+  ];
+  return <div>
+    <div style={{position:"sticky",top:0,zIndex:10,display:"flex",gap:12,alignItems:"center",padding:"14px 32px",background:"rgba(235,236,238,.9)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(112,115,124,.22)"}}>
+      <b style={{fontSize:16}}>홈 데스크톱 레이아웃 시안 4종</b>
+      <span style={{fontSize:13,opacity:.65}}>콘텐츠·부품 동일 · 배치만 다름 · 클릭하면 실제 크기</span>
+      <span style={{marginLeft:"auto",display:"flex",gap:2,padding:3,borderRadius:999,background:"rgba(112,115,124,.16)"}}>
+        {[["light","라이트"],["dark","다크"]].map(([k,l])=><button key={k} onClick={()=>setTheme(k)} aria-pressed={theme===k} style={{border:0,padding:"7px 14px",borderRadius:999,cursor:"pointer",font:"600 13px/1 var(--font)",background:theme===k?"#3366FF":"transparent",color:theme===k?"#fff":"#171719"}}>{l}</button>)}
+      </span>
+    </div>
+    <div className="wrap">{items.map(it=><Art key={it.k} item={it} s={.46} onOpen={()=>setLb(it)}/>)}</div>
+    {lb&&<Lightbox item={lb} close={()=>setLb(null)}/>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>

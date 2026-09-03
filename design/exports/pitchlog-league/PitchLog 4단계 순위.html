@@ -1,0 +1,87 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>PitchLog — 4단계 순위</title>
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/components/core/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/styles.css">
+<link rel="stylesheet" href="pitchlog.css">
+<style>body{margin:0;background:#EBECEE;font-family:var(--font)}
+.wrap{display:flex;gap:28px;flex-wrap:wrap;padding:20px 32px 48px;align-items:flex-start}
+.ab{display:grid;gap:8px}
+.ab h4{margin:0;font-size:14px;font-weight:700}
+.ab p{margin:0;font-size:12px;line-height:1.6;opacity:.7;max-width:var(--w)}
+h3.sec{margin:0;padding:26px 32px 0;font-size:18px;font-weight:700}
+.note{padding:8px 32px 0;max-width:900px;font-size:13px;line-height:1.75;opacity:.75}
+</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/_ds_bundle.js"></script>
+<script type="text/babel" src="pitchlog-kit.jsx"></script>
+<script type="text/babel" src="parts-2.jsx"></script>
+<script type="text/babel" src="standings-4.jsx"></script>
+<script type="text/babel">
+const {useState,useEffect}=React;
+function Art({item,onOpen}){
+  return <div className="ab" style={{"--w":item.w*item.s+"px"}}>
+    <h4>{item.label}</h4>
+    <div className="scr-btn" role="button" tabIndex={0} onClick={onOpen} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpen()}}} aria-label={item.label+" 크게 보기"}>
+      <div className="frame" style={{width:item.w*item.s,height:item.h*item.s,filter:item.mono?"grayscale(1)":"none"}}>
+        <div className="scaler" ref={n=>{if(n)n.setAttribute("inert","")}} aria-hidden="true" style={{transform:`scale(${item.s})`,width:item.w,height:item.h,pointerEvents:"none"}}>{item.el}</div>
+      </div>
+    </div>
+    {item.note&&<p>{item.note}</p>}
+  </div>;
+}
+function Lightbox({item,close}){
+  const [s,setS]=useState(1);
+  useEffect(()=>{
+    const fit=()=>setS(Math.min((window.innerHeight-110)/item.h,(window.innerWidth-64)/item.w,1));
+    fit();window.addEventListener("resize",fit);
+    const k=e=>{if(e.key==="Escape")close()};window.addEventListener("keydown",k);
+    return()=>{window.removeEventListener("resize",fit);window.removeEventListener("keydown",k)};
+  },[item]);
+  return <div className="ov" onClick={e=>{if(e.target.classList.contains("ov")||e.target.classList.contains("ovbody"))close()}} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(10,10,12,.74)",display:"grid",gridTemplateRows:"auto 1fr"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",color:"#fff",fontSize:14}}>
+      <b>{item.label}</b><span style={{opacity:.7}}>{item.w}×{item.h}</span>
+      <button onClick={close} style={{marginLeft:"auto",font:"600 13px/1 var(--font)",padding:"9px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.08)",color:"#fff",cursor:"pointer"}}>닫기 (Esc)</button>
+    </div>
+    <div className="ovbody" style={{display:"grid",placeItems:"center",overflow:"auto",padding:"0 20px 24px"}}>
+      <div className="frame" style={{width:item.w*s,height:item.h*s,filter:item.mono?"grayscale(1)":"none"}}><div className="scaler" style={{transform:`scale(${s})`,width:item.w,height:item.h}}>{item.el}</div></div>
+    </div>
+  </div>;
+}
+function App(){
+  const [lb,setLb]=useState(null);
+  const items=[
+    {label:"1. 데스크톱 라이트 · EPL (1440×1180)",w:1440,h:1180,s:.44,el:<StandingsDesk theme="light"/>,
+     note:"11개 열 전부 노출. 구역은 좌측 표시선(색 + 무늬) + 4% 틴트 + 하단 범례 3중 표기. 팀 이름은 본문 색."},
+    {label:"2. 데스크톱 다크 · EPL",w:1440,h:1180,s:.44,el:<StandingsDesk theme="dark"/>},
+    {label:"3. UCL 선택 — 구역 3종",w:1440,h:820,s:.44,el:<StandingsDesk theme="light" mode="ucl" h={820}/>,
+     note:"같은 레이아웃, 구역 구성만 교체: 16강 직행 / 플레이오프 / 탈락. 리그 페이즈 단일 순위표(조 테이블 없음)."},
+    {label:"4. 모바일 라이트 (390×844)",w:390,h:844,s:.62,el:<StandingsMobile theme="light"/>,
+     note:"순위·팀 열 고정(불투명 배경 + 우측 그림자), 나머지 8개 열 가로 스크롤. 상단에 스크롤 가능 안내. 폼은 팀 상세로 넘긴다."},
+    {label:"5. 모바일 다크",w:390,h:844,s:.62,el:<StandingsMobile theme="dark"/>},
+    {label:"6. 모바일 · UCL",w:390,h:844,s:.62,el:<StandingsMobile theme="light" mode="ucl"/>},
+    {label:"7. 통과 조건 — 색을 뺀 상태 (그레이스케일)",w:1440,h:1180,s:.44,mono:true,el:<StandingsDesk theme="light"/>,
+     note:"표시선 무늬가 구역마다 다르므로(실선 / 긴 파선 / 점선 / 굵은 블록) 색이 없어도 구역 경계가 읽힙니다."}
+  ];
+  return <div>
+    <div style={{position:"sticky",top:0,zIndex:10,display:"flex",gap:12,alignItems:"center",padding:"14px 32px",background:"rgba(235,236,238,.9)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(112,115,124,.22)"}}>
+      <b style={{fontSize:16}}>PitchLog · 4단계 순위 (/standings)</b><span style={{fontSize:13,opacity:.65}}>국내 리그 ↔ UCL 같은 레이아웃 · 클릭하면 실제 크기</span>
+    </div>
+    <div className="wrap">{items.map(it=><Art key={it.label} item={it} onOpen={()=>setLb(it)}/>)}</div>
+    <h3 className="sec">모바일 11개 열 문제를 푼 방법</h3>
+    <div className="note">
+      <p><b>고정 2열 + 스크롤 8열.</b> 순위·팀은 카드와 같은 불투명 배경에 우측 1px 선과 그림자를 얹어 뒤 내용이 비치지 않게 했습니다. 나머지 열은 50px 고정폭으로 가로 스크롤합니다.</p>
+      <p><b>안내를 문구로 남깁니다.</b> 표 위 한 줄에 “좌우로 밀어 보세요”와 폼 배지가 어디로 갔는지를 함께 적었습니다. 스크롤 가능 여부를 그림자에만 맡기지 않습니다.</p>
+      <p><b>폼 배지는 모바일에서 뺐습니다.</b> 5칸을 넣으면 팀 이름이 6글자 밑으로 잘립니다. 팀 상세에서 보여줍니다.</p>
+      <p><b>색 없이도 구분됩니다.</b> 구역 표시선은 색과 함께 무늬(실선·긴 파선·점선·블록)를 다르게 하고, 범례에 같은 무늬와 순위 범위를 함께 적었습니다.</p>
+    </div>
+    {lb&&<Lightbox item={lb} close={()=>setLb(null)}/>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>

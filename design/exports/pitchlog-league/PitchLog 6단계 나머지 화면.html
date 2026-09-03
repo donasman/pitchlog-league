@@ -1,0 +1,110 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>PitchLog — 6단계 나머지 화면</title>
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/components/core/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/styles.css">
+<link rel="stylesheet" href="pitchlog.css">
+<style>body{margin:0;background:#EBECEE;font-family:var(--font)}
+.wrap{display:flex;gap:28px;flex-wrap:wrap;padding:20px 32px 48px;align-items:flex-start}
+.ab{display:grid;gap:8px}
+.ab h4{margin:0;font-size:14px;font-weight:700}
+.ab p{margin:0;font-size:12px;line-height:1.6;opacity:.7;max-width:var(--w)}
+h3.sec{margin:0;padding:26px 32px 0;font-size:18px;font-weight:700}
+</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/_ds_bundle.js"></script>
+<script type="text/babel" src="pitchlog-kit.jsx"></script>
+<script type="text/babel" src="parts-2.jsx"></script>
+<script type="text/babel" src="home-3.jsx"></script>
+<script type="text/babel" src="home-3-variants.jsx"></script>
+<script type="text/babel" src="home-3-c.jsx"></script>
+<script type="text/babel" src="home-landing.jsx"></script>
+<script type="text/babel" src="standings-4.jsx"></script>
+<script type="text/babel" src="matches-tab.jsx"></script>
+<script type="text/babel" src="screens-6a.jsx"></script>
+<script type="text/babel" src="screens-6b.jsx"></script>
+<script type="text/babel">
+const {useState,useEffect}=React;
+function Art({item,theme,onOpen}){
+  const el=item.render(theme);
+  return <div className="ab" style={{"--w":item.w*item.s+"px"}}>
+    <h4>{item.label}</h4>
+    <div className="scr-btn" role="button" tabIndex={0} onClick={()=>onOpen({...item,el})} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpen({...item,el})}}} aria-label={item.label+" 크게 보기"}>
+      <div className="frame" style={{width:item.w*item.s,height:item.h*item.s}}>
+        <div className="scaler" ref={n=>{if(n)n.setAttribute("inert","")}} aria-hidden="true" style={{transform:`scale(${item.s})`,width:item.w,height:item.h,pointerEvents:"none"}}>{el}</div>
+      </div>
+    </div>
+    {item.note&&<p>{item.note}</p>}
+  </div>;
+}
+function Lightbox({item,close}){
+  const [s,setS]=useState(1);
+  useEffect(()=>{
+    const fit=()=>setS(Math.min((window.innerHeight-110)/item.h,(window.innerWidth-64)/item.w,1));
+    fit();window.addEventListener("resize",fit);
+    const k=e=>{if(e.key==="Escape")close()};window.addEventListener("keydown",k);
+    return()=>{window.removeEventListener("resize",fit);window.removeEventListener("keydown",k)};
+  },[item]);
+  return <div className="ov" onClick={e=>{if(e.target.classList.contains("ov")||e.target.classList.contains("ovbody"))close()}} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(10,10,12,.74)",display:"grid",gridTemplateRows:"auto 1fr"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",color:"#fff",fontSize:14}}>
+      <b>{item.label}</b><span style={{opacity:.7}}>{item.w}×{item.h}</span>
+      <button onClick={close} style={{marginLeft:"auto",font:"600 13px/1 var(--font)",padding:"9px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.08)",color:"#fff",cursor:"pointer"}}>닫기 (Esc)</button>
+    </div>
+    <div className="ovbody" style={{display:"grid",placeItems:"center",overflow:"auto",padding:"0 20px 24px"}}>
+      <div className="frame" style={{width:item.w*s,height:item.h*s}}><div className="scaler" style={{transform:`scale(${s})`,width:item.w,height:item.h}}>{item.el}</div></div>
+    </div>
+  </div>;
+}
+const P1=[
+  {label:"1. 대회 허브 · EPL /competitions/premier-league",w:1440,h:1120,s:.42,render:t=><CompHub theme={t}/>,
+   note:"개요 탭: 이번 라운드 경기 → 순위 Top8(+전체 보기) → 참가 팀. 우측에 득점·도움 Top5."},
+  {label:"2. 대회 허브 · UCL — 같은 레이아웃, 섹션 구성만 다름",w:1440,h:1120,s:.42,render:t=><CompHub theme={t} ucl/>,
+   note:"UCL만 ‘녹아웃 대진’ 진입 카드와 스테이지 표기가 붙고, 참가 팀은 12팀으로 바뀝니다."},
+  {label:"3. UCL 녹아웃 · 데스크톱 — 라운드별 열",w:1440,h:1000,s:.42,render:t=><Knockout theme={t}/>,
+   note:"플레이오프 → 결승 5열. 각 타이에 1·2차전 스코어, 합산 배지, 진출 배지, 미확정은 TBD."},
+  {label:"4. UCL 녹아웃 · 모바일 — 라운드 아코디언",w:390,h:1180,s:.5,render:t=><KnockoutMobile theme={t}/>,
+   note:"가로 대진표를 버리고 라운드별 접이식으로 바꿉니다. 열린 라운드만 타이 카드를 보여주고 나머지는 헤더만."},
+  {label:"5. 통계 /stats · 데스크톱",w:1440,h:1000,s:.42,render:t=><Stats theme={t}/>,
+   note:"전체 합산 선택 시 대회별 분해(EPL 18 + UCL 3)를 행마다 표기."},
+  {label:"6. 통계 · 모바일",w:390,h:1000,s:.5,render:t=><StatsMobile theme={t}/>,
+   note:"득점·도움·카드는 탭으로, 분해는 선수 이름 아래 한 줄로."},
+  {label:"7. 팀 상세 /teams/liverpool",w:1440,h:1520,s:.42,render:t=><TeamDetail theme={t} h={1520}/>,
+   note:"참가 대회별 현재 순위 3장 + 최근 4경기 + 다음 2경기 + 스쿼드 26명 전체. 우측에 소속 리그 순위와 팀 내 득점."},
+  {label:"8. 팀 일정 /teams/liverpool/fixtures · 데스크톱",w:1440,h:820,s:.42,render:t=><TeamFixtures theme={t} h={820}/>,
+   note:"과거·미래를 한 흐름으로 두고 ‘오늘 9월 3일’ 구분선을 넣습니다. 대회 필터 기본값은 전체."},
+  {label:"9. 팀 일정 · 모바일",w:390,h:900,s:.5,render:t=><TeamFixtures theme={t} mobile h={900}/>,
+   note:"열을 날짜·상대·스코어 3개로 줄이고 상태 배지는 스코어 자리에 통합."},
+  {label:"10. 선수 상세 /players/salah",w:1440,h:900,s:.42,render:t=><PlayerDetail theme={t}/>,
+   note:"대회별 분리 행 + 마지막에 전체 합산 행. 상단 토글로 합산만 보기로 전환."}
+];
+const P2=[
+  {label:"11. 대회 목록 /competitions",w:1440,h:760,s:.42,render:t=><CompList theme={t}/>},
+  {label:"12. 팀 목록 /teams",w:1440,h:900,s:.42,render:t=><TeamList theme={t}/>,
+   note:"팀 수를 20으로 고정하지 않습니다 — 하단에 리그별 팀 수 차이를 명시."},
+  {label:"13. 404",w:1440,h:700,s:.42,render:t=><NotFound theme={t}/>}
+];
+function App(){
+  const [theme,setTheme]=useState("light");
+  const [lb,setLb]=useState(null);
+  return <div>
+    <div style={{position:"sticky",top:0,zIndex:10,display:"flex",gap:12,alignItems:"center",padding:"14px 32px",background:"rgba(235,236,238,.9)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(112,115,124,.22)"}}>
+      <b style={{fontSize:16}}>PitchLog · 6단계 나머지 화면</b>
+      <span style={{fontSize:13,opacity:.65}}>P1 10장 + P2 3장 · 새 부품 없이 조립 · 클릭하면 실제 크기</span>
+      <span style={{marginLeft:"auto",display:"flex",gap:2,padding:3,borderRadius:999,background:"rgba(112,115,124,.16)"}}>
+        {[["light","라이트"],["dark","다크"]].map(([k,l])=><button key={k} onClick={()=>setTheme(k)} aria-pressed={theme===k} style={{border:0,padding:"7px 14px",borderRadius:999,cursor:"pointer",font:"600 13px/1 var(--font)",background:theme===k?"#3366FF":"transparent",color:theme===k?"#fff":"#171719"}}>{l}</button>)}
+      </span>
+    </div>
+    <h3 className="sec">P1</h3>
+    <div className="wrap">{P1.map(it=><Art key={it.label} item={it} theme={theme} onOpen={setLb}/>)}</div>
+    <h3 className="sec">P2</h3>
+    <div className="wrap">{P2.map(it=><Art key={it.label} item={it} theme={theme} onOpen={setLb}/>)}</div>
+    {lb&&<Lightbox item={lb} close={()=>setLb(null)}/>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>

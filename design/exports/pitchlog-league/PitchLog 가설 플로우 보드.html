@@ -1,0 +1,120 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>PitchLog — 가설 플로우 보드</title>
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/components/core/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/styles.css">
+<link rel="stylesheet" href="pitchlog.css">
+<style>
+body{margin:0}
+.bh{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;padding:18px 32px;background:inherit;border-bottom:1px solid rgba(112,115,124,.22);backdrop-filter:blur(8px)}
+.hyp{padding:32px 32px 8px}
+.hyp h2{margin:0 0 6px;font-size:22px;font-weight:700;letter-spacing:-.019em}
+.meta{display:flex;gap:24px;flex-wrap:wrap;font-size:13px;opacity:.72;max-width:1100px;line-height:1.6}
+.strip{display:flex;gap:14px;align-items:flex-start;padding:20px 32px 40px;overflow-x:auto}
+.scap{display:grid;gap:6px;max-width:var(--w);content-visibility:auto;contain-intrinsic-size:auto 560px}
+.scr-btn:focus-visible{outline:2px solid #3366FF;outline-offset:3px;border-radius:16px}
+.scap b{font-size:13px;font-weight:700}
+.scap span{font-size:12px;line-height:1.5;opacity:.68}
+.tgl{margin-left:auto;display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(112,115,124,.16)}
+.tgl button{border:0;background:none;padding:7px 14px;border-radius:999px;font:600 13px/1 var(--font);cursor:pointer;color:inherit}
+.tgl button[aria-pressed="true"]{background:#3366FF;color:#fff}
+.board.dark .tgl button[aria-pressed="true"]{background:#6E93FF;color:#0B0B0D}
+.ov{position:fixed;inset:0;z-index:50;background:rgba(10,10,12,.72);display:grid;grid-template-rows:auto 1fr;backdrop-filter:blur(4px)}
+.ovbar{display:flex;align-items:center;gap:12px;padding:14px 20px;color:#fff;font-size:14px}
+.ovbar button{font:600 13px/1 var(--font);padding:9px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;cursor:pointer}
+.ovbar button:disabled{opacity:.35;cursor:default}
+.ovbody{display:grid;place-items:center;overflow:auto;padding:0 20px 28px}
+</style></head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/_ds_bundle.js"></script>
+<script type="text/babel" src="pitchlog-kit.jsx"></script>
+<script type="text/babel" src="flows-h3.jsx"></script>
+<script type="text/babel" src="flows-h4.jsx"></script>
+<script type="text/babel" src="flows-h6.jsx"></script>
+<script type="text/babel">
+const {useState,useEffect}=React;
+const SIZE={mobile:{w:390,h:844,s:.62},desktop:{w:1440,h:900,s:.34}};
+function Frame({el,device,scale,locked}){
+  const d=SIZE[device];const s=scale||d.s;
+  return <div className="frame" style={{width:d.w*s,height:d.h*s}}>
+    <div className="scaler" ref={n=>{if(n&&locked)n.setAttribute("inert","")}} aria-hidden={locked?"true":undefined} style={{transform:`scale(${s})`,width:d.w,height:d.h,pointerEvents:locked?"none":"auto"}}>{el}</div>
+  </div>;
+}
+function Arrow(){return <div className="arrow" style={{height:60}}><svg width="26" height="12" viewBox="0 0 26 12" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M0 6h23m-5-4.5L23 6l-5 4.5"/></svg></div>;}
+function Strip({flow,onOpen}){
+  return <div className="strip">
+    {flow.screens.map((s,i)=><React.Fragment key={s.label}>
+      {i>0&&<Arrow/>}
+      <div className="scap" style={{"--w":SIZE[s.device||flow.device].w*SIZE[s.device||flow.device].s+"px"}}>
+        <div className="scr-btn" role="button" tabIndex={0} onClick={()=>onOpen(flow,i)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpen(flow,i);}}} aria-label={s.label+" 크게 보기"}><Frame el={s.el} device={s.device||flow.device} locked/></div>
+        <b>{s.label}</b><span>{s.note}</span>
+      </div>
+    </React.Fragment>)}
+  </div>;
+}
+function Overlay({flow,idx,setIdx,close}){
+  const dev=flow.screens[idx].device||flow.device;
+  const d=SIZE[dev];
+  const [s,setS]=useState(1);
+  useEffect(()=>{
+    const fit=()=>setS(Math.min((window.innerHeight-150)/d.h,(window.innerWidth-80)/d.w,1));
+    fit();window.addEventListener("resize",fit);return()=>window.removeEventListener("resize",fit);
+  },[flow.id,idx]);
+  useEffect(()=>{
+    const k=e=>{if(e.key==="Escape")close();if(e.key==="ArrowRight")setIdx(i=>Math.min(i+1,flow.screens.length-1));if(e.key==="ArrowLeft")setIdx(i=>Math.max(i-1,0));};
+    window.addEventListener("keydown",k);return()=>window.removeEventListener("keydown",k);
+  },[flow.id]);
+  const sc=flow.screens[idx];
+  return <div className="ov" onClick={e=>{if(e.target.classList.contains("ov")||e.target.classList.contains("ovbody"))close();}}>
+    <div className="ovbar">
+      <b>{flow.title.split("·")[0].trim()}</b><span style={{opacity:.75}}>{sc.label}</span>
+      <span style={{marginLeft:"auto",display:"flex",gap:8}}>
+        <button onClick={()=>setIdx(Math.max(idx-1,0))} disabled={idx===0}>← 이전</button>
+        <button onClick={()=>setIdx(Math.min(idx+1,flow.screens.length-1))} disabled={idx===flow.screens.length-1}>다음 →</button>
+        <button onClick={close}>닫기 (Esc)</button>
+      </span>
+    </div>
+    <div className="ovbody"><div style={{display:"grid",gap:12,justifyItems:"center"}}>
+      <Frame el={sc.el} device={dev} scale={s}/>
+      <div style={{color:"rgba(255,255,255,.78)",fontSize:13,maxWidth:640,textAlign:"center",lineHeight:1.6}}>{sc.note}</div>
+    </div></div>
+  </div>;
+}
+function App(){
+  const [theme,setTheme]=useState("light");
+  const [open,setOpen]=useState(null);
+  const flows=[window.FLOW_H3(theme),window.FLOW_H4(theme),window.FLOW_H6(theme)];
+  const cur=open?flows.find(f=>f.id===open.id):null;
+  return <div className={"board pl "+(theme==="dark"?"dark":"")} style={{background:theme==="dark"?"#0C0C0F":"#EBECEE",color:theme==="dark"?"#EDEDEF":"#171719"}}>
+    <div className="bh" style={{background:theme==="dark"?"rgba(12,12,15,.86)":"rgba(235,236,238,.86)"}}>
+      <b style={{fontSize:17,fontWeight:700}}>PitchLog · 가설 플로우 보드</b>
+      <span style={{fontSize:13,opacity:.65}}>가설 3개 · 화면 21개 · 모바일 390×844 / 데스크톱 1440×900</span>
+      <span className="tgl">
+        <button aria-pressed={theme==="light"} onClick={()=>setTheme("light")}>라이트</button>
+        <button aria-pressed={theme==="dark"} onClick={()=>setTheme("dark")}>다크</button>
+      </span>
+    </div>
+    {flows.map(f=><section key={f.id}>
+      <div className="hyp">
+        <h2>{f.title}</h2>
+        <div className="meta"><span style={{maxWidth:620}}>{f.claim}</span><span>측정: {f.measure}</span><span>{f.device==="mobile"?"모바일 390×844":"데스크톱 1440×900"} · {f.screens.length}화면</span></div>
+      </div>
+      <Strip flow={f} onOpen={(fl,i)=>setOpen({id:fl.id,i})}/>
+    </section>)}
+    <div style={{padding:"0 32px 60px",fontSize:12,opacity:.6,lineHeight:1.7,maxWidth:900}}>
+      화면을 클릭하면 실제 크기로 열리고 ←/→ 로 플로우를 따라 이동합니다. 라이트·다크는 상단에서 전환합니다.
+      모든 화면은 1단계 파운데이션 값(브랜드 파랑, 구역 색, 배지 8종, 상태 4종, tabular-nums)을 그대로 씁니다.
+    </div>
+    {cur&&<Overlay flow={cur} idx={open.i} setIdx={v=>setOpen(o=>({...o,i:typeof v==="function"?v(o.i):v}))} close={()=>setOpen(null)}/>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body></html>

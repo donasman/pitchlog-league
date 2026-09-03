@@ -1,0 +1,88 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>PitchLog — 홈 C안 파생 시안</title>
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/components/core/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/styles.css">
+<link rel="stylesheet" href="pitchlog.css">
+<style>body{margin:0;background:#EBECEE;font-family:var(--font)}
+.wrap{display:flex;gap:28px;flex-wrap:wrap;padding:20px 32px 48px;align-items:flex-start}
+.ab{display:grid;gap:8px;width:var(--w)}
+.ab h4{margin:0;font-size:14px;font-weight:700}
+.ab p{margin:0;font-size:12px;line-height:1.6;opacity:.7}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;padding:3px 7px;border-radius:5px;background:rgba(112,115,124,.16);margin-right:6px}
+</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/_ds_bundle.js"></script>
+<script type="text/babel" src="pitchlog-kit.jsx"></script>
+<script type="text/babel" src="parts-2.jsx"></script>
+<script type="text/babel" src="home-3.jsx"></script>
+<script type="text/babel" src="home-3-variants.jsx"></script>
+<script type="text/babel" src="home-3-c.jsx"></script>
+<script type="text/babel">
+const {useState,useEffect}=React;
+function Art({item,s,onOpen}){
+  return <div className="ab" style={{"--w":1440*s+"px"}}>
+    <h4><span className="tag">{item.k}</span>{item.label}</h4>
+    <div className="scr-btn" role="button" tabIndex={0} onClick={onOpen} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpen()}}} aria-label={item.label+" 크게 보기"}>
+      <div className="frame" style={{width:1440*s,height:900*s}}>
+        <div className="scaler" ref={n=>{if(n)n.setAttribute("inert","")}} aria-hidden="true" style={{transform:`scale(${s})`,width:1440,height:900,pointerEvents:"none"}}>{item.el}</div>
+      </div>
+    </div>
+    <p>{item.note}</p>
+    <p style={{opacity:.85}}><b>차이</b> · {item.diff}</p>
+  </div>;
+}
+function Lightbox({item,close}){
+  const [s,setS]=useState(1);
+  useEffect(()=>{
+    const fit=()=>setS(Math.min((window.innerHeight-110)/900,(window.innerWidth-64)/1440,1));
+    fit();window.addEventListener("resize",fit);
+    const k=e=>{if(e.key==="Escape")close()};window.addEventListener("keydown",k);
+    return()=>{window.removeEventListener("resize",fit);window.removeEventListener("keydown",k)};
+  },[item]);
+  return <div className="ov" onClick={e=>{if(e.target.classList.contains("ov")||e.target.classList.contains("ovbody"))close()}} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(10,10,12,.74)",display:"grid",gridTemplateRows:"auto 1fr"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",color:"#fff",fontSize:14}}>
+      <b>{item.k} · {item.label}</b><span style={{opacity:.7}}>1440×900</span>
+      <button onClick={close} style={{marginLeft:"auto",font:"600 13px/1 var(--font)",padding:"9px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.08)",color:"#fff",cursor:"pointer"}}>닫기 (Esc)</button>
+    </div>
+    <div className="ovbody" style={{display:"grid",placeItems:"center",overflow:"auto",padding:"0 20px 24px"}}>
+      <div className="frame" style={{width:1440*s,height:900*s}}><div className="scaler" style={{transform:`scale(${s})`,width:1440,height:900}}>{item.el}</div></div>
+    </div>
+  </div>;
+}
+function App(){
+  const [theme,setTheme]=useState("light");
+  const [lb,setLb]=useState(null);
+  const items=[
+    {k:"C1",label:"히어로 + 메타 스트립 4칸",el:<HomeC1 theme={theme}/>,
+     note:"선택 경기를 최상단에 크게. 그 아래 4칸을 두 팀의 리그 순위·감독으로 채운다. 오늘의 경기는 2열 카드.",
+     diff:"기존 요약 4칸의 자리와 리듬을 그대로 두고 내용만 교체 — 변화가 가장 작다."},
+    {k:"C2",label:"히어로 최대 + 팀 정보 내장",el:<HomeC2 theme={theme}/>,
+     note:"순위·감독을 히어로 안 팀 이름 아래로 넣고 스트립을 없앤다. 남은 높이로 오늘의 경기를 3열 카드로.",
+     diff:"정보가 팀 옆에 붙어 시선 이동이 짧다. 대신 스코어 영역이 다소 붐빈다."},
+    {k:"C3",label:"맞대결 구도 — 좌·우 팀 카드",el:<HomeC3 theme={theme}/>,
+     note:"가운데 스코어를 두고 좌우에 팀 카드(순위·승점·감독·최근 5경기)를 세운다.",
+     diff:"두 팀을 비교하는 화면이 된다. 프리뷰·라이브 모두에서 성립하지만 세로를 많이 쓴다."},
+    {k:"C4",label:"히어로 + 우측 선택 경기 패널 · 대회별 카드 그룹",el:<HomeC4 theme={theme}/>,
+     note:"순위·감독은 우측 “선택한 경기” 패널로 빼고, 본문은 대회별로 묶은 카드 그룹.",
+     diff:"본문이 목록이 아니라 대회 보드가 된다. 6개 대회 균등 노출에 가장 유리."}
+  ];
+  return <div>
+    <div style={{position:"sticky",top:0,zIndex:10,display:"flex",gap:12,alignItems:"center",padding:"14px 32px",background:"rgba(235,236,238,.9)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(112,115,124,.22)"}}>
+      <b style={{fontSize:16}}>홈 C안 파생 시안 4종</b>
+      <span style={{fontSize:13,opacity:.65}}>좌측 필터 레일 유지 · 선택 경기 최상단 · 요약칸 = 두 팀 순위·감독 · 오늘의 경기 카드형</span>
+      <span style={{marginLeft:"auto",display:"flex",gap:2,padding:3,borderRadius:999,background:"rgba(112,115,124,.16)"}}>
+        {[["light","라이트"],["dark","다크"]].map(([k,l])=><button key={k} onClick={()=>setTheme(k)} aria-pressed={theme===k} style={{border:0,padding:"7px 14px",borderRadius:999,cursor:"pointer",font:"600 13px/1 var(--font)",background:theme===k?"#3366FF":"transparent",color:theme===k?"#fff":"#171719"}}>{l}</button>)}
+      </span>
+    </div>
+    <div className="wrap">{items.map(it=><Art key={it.k} item={it} s={.46} onOpen={()=>setLb(it)}/>)}</div>
+    {lb&&<Lightbox item={lb} close={()=>setLb(null)}/>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>
