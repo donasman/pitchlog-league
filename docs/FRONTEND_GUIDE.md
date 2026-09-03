@@ -26,7 +26,7 @@ Tailwind CSS와 shadcn/ui는 TypeScript 전용 기술이 아니므로 사용함.
 경로 별칭이 필요하면 `tsconfig.json` 대신 `jsconfig.json`을 사용함.
 
 React Server Components도 언어 자체는 JavaScript로 작성할 수 있으나, 현재 구조는
-Vite SPA와 Spring Boot API를 분리하는 방식이므로 사용하지 않음. 이는 TypeScript 미사용과
+Vite SPA와 NestJS API를 분리하는 방식이므로 사용하지 않음. 이는 TypeScript 미사용과
 무관한 아키텍처 결정임.
 
 ## 2. 현재 프론트엔드 상태
@@ -181,15 +181,15 @@ SEO 대응이 확정되기 전에는 Vite SPA만으로 검색 노출 요구사�
 | --- | --- |
 | App Router 파일 기반 라우팅 | React Router DOM에서 라우트 직접 정의 |
 | `layout`, `loading`, `error`, `not-found` 파일 규칙 | Layout·Loading·Error·NotFound 컴포넌트 직접 구성 |
-| Server Components·Server Actions | TypeScript 여부와 무관하게 현재 Vite SPA에서는 사용하지 않고 Spring Boot API로 분리 |
-| API Routes·Route Handlers | Spring Boot Controller에서 제공 |
+| Server Components·Server Actions | TypeScript 여부와 무관하게 현재 Vite SPA에서는 사용하지 않고 NestJS API로 분리 |
+| API Routes·Route Handlers | NestJS Controller에서 제공 |
 | SSR·ISR·PPR | 초기에는 CSR. 검색 노출 전에 프리렌더링 또는 SSR 재검토 |
 | `generateMetadata` | React Helmet 또는 프리렌더링 단계에서 메타데이터 구성 |
 | `sitemap.js`·`robots.js` | 정적 파일 또는 별도 생성 스크립트 사용 |
 | `next/image` | 이미지 크기 명시, lazy loading, WebP·SVG, CDN 최적화 |
 | Next.js fetch cache·revalidate | 브라우저 캐시 또는 별도 데이터 요청 계층에서 관리 |
 | `next/link` 프리페치 | React Router `Link`와 페이지 lazy loading 사용 |
-| Next.js Middleware 인증 | Spring Security에서 인증·인가 수행 |
+| Next.js Middleware 인증 | NestJS Passport·JWT Guard에서 인증·인가 수행 |
 
 React의 Hooks, 컴포넌트, 상태 관리, REST API, Socket.io, 차트, 반응형 UI는 그대로 사용할 수 있음.
 
@@ -297,7 +297,7 @@ TeamLocalization
 
 화면 작업이 모두 끝난 뒤 한 번에 다국어를 붙이지 않음. 현재 프론트엔드 단계에서 언어 선택,
 UI 문구 분리, 공통 이름 표시 함수를 먼저 적용함. 전체 팀·선수 이름 매칭과 검색 별칭 관리는
-Spring Boot 백엔드와 데이터 수집 구조를 구현할 때 완성함.
+NestJS 백엔드와 데이터 수집 구조를 구현할 때 완성함.
 
 ## 14. 전환 완료 기준
 

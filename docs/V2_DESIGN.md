@@ -3,10 +3,11 @@
 > 작성: 2026-08-24
 > 갱신: 2026-08-26 — 설계 검토 반영 (5-4 동시쓰기 안전장치, 3-2 처리량 검증, 4-3 배포 멱등성, 6-1 sitemap 공백)
 > 갱신: 2026-08-27 — S0(API-Football 구독) 완료, S1(저장소 이름) `pitchlog-league`로 확정
-> 갱신: 2026-08-27 — 실시간 레이어를 Node.js+Socket.io 게이트웨이로 분리 (5-6, 폴리글랏 결정)
+> 과거 결정(폐기): 2026-08-27 — Spring + 별도 Node.js 게이트웨이 검토. 2026-09-02 통합 NestJS 결정으로 대체
 > 갱신: 2026-08-28 — 최종 범위를 유럽 5대 리그+UCL로 확정하고 다중 대회·UCL 모델, 화면, WebSocket, 통계·배포 전략 반영
 > 갱신: 2026-08-30 — 검증 가능한 AI 챗봇 방법론 반영. 결정적 조회 계층·도구 호출 루프·단계별 도입 전략 추가
 > 갱신: 2026-09-01 — 프론트엔드를 React + Vite + JavaScript로 변경. 상세 기준은 `FRONTEND_GUIDE.md` 우선 적용
+> 갱신: 2026-09-02 — 백엔드를 NestJS + TypeScript 통합 구조로 전환. 별도 실시간 서버 폐기, Redis·BullMQ는 확장 시 도입
 > 전제: 2026 WC 아카이브(`donasman/pitchlog`)는 `47f3749`에서 동결. v2는 **신규 저장소**에서 시작
 > 첫 구현 범위: **EPL (league=39), 26-27 시즌**
 > 최종 확정 범위: **유럽 5대 리그 + UEFA Champions League(UCL)**
@@ -23,9 +24,9 @@
 | 프론트엔드 | **React + Vite + JavaScript + Tailwind CSS + shadcn/ui** | 개발자가 직접 이해하고 수정할 수 있는 구성을 우선. shadcn/ui는 `tsx: false`, `rsc: false`로 사용 |
 | 프론트 배포 | **Vite 정적 빌드 + CSR** | 초기 화면 구현과 사용자 흐름 검증 우선. 검색 노출 전 프리렌더링·사이트맵 방안 별도 확정 필요 |
 | 착수 순서 | 인프라(CI·보호규칙) → 도메인 → 배치 → 프론트 | 회고 4-1/4-2가 fix 커밋 절반을 없앴을 것 |
-| 백엔드 스택 | Spring Boot 3.x + Java 21 **유지** | 언어 전환 이득 < v1 자산 손실 (5장) |
-| 백엔드 구조 | **대량 백필(Batch)과 실시간 동기화(@Scheduled) 분리** | v1은 둘이 서로를 호출하는 양방향 결합이었음 (5-2) |
-| 실시간 레이어 | **Node.js + Socket.io 게이트웨이 분리, Spring Boot와 Redis Pub/Sub로 연결** | WebSocket 푸시를 기본 경로로 확정. REST는 최초·재연결 동기화와 장애 fallback 담당 (5-6, Phase 2 이후 적용) |
+| 백엔드 스택 | **NestJS + TypeScript + PostgreSQL + Prisma** | 백엔드 구현 전 단계에서 프론트와 생태계를 통일하고 운영 복잡도를 줄임 (ADR-001) |
+| 백엔드 구조 | **모듈형 모놀리스로 시작, 필요 시 Worker 분리** | REST·수집·스케줄러·Socket.io를 한 앱에서 시작하고 대량 작업만 Redis+BullMQ로 분리 |
+| 실시간 레이어 | **NestJS WebSocket Gateway + Socket.io** | 별도 Node 서버 없이 같은 백엔드가 DB 커밋 후 푸시. REST는 최초·재연결 동기화와 장애 fallback 담당 |
 | AI 챗봇 | **부분 적용 — LLM은 도구 선택과 설명만 담당** | DB·외부 API 직접 접근 금지. 집계·비교·진출 판정은 결정적 백엔드 계층에서 수행하고 데이터 기준 시각과 호출 근거를 공개 (5-8, Phase 5) |
 
 `FEATURE_PLAN.md` 3장을 기반으로 하되, **거기에 없던 클럽축구 고유 문제(2장)** 를 추가했다.
@@ -246,7 +247,7 @@ EPL 토요일은 12:30 킥오프 ~ 22:00 종료로 **약 9.5시간** 연속 LIVE
 > 호출 예산(필요조건)만 확인한다. `live=all` 1콜의 응답 페이로드는 동시 진행 경기 수에
 > 비례해 커지고, 이를 파싱·upsert하는 처리 시간은 호출 횟수와 무관한 별개 변수다.
 > 5경기가 IDLE/LINEUP/LIVE 중 서로 다른 상태로 섞여 있을 때 v1의 3단계 스케줄러가 이를
-> 다룰 수 있는지, `@Scheduled`가 처리 지연 시 다음 주기와 겹치지 않도록 **오버랩 방지
+> 다룰 수 있는지, NestJS Scheduler가 처리 지연 시 다음 주기와 겹치지 않도록 **오버랩 방지
 > 장치(예: ShedLock)** 가 필요한지 Phase 2(실제 라운드 1회 무중단 관측)에서 실측·검증할 것.
 
 ### 3-3. 최종 확정 범위 — 5대 리그 + UCL
@@ -284,8 +285,8 @@ WebSocket으로 푸시하므로 외부 API 폴링 주기와 사용자 연결 수
 다시 만들 이유가 없고, SEO도 필요 없다(진행 중 스코어를 검색으로 찾지 않는다).
 v1은 클라이언트 폴링(라이브 10초, 대기 30초)으로 이를 처리했다.
 
-> **v2 확정 — 브라우저 실시간 경로는 WebSocket 푸시.** Node.js + Socket.io 게이트웨이를
-> 두고 Spring Boot와 Redis Pub/Sub로 연결한다 (5-6). Spring Boot가 API-Football을 주기적으로
+> **v2 확정 — 브라우저 실시간 경로는 WebSocket 푸시.** NestJS WebSocket Gateway와
+> Socket.io를 사용한다 (5-6). NestJS가 API-Football을 주기적으로
 > 조회하는 외부 폴링은 유지하지만, 브라우저는 백엔드를 10초마다 직접 폴링하지 않는다.
 > REST는 최초 화면 로드·재연결 풀 싱크·WebSocket 장애 fallback에만 사용한다.
 
@@ -348,10 +349,10 @@ Edge 런타임 전용이라 Node API를 못 쓰고 ISR 지원이 제한적이었
 2. **빌드 실패 = 이전 배포 유지** — Cloudflare 기본 동작. 다만 실패를 **알림으로 노출**한다
 3. **`generateStaticParams`가 빈 배열이면 throw** — 회고 4-6. v1의 placeholder 사고가
    정확히 여기서 났다. 백엔드가 죽은 채 빌드가 "성공"하는 경로를 원천 차단
-4. **빌드 시점 백엔드 헬스체크** — `prebuild`에서 `/actuator/health` 확인 후 진행
+4. **빌드 시점 백엔드 헬스체크** — `prebuild`에서 `/health` 확인 후 진행
 5. **배포 자체의 멱등성** — `data_version`별 성공 배포 여부를 기억해 중복 Deploy Hook 호출을
    막는다. 이는 5-3이
-   실시간 동기화(`@Scheduled`)에 세운 "상태 불필요" 원칙과 정면으로 충돌한다.
+   짧은 주기 동기화에 세운 "다음 주기 복구" 원칙과 정면으로 충돌한다.
    Deploy Hook 트리거는 `MatchScheduler` 안에 암묵적으로 섞지 말고, 위 1번의
    `deployment_requests` 상태를 갖는 **별도 컴포넌트로 분리**해 원칙 충돌을
    명시적으로 인정하고 격리할 것
@@ -360,7 +361,7 @@ Edge 런타임 전용이라 Node API를 못 쓰고 ISR 지원이 제한적이었
 
 | 라우트 | 전략 | 신선도 |
 |---|---|---|
-| `/matches/[id]` 진행 중 | 정적 셸 + **Socket.io 경기 room 구독** | Spring 수집 주기 내 푸시 |
+| `/matches/[id]` 진행 중 | 정적 셸 + **Socket.io 경기 room 구독** | NestJS 수집 주기 내 푸시 |
 | `/` 홈 (오늘 경기) | 정적 셸 + 대회/라이브 요약 room 구독 | 즉시 푸시 |
 | `/standings` | 정적, 라운드 종료 시 재빌드 | 수 분 |
 | `/matches` 목록 | 정적, 라운드 종료 시 재빌드 | 수 분 |
@@ -380,47 +381,71 @@ C안으로 갈 경우 위 표의 "정적, 재빌드"를 각각 ISR `revalidate` 
    디바운스되고 `deployment_requests`가 재시작 후에도 복구되는지
 
 ---
-## 5. 백엔드 구조 — 배치와 실시간 동기화의 분리
+## 5. 백엔드 구조 — NestJS 모듈형 모놀리스
 
-스택은 유지한다: **Spring Boot 3.x + Java 21.** 바꾸는 것은 언어나 프레임워크가 아니라
-**스프링을 쓰는 방식**이다. Kotlin·NestJS·Go 전환도 검토했으나, v1 자산(스케줄러, 13개 Step,
-엔티티)이 전부 날아가고 회고에서 이미 1.8:1이던 fix/feat 비율을 더 악화시킬 위험이 크다.
+현재 확정 설계는 **NestJS + TypeScript + PostgreSQL + Prisma**다. REST API, 외부 데이터 수집,
+경기일 스케줄러, Socket.io 실시간 전송을 하나의 애플리케이션에서 시작한다. 대량 백필과 주간
+보정처럼 재시작 지점이 필요한 작업이 생기면 Redis+BullMQ Worker를 추가한다. 상세 결정은
+`ADR-001-NODE-BACKEND.md`를 따른다.
 
-### 5-1. v1 진단 — 스프링의 껍데기만 썼다
+```text
+React 브라우저 ── REST·Socket.io ──▶ NestJS
+                                      ├── 조회 API
+API-Football ────────────────────────▶ ├── 수집·스케줄러
+                                      ├── 통계·순위 확정
+                                      ├── WebSocket Gateway
+                                      └── AI 조회 도구
+                                               │
+                                               ▼
+                                          PostgreSQL
 
-| 발견 | 근거 (코드) | v2 |
+확장 시: NestJS API ── Redis·BullMQ ── Worker
+```
+
+### 5-0. 현재 구현 원칙
+
+1. 기능은 `competition`, `team`, `player`, `match`, `standing`, `statistics`, `ingestion`,
+   `realtime`, `ai` 모듈로 분리한다.
+2. Prisma의 unique key와 transaction을 사용해 같은 수집을 반복해도 결과가 중복되지 않게 한다.
+3. 짧은 주기 작업은 NestJS Scheduler로 실행하되, 중복 실행 락과 종료 시간을 기록한다.
+4. 수백 건을 처리하고 실패 지점부터 재개해야 하는 작업은 BullMQ Job으로 승격한다.
+5. Socket.io 이벤트는 DB 커밋 이후 발행하고, 연결 복구 시 REST로 최신 상태를 다시 받는다.
+6. 외부 API 입력은 DTO 검증과 정규화를 거친 뒤에만 도메인 데이터로 저장한다.
+
+> 아래 5-1~5-3의 Spring 관련 내용은 v1 회고에서 도출한 문제 설명이다. 현재 구현 기술을
+> 의미하지 않으며, 재시작·중복 실행·조용한 실패를 방지해야 한다는 원칙만 NestJS 설계에 이식한다.
+
+### 5-1. v1 진단 기록 — 현재 기술 선택의 반면교사
+
+| 발견 | 근거 (v1 코드) | 현재 설계에 남기는 교훈 |
 |---|---|---|
-| **Spring Batch가 장식** | Step 13개 전부 `.tasklet()` 단발. `.chunk(` **0건**, ItemReader/Writer 없음. `BATCH_*` 테이블 9개와 `Job`/`Step` 보일러플레이트만 남음 | 대량 백필에만 한정하되 **chunk·retry·재시작을 실제로 사용** |
-| **QueryDSL 미사용** | `JPAQueryFactory` 사용처가 `QueryDslConfig.java` 자기 자신뿐. 실제 쿼리 **0건**인데 annotationProcessor + `src/main/generated` 유지비만 발생 | 첫 동적 쿼리가 필요한 시점에 결정. 안 쓸 거면 의존성 제거 |
-| **마이그레이션 도구 없음** | `ddl-auto: validate` + 수기 `schema.sql`(13테이블). 증거: `fix(db): matches, match_lineup_entries 테이블 schema.sql에 누락분 추가` | **Flyway 필수.** v2는 시즌 롤오버·이적 이력으로 스키마가 상시 변한다 |
-| **Spring Security 미사용** | `spring-security-crypto`(BCrypt)만 사용, `AdminAuthFilter`·`JwtUtil`은 수제 → 회고 3-10의 `@WebMvcTest` 컨텍스트 로딩 실패 원인 | Spring Security 정식 도입 |
-| **외부 API 보호장치 없음** | WebClient 생짜 호출. rate limit 대응·백오프·서킷브레이커 없음 | **Resilience4j** |
-| **테스트 DB 괴리** | H2 `MODE=PostgreSQL` | **Testcontainers** — Postgres 특화 SQL이 늘면 H2가 갈라진다 |
+| **배치 프레임워크가 장식** | Step 13개가 단발 실행이고 재시작 기능을 쓰지 않음 | BullMQ는 실제 재시작·재시도 필요가 생길 때만 도입 |
+| **미사용 조회 도구** | QueryDSL 설정만 있고 실제 쿼리는 없음 | Prisma 기본 조회로 시작하고 필요 없는 추상화는 추가하지 않음 |
+| **마이그레이션 도구 없음** | 수기 `schema.sql` 누락 사고 발생 | Prisma migration을 변경 이력의 단일 기준으로 사용 |
+| **인증 직접 구현** | 수제 인증 필터가 테스트 실패 원인 | Passport·JWT Guard와 검증된 모듈 사용 |
+| **외부 API 보호장치 없음** | rate limit·백오프·서킷브레이커 없음 | 공통 HTTP client에서 호출 제한·재시도·백오프 적용 |
+| **테스트 DB 괴리** | H2와 PostgreSQL 동작 차이 | 테스트도 PostgreSQL 컨테이너 또는 전용 테스트 DB 사용 |
 
-### 5-2. v1의 구조적 결함 — 배치와 스케줄러가 서로를 호출했다
+### 5-2. 실행 경로 분리 — Scheduler와 Worker
 
+짧은 주기 동기화와 대량 수집은 실행 방식만 다르고 같은 도메인 규칙을 사용한다.
+
+```text
+NestJS Scheduler ─┐
+                  ├── application 계층 ── Prisma ── PostgreSQL
+BullMQ Worker ────┘
 ```
-MatchSchedulerService ──생성자 주입──> FetchStandingsStep, FetchInjuriesStep,
-        ^                              FetchPlayerRatingsStep, FetchPredictionsStep
-        │
-        └──직접 호출──────────────────  BackfillLineupsStep (배치)
-```
 
-코드 주석이 이 상태를 그대로 증언한다:
-
-> Bean 자체는 항상 등록한다 — BackfillLineupsStep 등 배치가 `fetchAndSaveLineups()`를 직접
-> 호출하기 때문이다. 이 플래그는 `@Scheduled` 폴링만 차단한다.
-
-양방향 결합 탓에 스케줄러 빈을 내릴 수 없었고, `api-football.scheduler-enabled` 플래그로
-`@Scheduled`만 따로 막는 우회가 들어갔다. **Spring Batch 의존성이 런타임 계층까지 번진 것**이
-근본 원인이다.
+Scheduler는 다음 주기에 다시 실행하면 복구되는 작업을 담당한다. Worker는 수백 건 처리,
+진행률, 재시도, 실패 지점 재개가 필요한 작업만 담당한다. Worker가 필요하기 전에는 Redis와
+BullMQ를 설치하지 않는다.
 
 ### 5-3. 판별 기준 — "시점"이 아니라 "실패했을 때 어떻게 되는가"
 
 "초기 수집 vs 운영 중"으로 나누면 애매해진다. 선수 통계 백필은 주 1회, 이적창 스쿼드 diff는
 매일 도는데 둘 다 배치다. 실제 경계는 **재시작 지점을 기억해야 하는가**이다.
 
-| | 배치 (Spring Batch) | 실시간 동기화 (`@Scheduled`) |
+| | 대량 작업 (BullMQ Worker) | 짧은 주기 동기화 (NestJS Scheduler) |
 |---|---|---|
 | 한 번에 쓰는 API 콜 | 수백 개 | 1~수 개 |
 | 중간에 죽으면 | **이어서 해야 함** → 재시작 지점 저장 필요 | 다음 주기에 다시 함 → 상태 불필요 |
@@ -428,124 +453,91 @@ MatchSchedulerService ──생성자 주입──> FetchStandingsStep, FetchInj
 | 실행 방식 | 수동 트리거 / 주 1회 / 시즌 초 | 10초~1일 주기 |
 | v2 해당 작업 | 스쿼드 500명 적재, 선수통계 백필(~400콜), 시즌 롤오버, 과거 라운드 라인업 | `live=all` 10초, 라인업 5분, 순위 10분, 부상 1일 |
 
-즉 **재시작 지점을 기억해야 하면 Spring Batch가 값을 하고, 안 해도 되면 순수 오버헤드다.**
-v1은 후자에까지 Batch를 씌웠다.
+즉 **재시작 지점을 기억해야 하면 BullMQ Job으로 승격하고, 아니면 Scheduler로 충분하다.**
 
-### 5-4. v2 구조 — 공통 도메인 서비스를 가운데 둔다
+### 5-4. 현재 구조 — 수집 경로가 같은 도메인 규칙을 사용한다
 
-두 시스템이 서로를 부르지 않는다. **각자 같은 도메인 서비스를 부른다.**
+Scheduler와 Worker는 서로를 호출하지 않고 **같은 도메인 규칙과 데이터 접근 계층을 사용한다.**
 
 ```
-                 StandingsSyncService.sync(competition, season) ← upsert 로직의 유일한 자리
+                 순위 갱신 규칙 + Prisma transaction
                        ↑                        ↑
-       FetchStandingsTasklet              MatchScheduler
-       (Batch — 시즌 초 백필,             (@Scheduled — 10분 주기,
-        chunk + 재시작)                    상태 없음)
+          BullMQ Worker                 NestJS Scheduler
+       (대량 백필·재시작)               (짧은 주기 동기화)
 ```
 
 원칙 3가지:
 
-1. **`ingest/batch`와 `ingest/schedule`은 서로를 import 하지 않는다** — 둘 다 `domain/*/sync`만 부른다
-2. **Spring Batch 의존성은 `ingest/batch` 밖으로 나가지 않는다** — v1에서 번진 것이 결함의 근원
-3. **upsert 로직은 도메인 서비스에 한 번만 존재한다** — 테스트를 붙이면 양쪽이 동시에 검증된다 (회고 4-5)
+1. **`ingestion/jobs`와 `ingestion/schedule`은 서로를 호출하지 않는다.**
+2. **BullMQ 의존성은 작업 실행 계층 밖으로 퍼뜨리지 않는다.**
+3. **upsert와 통계 확정 규칙은 한 곳에만 둔다.** Scheduler와 Worker가 같은 테스트 대상 규칙을 사용한다.
 
-부수 효과: 스케줄러를 끄고 배치만 돌리는 것이 가능해져 `scheduler-enabled` 같은 우회 플래그가
-필요 없어진다.
+스케줄러와 Worker를 각각 끌 수 있게 구성해 로컬 개발·백필·운영 실행을 독립적으로 제어한다.
 
-> ⚠️ **동시 쓰기 안전장치 — 설계 검토(2026-08-26)에서 지적됨.** 위 3원칙은 배치/스케줄러의
-> *결합도* 문제를 풀 뿐, 두 시스템이 같은 row를 **동시에** upsert할 때의 안전장치는 아니다.
-> 여름 이적창(6/13~9/1)은 EPL 시즌 개막(8월)과 실제로 겹치므로, 시즌 초 스쿼드 백필(Batch)과
-> 이적창 기간 매일 도는 스쿼드 diff(Schedule)가 같은 선수 row를 동시에 건드릴 수 있다.
-> **`*SyncService`의 upsert는 `find-then-save`가 아니라 `ON CONFLICT` 기반이거나
-> `@Version` 낙관적 락을 둬야 한다.** `find-then-save`면 예외 없이 조용히 값이 덮어써질 수 있는데,
-> 이는 회고 4-6 "조용한 실패 금지" 원칙과 정면으로 충돌한다.
-> Phase 1의 `TeamSyncService`/`SquadSyncService` 최초 구현 시점(8-3 #4~#5)에 결정하고
-> 테스트를 동반할 것. ArchUnit은 원칙 1·2만 강제할 뿐 이 문제는 정적 분석으로 잡히지 않는다.
+> ⚠️ **동시 쓰기 안전장치.** 시즌 초 스쿼드 백필과 이적창의 스쿼드 diff는 같은 row를
+> 동시에 변경할 수 있다. Prisma schema에 외부 ID 기반 unique constraint를 두고 `upsert`와
+> transaction을 사용한다. Scheduler와 Worker에는 같은 competition·season·job type 조합의
+> 중복 실행을 막는 lock 또는 job key를 적용하며, 이 시나리오를 통합 테스트로 검증한다.
 
-### 5-5. 패키지 구조
+### 5-5. NestJS 모듈 구조
 
 ```
-com.pitchlog
-├── domain/
-│   ├── competition/ team/ player/ match/ standing/
-│   │     각각 entity · repository · *SyncService(upsert) · *QueryService(조회)
-├── ingest/
-│   ├── client/     ← ApiFootballClient (Resilience4j 적용 지점)
-│   ├── dto/        ← 외부 API 응답 DTO (@JsonIgnoreProperties 필수)
-│   ├── batch/      ← Spring Batch Job/Tasklet — Batch 의존은 여기까지만
-│   └── schedule/   ← @Scheduled 스케줄러 — Batch 의존 없음
-├── api/            ← controller + response DTO
-└── config/
+backend/src
+├── competition/ season/ team/ player/ squad/
+├── match/ standing/ statistics/
+├── ingestion/
+│   ├── api-football/  ← 외부 응답 DTO·정규화·호출 제한
+│   ├── schedule/      ← 짧은 주기 작업
+│   └── jobs/          ← BullMQ 대량 작업(도입 시)
+├── realtime/          ← NestJS Gateway + Socket.io
+├── ai/                ← 결정적 조회 도구와 LLM 오케스트레이터
+├── common/            ← 오류·시간·검증·관측성
+└── prisma/            ← schema·migration
 ```
 
-v1의 `batch/` 최상위 패키지를 `ingest/` 아래로 내리고 `batch`와 `schedule`을 형제로 둔다.
-이름이 구조를 강제한다.
+API Controller, Scheduler, Worker는 도메인 규칙을 직접 복제하지 않는다. 입력을 검증하고 같은
+application 계층을 호출한다.
 
-> **ArchUnit 테스트로 원칙 1·2를 CI에서 강제할 것.** 회고 3-7의 교훈 —
-> "규칙이 문서에만 존재했다". 문서에 적는 것으로는 지켜지지 않는다.
+> ESLint 경계 규칙과 모듈 테스트로 의존 방향을 CI에서 검사한다. 회고 3-7의 교훈처럼 규칙을
+> 문서에만 두지 않는다.
 
-### 5-6. 실시간 레이어 — Node.js 게이트웨이 (폴리글랏, 2026-08-27 결정)
+### 5-6. 실시간 레이어 — NestJS WebSocket Gateway
 
-기존 4-0/5장은 실시간 스코어를 "클라이언트 폴링"으로 처리한다고 정리했다. v2는 여기서
-한 단계 더 나아가 **Spring Boot(코어) + Node.js(실시간 게이트웨이) 폴리글랏 구조**를
-도입한다.
+NestJS가 외부 경기 데이터를 저장한 뒤 같은 애플리케이션의 WebSocket Gateway가 변경 이벤트를
+브라우저에 전달한다. 별도 실시간 서버와 Redis Pub/Sub은 초기 구성에서 제외한다.
 
 ```
 API-Football
      │ live=all (10초 폴링, 기존 그대로)
      ▼
-Spring Boot @Scheduled  ──upsert(DB, 동시성 안전장치 5-4)──▶  PostgreSQL
+NestJS Scheduler ── Prisma transaction ──▶ PostgreSQL
      │
-     └─ upsert 성공 후 이벤트 publish
-              │
-              ▼
-        Redis Pub/Sub (channel: match:{fixtureId})
-              │
-              ▼
-        Node.js + Socket.io 게이트웨이  ──WebSocket──▶  브라우저
+     └─ 커밋 성공 후 NestJS Gateway ── Socket.io ──▶ 브라우저
 ```
 
-**왜 이 경계를 두는가.** 외부 API 수집·도메인 정합성·DB 쓰기는 Spring Boot가 소유하고,
-다수 브라우저 연결과 room별 이벤트 전달은 Node.js가 소유한다. 초기 트래픽만 보면 폴링으로도
-충분하지만 최종 범위인 5대 리그+UCL의 동시 경기를 하나의 실시간 채널 계층으로 제공하고,
-폴리글랏 아키텍처의 명확한 역할 분리를 직접 검증하기 위한 확정 선택이다.
+초기에는 배포 단위를 하나로 유지해 운영 복잡도를 낮춘다. 접속량이 증가하면 Gateway 프로세스를
+분리하고 Redis Socket.io adapter를 추가할 수 있지만, 데이터 확정 권한은 계속 도메인 계층에 둔다.
 
 **역할 경계 — 반드시 지킬 것:**
 
-1. **Node는 API-Football을 직접 호출하지 않는다.** API 클라이언트·DTO는 계속 Spring
-   Boot(`ingest/client`)에만 존재한다. Node가 API-Football을 따로 호출하면 두 언어에서
-   같은 외부 API 계약을 유지해야 해서 유지보수 비용이 두 배가 된다.
-2. **Node는 DB에 쓰지 않는다.** upsert(동시성 안전장치 포함, 5-4)는 여전히 Spring Boot의
-   `*SyncService`가 유일한 자리다. Node는 Redis 채널을 구독해서 Socket.io로 릴레이만
-   하는 **얇은 게이트웨이**로 스코프를 제한한다.
-3. **메시지 브로커는 Redis Pub/Sub — Kafka 아님.** 컨슈머가 Node 게이트웨이 하나뿐인
-   상황에서 Kafka의 존재 이유(내구성 있는 로그, 리플레이, 다중 컨슈머 그룹)가 없다.
-   Redis Pub/Sub이 이 규모에 맞는 선택이고, "왜 Kafka를 안 썼는가"도 근거 있는 답이 된다.
+1. API-Football 호출은 `ingestion` 모듈만 담당한다.
+2. 실시간 Gateway는 경기·순위·통계를 계산하지 않고 커밋된 결과만 전달한다.
+3. 브라우저 room은 `fixtureId` 기준으로 관리하고 구독 권한과 입력값을 검증한다.
+4. 여러 인스턴스로 확장하기 전에는 Redis를 실시간 전달 경로에 넣지 않는다.
 
 **새로 생기는 실패 모드 — 조용한 실패 금지(회고 4-6) 원칙과 연결:**
 
-Redis Pub/Sub은 fire-and-forget이라 **Node가 재시작되는 순간의 이벤트는 유실된다.**
-Node 재연결 시 Pub/Sub 이벤트만으로 상태를 복구하려 하지 말고 **REST로 현재 경기 상태를 한 번 풀 싱크**하는
-로직을 넣는다 — 안 그러면 서버 재시작 한 번에 스코어가 조용히 멈춘 것처럼 보이는,
-문서가 계속 경계해온 바로 그 실패 패턴이 재발한다.
+서버나 브라우저가 재시작되는 순간의 이벤트는 놓칠 수 있다. Socket.io 이벤트만으로 상태를
+복구하지 말고 **REST로 현재 경기 상태를 한 번 풀 싱크**한다.
 
-- Spring은 DB 트랜잭션 **커밋 이후** Redis 이벤트를 발행한다
+- NestJS는 DB 트랜잭션 **커밋 이후** Socket.io 이벤트를 발행한다
 - 이벤트에 `fixtureId`, `competitionId`, `updatedAt`, `version`을 포함한다
-- Node와 브라우저는 마지막 `version` 이하의 중복·역순 이벤트를 무시한다
-- 발행 실패는 기록하고 다음 외부 API 수집 주기에 최신 스냅샷을 다시 발행한다
+- Gateway와 브라우저는 마지막 `version` 이하의 중복·역순 이벤트를 무시한다
+- 전송 실패는 기록하고 다음 수집 주기에 최신 스냅샷을 다시 제공한다
 - 브라우저 연결 실패 시 REST 풀 싱크 후 제한적 폴링으로 fallback한다
 
-**언어 전환 기각(5장) 결정과 충돌 아님.** 5장의 "언어 전환 기각"은 **코어 전체**를
-Kotlin/NestJS/Go로 바꾸는 안을 기각한 것이다. 이건 경계가 분명한 위성 서비스 하나를
-Node로 추가하는 것이라 별개의 결정이다. 코어(도메인·배치·API)는 계속 Java다.
-
-**적용 시점 — Phase 0/1에는 넣지 않는다.** 아직 도메인 코드도 없는 단계라 지금 구현하지
-않는다. **Phase 2의 스케줄러 구현 다음 작업으로 적용하고, Phase 2 완료 조건에 포함한다**
-(8장 로드맵 참조).
-
-**비용.** Redis 호스팅(Upstash 무료 티어 또는 Railway addon) + Node 서비스 배포 위치가
-추가로 필요하다. 10장 #3(상시 백엔드 Railway $5)에 합산해서 평가할 것 — 현재 문서에
-고정비가 종합적으로 검증된 적이 없다는 점도 함께 기억할 것.
+**적용 시점.** Phase 2에서 경기 스케줄러와 함께 Gateway를 구현한다. Redis 비용은 초기에는
+발생하지 않으며 BullMQ Worker 또는 다중 서버 확장이 필요한 시점에 다시 평가한다.
 
 ### 5-7. 경기 종료 후 확정 처리 — 선수 통계와 순위
 
@@ -839,13 +831,13 @@ fix 커밋 35건 중 절반을 없앴을 것"이었다.
 |---|---|---|---|
 | **0** | 안전장치 + 배포 PoC (프로덕션 코드 없음) | 빈 스켈레톤 + 녹색 CI | 아래 8-2 완료 기준 |
 | **1** | `Competition`/`Team`/`Season`/`CompetitionEntry` + `Player` 이관 + Localization 기반 + EPL 스쿼드 수집 | EPL 20팀 ~500선수 DB 적재, 영어 원본·한국어 표시명 구조 | 스쿼드 diff·다중 대회 참가·이름 fallback 테스트 통과 |
-| **2** | 경기·라인업·순위·종료 후 통계 + 스케줄러 + WebSocket 게이트웨이 | EPL 매치데이 자동 갱신·푸시 | 실제 라운드 1회 무중단 관측, 재연결 복구 |
+| **2** | 경기·라인업·순위·종료 후 통계 + NestJS Scheduler·Socket.io Gateway | EPL 매치데이 자동 갱신·푸시 | 실제 라운드 1회 무중단 관측, 재연결 복구 |
 | **3** | 다중 대회·한국어/영어 프론트 + 배포 파이프라인 | EPL 공개 사이트, 언어 전환, 5대 리그/UCL 공통 화면 구조 | 양 언어 반응형 화면, Lighthouse, 백엔드·Socket 장애 시 오류/fallback 확인 |
 | **4** | 라리가·분데스리가·세리에 A·리그 1 + UCL 데이터 활성화 | **최종 확정 범위 완성** | 최종 API 예산, 5,000+페이지 배포, UCL 녹아웃 검증 |
 | **5** | 결정적 조회 도구 + AI 챗봇 | 사실 조회·선수 비교·근거 공개가 가능한 AI 패널 | 숫자 환각 0건, 동일 데이터 버전의 판정 일치, 도구 한도·실패 처리 검증 |
 
-> Node.js 실시간 게이트웨이(5-6)는 Phase 0/1에는 넣지 않는다. Phase 2에서 Spring 스케줄러와
-> Redis 발행을 먼저 구현한 뒤 Socket.io 게이트웨이를 연결하며, Phase 2 완료 조건에 포함한다.
+> Socket.io Gateway(5-6)는 Phase 0/1에는 넣지 않는다. Phase 2에서 NestJS 경기 스케줄러와
+> DB 갱신을 먼저 구현한 뒤 같은 애플리케이션에 Gateway를 연결하며 Phase 2 완료 조건에 포함한다.
 
 **Phase 0을 건너뛰지 않는 것이 이 로드맵의 유일한 핵심이다.**
 
@@ -868,7 +860,7 @@ S0·S1 모두 해결 완료 (2026-08-27) — Phase 0 착수를 막던 두 선행
 | **#2** | CI 이관 — `file-integrity`/`frontend`/`backend` 3잡 + **Vite lint·build 추가** | 녹색 CI | |
 | **#3** | 브랜치 보호 Ruleset — `main`에 PR 필수 + CI 통과 필수, 기본 브랜치 `dev` | GitHub 설정 | **본인** (Settings 권한) |
 | **#4** | pre-commit 훅 — null byte·깨진 UTF-8 + ESLint + 10파일 초과 경고 | `.githooks/pre-commit` | |
-| **#5** | Spring Boot 스켈레톤 — Flyway `V1__init.sql`(빈), Actuator health, Testcontainers, ArchUnit 규칙 1개 | `./gradlew build` 통과 | |
+| **#5** | NestJS 스켈레톤 — Prisma 초기 schema, `/health`, Jest·Supertest, 모듈 경계 ESLint 규칙 | `npm run build`·`npm test` 통과 | |
 | **#6** | **배포 PoC** — 4-5의 5가지 확인 | 배포 방식 확정 | |
 
 > **#2에서 `npm run lint`와 `npm run build`를 CI에 넣는 것이 요점이다.** 화면 구현 단계는
@@ -878,18 +870,18 @@ S0·S1 모두 해결 완료 (2026-08-27) — Phase 0 착수를 막던 두 선행
 ### 8-2. Phase 0 완료 기준 (DoD)
 
 - [ ] PR 하나가 CI 3잡 통과 → `dev` 머지 → `main` 직접 push가 보호규칙에 막히는 것 확인
-- [ ] `./gradlew build`가 Testcontainers로 Postgres 띄우고 통과
-- [ ] ArchUnit 규칙이 `ingest/schedule` → `ingest/batch` 의존을 실제로 실패시킴
+- [ ] `npm run build`·`npm test`가 PostgreSQL 테스트 환경에서 통과
+- [ ] ESLint 모듈 경계 규칙이 `ingestion/schedule` → `ingestion/jobs` 직접 의존을 실패시킴
 - [ ] 배포 PoC 5항목 확인 → **10장 #2 닫기**
 
 ### 8-3. Phase 1 — 첫 도메인 코드
 
-1. Flyway `V2__competitions_teams.sql` — `competitions`·`teams`·`seasons`·`competition_entries`
-2. 엔티티 + 리포지토리 (`Competition`/`Team`/`Season`/`CompetitionEntry`), `Player`는 v1에서 이관
-3. `ApiFootballClient` + Resilience4j (rate limit·백오프)
-4. `TeamSyncService` — EPL 20팀 적재. **첫 upsert 로직이므로 테스트 동반**
-5. `SquadSyncService` + **diff 로직** — v2 최대 리스크(1-3). 테스트 필수
-6. Spring Batch Job 1개 — 시즌 초 스쿼드 벌크 적재, chunk + 재시작
+1. Prisma schema·migration — `competitions`·`teams`·`seasons`·`competition_entries`
+2. NestJS 모듈 + Prisma 데이터 접근 (`Competition`/`Team`/`Season`/`CompetitionEntry`/`Player`)
+3. API-Football HTTP client + 호출 제한·재시도·백오프
+4. EPL 20팀 적재 기능 — **첫 upsert 로직이므로 테스트 동반**
+5. 스쿼드 수집 + **diff 로직** — v2 최대 리스크(1-3). 테스트 필수
+6. 스쿼드 벌크 적재 Job 1개 — BullMQ 도입 전에는 DB 체크포인트, 도입 후 job 재시작 사용
 
 Phase 1의 검증 기준은 "20팀 500선수가 DB에 있다"가 아니라
 **"스쿼드 diff 테스트가 이적 시나리오를 통과한다"** 이다.
@@ -932,8 +924,8 @@ git push origin chore/cleanup
 | 3 | 상시 백엔드 (Railway Hobby $5) | Phase 2 전 | 아카이브는 평시 $0였음 — 성격이 다른 결정 |
 | 4 | ~~API-Football Pro 구독 시점~~ | **완료 (2026-08-27)** | Pro 플랜 구독 완료 — 26-27 시즌 데이터 접근 가능 |
 | 5 | 이적 이력 정밀도 (`/transfers` 사용 여부) | Phase 3 | 선수당 1콜 — 비쌈 |
-| 6 | QueryDSL 유지 여부 | 첫 동적 쿼리 필요 시점 | v1에서는 사용처 0건이었음 (5-1) |
-| 7 | ~~실시간 레이어 적용 여부·시점~~ | **확정: Phase 2** | WebSocket 기본 경로, Redis Pub/Sub + Node/Socket.io. REST 동기화·fallback 포함 |
+| 6 | ~~ORM 선택~~ | **확정 (2026-09-02)** | Prisma 사용. PostgreSQL unique·transaction 기준 |
+| 7 | ~~실시간 레이어 적용 여부·시점~~ | **확정: Phase 2** | NestJS Gateway + Socket.io. REST 동기화·fallback 포함 |
 | 8 | AI 제공 모델·호스팅·월 호출 예산 | Phase 5 착수 전 | 기능 설계는 모델 비종속. 비용·응답시간·한국어 품질을 PoC로 비교 |
 | 9 | AI 패널 진입 방식 (`/assistant` 전용 / 전역 패널) | Phase 3 화면 설계 시 | 모바일 사용성, 현재 화면 문맥 전달 범위와 함께 결정 |
 

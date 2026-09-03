@@ -5,8 +5,10 @@
 | 문서 | 용도 | 상태 |
 | --- | --- | --- |
 | [FRONTEND_GUIDE.md](./FRONTEND_GUIDE.md) | React·Vite·JavaScript 기술 결정과 화면 개발 기준 | **현재 기준 문서** |
+| [BACKEND_GUIDE.md](./BACKEND_GUIDE.md) | NestJS·Prisma·Socket.io 백엔드 개발 기준 | **현재 기준 문서** |
 | [FRONTEND_CLI_PROMPT.md](./FRONTEND_CLI_PROMPT.md) | CLI에 전달할 프론트엔드 작업 요청문 | 실행용 |
 | [NEXT_STEPS.md](./NEXT_STEPS.md) | 현재 검사 결과와 다음 작업 순서 | **실행 체크리스트** |
+| [ADR-001-NODE-BACKEND.md](./ADR-001-NODE-BACKEND.md) | NestJS 통합 백엔드 기술 결정 | **확정 결정** |
 | [V2_DESIGN.md](./V2_DESIGN.md) | 유럽 클럽축구 시스템 상세 설계 및 구현 로드맵 | 기준 문서 |
 | [V2_DESIGN_REVIEW.md](./V2_DESIGN_REVIEW.md) | 설계 위험요소 및 보완사항 검토 | 참고 문서 |
 | [FEATURE_PLAN.md](./FEATURE_PLAN.md) | 기능 현황과 확장 계획 | 참고 문서 |
