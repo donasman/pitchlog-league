@@ -1,6 +1,7 @@
 # PitchLog — 기능 현황 및 확장 계획
 
 > 최종 갱신: 2026-08-23
+> 현재 백엔드 기준: 2026-09-02 NestJS + TypeScript 통합 구조. 아래 v1 클래스·Step 이름은 과거 구현 근거이며 v2 구현 이름이 아님.
 
 > **현재 프론트엔드 기준:** 2026-09-01 React + Vite + JavaScript로 변경됨.
 > 이 문서의 Next.js·SSR 관련 항목은 당시 검토 기록이며, 구현에는
@@ -51,7 +52,8 @@
 
 ### 3-1. 그대로 재사용하는 것
 
-배치 Step 들이 리그·시즌을 `@Value` 로 주입받는 구조라 대부분 그대로 동작한다.
+v1 기능 요구사항은 재사용하되 Java 배치 Step 코드는 이식하지 않는다. NestJS의 수집 모듈,
+Scheduler, 필요 시 BullMQ Worker로 기능을 다시 구현한다.
 
 ```java
 @Value("${api-football.wc-league-id:1}")   // 1 → 39(EPL) 로 바꾸면 그대로 돈다

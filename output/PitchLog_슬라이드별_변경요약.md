@@ -1,5 +1,14 @@
 # PitchLog 1차 기획·설계 발표 — 슬라이드별 변경 요약
 
+## 2026-09-02 백엔드 구조 변경
+
+- Spring Boot Core + Redis Pub/Sub + 별도 Node.js Gateway 구조를 폐기했습니다.
+- NestJS + TypeScript + PostgreSQL + Prisma 통합 백엔드로 변경했습니다.
+- 초기에는 REST, 데이터 수집, Scheduler, Socket.io를 하나의 애플리케이션에서 운영합니다.
+- 대량 작업이 필요할 때만 Redis + BullMQ Worker를 추가합니다.
+- 발표 슬라이드 13·14·16과 발표자 노트를 새 구조에 맞게 수정했습니다.
+- 최신 발표본: `PitchLog_1차_기획설계_발표_v5.pptx`
+
 ## 전체 변경 방향
 
 - 발표 성격을 **개발 완료·기술 보고**에서 **1차 기획·설계 발표**로 전환했습니다.

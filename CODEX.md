@@ -13,17 +13,14 @@
 
 ```
 pitchlog-league/                 ← 모노레포 루트
-├── backend/                     ← Spring Boot 3.x + Java 21
-│   └── src/main/java/com/pitchlog/
-│       ├── domain/              ← league/ team/ player/ match/ standing/
-│       │     각각 entity · repository · *SyncService(upsert) · *QueryService(조회)
-│       ├── ingest/
-│       │   ├── client/          ← ApiFootballClient (Resilience4j 적용 지점)
-│       │   ├── dto/             ← 외부 API 응답 DTO (@JsonIgnoreProperties 필수)
-│       │   ├── batch/           ← Spring Batch Job/Tasklet — Batch 의존은 여기까지만
-│       │   └── schedule/        ← @Scheduled 스케줄러 — Batch 의존 없음
-│       ├── api/                 ← controller + response DTO
-│       └── config/
+├── backend/                     ← NestJS + TypeScript + Prisma
+│   ├── src/
+│   │   ├── competition/ team/ player/ match/ standing/ statistics/
+│   │   ├── ingestion/           ← API-Football·schedule·jobs
+│   │   ├── realtime/            ← NestJS Gateway + Socket.io
+│   │   ├── ai/                  ← 결정적 조회 도구·LLM 오케스트레이터
+│   │   └── common/
+│   └── prisma/                  ← schema·migration
 ├── frontend/                    ← React + Vite + JavaScript, Node 22 고정
 │   └── src/
 │       ├── pages/               ← teams, players, matches, standings, stats
@@ -43,8 +40,8 @@ pitchlog-league/                 ← 모노레포 루트
 └── README.md
 ```
 
-`domain/*/sync`가 upsert 로직의 유일한 자리다. `ingest/batch`와 `ingest/schedule`은
-서로 import하지 않고 각자 같은 도메인 서비스만 호출한다 (V2_DESIGN.md 5-4).
+Controller, Scheduler, Worker, Gateway는 규칙을 복제하지 않고 같은 application 계층을 호출한다.
+백엔드 상세 규칙은 `docs/BACKEND_GUIDE.md`를 우선 적용한다.
 
 ---
 
@@ -72,7 +69,7 @@ feature/<이름>  ──PR──▶  dev  ──(검증 통과 후 PR)──▶ 
 |---|---|---|
 | `feature/` | 신규 기능 | `feature/team-sync-service` |
 | `fix/` | 버그 수정 | `fix/squad-diff-duplicate` |
-| `chore/` | 설정, 의존성, 환경 | `chore/flyway-setup` |
+| `chore/` | 설정, 의존성, 환경 | `chore/prisma-setup` |
 | `docs/` | 문서, README | `docs/api-spec` |
 | `refactor/` | 리팩토링 | `refactor/standing-service` |
 
@@ -167,18 +164,16 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
 
 ## 코드 작성 규칙
 
-### Backend (Java)
+### Backend (TypeScript)
 
-- 패키지: `com.pitchlog.*` 준수. `ingest/batch`와 `ingest/schedule`은 서로 import 금지
-  (ArchUnit으로 CI에서 강제 — V2_DESIGN.md 5-4, 5-5)
-- Java record, `@NoArgsConstructor(access = PROTECTED)`, 정적 팩토리 메서드 패턴 사용
-- 외부 API DTO에 `@JsonIgnoreProperties(ignoreUnknown = true)` 필수
+- NestJS + TypeScript strict mode, Node.js 22 기준
+- 외부 API DTO와 내부 API 응답 DTO 분리, ValidationPipe 적용
 - 서비스 중 외부 API 호출 절대 금지 (배치·스케줄러 시점에만 허용)
-- **`*SyncService`의 upsert는 `ON CONFLICT` 또는 `@Version` 낙관적 락 필수** — 배치
-  백필과 스케줄러 동기화가 같은 row를 동시에 쓸 수 있음 (V2_DESIGN.md 5-4 ⚠️)
-- 마이그레이션은 **Flyway 필수** (`ddl-auto: validate`, 수기 schema.sql 금지)
-- 테스트 DB는 **Testcontainers**(Postgres) 사용, H2 금지
-- 외부 API 호출에는 **Resilience4j**(rate limit·백오프·서킷브레이커) 적용
+- Prisma unique·upsert·transaction으로 중복 수집과 동시 쓰기를 방지
+- Prisma migration을 DB 구조의 단일 기준으로 사용
+- 테스트는 Jest·Supertest와 PostgreSQL 테스트 환경 사용
+- 외부 API 호출에는 timeout·호출 제한·제한된 retry·backoff 적용
+- Redis·BullMQ는 대량 작업 또는 다중 인스턴스 확장 시에만 도입
 
 ### Frontend (JavaScript)
 
@@ -199,13 +194,13 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
 ## 환경변수 관리 (보안)
 
 절대 커밋 금지 파일:
-- `backend/src/main/resources/application-secret.yml`
-- `backend/src/main/resources/application-local.yml`
+- `backend/.env`
+- `backend/.env.local`
 - `frontend/.env`
 - `frontend/.env.local`
 - `frontend/.env*.local`
 
-API-Football API 키는 반드시 `application-secret.yml`에만 저장.
+API-Football API 키는 환경변수로만 주입한다.
 **어드민 비밀번호는 환경변수 필수화** — 미설정 시 부팅 실패 (v1의 기본값
 `admin/admin1234!` 방치 문제 재발 방지, V2_DESIGN.md 9장).
 

@@ -1,5 +1,8 @@
 # PitchLog 회고 — 커밋 이력 분석
 
+> 상태 안내: 이전 프로젝트의 Spring Boot·Java 기술 이력을 보존한 문서다. PitchLog v2의
+> 현재 기술 스택은 `ADR-001-NODE-BACKEND.md`를 따른다.
+
 > **현재 기준과의 구분:** 이 문서의 `.tsx`, `tsc`, Next.js 관련 경로와 명령은 v1 이력에 대한
 > 분석 기록임. 현재 프론트엔드는 React + Vite + JavaScript를 사용하며
 > [`FRONTEND_GUIDE.md`](./FRONTEND_GUIDE.md)를 우선 적용함.

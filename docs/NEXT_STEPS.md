@@ -102,9 +102,15 @@
 수동 브라우저 검수 (개발 서버)
 → 남은 페이지 i18n 적용
 → 발표 캡처 확정
-→ Spring Boot 도메인·수집 구조
+→ NestJS + TypeScript 백엔드 골격
+→ PostgreSQL·Prisma 연결과 대회·팀·선수 모델
+→ API-Football 공통 클라이언트와 EPL 스쿼드 수집
+→ NestJS REST API 구현
 → Localization 테이블과 API 계약
 → 실제 API 연결
 → entityNames.js 제거 + API displayName 사용
 → 검색 별칭과 미번역 관리
+→ 경기·순위·선수 통계 수집
+→ NestJS Socket.io Gateway 연결
+→ 필요 시 Redis·BullMQ Worker 추가
 ```
