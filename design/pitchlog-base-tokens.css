@@ -1,0 +1,70 @@
+/* Pretendard — 원래 _ds/tokens/fonts.css 가 제공하던 웹폰트.
+   그 파일이 로컬에 없어 CDN 으로 대체. 오프라인 빌드에서는
+   이 @import 를 지우고 self-host 로 바꾼다. */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+
+/* =============================================================
+   PitchLog — base token layer (--wds-*)
+   -------------------------------------------------------------
+   pitchlog-foundation.css 는 23개의 --wds-* 토큰에 alias 를 겁니다.
+   원래 그 값들은 Claude Design 샌드박스의
+     _ds/wanted-design-system-<uuid>/tokens/semantic.css
+   에서 왔고, 그 경로는 로컬에 존재하지 않습니다.
+   → 이 파일이 그 자리를 대신해 Foundation 을 self-contained 로 만듭니다.
+
+   [출처] recovered = pitchlog-design.pdf 400dpi 재렌더에서 라벨 판독 +
+                      스와치 픽셀 샘플링으로 복원 (알파 합성값 교차검증 완료)
+          decided   = 원본 값을 확보할 수 없어 PitchLog 가 직접 정한 값.
+                      전부 WCAG 대비 계산 근거가 있음 (주석에 비율 표기)
+   ============================================================= */
+
+:root{
+  /* ---- Brand ------------------------------------------------ */
+  --wds-primary:        rgb(51,102,255);   /* recovered · white text 4.68:1 */
+  --wds-primary-strong: #025FEB;           /* recovered · hover   · 5.47:1 */
+  --wds-primary-heavy:  #0054D1;           /* recovered · pressed · 6.59:1 */
+
+  /* ---- Text (rgba(55,56,60,α) 계열) ------------------------- */
+  --wds-text-strong:      #000000;              /* recovered */
+  --wds-text-normal:      #171719;              /* recovered (label-normal) */
+  --wds-text-alternative: rgba(55,56,60,0.71);  /* decided ← .61
+                             .61 은 흰 배경 3.66:1 / surface-alt 3.56:1 로
+                             본문 보조 텍스트 기준(4.5:1) 미달이었음.
+                             .71 → 4.83:1 / 4.66:1 */
+  --wds-text-assistive:   rgba(55,56,60,0.71);  /* decided · placeholder.
+                             입력값(#000)과는 명도로 충분히 구분되고,
+                             자리표시자 자체는 읽을 수 있어야 함 */
+  --wds-text-disable:     rgba(55,56,60,0.16);  /* recovered · 비활성 전용 */
+
+  /* ---- Surface --------------------------------------------- */
+  --wds-surface-page:     #FFFFFF;              /* recovered */
+  --wds-surface-page-alt: rgb(247,247,248);     /* recovered */
+
+  /* ---- Fill (rgba(112,115,124,α) 계열) ---------------------- */
+  --wds-fill-normal:      rgba(112,115,124,0.08); /* recovered */
+  --wds-fill-alternative: rgba(112,115,124,0.05); /* decided · hover 용 최약 단계 */
+
+  /* ---- Line ------------------------------------------------- */
+  --wds-line-alternative: rgba(112,115,124,0.16); /* decided · 장식용 구분선 */
+  --wds-line-normal:      rgba(112,115,124,0.22); /* recovered · 장식용 구분선 */
+  --wds-line-strong:      rgba(112,115,124,0.80); /* decided ← 원본 미확보.
+                             Input·Checkbox 등 컨트롤 경계에 쓰이므로
+                             WCAG 1.4.11(3:1) 충족이 필요.
+                             흰 배경 3.23:1 / surface-alt 3.08:1 */
+
+  /* ---- Interaction ------------------------------------------ */
+  --wds-interaction-disable:  rgba(112,115,124,0.08); /* decided · 비활성 배경.
+                             opacity 가 아닌 배경+전경 토큰 조합으로 표현 */
+  --wds-interaction-inactive: rgba(112,115,124,0.40); /* decided · Switch off.
+                             경계는 --wds-line-strong 1px 로 별도 확보 */
+
+  /* ---- Status (배지·상태 tint 파생용 원색) ------------------ */
+  --wds-status-positive:   rgb(0,191,64);   /* recovered */
+  --wds-status-cautionary: #FF9200;         /* recovered (픽셀 #FF9101) */
+  --wds-status-negative:   rgb(255,66,66);  /* recovered */
+
+  /* ---- Shadow (시각 전용, 대비 요건 없음) ------------------- */
+  --wds-shadow-card:    0 1px 2px rgba(23,23,25,0.06), 0 2px 8px rgba(23,23,25,0.06);
+  --wds-shadow-overlay: 0 4px 16px rgba(23,23,25,0.12);
+  --wds-shadow-modal:   0 8px 32px rgba(23,23,25,0.16);
+}
