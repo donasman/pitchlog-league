@@ -140,15 +140,12 @@ export default function StandingsTable({ entries = [], maxRows, competitionSlug,
               return (
                 <tr
                   key={entry.teamId ?? entry.teamSlug}
-                  className="pl-trow"
                   style={{
-                    '--zc': zc ?? 'transparent',
                     backgroundColor: rowBg,
                     boxShadow: 'inset 0 -1px 0 var(--pl-line)',
-                    cursor: 'pointer',
                   }}
                 >
-                  {/* 순위 — sticky, 좌측 표시선 */}
+                  {/* 순위 — sticky, 좌측 표시선 (inset box-shadow: ::before 대신 사용, <tr>::before는 Chrome에서 열을 밀어냄) */}
                   <td
                     className={`t-cap num ${stickyBg}`}
                     style={{
@@ -156,6 +153,9 @@ export default function StandingsTable({ entries = [], maxRows, competitionSlug,
                       position: 'sticky',
                       left: 0,
                       zIndex: 10,
+                      boxShadow: zc
+                        ? `inset 2px 0 0 ${zc}, inset 0 -1px 0 var(--pl-line)`
+                        : 'inset 0 -1px 0 var(--pl-line)',
                     }}
                   >
                     {entry.rank}
@@ -165,7 +165,7 @@ export default function StandingsTable({ entries = [], maxRows, competitionSlug,
                   <td
                     className={`${stickyBg}`}
                     style={{
-                      padding: '10px 12px 10px 8px',
+                      padding: '0 12px 0 8px',
                       position: 'sticky',
                       left: 28,
                       zIndex: 10,
@@ -179,7 +179,7 @@ export default function StandingsTable({ entries = [], maxRows, competitionSlug,
                         gap: 8,
                         color: 'var(--pl-text)',   /* 순위표 안에서 팀 이름을 브랜드 색으로 칠하지 않는다 */
                         textDecoration: 'none',
-                        outline: 'none',
+                        minHeight: 44,             /* 터치 타깃 44px */
                       }}
                     >
                       <TeamBadge
@@ -188,22 +188,25 @@ export default function StandingsTable({ entries = [], maxRows, competitionSlug,
                         size="xs"
                         name={entry.teamName}
                       />
-                      <span
-                        className="tname"
-                        style={{
-                          fontWeight: 500,
-                          maxWidth: compact ? 80 : 130,
-                        }}
-                      >
-                        {getLocalizedName(teamObj, locale) || entry.teamName}
+                      <span style={{ minWidth: 0 }}>
+                        <span
+                          className="tname"
+                          style={{
+                            fontWeight: 500,
+                            display: 'block',
+                            maxWidth: compact ? 80 : 130,
+                          }}
+                        >
+                          {getLocalizedName(teamObj, locale) || entry.teamName}
+                        </span>
+                        {/* 모바일: 구역 레이블 — block sm:hidden (인라인 display 금지) */}
+                        {labelKey && (
+                          <span className="t-cap block sm:hidden">
+                            {t(labelKey)}
+                          </span>
+                        )}
                       </span>
                     </Link>
-                    {/* 모바일: 구역 레이블 */}
-                    {labelKey && (
-                      <span className="t-cap sm:hidden" style={{ display: 'block', marginTop: 2 }}>
-                        {t(labelKey)}
-                      </span>
-                    )}
                   </td>
 
                   <td className="t-sub num" style={{ textAlign: 'center', padding: '10px 4px' }}>{entry.played}</td>

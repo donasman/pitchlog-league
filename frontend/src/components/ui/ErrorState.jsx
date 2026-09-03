@@ -32,7 +32,7 @@ export default function ErrorState({ title, description, onRetry }) {
           width: 48,
           height: 48,
           borderRadius: 12,
-          background: 'rgba(168, 99, 0, .10)',
+          background: 'rgba(208, 25, 25, .08)',
           display: 'grid',
           placeItems: 'center',
         }}
@@ -42,7 +42,7 @@ export default function ErrorState({ title, description, onRetry }) {
           height="24"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="var(--st-warn)"
+          stroke="var(--st-neg)"
           strokeWidth="1.6"
           strokeLinecap="round"
           strokeLinejoin="round"

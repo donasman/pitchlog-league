@@ -60,6 +60,11 @@ export default function EmptyState({ title, description }) {
           {displayDesc}
         </p>
       </div>
+
+      {/* 다음 행동 안내 — 오류와 구분되는 보조 힌트 */}
+      <p className="t-cap" style={{ margin: 0, color: 'var(--pl-sub)' }}>
+        {t('common.emptyHint')}
+      </p>
     </div>
   )
 }

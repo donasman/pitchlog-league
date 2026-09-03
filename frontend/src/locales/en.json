@@ -275,6 +275,7 @@
     "retry": "Retry",
     "noDataTitle": "No data",
     "noDataDesc": "Nothing to display.",
+    "emptyHint": "Try adjusting your filters or search",
     "close": "Close",
     "viewAll": "All",
     "dataUpdated": "Updated: {{datetime}} KST",

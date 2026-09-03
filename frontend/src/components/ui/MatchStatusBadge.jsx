@@ -1,7 +1,9 @@
 /**
  * 경기 상태 배지 8종
  * 예정·LIVE·하프타임·종료·재검증 중·확정·연기·취소
- * 색상 외 형태 단서(도트, 점선, 취소선)로 구분 — 색상 단독 의존 금지
+ * 색상 외 형태 단서(도트·사선 패턴·취소선)로 구분 — 색상 단독 의존 금지
+ *
+ * showDescription: 배지 아래 설명 표시 (badge 너비는 확장하지 않음)
  *
  * @param {{ state:string, showDescription?:boolean }} props
  */
@@ -27,7 +29,8 @@ export default function MatchStatusBadge({ state, showDescription = false }) {
   const ariaDesc = t(STATUS_DESC_KEYS[safeState])
 
   return (
-    <div className="inline-flex flex-col gap-0.5">
+    /* alignItems:'flex-start' — 설명 텍스트가 배지 너비를 늘리지 않게 */
+    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
       <span
         className={STATE_BADGE_CLASS[safeState]}
         aria-label={ariaDesc}
@@ -41,7 +44,9 @@ export default function MatchStatusBadge({ state, showDescription = false }) {
         {label}
       </span>
       {showDescription && (
-        <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>{ariaDesc}</span>
+        <span className="t-cap" style={{ color: 'var(--pl-sub)', whiteSpace: 'nowrap' }}>
+          {ariaDesc}
+        </span>
       )}
     </div>
   )

@@ -275,6 +275,7 @@
     "retry": "다시 시도",
     "noDataTitle": "데이터 없음",
     "noDataDesc": "표시할 데이터가 없습니다.",
+    "emptyHint": "필터나 검색어를 바꿔보세요",
     "close": "닫기",
     "viewAll": "전체",
     "dataUpdated": "데이터 기준: {{datetime}} KST",
