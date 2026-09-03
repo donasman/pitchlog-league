@@ -454,26 +454,28 @@ export default function AssistantPanel() {
 
   const handleAsk = useCallback(question => sendMessage(question), [sendMessage])
 
-  if (!isOpen) return null
-
   const isEmpty = messages.length === 0 && !isThinking
 
   return (
     <>
-      {/* 모바일 오버레이 */}
+      {/* 모바일 오버레이 — 페이드 */}
       <div
-        className="lg:hidden"
+        className="lg:hidden assistant-overlay"
+        data-open={isOpen ? 'true' : 'false'}
         style={{
           position: 'fixed',
           inset: 0,
           background: 'rgba(0,0,0,.3)',
           zIndex: 7000,
+          opacity: isOpen ? 1 : 0,
+          pointerEvents: isOpen ? 'auto' : 'none',
+          transition: 'opacity .22s ease',
         }}
         onClick={closePanel}
         aria-hidden="true"
       />
 
-      {/* 패널 — 데스크톱: 우측 슬라이드 / 모바일: 바텀시트 */}
+      {/* 패널 — 데스크톱: 우측 슬라이드 / 모바일: 바텀시트 슬라이드 */}
       <div
         style={{
           position: 'fixed',
@@ -482,8 +484,13 @@ export default function AssistantPanel() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          visibility: isOpen ? 'visible' : 'hidden',
+          transitionDelay: isOpen ? '0s' : '.28s',
+          transitionProperty: 'visibility',
         }}
         className="assistant-panel"
+        data-open={isOpen ? 'true' : 'false'}
+        aria-hidden={!isOpen}
       >
         <style>{`
           /* 데스크톱: 우측 슬라이드 */
@@ -493,14 +500,31 @@ export default function AssistantPanel() {
               width:420px;
               border-left:1px solid var(--pl-line);
               box-shadow:var(--sh-modal);
+              transform:translateX(100%);
+              transition:transform .28s cubic-bezier(.22,.61,.36,1), visibility 0s linear .28s;
+            }
+            .assistant-panel[data-open="true"]{
+              transform:translateX(0);
+              transition:transform .28s cubic-bezier(.22,.61,.36,1), visibility 0s linear 0s;
             }
           }
-          /* 모바일: 바텀시트 */
+          /* 모바일: 바텀시트 슬라이드 */
           @media(max-width:1023px){
             .assistant-panel{
               left:0; right:0; bottom:0; top:34%;
               border-radius:16px 16px 0 0;
               box-shadow:var(--sh-modal);
+              transform:translateY(100%);
+              transition:transform .28s cubic-bezier(.22,.61,.36,1), visibility 0s linear .28s;
+            }
+            .assistant-panel[data-open="true"]{
+              transform:translateY(0);
+              transition:transform .28s cubic-bezier(.22,.61,.36,1), visibility 0s linear 0s;
+            }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .assistant-panel, .assistant-overlay {
+              transition: none !important;
             }
           }
         `}</style>
