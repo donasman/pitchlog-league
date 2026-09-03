@@ -9,6 +9,7 @@
 | [BACKEND_GUIDE.md](./BACKEND_GUIDE.md) | NestJS·Prisma·Socket.io 백엔드 개발 기준 | **현재 기준 문서** |
 | [FRONTEND_CLI_PROMPT.md](./FRONTEND_CLI_PROMPT.md) | CLI에 전달할 프론트엔드 작업 요청문 | 실행용 |
 | [NEXT_STEPS.md](./NEXT_STEPS.md) | 현재 검사 결과와 다음 작업 순서 | **실행 체크리스트** |
+| [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) | 화면 구현 8단계 — Claude Code 인수인계 | **실행 체크리스트** |
 | [ADR-001-NODE-BACKEND.md](./ADR-001-NODE-BACKEND.md) | NestJS 통합 백엔드 기술 결정 | **확정 결정** |
 | [BACKEND_DESIGN_REVIEW.md](./BACKEND_DESIGN_REVIEW.md) | 백엔드 설계 재검토 — 착수 전 결정 사항 | **실행 체크리스트** |
 | [BACKEND_FEATURES.md](./BACKEND_FEATURES.md) | 백엔드 기능 목록 — 데이터 계층별 분류와 Phase 배치 | **실행 체크리스트** |
