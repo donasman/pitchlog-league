@@ -1,19 +1,38 @@
 /**
- * 팀 전체 일정 (/teams/:slug/fixtures)
- * 데이터: services/api.js → fetchTeamFixtures
+ * 팀 전체 일정 /teams/:slug/fixtures
+ * 대회 필터 + "오늘" 위치 표시 (과거·현재·미래를 한 흐름으로)
  */
 
 import { useParams, useSearchParams, Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import MatchCard from '@/components/ui/MatchCard'
-import FilterBar from '@/components/ui/FilterBar'
-import EmptyState from '@/components/ui/EmptyState'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
+import EmptyState from '@/components/ui/EmptyState'
 import { useData } from '@/hooks/useData'
 import { fetchTeamFixtures } from '@/services/api'
 import { getLocalizedName, getLocalizedCompetitionShortName } from '@/utils/localization'
+import { isLive } from '@/utils/matchStatus'
+import { toKSTDate } from '@/utils/dateFormat'
+
+const MOCK_TODAY_KST = '2026-11-23'  // Mock 기준일 (경기 데이터 기준)
+
+function getKSTDateKey(isoString) {
+  return new Date(isoString).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
+}
+
+/* 오늘 구분선 */
+function TodayDivider({ t }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0' }}>
+      <span style={{ height: 2, flex: 1, background: 'var(--pl-primary)' }} />
+      <span className="t-cap" style={{ color: 'var(--pl-primary)', fontWeight: 700, flexShrink: 0 }}>
+        {t('team.todayDivider')}
+      </span>
+      <span style={{ height: 2, flex: 1, background: 'var(--pl-primary)' }} />
+    </div>
+  )
+}
 
 export default function TeamFixturesPage() {
   const { slug } = useParams()
@@ -27,102 +46,121 @@ export default function TeamFixturesPage() {
   function handleFilter(v) {
     setSearchParams(prev => {
       const n = new URLSearchParams(prev)
-      n.set('competition', v)
+      if (v === 'all') n.delete('competition')
+      else n.set('competition', v)
       return n
-    })
+    }, { replace: true })
   }
 
-  if (loading) {
-    return (
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-        <LoadingSkeleton rows={2} variant="text" />
-        <LoadingSkeleton rows={5} />
-      </div>
-    )
-  }
+  if (loading) return (
+    <div style={{ maxWidth: 820, margin: '0 auto', padding: '24px 16px' }}>
+      <LoadingSkeleton rows={8} />
+    </div>
+  )
 
-  if (error) {
-    return (
-      <div className="max-w-3xl mx-auto px-4 py-16">
-        <ErrorState title={t('team.fixtureErrorTitle')} description={error} />
-      </div>
-    )
-  }
+  if (error) return (
+    <div style={{ maxWidth: 820, margin: '0 auto', padding: '64px 16px' }}>
+      <ErrorState title={t('team.fixtureErrorTitle')} description={error} />
+    </div>
+  )
 
   if (!data) return null
 
   const { team, matches, competitions } = data
+  const teamName = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
 
-  const teamDisplayName = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
-
-  const filterOptions = [
-    { value: 'all', label: t('team.allCompetitions') },
-    ...competitions.map(c => ({ value: c.slug, label: getLocalizedCompetitionShortName(c, locale) || c.shortName })),
+  const compOptions = [
+    { slug: 'all', label: t('team.allCompetitions') },
+    ...(competitions ?? []).map(c => ({
+      slug: c.slug,
+      label: getLocalizedCompetitionShortName(c, locale) || c.shortName,
+    })),
   ]
 
   const filtered = filterComp === 'all'
     ? matches
     : matches.filter(m => m.competitionSlug === filterComp)
 
-  const scheduled = filtered.filter(m => m.displayState === 'scheduled')
-  const results   = filtered.filter(m => ['confirmed','recheck','final'].includes(m.displayState))
-  const live      = filtered.filter(m => ['live','halftime'].includes(m.displayState))
+  /* 날짜 순 정렬 */
+  const sorted = [...filtered].sort((a, b) => a.date.localeCompare(b.date))
+
+  /* 오늘 기준으로 분리: 과거 / 오늘 / 미래 */
+  const past    = sorted.filter(m => getKSTDateKey(m.date) < MOCK_TODAY_KST)
+  const today   = sorted.filter(m => getKSTDateKey(m.date) === MOCK_TODAY_KST)
+  const future  = sorted.filter(m => getKSTDateKey(m.date) > MOCK_TODAY_KST)
+  const hasToday = today.length > 0 || past.length > 0  // show divider between past and future
 
   return (
-    <div className="max-w-3xl mx-auto px-4 lg:px-6 py-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <Link
-          to={`/teams/${slug}`}
-          className="text-muted-foreground hover:text-foreground p-1 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          aria-label={t('team.backToTeam')}
-        >
-          <ArrowLeft size={18} />
-        </Link>
-        <div>
-          <h1 className="text-xl font-bold text-foreground">
-            {teamDisplayName} — {t('team.fixtures')}
+    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+      <div style={{ maxWidth: 820, margin: '0 auto', padding: '16px 16px 48px' }} className="lg:px-8">
+
+        {/* 헤더 */}
+        <div style={{ marginBottom: 16 }}>
+          <Link to={`/teams/${slug}`} className="pl-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44 }}>
+            ← {teamName}
+          </Link>
+          <h1 className="t-page" style={{ margin: '4px 0 2px', fontSize: 22 }}>
+            {teamName} — {t('team.fixtures')}
           </h1>
-          <p className="text-sm text-muted-foreground">{t('team.fixtureSubtitle')}</p>
+          <span className="t-sub">2026-27 · {t('team.allCompetitions')}</span>
         </div>
+
+        {/* 대회 필터 */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          {compOptions.map(c => (
+            <button
+              key={c.slug}
+              className="pl-chip"
+              aria-pressed={filterComp === c.slug}
+              onClick={() => handleFilter(c.slug)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        {sorted.length === 0 && <EmptyState description={t('team.noFixtures')} />}
+
+        {sorted.length > 0 && (
+          <div className="pl-card" style={{ overflow: 'hidden' }}>
+
+            {/* LIVE */}
+            {today.filter(m => isLive(m.displayState)).map(m => (
+              <div key={m.id} style={{ padding: '8px 12px', borderBottom: '1px solid var(--pl-line)' }}>
+                <MatchCard match={m} />
+              </div>
+            ))}
+
+            {/* 과거 경기 */}
+            {past.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8, padding: 12 }}>
+                {past.map(m => <MatchCard key={m.id} match={m} compact />)}
+              </div>
+            )}
+
+            {/* 오늘 구분선 */}
+            {(past.length > 0 || today.length > 0) && (future.length > 0 || today.filter(m => !isLive(m.displayState)).length > 0) && (
+              <div style={{ padding: '0 12px' }}>
+                <TodayDivider t={t} />
+              </div>
+            )}
+
+            {/* 오늘 비-LIVE 경기 */}
+            {today.filter(m => !isLive(m.displayState)).map(m => (
+              <div key={m.id} style={{ padding: '8px 12px', borderBottom: '1px solid var(--pl-line)', background: 'color-mix(in srgb, var(--pl-primary) 5%, transparent)' }}>
+                <MatchCard match={m} />
+              </div>
+            ))}
+
+            {/* 미래 경기 */}
+            {future.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8, padding: 12 }}>
+                {future.map(m => <MatchCard key={m.id} match={m} />)}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-
-      <FilterBar
-        options={filterOptions}
-        value={filterComp}
-        onChange={handleFilter}
-        label={t('team.filterLabel')}
-      />
-
-      {live.length > 0 && (
-        <section>
-          <h2 className="text-xs font-semibold text-red-500 dark:text-red-400 uppercase tracking-wider mb-3">
-            {t('team.live')}
-          </h2>
-          <div className="space-y-2">{live.map(m => <MatchCard key={m.id} match={m} />)}</div>
-        </section>
-      )}
-
-      {scheduled.length > 0 && (
-        <section>
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            {t('team.upcoming')}
-          </h2>
-          <div className="space-y-2">{scheduled.map(m => <MatchCard key={m.id} match={m} />)}</div>
-        </section>
-      )}
-
-      {results.length > 0 && (
-        <section>
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            {t('team.results')}
-          </h2>
-          <div className="space-y-2">{results.map(m => <MatchCard key={m.id} match={m} compact />)}</div>
-        </section>
-      )}
-
-      {filtered.length === 0 && (
-        <EmptyState description={t('team.noFixtures')} />
-      )}
     </div>
   )
 }

@@ -213,6 +213,7 @@
     "eplRankPoints": "{{pts}}승점",
     "allCompetitions": "전체 대회",
     "fixtures": "전체 일정",
+    "todayDivider": "오늘",
     "noMatches": "경기 일정이 없습니다.",
     "recentForm": "최근 5경기 폼",
     "upcomingMatches": "다음 경기",
@@ -250,6 +251,7 @@
     "noStandings": "순위 데이터가 없습니다.",
     "allCompetitions": "전체 대회",
     "allCompetitionsChip": "전체 대회 {{count}}",
+    "allMatches": "전체 일정",
     "errorTitle": "대회 정보를 불러오지 못했습니다"
   },
   "knockout": {
@@ -267,6 +269,8 @@
     "leg1": "1차전",
     "leg2": "2차전",
     "aggregate": "합산",
+    "leg2Pending": "2차전 대기",
+    "tbd": "대진 미정",
     "winner": "진출",
     "through": "{{team}} 진출",
     "inProgress": "진행 중",
@@ -349,7 +353,14 @@
     "assists": "도움",
     "errorTitle": "통계 데이터를 불러오지 못했습니다",
     "noData": "데이터 없음",
-    "noDataDesc": "선택한 대회의 통계 데이터가 없습니다."
+    "noDataDesc": "선택한 대회의 통계 데이터가 없습니다.",
+    "allLeagues": "전체 합산",
+    "allDesc": "전체 합산에서는 대회별 분해를 함께 표기합니다",
+    "breakdown": "대회별 분해",
+    "rank": "#",
+    "player": "선수",
+    "team": "팀",
+    "total": "합계"
   },
   "notFound": {
     "title": "페이지를 찾을 수 없습니다",

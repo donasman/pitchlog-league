@@ -213,6 +213,7 @@
     "eplRankPoints": "{{pts}} pts",
     "allCompetitions": "All",
     "fixtures": "All Fixtures",
+    "todayDivider": "Today",
     "noMatches": "No fixtures available.",
     "recentForm": "Recent Form",
     "upcomingMatches": "Next Matches",
@@ -250,6 +251,7 @@
     "noStandings": "No standings data.",
     "allCompetitions": "All competitions",
     "allCompetitionsChip": "All ({{count}})",
+    "allMatches": "All fixtures",
     "errorTitle": "Could not load competition"
   },
   "knockout": {
@@ -265,6 +267,8 @@
     "semiFinal": "Semi-final",
     "final": "Final",
     "leg1": "1st Leg",
+    "leg2Pending": "Awaiting 2nd leg",
+    "tbd": "TBD",
     "leg2": "2nd Leg",
     "aggregate": "Agg.",
     "winner": "Through",
@@ -349,7 +353,14 @@
     "assists": "Assists",
     "errorTitle": "Could not load stats",
     "noData": "No data",
-    "noDataDesc": "No stats available for this competition."
+    "noDataDesc": "No stats available for this competition.",
+    "allLeagues": "All competitions",
+    "allDesc": "Combined totals include breakdown by competition",
+    "breakdown": "By competition",
+    "rank": "#",
+    "player": "Player",
+    "team": "Team",
+    "total": "Total"
   },
   "notFound": {
     "title": "Page Not Found",

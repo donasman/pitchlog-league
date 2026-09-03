@@ -220,6 +220,17 @@ export async function fetchTopAssisters() { return TOP_ASSISTERS }
 /** 득점 순위 (전체 대회 합산) */
 export async function fetchTopScorersAll() { return TOP_SCORERS_ALL }
 
+/**
+ * 통계 — 전체 대회 합산 + 대회별 분해
+ * stats 페이지의 "전체 합산" 탭용
+ */
+export async function fetchAllStats() {
+  return {
+    topScorers: TOP_SCORERS_ALL,
+    topAssisters: TOP_ASSISTERS,
+  }
+}
+
 // ─── UCL ───────────────────────────────────────────────────────
 
 /** UCL 녹아웃 대진 */
