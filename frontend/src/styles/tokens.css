@@ -284,19 +284,8 @@
   border-radius: 6px;
 }
 
-/* 순위 구역 — 테이블 행용 (.trow) */
-.pl-trow { position: relative; }
-.pl-trow::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--zc, transparent);
-  pointer-events: none;
-  z-index: 2;
-}
+/* 순위 구역 — 표 행 좌측 표시선은 rank <td>의 box-shadow로 구현한다.
+   <tr>::before 는 Chrome 에서 익명 table-cell로 배치돼 열이 밀리므로 사용하지 않는다. */
 
 /* 범례 */
 .pl-legend {
@@ -322,6 +311,12 @@
 }
 
 /* 폼 배지 */
+/* 터치 타깃 — pointer: coarse 환경(터치스크린)에서 최소 44px */
+@media (pointer: coarse) {
+  .pl-chip, .pl-chip-m { min-height: 44px; }
+  .pl-btn-sm { min-height: 44px; }
+}
+
 .pl-form { display: inline-flex; gap: 3px; }
 .pl-form-badge {
   width: 18px;
