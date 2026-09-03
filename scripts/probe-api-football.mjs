@@ -8,7 +8,7 @@
  * 실행:
  *   API_FOOTBALL_KEY=발급받은키 node scripts/probe-api-football.mjs
  *
- * 호출 수: 약 7콜 (일 한도 7,500 대비 무시할 수준)
+ * 호출 수: 약 14콜 (일 한도 7,500 대비 무시할 수준)
  *
  * 이 스크립트는 BACKEND_DESIGN_REVIEW.md B-1(26-27 시즌 데이터 실호출 확인)도 함께 수행한다.
  */
@@ -188,6 +188,53 @@ async function main() {
       collectKeys(sample, 'players.statistics', allKeys)
     }
   } catch (e) { bad(e.message) }
+
+  // ── 7-1. 아직 안 쓰는 엔드포인트 점검 ★ ───────────────────
+  head('7-1. 계획에 없는 엔드포인트 — 실제로 있는가')
+
+  const CANDIDATES = [
+    { name: '득점 랭킹',      path: `/players/topscorers?league=${LEAGUE}&season=${SEASON}`,
+      why: '지금은 /players 23페이지를 받아 자체 집계 (~400콜) → 1콜로 대체 가능?' },
+    { name: '도움 랭킹',      path: `/players/topassists?league=${LEAGUE}&season=${SEASON}`,
+      why: '같음' },
+    { name: '경고 랭킹',      path: `/players/topyellowcards?league=${LEAGUE}&season=${SEASON}`,
+      why: '통계 화면 카드 랭킹' },
+    { name: '팀 시즌 통계',   path: `/teams/statistics?league=${LEAGUE}&season=${SEASON}&team=33`,
+      why: '홈/원정 성적·폼·평균 득실 → 팀 상세 화면' },
+    { name: '라운드 목록',    path: `/fixtures/rounds?league=${LEAGUE}&season=${SEASON}`,
+      why: '지금은 "Regular Season - 12" 문자열 파싱 → 전용 엔드포인트로 대체 가능?' },
+    { name: '결장자',        path: `/sidelined?league=${LEAGUE}&season=${SEASON}`,
+      why: '부상 외 결장 사유(징계 등). /injuries와 별개인지' },
+  ]
+
+  for (const c of CANDIDATES) {
+    try {
+      const r = await get(c.path)
+      if (r.results === 0) {
+        warn(`${c.name} — 응답은 오지만 데이터 0건`)
+      } else {
+        ok(`${c.name} — ${r.results}건`)
+        const sample = Array.isArray(r.response) ? r.response[0] : r.response
+        const keys = [...collectKeys(sample, '', new Set())].filter(k => !k.includes('.')).slice(0, 12)
+        console.log(`${C.d}   최상위 키: ${keys.join(', ')}${C.x}`)
+        collectKeys(sample, c.path.split('?')[0], allKeys)
+      }
+      console.log(`${C.d}   → ${c.why}${C.x}`)
+    } catch (e) {
+      bad(`${c.name} — ${e.message.split(' — ')[0]}`)
+      console.log(`${C.d}   → 이 엔드포인트는 쓸 수 없다${C.x}`)
+    }
+  }
+
+  // ── 7-2. H2H ──────────────────────────────────────────────
+  head('7-2. H2H 전용 엔드포인트')
+  try {
+    const h = await get('/fixtures/headtohead?h2h=33-40&last=5')
+    ok(`맞대결 ${h.results}건 조회됨`)
+    console.log(`${C.d}   → 지금은 #33에서 자체 계산 예정. 이걸 쓰면 계산이 불필요할 수 있다${C.x}`)
+  } catch (e) {
+    bad(`H2H — ${e.message.split(' — ')[0]}`)
+  }
 
   // ── 8. xG 전수 검색 ★ ─────────────────────────────────────
   head('8. xG · 기대값 계열 전수 검색')
