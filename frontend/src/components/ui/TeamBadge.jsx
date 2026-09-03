@@ -1,19 +1,15 @@
 /**
- * 팀 로고 자리표시자
+ * 팀 엠블럼 / 로고
  * 실제 로고 이미지가 없을 때 이니셜 기반 배지를 렌더링.
- * 로고 URL이 제공되면 이미지를 우선 시도하고, 로딩 실패 시 이니셜로 폴백.
+ * logoUrl이 제공되면 이미지를 우선 시도하고, 로딩 실패 시 이니셜로 폴백.
  *
  * @param {{ initials:string, color:string, size?:'xs'|'sm'|'md'|'lg', name?:string, logoUrl?:string }} props
  */
 
 import { useState } from 'react'
 
-const SIZE_MAP = {
-  xs: 'w-7 h-7 text-[10px]',
-  sm: 'w-9 h-9 text-xs',
-  md: 'w-12 h-12 text-sm',
-  lg: 'w-16 h-16 text-base',
-}
+const SIZE_PX = { xs: 28, sm: 36, md: 44, lg: 56 }
+const FONT_PX = { xs: 10, sm: 12, md: 14, lg: 16 }
 
 /** 배경색 밝기에 따라 텍스트 색상 결정 */
 function getTextColor(hex) {
@@ -26,8 +22,8 @@ function getTextColor(hex) {
 
 export default function TeamBadge({ initials, color, size = 'md', name, logoUrl }) {
   const [imgFailed, setImgFailed] = useState(false)
-  const sizeClass = SIZE_MAP[size] ?? SIZE_MAP.md
-  const textColor = getTextColor(color ?? '#2d4060')
+  const px = SIZE_PX[size] ?? SIZE_PX.md
+  const fs = FONT_PX[size] ?? FONT_PX.md
   const displayInitials = (initials ?? '?').slice(0, 3)
 
   if (logoUrl && !imgFailed) {
@@ -35,24 +31,33 @@ export default function TeamBadge({ initials, color, size = 'md', name, logoUrl 
       <img
         src={logoUrl}
         alt={name ?? initials}
-        width={48}
-        height={48}
+        width={px}
+        height={px}
         loading="lazy"
         onError={() => setImgFailed(true)}
-        className={`${sizeClass} rounded-lg object-contain flex-shrink-0`}
+        className="pl-emblem"
+        style={{ width: px, height: px }}
       />
     )
   }
 
+  const textColor = getTextColor(color ?? '#2d4060')
+
   return (
-    <div
-      className={`${sizeClass} rounded-lg flex items-center justify-center flex-shrink-0 font-bold leading-none`}
-      style={{ backgroundColor: color ?? '#2d4060', color: textColor }}
+    <span
+      className="pl-emblem"
+      style={{
+        width: px,
+        height: px,
+        fontSize: fs,
+        backgroundColor: color ?? '#2d4060',
+        color: textColor,
+      }}
       role="img"
       aria-label={name ?? initials}
       title={name ?? initials}
     >
       {displayInitials}
-    </div>
+    </span>
   )
 }

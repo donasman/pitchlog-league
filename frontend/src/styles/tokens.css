@@ -1,0 +1,363 @@
+/* PitchLog — 파운데이션 토큰 (현재 기준)
+   출처: Claude Design 시안 내보내기 (design/exports/pitchlog-league/pitchlog.css)
+   2026-09-03 대비 실측 후 2건 수정. 원본은 exports/ 에 그대로 보관한다.
+
+   [수정 1] --form-draw 신설
+     폼 무승부 배지가 --pl-control(합성 141,143,150) 위 흰 글자로 3.23:1 이었다.
+     10px 텍스트라 본문 기준 4.5:1 이 필요하다.
+     --pl-control 자체는 컨트롤 경계용(3:1)으로 3.23:1 통과이므로 건드리지 않고,
+     폼 배지 전용 색을 새로 둔다. #667085 → 흰 글자 4.97:1
+
+   [수정 2] --pl-sub 조정
+     #64748B 는 카드(#FFFFFF) 위 4.76:1 로 통과하지만
+     페이지 배경(#F5F7FA) 위에서 4.43:1 로 미달이었다.
+     #61707F 로 조정 — 카드 5.08:1 / 배경 4.74:1 양쪽 통과. 육안 차이는 거의 없다. */
+
+:root {
+  --pl-primary: #3366FF;
+  --pl-primary-hover: #025FEB;
+  --pl-primary-pressed: #0054D1;
+  --pl-on-primary: #FFFFFF;
+
+  --pl-bg: #F5F7FA;
+  --pl-card: #FFFFFF;
+  --pl-text: #0F172A;
+  --pl-sub: #61707F;
+  --pl-line: #E2E8F0;
+  --pl-control: rgba(112, 115, 124, .80);
+  --pl-fill: rgba(112, 115, 124, .08);
+  --pl-fill-2: rgba(112, 115, 124, .14);
+
+  --form-draw: #667085; /* 폼 무승부 — 흰 글자 4.97:1 · 다크 카드와 3.59:1. 다크에서도 그대로 쓴다 */
+
+  /* 순위 구역 색 */
+  --z-ucl: #3B82F6;
+  --z-uclpo: #EAB308;
+  --z-uel: #F97316;
+  --z-uecl: #16A34A;
+  --z-relpo: #F87171;
+  --z-rel: #DC2626;
+
+  /* 상태 색 */
+  --st-pos: #007833;
+  --st-warn: #9C5600;
+  --st-neg: #D01919;
+  --st-neg-text: #B81515;
+  --st-pos-text: #007833;
+  --st-warn-text: #9C5600;
+
+  /* 간격 */
+  --sp-4: 4px;
+  --sp-8: 8px;
+  --sp-10: 10px;
+  --sp-12: 12px;
+  --sp-16: 16px;
+  --sp-20: 20px;
+  --sp-24: 24px;
+  --sp-32: 32px;
+  --sp-40: 40px;
+
+  /* 모서리·그림자 */
+  --r-card: 12px;
+  --r-sm: 8px;
+  --r-pill: 999px;
+  --sh-card: 0 1px 2px rgba(0, 0, 0, .08);
+  --sh-over: 0 4px 12px rgba(0, 0, 0, .08);
+  --sh-modal: 0 8px 24px rgba(0, 0, 0, .12);
+
+  --font: "Pretendard JP", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+}
+
+.dark {
+  --pl-primary: #6E93FF;
+  --pl-primary-hover: #8FACFF;
+  --pl-primary-pressed: #A0BAFF;
+  --pl-on-primary: #0B0B0D;
+
+  --pl-bg: #0B1120;
+  --pl-card: #0F172A;
+  --pl-text: #F1F5F9;
+  --pl-sub: #94A3B8;
+  --pl-line: #1E293B;
+  --pl-control: #94A3B8;
+  --pl-fill: rgba(142, 142, 151, .12);
+  --pl-fill-2: rgba(142, 142, 151, .20);
+
+  --st-neg-text: #F87171;
+  --st-pos-text: #4ADE80;
+  --st-warn-text: #E0A83C;
+
+  --sh-card: 0 1px 2px rgba(0, 0, 0, .4);
+  --sh-over: 0 4px 12px rgba(0, 0, 0, .5);
+  --sh-modal: 0 8px 24px rgba(0, 0, 0, .6);
+}
+
+/* ── 기본 리셋 ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+/* 숫자 고정폭 */
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* 타입 스케일 */
+.t-page { font-size: 28px; line-height: 1.36; font-weight: 700; letter-spacing: -.024em; }
+.t-sec  { font-size: 20px; line-height: 1.4;  font-weight: 700; letter-spacing: -.012em; }
+.t-card { font-size: 16px; line-height: 1.5;  font-weight: 600; }
+.t-body { font-size: 15px; line-height: 1.47; font-weight: 500; }
+.t-sub  { font-size: 13px; line-height: 1.385; font-weight: 500; color: var(--pl-sub); }
+.t-cap  { font-size: 11px; line-height: 1.28; font-weight: 600; letter-spacing: .031em; color: var(--pl-sub); }
+.t-num  { font-size: 17px; line-height: 1.4;  font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* 카드 */
+.pl-card {
+  background: var(--pl-card);
+  border-radius: var(--r-card);
+  box-shadow: inset 0 0 0 1px var(--pl-line);
+}
+.pl-hr { height: 1px; background: var(--pl-line); border: 0; margin: 0; }
+
+/* 칩 — 활성은 틴트가 아니라 채운다 */
+.pl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--pl-control);
+  background: transparent;
+  color: var(--pl-text);
+  font: 500 13px/1 var(--font);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.pl-chip:hover { background: var(--pl-fill); }
+.pl-chip[aria-pressed="true"] {
+  background: var(--pl-primary);
+  border-color: var(--pl-primary);
+  color: var(--pl-on-primary);
+  font-weight: 600;
+}
+.pl-chip-m { height: 44px; padding: 0 16px; font-size: 14px; }
+
+/* 버튼 */
+.pl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: var(--r-sm);
+  border: 0;
+  background: var(--pl-primary);
+  color: var(--pl-on-primary);
+  font: 600 15px/1 var(--font);
+  cursor: pointer;
+  transition: background .12s;
+}
+.pl-btn:hover { background: var(--pl-primary-hover); }
+.pl-btn:active { background: var(--pl-primary-pressed); }
+.pl-btn-ghost {
+  background: transparent;
+  color: var(--pl-text);
+  border: 1px solid var(--pl-control);
+}
+.pl-btn-ghost:hover { background: var(--pl-fill); }
+.pl-btn-sm { height: 34px; font-size: 13px; padding: 0 12px; }
+
+/* 링크 */
+.pl-link {
+  color: var(--pl-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+}
+
+/* 포커스 */
+.pl-focus-ring:focus-visible {
+  outline: 2px solid var(--pl-primary);
+  outline-offset: 2px;
+}
+
+/* 경기 상태 배지 8종 — 항상 한 줄 */
+.pl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font: 600 11px/1 var(--font);
+  letter-spacing: .02em;
+  white-space: nowrap;
+  flex: none;
+}
+
+/* 예정 */
+.b-sched {
+  background: var(--pl-fill);
+  color: #475569;
+  box-shadow: inset 0 0 0 1px var(--pl-line);
+}
+.dark .b-sched { color: #A9B4C4; }
+
+/* LIVE */
+.b-live { background: var(--st-neg); color: #fff; }
+
+/* 하프타임 */
+.b-half { background: var(--st-warn); color: #fff; }
+
+/* 종료 */
+.b-ft { background: var(--pl-fill-2); color: var(--pl-text); }
+
+/* 재검증 중 */
+.b-recheck {
+  background: transparent;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(168, 99, 0, .10) 0 4px,
+    transparent 4px 8px
+  );
+  color: var(--st-warn);
+  box-shadow: inset 0 0 0 1px var(--st-warn);
+}
+.dark .b-recheck {
+  color: #E0A83C;
+  box-shadow: inset 0 0 0 1px #E0A83C;
+}
+
+/* 확정 */
+.b-final { background: var(--st-pos); color: #fff; }
+
+/* 연기 */
+.b-post {
+  background: transparent;
+  color: var(--pl-sub);
+  box-shadow: inset 0 0 0 1px var(--pl-control);
+  border-style: dashed;
+}
+
+/* 취소 */
+.b-cancel {
+  background: transparent;
+  color: var(--pl-sub);
+  box-shadow: inset 0 0 0 1px var(--pl-line);
+  text-decoration: line-through;
+}
+
+/* 상태 도트 */
+.pl-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.pl-dot-pulse { animation: plpulse 1.1s ease-in-out infinite; }
+.pl-dot-ring { background: transparent; box-shadow: inset 0 0 0 2px currentColor; }
+
+@keyframes plpulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@keyframes plspin  { to { transform: rotate(360deg); } }
+@keyframes plshim  { to { background-position: 200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pl-dot-pulse, .pl-spin, .pl-sk { animation: none; }
+}
+
+/* 스켈레톤 */
+.pl-sk {
+  background: linear-gradient(
+    90deg,
+    var(--pl-fill) 25%,
+    var(--pl-fill-2) 37%,
+    var(--pl-fill) 63%
+  );
+  background-size: 200% 100%;
+  animation: plshim 1.3s linear infinite;
+  border-radius: 6px;
+}
+
+/* 순위 구역 — 테이블 행용 (.trow) */
+.pl-trow { position: relative; }
+.pl-trow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--zc, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 범례 */
+.pl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.pl-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--pl-sub);
+  white-space: nowrap;
+}
+.pl-legend-bar {
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--zc);
+  display: block;
+}
+
+/* 폼 배지 */
+.pl-form { display: inline-flex; gap: 3px; }
+.pl-form-badge {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 10px/1 var(--font);
+  font-style: normal;
+  color: #fff;
+}
+.f-w { background: var(--st-pos); }
+.f-d { background: var(--form-draw); }
+.f-l { background: var(--st-neg); }
+
+/* 긴 팀명 정책: 말줄임 */
+.tname {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* 팀 엠블럼 자리표시자 */
+.pl-emblem {
+  border-radius: 6px;
+  flex: none;
+  background: var(--pl-fill-2);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: var(--pl-sub);
+  font-family: var(--font);
+  overflow: hidden;
+  object-fit: contain;
+}
