@@ -75,6 +75,24 @@ export const ZONE_LEGEND_COLOR = {
 }
 
 /**
+ * 구역별 좌측 표시선 패턴 (색을 빼도 구역 구분 가능).
+ * solid: 실선 | dash: 점선 | dot: 점 | block: 블록
+ * 패턴은 data-pat 속성으로 .zrow CSS에 전달된다.
+ */
+export const ZONE_PAT = {
+  champions_league:         'solid',
+  champions_league_playoff: 'dash',
+  europa_league:            'dash',
+  europa_conference:        'dot',
+  relegation_playoff:       'block',
+  relegation:               'solid',
+  none:                     null,
+  ucl_direct:               'solid',
+  ucl_playoff:              'dash',
+  ucl_eliminated:           'dot',
+}
+
+/**
  * 구역별 CSS 변수값 (--z-* tokens).
  * StandingsTable 에서 --zc 로 주입해 좌측 2px 표시선 + 4% 배경 틴트에 사용.
  */

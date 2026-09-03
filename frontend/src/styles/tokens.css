@@ -287,6 +287,60 @@
 /* 순위 구역 — 표 행 좌측 표시선은 rank <td>의 box-shadow로 구현한다.
    <tr>::before 는 Chrome 에서 익명 table-cell로 배치돼 열이 밀리므로 사용하지 않는다. */
 
+/* ─── DIV 기반 순위 행 (.zrow) — StandingsPage 전용 ──────────────────────────
+   <div role="row">에서 ::before 패턴 표시선이 동작한다.
+   compact StandingsTable (미니 패널)은 별도 <table> 구조를 유지한다.        */
+.zrow {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.zrow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--zc, transparent);
+  pointer-events: none;
+}
+.zrow[data-zone] {
+  background: color-mix(in srgb, var(--zc) 4%, transparent);
+}
+.zrow:hover {
+  background: color-mix(in srgb, var(--zc, var(--pl-text)) 8%, transparent);
+  cursor: pointer;
+}
+.zrow + .zrow {
+  box-shadow: inset 0 1px 0 var(--pl-line);
+}
+/* 패턴 — 색 없이도 구역 구분 */
+.zrow[data-pat="dash"]::before {
+  background: repeating-linear-gradient(
+    180deg,
+    var(--zc) 0 8px,
+    transparent 8px 14px
+  );
+}
+.zrow[data-pat="dot"]::before {
+  background: repeating-linear-gradient(
+    180deg,
+    var(--zc) 0 3px,
+    transparent 3px 7px
+  );
+}
+.zrow[data-pat="block"]::before {
+  background: repeating-linear-gradient(
+    180deg,
+    var(--zc) 0 16px,
+    transparent 16px 22px
+  );
+}
+
 /* 범례 */
 .pl-legend {
   display: flex;
