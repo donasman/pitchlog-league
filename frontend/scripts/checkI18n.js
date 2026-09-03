@@ -46,6 +46,7 @@ const KO_WHITELIST = [
   resolve(SRC, 'mocks'),
   resolve(SRC, 'i18n', 'entityNames.js'),
   resolve(SRC, 'components', 'layout', 'LanguageToggle.jsx'),
+  resolve(SRC, 'pages', 'PartsPage.jsx'),  // 부품 시트 — dev 전용, 하드코딩 한국어 허용
 ]
 
 function isWhitelisted(absPath) {

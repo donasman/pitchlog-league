@@ -1,12 +1,14 @@
 /**
  * 로딩 스켈레톤
+ * 실제 콘텐츠와 같은 레이아웃을 유지해 레이아웃 이동(CLS)을 최소화한다.
+ *
  * @param {{ rows?:number, variant?:'row'|'card'|'text' }} props
  */
 
 import { useTranslation } from 'react-i18next'
 
-function Bar({ className = '' }) {
-  return <div className={`bg-navy-700 rounded animate-pulse ${className}`} aria-hidden="true" />
+function Bar({ style }) {
+  return <div className="pl-sk" style={style} aria-hidden="true" />
 }
 
 export default function LoadingSkeleton({ rows = 5, variant = 'row' }) {
@@ -15,12 +17,16 @@ export default function LoadingSkeleton({ rows = 5, variant = 'row' }) {
 
   if (variant === 'card') {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="status" aria-label={label}>
+      <div
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}
+        role="status"
+        aria-label={label}
+      >
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="bg-navy-800 rounded-lg p-4 space-y-3">
-            <Bar className="h-4 w-3/4" />
-            <Bar className="h-8 w-full" />
-            <Bar className="h-3 w-1/2" />
+          <div key={i} className="pl-card" style={{ padding: 16, display: 'grid', gap: 12 }}>
+            <Bar style={{ height: 16, width: '75%' }} />
+            <Bar style={{ height: 40 }} />
+            <Bar style={{ height: 12, width: '50%' }} />
           </div>
         ))}
       </div>
@@ -29,23 +35,24 @@ export default function LoadingSkeleton({ rows = 5, variant = 'row' }) {
 
   if (variant === 'text') {
     return (
-      <div className="space-y-2" role="status" aria-label={label}>
+      <div style={{ display: 'grid', gap: 8 }} role="status" aria-label={label}>
         {Array.from({ length: rows }).map((_, i) => (
-          <Bar key={i} className={`h-4 ${i % 3 === 2 ? 'w-1/2' : 'w-full'}`} />
+          <Bar key={i} style={{ height: 16, width: i % 3 === 2 ? '50%' : '100%' }} />
         ))}
       </div>
     )
   }
 
+  /* row — 순위표·목록 행 */
   return (
-    <div className="space-y-1" role="status" aria-label={label}>
+    <div style={{ display: 'grid', gap: 4 }} role="status" aria-label={label}>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 py-2.5 px-2">
-          <Bar className="h-4 w-6" />
-          <Bar className="w-7 h-7 rounded-lg flex-shrink-0" />
-          <Bar className="h-4 flex-1" />
-          <Bar className="h-4 w-8" />
-          <Bar className="h-4 w-10" />
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px' }}>
+          <Bar style={{ height: 14, width: 24 }} />
+          <Bar style={{ width: 28, height: 28, borderRadius: 6, flexShrink: 0 }} />
+          <Bar style={{ height: 14, flex: 1 }} />
+          <Bar style={{ height: 14, width: 32 }} />
+          <Bar style={{ height: 14, width: 40 }} />
         </div>
       ))}
     </div>

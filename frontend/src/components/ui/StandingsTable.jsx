@@ -1,9 +1,10 @@
 /**
  * 순위 테이블
- * compact=false (기본): 전체 열 표시, minWidth 480px
- * compact=true  (홈 사이드바): 핵심 열만 표시(순위·팀·경기수·득실·승점), minWidth 260px
- * 다국어: useTranslation (열 헤더·범례), getLocalizedName (팀명)
- * 구역 색상: 왼쪽 표시선 + 연한 행 배경 + sticky 셀 합성 배경
+ * compact=false (기본): 전체 열 표시
+ * compact=true  (홈 사이드바): 핵심 열만 표시 (순위·팀·득실·승점)
+ *
+ * 구역 표기: 좌측 2px 표시선 + 4% 배경 틴트 + 범례 텍스트 (색상 단독 의존 금지)
+ * 순위표 안에서 팀 이름을 브랜드 색으로 칠하지 않는다 (PRD 9-2).
  *
  * @param {{ entries:Array<Object>, isUCL?:boolean, maxRows?:number,
  *           competitionSlug?:string, compact?:boolean }} props
@@ -13,10 +14,13 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import TeamBadge from './TeamBadge'
 import FormBadge from './FormBadge'
-import { ZONE_BORDER_CLASS, ZONE_BG_CLASS, ZONE_STICKY_BG, ZONE_LEGEND_COLOR } from '@/utils/standingsZone'
+import {
+  ZONE_STICKY_BG,
+  ZONE_LEGEND_COLOR,
+  ZONE_COLOR_VAR,
+} from '@/utils/standingsZone'
 import { getLocalizedName } from '@/utils/localization'
 
-/** entries 에 실제로 존재하는 zone 만 순서대로 렌더 */
 const ZONE_DISPLAY_ORDER = [
   'champions_league',
   'champions_league_playoff',
@@ -29,7 +33,6 @@ const ZONE_DISPLAY_ORDER = [
   'ucl_eliminated',
 ]
 
-/** zone → i18n 키 (빈 문자열 = 범례에 표시 안 함) */
 const ZONE_LABEL_KEY = {
   champions_league:          'standings.legend.ucl',
   champions_league_playoff:  '',
@@ -43,20 +46,30 @@ const ZONE_LABEL_KEY = {
   none:                      '',
 }
 
-/** entries 에 실제 존재하는 zone 만 추려 렌더하는 데이터 기반 범례 */
 function ZoneLegend({ entries }) {
   const { t } = useTranslation()
   const zonesInData = new Set(entries.map(e => e.zone ?? 'none'))
   const items = ZONE_DISPLAY_ORDER.filter(z => zonesInData.has(z) && ZONE_LABEL_KEY[z])
   if (!items.length) return null
+
   return (
-    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mb-3">
-      {items.map(zone => (
-        <span key={zone} className="flex items-center gap-1.5">
-          <span className={`w-2 h-3 ${ZONE_LEGEND_COLOR[zone] ?? 'bg-muted'} rounded-sm`} aria-hidden="true" />
-          {t(ZONE_LABEL_KEY[zone])}
-        </span>
-      ))}
+    <div className="pl-legend" style={{ marginBottom: 12 }}>
+      {items.map(zone => {
+        const zc = ZONE_COLOR_VAR[zone]
+        return (
+          <span
+            key={zone}
+            className="pl-legend-item"
+            style={{ '--zc': zc ?? ZONE_LEGEND_COLOR[zone] }}
+          >
+            {zc
+              ? <i className="pl-legend-bar" style={{ background: zc }} />
+              : <span className={`w-2 h-3 rounded-sm ${ZONE_LEGEND_COLOR[zone] ?? 'bg-muted'}`} aria-hidden="true" />
+            }
+            {t(ZONE_LABEL_KEY[zone])}
+          </span>
+        )
+      })}
     </div>
   )
 }
@@ -71,84 +84,154 @@ export default function StandingsTable({ entries = [], maxRows, competitionSlug,
     <div>
       <ZoneLegend entries={rows} />
       {!compact && (
-        <p className="text-xs text-muted-foreground/60 mb-1 sm:hidden">{t('standings.scrollHint')}</p>
+        <p className="t-cap" style={{ marginBottom: 4, display: 'block' }} aria-hidden="true">
+          <span className="sm:hidden">{t('standings.scrollHint')}</span>
+        </p>
       )}
-      <div className="overflow-x-auto -mx-1 px-1">
-        <table className="w-full text-sm" style={{ minWidth: minW }}>
+      <div className="overflow-x-auto -mx-1 px-1" role="region">
+        <table
+          className="w-full text-sm"
+          style={{ minWidth: minW, borderCollapse: 'separate', borderSpacing: 0 }}
+        >
           <thead>
-            <tr className="text-muted-foreground text-xs border-b border-border">
-              <th className="text-left py-2 pr-1 w-7 sticky left-0 bg-card z-10">{t('standings.rank')}</th>
-              <th className="text-left py-2 pr-3 sticky left-7 bg-card z-10 min-w-[110px]">{t('standings.team')}</th>
-              <th className="text-center py-2 w-8" title={t('standings.played')}>{t('standings.played')}</th>
-              {!compact && <>
-                <th className="text-center py-2 w-8 hidden sm:table-cell" title={t('standings.won')}>{t('standings.won')}</th>
-                <th className="text-center py-2 w-8 hidden sm:table-cell" title={t('standings.drawn')}>{t('standings.drawn')}</th>
-                <th className="text-center py-2 w-8 hidden sm:table-cell" title={t('standings.lost')}>{t('standings.lost')}</th>
-                <th className="text-center py-2 w-10 hidden sm:table-cell" title={t('standings.goalsFor')}>{t('standings.goalsFor')}</th>
-                <th className="text-center py-2 w-10 hidden sm:table-cell" title={t('standings.goalsAgainst')}>{t('standings.goalsAgainst')}</th>
-              </>}
-              <th className="text-center py-2 w-10" title={t('standings.goalDifference')}>{t('standings.goalDifference')}</th>
-              <th className="text-center py-2 w-10 font-bold" title={t('standings.points')}>{t('standings.points')}</th>
-              {!compact && <>
-                <th className="text-center py-2 hidden md:table-cell">{t('standings.form')}</th>
-                <th className="text-center py-2 w-14 hidden sm:table-cell">{t('standings.zone')}</th>
-              </>}
+            <tr style={{ borderBottom: '1px solid var(--pl-line)' }}>
+              <th className="t-cap" style={{ textAlign: 'left', padding: '6px 4px 6px 14px', width: 28, position: 'sticky', left: 0, background: 'var(--pl-card)', zIndex: 10 }}>
+                {t('standings.rank')}
+              </th>
+              <th className="t-cap" style={{ textAlign: 'left', padding: '6px 12px 6px 8px', position: 'sticky', left: 28, background: 'var(--pl-card)', zIndex: 10, minWidth: 110 }}>
+                {t('standings.team')}
+              </th>
+              <th className="t-cap num" style={{ textAlign: 'center', padding: '6px 4px', width: 32 }} title={t('standings.played')}>
+                {t('standings.played')}
+              </th>
+              {!compact && (
+                <>
+                  <th className="t-cap num hidden sm:table-cell" style={{ textAlign: 'center', padding: '6px 4px', width: 32 }} title={t('standings.won')}>{t('standings.won')}</th>
+                  <th className="t-cap num hidden sm:table-cell" style={{ textAlign: 'center', padding: '6px 4px', width: 32 }} title={t('standings.drawn')}>{t('standings.drawn')}</th>
+                  <th className="t-cap num hidden sm:table-cell" style={{ textAlign: 'center', padding: '6px 4px', width: 32 }} title={t('standings.lost')}>{t('standings.lost')}</th>
+                  <th className="t-cap num hidden sm:table-cell" style={{ textAlign: 'center', padding: '6px 4px', width: 38 }} title={t('standings.goalsFor')}>{t('standings.goalsFor')}</th>
+                  <th className="t-cap num hidden sm:table-cell" style={{ textAlign: 'center', padding: '6px 4px', width: 38 }} title={t('standings.goalsAgainst')}>{t('standings.goalsAgainst')}</th>
+                </>
+              )}
+              <th className="t-cap num" style={{ textAlign: 'center', padding: '6px 4px', width: 40 }} title={t('standings.goalDifference')}>
+                {t('standings.goalDifference')}
+              </th>
+              <th className="t-cap num" style={{ textAlign: 'center', padding: '6px 4px', width: 40, fontWeight: 700 }} title={t('standings.points')}>
+                {t('standings.points')}
+              </th>
+              {!compact && (
+                <th className="t-cap hidden md:table-cell" style={{ textAlign: 'center', padding: '6px 4px' }}>{t('standings.form')}</th>
+              )}
             </tr>
           </thead>
           <tbody>
             {rows.map(entry => {
-              const zone       = entry.zone ?? 'none'
-              const borderCls  = ZONE_BORDER_CLASS[zone] ?? ZONE_BORDER_CLASS.none
-              const bgCls      = ZONE_BG_CLASS[zone] ?? ''
-              const stickyBg   = ZONE_STICKY_BG[zone] ?? 'bg-card'
-              const zoneLabelKey = ZONE_LABEL_KEY[zone] ?? ''
-              const gd         = entry.goalDifference
-              const teamForLookup = { id: entry.teamId, name: entry.teamName, slug: entry.teamSlug }
+              const zone      = entry.zone ?? 'none'
+              const zc        = ZONE_COLOR_VAR[zone]
+              const stickyBg  = ZONE_STICKY_BG[zone] ?? 'bg-card'
+              const labelKey  = ZONE_LABEL_KEY[zone] ?? ''
+              const gd        = entry.goalDifference
+              const teamObj   = { id: entry.teamId, name: entry.teamName, slug: entry.teamSlug }
+
+              const rowBg = zc
+                ? `color-mix(in srgb, ${zc} 4%, transparent)`
+                : undefined
 
               return (
                 <tr
                   key={entry.teamId ?? entry.teamSlug}
-                  className={`border-b border-border/50 hover:bg-accent/50 transition-colors ${borderCls} ${bgCls}`}
+                  className="pl-trow"
+                  style={{
+                    '--zc': zc ?? 'transparent',
+                    backgroundColor: rowBg,
+                    boxShadow: 'inset 0 -1px 0 var(--pl-line)',
+                    cursor: 'pointer',
+                  }}
                 >
-                  <td className={`py-2.5 pr-1 text-muted-foreground text-xs sticky left-0 z-10 ${stickyBg}`}>
+                  {/* 순위 — sticky, 좌측 표시선 */}
+                  <td
+                    className={`t-cap num ${stickyBg}`}
+                    style={{
+                      padding: '10px 4px 10px 14px',
+                      position: 'sticky',
+                      left: 0,
+                      zIndex: 10,
+                    }}
+                  >
                     {entry.rank}
                   </td>
-                  <td className={`py-2.5 pr-3 sticky left-7 z-10 ${stickyBg}`}>
+
+                  {/* 팀명 — sticky */}
+                  <td
+                    className={`${stickyBg}`}
+                    style={{
+                      padding: '10px 12px 10px 8px',
+                      position: 'sticky',
+                      left: 28,
+                      zIndex: 10,
+                    }}
+                  >
                     <Link
                       to={`/teams/${entry.teamSlug}${competitionSlug ? `?competition=${competitionSlug}` : ''}`}
-                      className="flex items-center gap-2 hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        color: 'var(--pl-text)',   /* 순위표 안에서 팀 이름을 브랜드 색으로 칠하지 않는다 */
+                        textDecoration: 'none',
+                        outline: 'none',
+                      }}
                     >
-                      <TeamBadge initials={entry.teamInitials} color={entry.teamColor} size="xs" name={entry.teamName} />
-                      <span className={`font-medium truncate ${compact ? 'max-w-[80px] sm:max-w-[110px]' : 'max-w-[130px] sm:max-w-[200px]'}`}>
-                        {getLocalizedName(teamForLookup, locale) || entry.teamName}
+                      <TeamBadge
+                        initials={entry.teamInitials}
+                        color={entry.teamColor}
+                        size="xs"
+                        name={entry.teamName}
+                      />
+                      <span
+                        className="tname"
+                        style={{
+                          fontWeight: 500,
+                          maxWidth: compact ? 80 : 130,
+                        }}
+                      >
+                        {getLocalizedName(teamObj, locale) || entry.teamName}
                       </span>
                     </Link>
-                    {zoneLabelKey && (
-                      <span className="block text-[10px] text-muted-foreground/70 mt-0.5 sm:hidden">
-                        {t(zoneLabelKey)}
+                    {/* 모바일: 구역 레이블 */}
+                    {labelKey && (
+                      <span className="t-cap sm:hidden" style={{ display: 'block', marginTop: 2 }}>
+                        {t(labelKey)}
                       </span>
                     )}
                   </td>
-                  <td className="py-2.5 text-center text-muted-foreground">{entry.played}</td>
-                  {!compact && <>
-                    <td className="py-2.5 text-center text-muted-foreground hidden sm:table-cell">{entry.won}</td>
-                    <td className="py-2.5 text-center text-muted-foreground hidden sm:table-cell">{entry.drawn}</td>
-                    <td className="py-2.5 text-center text-muted-foreground hidden sm:table-cell">{entry.lost}</td>
-                    <td className="py-2.5 text-center text-muted-foreground hidden sm:table-cell">{entry.goalsFor}</td>
-                    <td className="py-2.5 text-center text-muted-foreground hidden sm:table-cell">{entry.goalsAgainst}</td>
-                  </>}
-                  <td className="py-2.5 text-center text-muted-foreground">{gd > 0 ? `+${gd}` : gd}</td>
-                  <td className="py-2.5 text-center font-bold text-foreground">{entry.points}</td>
-                  {!compact && <>
-                    <td className="py-2.5 hidden md:table-cell">
-                      <div className="flex gap-0.5 justify-center">
+
+                  <td className="t-sub num" style={{ textAlign: 'center', padding: '10px 4px' }}>{entry.played}</td>
+
+                  {!compact && (
+                    <>
+                      <td className="t-sub num hidden sm:table-cell" style={{ textAlign: 'center', padding: '10px 4px' }}>{entry.won}</td>
+                      <td className="t-sub num hidden sm:table-cell" style={{ textAlign: 'center', padding: '10px 4px' }}>{entry.drawn}</td>
+                      <td className="t-sub num hidden sm:table-cell" style={{ textAlign: 'center', padding: '10px 4px' }}>{entry.lost}</td>
+                      <td className="t-sub num hidden sm:table-cell" style={{ textAlign: 'center', padding: '10px 4px' }}>{entry.goalsFor}</td>
+                      <td className="t-sub num hidden sm:table-cell" style={{ textAlign: 'center', padding: '10px 4px' }}>{entry.goalsAgainst}</td>
+                    </>
+                  )}
+
+                  <td className="t-sub num" style={{ textAlign: 'center', padding: '10px 4px' }}>
+                    {gd > 0 ? `+${gd}` : gd}
+                  </td>
+                  <td className="num" style={{ textAlign: 'center', padding: '10px 4px', fontWeight: 700, color: 'var(--pl-text)' }}>
+                    {entry.points}
+                  </td>
+
+                  {!compact && (
+                    <td className="hidden md:table-cell" style={{ padding: '10px 4px' }}>
+                      <span className="pl-form" style={{ justifyContent: 'center' }}>
                         {(entry.form ?? []).map((r, i) => <FormBadge key={i} result={r} />)}
-                      </div>
+                      </span>
                     </td>
-                    <td className="py-2.5 text-center hidden sm:table-cell">
-                      {zoneLabelKey && <span className="text-xs text-muted-foreground">{t(zoneLabelKey)}</span>}
-                    </td>
-                  </>}
+                  )}
                 </tr>
               )
             })}

@@ -79,8 +79,8 @@ export default function AppHeader() {
             to="/"
             className="flex items-center gap-2 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
           >
-            <div className="w-7 h-7 bg-green-600 dark:bg-green-500 rounded flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-black text-white select-none">PL</span>
+            <div className="w-7 h-7 bg-primary rounded flex items-center justify-center flex-shrink-0">
+              <span className="text-xs font-black text-primary-foreground select-none">PL</span>
             </div>
             <span className="font-bold text-foreground text-sm tracking-tight hidden sm:block">PitchLog</span>
           </Link>
@@ -216,8 +216,8 @@ export default function AppHeader() {
             aria-label={t('nav.home')}
           >
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-green-600 dark:bg-green-500 rounded flex items-center justify-center">
-                <span className="text-xs font-black text-white">PL</span>
+              <div className="w-7 h-7 bg-primary rounded flex items-center justify-center">
+                <span className="text-xs font-black text-primary-foreground">PL</span>
               </div>
               <span className="font-bold text-foreground">PitchLog</span>
             </div>

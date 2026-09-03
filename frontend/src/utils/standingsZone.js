@@ -73,3 +73,20 @@ export const ZONE_LEGEND_COLOR = {
   ucl_playoff:              'bg-yellow-500',
   ucl_eliminated:           'bg-gray-500',
 }
+
+/**
+ * 구역별 CSS 변수값 (--z-* tokens).
+ * StandingsTable 에서 --zc 로 주입해 좌측 2px 표시선 + 4% 배경 틴트에 사용.
+ */
+export const ZONE_COLOR_VAR = {
+  champions_league:          'var(--z-ucl)',
+  champions_league_playoff:  'var(--z-uclpo)',
+  europa_league:             'var(--z-uel)',
+  europa_conference:         'var(--z-uecl)',
+  relegation_playoff:        'var(--z-relpo)',
+  relegation:                'var(--z-rel)',
+  none:                      null,
+  ucl_direct:                'var(--z-ucl)',
+  ucl_playoff:               'var(--z-uclpo)',
+  ucl_eliminated:            null,
+}
