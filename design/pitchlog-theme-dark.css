@@ -1,0 +1,185 @@
+/* =============================================================
+   PitchLog — Dark theme
+   -------------------------------------------------------------
+   반드시 pitchlog-base-tokens.css → pitchlog-foundation.css 다음,
+   마지막으로 로드한다. 컴포넌트 CSS 는 한 줄도 건드리지 않고
+   토큰 값만 재정의한다.
+
+   적용 방식 (둘 다 지원):
+     · 시스템 설정 따름 → @media (prefers-color-scheme: dark)
+     · 사용자가 고정    → <html data-theme="dark"> 또는 data-theme="light"
+   data-theme 이 있으면 시스템 설정보다 우선한다.
+
+   ⚠ 아래 두 블록의 토큰 값은 스크립트로 생성돼 항상 동일하다.
+     한쪽만 고치면 테마가 어긋나므로 반드시 양쪽을 함께 수정한다.
+
+   대비 비율 주석은 surface(#1E1E23) 위에서 측정한 값이다.
+   ============================================================= */
+
+:root{ color-scheme: light; }
+
+/* ---------- 1) 시스템이 다크일 때 (사용자가 light 로 고정하지 않은 경우) ---------- */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+
+    /* ---- Surface : 페이지가 더 어둡고 카드가 밝다 (라이트와 역전) ---- */
+    --wds-surface-page:      #1E1E23;   /* 카드·입력·모달 */
+    --wds-surface-page-alt:  #121216;   /* body 배경 */
+
+    /* ---- Brand : 어두운 배경 위에서 읽히도록 밝은 쪽으로 이동 ---- */
+    --wds-primary:        #6E93FF;   /* 텍스트 5.95:1 · 배경으로 쓸 때 5.75:1 */
+    --wds-primary-strong: #8FACFF;   /* hover — 라이트와 반대로 밝아진다 */
+    --wds-primary-heavy:  #A0BAFF;   /* pressed */
+
+    /* ---- Text : 흰색 알파 오버레이 ---- */
+    --wds-text-strong:      #FFFFFF;
+    --wds-text-normal:      rgba(255,255,255,0.92);
+    --wds-text-alternative: rgba(255,255,255,0.60);   /* 6.75:1 */
+    --wds-text-assistive:   rgba(255,255,255,0.60);
+    --wds-text-disable:     rgba(255,255,255,0.24);
+
+    /* ---- Fill / Line ---- */
+    --wds-fill-normal:      rgba(255,255,255,0.08);
+    --wds-fill-alternative: rgba(255,255,255,0.05);
+    --wds-line-alternative: rgba(255,255,255,0.12);
+    --wds-line-normal:      rgba(255,255,255,0.16);
+    --wds-line-strong:      rgba(255,255,255,0.40);   /* 3.77:1 — WCAG 1.4.11 */
+
+    --wds-interaction-disable:  rgba(255,255,255,0.08);
+    --wds-interaction-inactive: rgba(255,255,255,0.24);
+
+    /* ---- Status 원색 ---- */
+    --wds-status-positive:   #2DD46B;   /* 8.78:1 */
+    --wds-status-cautionary: #FFA733;   /* 8.85:1 */
+    --wds-status-negative:   #FF6B6B;   /* 6.19:1 */
+
+    /* ---- Shadow : 어두운 화면에서는 그림자가 거의 안 보이므로 진하게 ---- */
+    --wds-shadow-card:    0 1px 2px rgba(0,0,0,0.40);
+    --wds-shadow-overlay: 0 4px 16px rgba(0,0,0,0.52);
+    --wds-shadow-modal:   0 8px 32px rgba(0,0,0,0.60);
+
+    /* ==== PitchLog 레이어 ==== */
+
+    /* 채워진 배경 위 글자는 어두운 색이 된다.
+       밝아진 primary/negative 위에 흰 글자를 얹으면 2.5~2.9:1 로 무너진다. */
+    --pl-on-primary:  #0B0B0D;   /* primary #6E93FF 위 6.82:1 */
+    --pl-on-negative: #0B0B0D;   /* negative-solid #FF6B6B 위 7.09:1 */
+    --pl-on-solid:    #0B0B0D;
+
+    --pl-negative-solid:        #FF6B6B;
+    --pl-negative-solid-hover:  #FF8080;   /* 라이트와 반대로 밝아진다 */
+    --pl-negative-solid-active: #FCA5A5;
+
+    --pl-positive-solid:   #2DD46B;
+    --pl-cautionary-solid: #FFA733;
+
+    /* Badge : tint 알파를 올리고 전경을 밝은 쪽으로 */
+    --pl-badge-positive-bg:   rgba(45,212,107,0.16);
+    --pl-badge-cautionary-bg: rgba(255,167,51,0.18);
+    --pl-badge-negative-bg:   rgba(255,107,107,0.16);
+    --pl-badge-positive-fg:   #5CE58C;
+    --pl-badge-cautionary-fg: #FFC46B;
+    --pl-badge-negative-fg:   #FF9494;
+
+    /* Tooltip / Toast : 라이트에서 어두웠으므로 다크에서는 밝게 */
+    --pl-inverse-surface: #E9E9EC;
+    --pl-inverse-text:    #17171A;
+
+    --pl-switch-thumb: #FFFFFF;
+    --pl-skel-a: rgba(255,255,255,0.06);
+    --pl-skel-b: rgba(255,255,255,0.12);
+
+    --pl-dimmer: rgba(0,0,0,0.62);
+  }
+
+  :root:not([data-theme="light"]) .pl-select{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23A8A8AD' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  }
+  :root:not([data-theme="light"]) .pl-badge--solid{
+    background:var(--pl-text-strong);
+    color:#17171A;
+  }
+}
+
+/* ---------- 2) 사용자가 다크로 고정한 경우 (시스템 설정보다 우선) ---------- */
+:root[data-theme="dark"]{
+    color-scheme: dark;
+
+    /* ---- Surface : 페이지가 더 어둡고 카드가 밝다 (라이트와 역전) ---- */
+    --wds-surface-page:      #1E1E23;   /* 카드·입력·모달 */
+    --wds-surface-page-alt:  #121216;   /* body 배경 */
+
+    /* ---- Brand : 어두운 배경 위에서 읽히도록 밝은 쪽으로 이동 ---- */
+    --wds-primary:        #6E93FF;   /* 텍스트 5.95:1 · 배경으로 쓸 때 5.75:1 */
+    --wds-primary-strong: #8FACFF;   /* hover — 라이트와 반대로 밝아진다 */
+    --wds-primary-heavy:  #A0BAFF;   /* pressed */
+
+    /* ---- Text : 흰색 알파 오버레이 ---- */
+    --wds-text-strong:      #FFFFFF;
+    --wds-text-normal:      rgba(255,255,255,0.92);
+    --wds-text-alternative: rgba(255,255,255,0.60);   /* 6.75:1 */
+    --wds-text-assistive:   rgba(255,255,255,0.60);
+    --wds-text-disable:     rgba(255,255,255,0.24);
+
+    /* ---- Fill / Line ---- */
+    --wds-fill-normal:      rgba(255,255,255,0.08);
+    --wds-fill-alternative: rgba(255,255,255,0.05);
+    --wds-line-alternative: rgba(255,255,255,0.12);
+    --wds-line-normal:      rgba(255,255,255,0.16);
+    --wds-line-strong:      rgba(255,255,255,0.40);   /* 3.77:1 — WCAG 1.4.11 */
+
+    --wds-interaction-disable:  rgba(255,255,255,0.08);
+    --wds-interaction-inactive: rgba(255,255,255,0.24);
+
+    /* ---- Status 원색 ---- */
+    --wds-status-positive:   #2DD46B;   /* 8.78:1 */
+    --wds-status-cautionary: #FFA733;   /* 8.85:1 */
+    --wds-status-negative:   #FF6B6B;   /* 6.19:1 */
+
+    /* ---- Shadow : 어두운 화면에서는 그림자가 거의 안 보이므로 진하게 ---- */
+    --wds-shadow-card:    0 1px 2px rgba(0,0,0,0.40);
+    --wds-shadow-overlay: 0 4px 16px rgba(0,0,0,0.52);
+    --wds-shadow-modal:   0 8px 32px rgba(0,0,0,0.60);
+
+    /* ==== PitchLog 레이어 ==== */
+
+    /* 채워진 배경 위 글자는 어두운 색이 된다.
+       밝아진 primary/negative 위에 흰 글자를 얹으면 2.5~2.9:1 로 무너진다. */
+    --pl-on-primary:  #0B0B0D;   /* primary #6E93FF 위 6.82:1 */
+    --pl-on-negative: #0B0B0D;   /* negative-solid #FF6B6B 위 7.09:1 */
+    --pl-on-solid:    #0B0B0D;
+
+    --pl-negative-solid:        #FF6B6B;
+    --pl-negative-solid-hover:  #FF8080;   /* 라이트와 반대로 밝아진다 */
+    --pl-negative-solid-active: #FCA5A5;
+
+    --pl-positive-solid:   #2DD46B;
+    --pl-cautionary-solid: #FFA733;
+
+    /* Badge : tint 알파를 올리고 전경을 밝은 쪽으로 */
+    --pl-badge-positive-bg:   rgba(45,212,107,0.16);
+    --pl-badge-cautionary-bg: rgba(255,167,51,0.18);
+    --pl-badge-negative-bg:   rgba(255,107,107,0.16);
+    --pl-badge-positive-fg:   #5CE58C;
+    --pl-badge-cautionary-fg: #FFC46B;
+    --pl-badge-negative-fg:   #FF9494;
+
+    /* Tooltip / Toast : 라이트에서 어두웠으므로 다크에서는 밝게 */
+    --pl-inverse-surface: #E9E9EC;
+    --pl-inverse-text:    #17171A;
+
+    --pl-switch-thumb: #FFFFFF;
+    --pl-skel-a: rgba(255,255,255,0.06);
+    --pl-skel-b: rgba(255,255,255,0.12);
+
+    --pl-dimmer: rgba(0,0,0,0.62);
+  }
+
+:root[data-theme="dark"] .pl-select{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23A8A8AD' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+}
+:root[data-theme="dark"] .pl-badge--solid{
+  background:var(--pl-text-strong);
+  color:#17171A;
+}

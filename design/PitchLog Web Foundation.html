@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PitchLog — Web UI Foundation</title>
+<link rel="stylesheet" href="pitchlog-base-tokens.css">
+<link rel="stylesheet" href="pitchlog-foundation.css">
+<link rel="stylesheet" href="pitchlog-theme-dark.css">
+</head>
+<body>
+<div class="pl-page-wrap">
+
+<header class="pl-hero">
+<div class="pl-eyebrow">PitchLog Design Foundation · v0.1</div>
+<h1 style="font-size:36px;font-weight:700;letter-spacing:-0.027em;color:var(--pl-text-strong)">웹 UI Foundation</h1>
+<p style="font-size:16px;line-height:1.6;letter-spacing:0.006em;color:var(--pl-text-sub);max-width:60ch">Wanted Design System의 원칙과 토큰 구조를 참고해 정리한 PitchLog 웹 전용 최소 컴포넌트 세트입니다. 네이티브 플랫폼 컴포넌트는 제외했고, 깨진 원본 아이콘은 Lucide 스타일 아이콘으로 대체했습니다.</p>
+<div class="pl-row">
+<button class="pl-btn pl-btn--outline pl-btn--sm" data-theme-toggle aria-live="polite">테마: 시스템</button>
+<span class="pl-badge pl-badge--primary">Web only</span>
+<span class="pl-badge pl-badge--cautionary">Primary = 임시 컬러</span>
+<span class="pl-badge pl-badge--neutral">Pretendard</span>
+</div>
+</header>
+
+<div class="pl-note">Primary <b>#3366FF</b>는 Wanted 브랜드 컬러이며 PitchLog의 최종 브랜드 컬러가 아닙니다. 현재는 <b>임시 Primary</b>로만 사용하고, <code>--pl-primary</code> 한 곳만 교체하면 전체가 전환되도록 구성했습니다.</div>
+
+<!-- ================= TOKENS ================= -->
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Colors</h2><span class="pl-section__note">semantic 레이어만 사용. 텍스트·라인·필은 알파 값</span></div>
+<div class="pl-spec">
+<div class="pl-spec__name">Brand · temporary</div>
+<div class="pl-grid pl-grid--tokens">
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-primary)"></div><div class="pl-swatch__name">primary</div><div class="pl-swatch__val">rgb(51,102,255)</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-primary-strong)"></div><div class="pl-swatch__name">primary-strong</div><div class="pl-swatch__val">hover</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-primary-heavy)"></div><div class="pl-swatch__name">primary-heavy</div><div class="pl-swatch__val">pressed</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-primary-tint)"></div><div class="pl-swatch__name">primary-tint</div><div class="pl-swatch__val">rgba(51,102,255,.06)</div></div>
+</div>
+<div class="pl-spec__name">Text</div>
+<div class="pl-grid pl-grid--tokens">
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-text-strong)"></div><div class="pl-swatch__name">text-strong</div><div class="pl-swatch__val">rgb(23,23,23)</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-text)"></div><div class="pl-swatch__name">text</div><div class="pl-swatch__val">label-normal</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-text-sub)"></div><div class="pl-swatch__name">text-sub</div><div class="pl-swatch__val">rgba(55,56,60,.61)</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-text-disable)"></div><div class="pl-swatch__name">text-disable</div><div class="pl-swatch__val">rgba(55,56,60,.16)</div></div>
+</div>
+<div class="pl-spec__name">Surface · Fill · Line</div>
+<div class="pl-grid pl-grid--tokens">
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-surface)"></div><div class="pl-swatch__name">surface</div><div class="pl-swatch__val">#FFFFFF</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-surface-alt)"></div><div class="pl-swatch__name">surface-alt</div><div class="pl-swatch__val">rgb(247,247,248)</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-fill)"></div><div class="pl-swatch__name">fill</div><div class="pl-swatch__val">rgba(112,115,124,.08)</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-line)"></div><div class="pl-swatch__name">line</div><div class="pl-swatch__val">rgba(112,115,124,.22)</div></div>
+</div>
+<div class="pl-spec__name">Status</div>
+<div class="pl-grid pl-grid--tokens">
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-positive)"></div><div class="pl-swatch__name">positive</div><div class="pl-swatch__val">rgb(0,191,64)</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-cautionary)"></div><div class="pl-swatch__name">cautionary</div><div class="pl-swatch__val">status-cautionary</div></div>
+<div class="pl-swatch"><div class="pl-swatch__chip" style="background:var(--pl-negative)"></div><div class="pl-swatch__name">negative</div><div class="pl-swatch__val">rgb(255,66,66)</div></div>
+</div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Typography</h2><span class="pl-section__note">Pretendard 단일 서체. 20px 미만은 트래킹이 양수</span></div>
+<div class="pl-spec">
+<div style="font-size:36px;font-weight:700;letter-spacing:-0.027em;color:var(--pl-text-strong)">Title 1 · 피치 기록 36 / 700</div>
+<div style="font-size:24px;font-weight:700;letter-spacing:-0.023em;color:var(--pl-text-strong)">Title 2 · 투자 미팅 24 / 700</div>
+<div style="font-size:20px;font-weight:600;color:var(--pl-text-strong)">Title 3 · Pitch Rounds 20 / 600</div>
+<div style="font-size:17px;font-weight:600;line-height:1.412;color:var(--pl-text-strong)">Heading 1 · Seed Round 17 / 600</div>
+<div style="font-size:16px;font-weight:500;line-height:1.5;letter-spacing:0.006em">Body 1 · 피치 1,240건 · 경력 3~7년 16 / 500</div>
+<div style="font-size:14px;font-weight:500;line-height:1.429;letter-spacing:0.015em">Label 1 · 지원 현황 14 / 500</div>
+<div style="font-size:12px;font-weight:600;line-height:1.334;letter-spacing:0.025em;color:var(--pl-text-sub)">Caption 1 · 2026.09.02 업데이트 12 / 600</div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Spacing &amp; Radius</h2><span class="pl-section__note">4 기반 스케일. 페이지 마진 20</span></div>
+<div class="pl-grid pl-grid--2">
+<div class="pl-spec">
+<div class="pl-spec__name">Spacing</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div class="pl-row"><span class="pl-swatch__val" style="width:64px">s-1 · 4</span><div style="height:12px;width:4px;background:var(--pl-primary)"></div></div>
+<div class="pl-row"><span class="pl-swatch__val" style="width:64px">s-2 · 8</span><div style="height:12px;width:8px;background:var(--pl-primary)"></div></div>
+<div class="pl-row"><span class="pl-swatch__val" style="width:64px">s-3 · 12</span><div style="height:12px;width:12px;background:var(--pl-primary)"></div></div>
+<div class="pl-row"><span class="pl-swatch__val" style="width:64px">s-4 · 16</span><div style="height:12px;width:16px;background:var(--pl-primary)"></div></div>
+<div class="pl-row"><span class="pl-swatch__val" style="width:64px">s-5 · 20</span><div style="height:12px;width:20px;background:var(--pl-primary)"></div></div>
+<div class="pl-row"><span class="pl-swatch__val" style="width:64px">s-6 · 24</span><div style="height:12px;width:24px;background:var(--pl-primary)"></div></div>
+<div class="pl-row"><span class="pl-swatch__val" style="width:64px">s-8 · 32</span><div style="height:12px;width:32px;background:var(--pl-primary)"></div></div>
+<div class="pl-row"><span class="pl-swatch__val" style="width:64px">s-16 · 64</span><div style="height:12px;width:64px;background:var(--pl-primary)"></div></div>
+</div>
+</div>
+<div class="pl-spec">
+<div class="pl-spec__name">Radius</div>
+<div class="pl-row" style="gap:16px">
+<div class="pl-swatch" style="width:72px"><div class="pl-swatch__chip" style="background:var(--pl-fill);border-radius:4px"></div><div class="pl-swatch__val">xs · 4</div></div>
+<div class="pl-swatch" style="width:72px"><div class="pl-swatch__chip" style="background:var(--pl-fill);border-radius:8px"></div><div class="pl-swatch__val">sm · 8</div></div>
+<div class="pl-swatch" style="width:72px"><div class="pl-swatch__chip" style="background:var(--pl-fill);border-radius:12px"></div><div class="pl-swatch__val">md · 12</div></div>
+<div class="pl-swatch" style="width:72px"><div class="pl-swatch__chip" style="background:var(--pl-fill);border-radius:16px"></div><div class="pl-swatch__val">lg · 16</div></div>
+<div class="pl-swatch" style="width:72px"><div class="pl-swatch__chip" style="background:var(--pl-fill);border-radius:20px"></div><div class="pl-swatch__val">xl · 20</div></div>
+<div class="pl-swatch" style="width:72px"><div class="pl-swatch__chip" style="background:var(--pl-fill);border-radius:9999px"></div><div class="pl-swatch__val">full</div></div>
+</div>
+<div class="pl-swatch__val">2px · 6px 스텝은 시스템에 없음 — 사용하지 않습니다.</div>
+</div>
+</div>
+</section>
+
+<!-- ================= COMPONENTS ================= -->
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Top Navigation</h2><span class="pl-section__note">웹 전용 56px sticky · Bottom Navigation은 제외</span></div>
+<div class="pl-spec" style="padding:0">
+<div class="pl-topnav">
+<div class="pl-topnav__brand">PitchLog</div>
+<nav class="pl-topnav__links"><a class="pl-topnav__link" href="#" aria-current="page">피치</a><a class="pl-topnav__link" href="#">라운드</a><a class="pl-topnav__link" href="#">투자자</a><a class="pl-topnav__link" href="#">리포트</a></nav>
+<div class="pl-topnav__spacer"></div>
+<div class="pl-topnav__actions">
+<button class="pl-btn pl-btn--ghost pl-btn--md pl-btn-icon" aria-label="검색"><i data-icon="search" data-size="20"></i></button>
+<span class="pl-tooltip-host"><button class="pl-btn pl-btn--ghost pl-btn--md pl-btn-icon" aria-label="알림"><i data-icon="bell" data-size="20"></i></button><span class="pl-tooltip">알림 3건</span></span>
+<button class="pl-btn pl-btn--primary pl-btn--md">피치 기록</button>
+</div>
+</div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Button</h2><span class="pl-section__note">Primary · Secondary · Outline · Ghost · Danger / lg · md · sm</span></div>
+<div class="pl-spec">
+<div class="pl-row"><button class="pl-btn pl-btn--primary pl-btn--lg">지원하기</button><button class="pl-btn pl-btn--secondary pl-btn--lg">저장</button><button class="pl-btn pl-btn--outline pl-btn--lg">미리보기</button><button class="pl-btn pl-btn--ghost pl-btn--lg">취소</button><button class="pl-btn pl-btn--danger pl-btn--lg">삭제</button></div>
+<div class="pl-row"><button class="pl-btn pl-btn--primary pl-btn--md"><i data-icon="plus" data-size="16"></i>피치 추가</button><button class="pl-btn pl-btn--outline pl-btn--md"><i data-icon="filter" data-size="16"></i>필터</button><button class="pl-btn pl-btn--outline pl-btn--md pl-btn-icon" aria-label="더보기"><i data-icon="more" data-size="18"></i></button><button class="pl-btn pl-btn--primary pl-btn--sm">팔로우</button><button class="pl-btn pl-btn--primary pl-btn--md" disabled>비활성</button></div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Input &amp; Select</h2><span class="pl-section__note">Textfield · Textarea · Select · 오류 상태</span></div>
+<div class="pl-grid pl-grid--2">
+<div class="pl-spec">
+<label class="pl-field"><span class="pl-field__label">회사명</span><input class="pl-input" placeholder="예: 우아한형제들"></label>
+<label class="pl-field"><span class="pl-field__label">검색</span><span class="pl-input-affix"><i data-icon="search" data-size="18"></i><input class="pl-input" placeholder="포지션 검색"></span></label>
+<label class="pl-field"><span class="pl-field__label">이메일</span><input class="pl-input" value="pitch@" aria-invalid="true"><span class="pl-field__help pl-field__help--error">올바른 이메일 형식을 입력해주세요.</span></label>
+<label class="pl-field"><span class="pl-field__label">비활성</span><input class="pl-input" value="수정할 수 없습니다" disabled></label>
+</div>
+<div class="pl-spec">
+<label class="pl-field"><span class="pl-field__label">라운드</span><select class="pl-select"><option>Seed</option><option>Pre-A</option><option>Series A</option></select><span class="pl-field__help">기본값은 가장 최근 라운드입니다.</span></label>
+<label class="pl-field"><span class="pl-field__label">피치 메모</span><textarea class="pl-textarea" placeholder="미팅에서 나온 질문과 답변을 기록해주세요."></textarea></label>
+</div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Checkbox · Radio · Switch</h2><span class="pl-section__note">상태는 알파 레이어가 아닌 primary 채움으로 구분</span></div>
+<div class="pl-spec">
+<div class="pl-row" style="gap:24px">
+<label class="pl-choice"><input type="checkbox" checked><span class="pl-choice__box"><i data-icon="check" data-size="14"></i></span>전체 선택</label>
+<label class="pl-choice"><input type="checkbox"><span class="pl-choice__box"><i data-icon="check" data-size="14"></i></span>알림 받기</label>
+<label class="pl-choice"><input type="checkbox" disabled><span class="pl-choice__box"><i data-icon="check" data-size="14"></i></span>비활성</label>
+</div>
+<div class="pl-row" style="gap:24px">
+<label class="pl-choice"><input type="radio" name="pl-stage" checked><span class="pl-choice__box pl-choice__box--radio"></span>Seed</label>
+<label class="pl-choice"><input type="radio" name="pl-stage"><span class="pl-choice__box pl-choice__box--radio"></span>Series A</label>
+<label class="pl-choice"><input type="radio" name="pl-stage" disabled><span class="pl-choice__box pl-choice__box--radio"></span>비활성</label>
+</div>
+<div class="pl-row" style="gap:24px">
+<label class="pl-choice"><input type="checkbox" checked><span class="pl-switch__track"></span>공개 피치</label>
+<label class="pl-choice"><input type="checkbox"><span class="pl-switch__track"></span>주간 리포트</label>
+</div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Tabs</h2><span class="pl-section__note">검은 배경 Variant 제거 · 선택 상태는 밑줄과 텍스트 강조</span></div>
+<div class="pl-spec">
+<div class="pl-tabs" role="tablist" data-tabs>
+<button class="pl-tab" role="tab" aria-selected="true">전체</button>
+<button class="pl-tab" role="tab" aria-selected="false">진행 중</button>
+<button class="pl-tab" role="tab" aria-selected="false">완료</button>
+<button class="pl-tab" role="tab" aria-selected="false">보류</button>
+</div>
+<div class="pl-segmented" role="tablist" data-tabs>
+<button class="pl-segment" role="tab" aria-selected="true">리스트</button>
+<button class="pl-segment" role="tab" aria-selected="false">보드</button>
+<button class="pl-segment" role="tab" aria-selected="false">캘린더</button>
+</div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Badge</h2><span class="pl-section__note">전경·배경 페어로만 사용 · 대비 4.5:1 이상</span></div>
+<div class="pl-spec">
+<div class="pl-row"><span class="pl-badge pl-badge--neutral">전체</span><span class="pl-badge pl-badge--primary">Seed</span><span class="pl-badge pl-badge--positive">투자 확정</span><span class="pl-badge pl-badge--cautionary">검토 중</span><span class="pl-badge pl-badge--negative">거절</span><span class="pl-badge pl-badge--solid">NEW</span><span class="pl-badge-dot">3</span><span class="pl-badge-dot">12</span></div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Card &amp; Media Placeholder</h2><span class="pl-section__note">검은 사각형은 명시적 placeholder로 교체</span></div>
+<div class="pl-grid pl-grid--3">
+<div class="pl-card">
+<div class="pl-media"><div class="pl-media__inner"><i data-icon="image" data-size="24"></i><span class="pl-media__label">Image 16:9</span></div></div>
+<div><div style="font-size:15px;font-weight:600;color:var(--pl-text-strong)">시리즈 A 피치 덱</div><div style="font-size:13px;letter-spacing:0.019em;color:var(--pl-text-sub)">최종 수정 2026.08.28</div></div>
+<div class="pl-row"><span class="pl-badge pl-badge--primary">Series A</span><span class="pl-badge pl-badge--neutral">18 slides</span></div>
+</div>
+<div class="pl-card pl-card--elevated">
+<div class="pl-media pl-media--square" style="max-width:120px"><div class="pl-media__inner"><i data-icon="image" data-size="20"></i><span class="pl-media__label">1:1</span></div></div>
+<div><div style="font-size:15px;font-weight:600;color:var(--pl-text-strong)">투자자 프로필</div><div style="font-size:13px;letter-spacing:0.019em;color:var(--pl-text-sub)">채용보상금 1,000,000원</div></div>
+<button class="pl-btn pl-btn--secondary pl-btn--sm" style="align-self:flex-start">저장</button>
+</div>
+<div class="pl-card">
+<div class="pl-spec__name">Skeleton</div>
+<div class="pl-skel pl-skel--media"></div>
+<div class="pl-skel pl-skel--title" style="width:70%"></div>
+<div class="pl-skel pl-skel--text" style="width:90%"></div>
+<div class="pl-skel pl-skel--text" style="width:50%"></div>
+</div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">List</h2><span class="pl-section__note">긴 텍스트는 ellipsis 처리 · 가로 스크롤 없음</span></div>
+<div class="pl-list">
+<div class="pl-list-item pl-list-item--action"><div class="pl-media pl-media--avatar"><i data-icon="image" data-size="16"></i></div><div class="pl-list-item__body"><div class="pl-list-item__title">카카오 · 프로덕트 디자이너</div><div class="pl-list-item__meta">서울 판교 · 경력 3~7년 · 채용보상금 1,000,000원</div></div><span class="pl-badge pl-badge--positive">진행 중</span><i data-icon="chevron-right" data-size="18" style="color:var(--pl-text-sub)"></i></div>
+<div class="pl-list-item pl-list-item--action"><div class="pl-media pl-media--avatar"><i data-icon="image" data-size="16"></i></div><div class="pl-list-item__body"><div class="pl-list-item__title">네이버 · 데이터 애널리스트</div><div class="pl-list-item__meta">서울 정자 · 경력 5년 이상</div></div><span class="pl-badge pl-badge--cautionary">검토 중</span><i data-icon="chevron-right" data-size="18" style="color:var(--pl-text-sub)"></i></div>
+<div class="pl-list-item"><div class="pl-media pl-media--avatar"><i data-icon="image" data-size="16"></i></div><div class="pl-list-item__body"><div class="pl-list-item__title">쿠팡 · 백엔드 엔지니어 — 아주 긴 포지션 이름이 들어가도 한 줄로 잘립니다</div><div class="pl-list-item__meta">서울 잠실 · 1,000명 이상</div></div><label class="pl-choice"><input type="checkbox"><span class="pl-choice__box"><i data-icon="check" data-size="14"></i></span></label></div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Modal · Drawer · Toast · Tooltip</h2><span class="pl-section__note">Dimmer rgba(23,23,25,.52) · 액션은 우측 정렬</span></div>
+<div class="pl-spec">
+<div class="pl-row">
+<button class="pl-btn pl-btn--outline pl-btn--md" data-open-modal>Modal 열기</button>
+<button class="pl-btn pl-btn--outline pl-btn--md" data-open-drawer>Drawer 열기</button>
+<button class="pl-btn pl-btn--outline pl-btn--md" data-toast="피치가 저장되었습니다.">Toast 띄우기</button>
+<span class="pl-tooltip-host"><button class="pl-btn pl-btn--ghost pl-btn--md pl-btn-icon" aria-label="도움말"><i data-icon="info" data-size="18"></i></button><span class="pl-tooltip">Tooltip · hover 또는 focus</span></span>
+</div>
+</div>
+</section>
+
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">Pagination</h2><span class="pl-section__note">페이지 수 표시는 컨테이너 안에서 줄바꿈</span></div>
+<div class="pl-spec">
+<div class="pl-row" style="justify-content:space-between">
+<div class="pl-pagination" data-pagination>
+<button class="pl-page" data-nav="first" aria-label="첫 페이지"><i data-icon="chevrons-left" data-size="16"></i></button>
+<button class="pl-page" data-nav="prev" aria-label="이전"><i data-icon="chevron-left" data-size="16"></i></button>
+<button class="pl-page" aria-current="page">1</button><button class="pl-page">2</button><button class="pl-page">3</button><button class="pl-page">4</button><button class="pl-page">5</button>
+<button class="pl-page" data-nav="next" aria-label="다음"><i data-icon="chevron-right" data-size="16"></i></button>
+<button class="pl-page" data-nav="last" aria-label="마지막"><i data-icon="chevrons-right" data-size="16"></i></button>
+</div>
+<div class="pl-row"><select class="pl-select" style="width:auto"><option>10개씩 보기</option><option>20개씩 보기</option><option>50개씩 보기</option></select></div>
+</div>
+</div>
+</section>
+
+<!-- ================= REPORT ================= -->
+<section class="pl-section">
+<div class="pl-section__head"><h2 class="pl-section__title">정리 리포트</h2></div>
+<div class="pl-grid pl-grid--2">
+<div class="pl-spec pl-report">
+<div class="pl-spec__name">유지한 컴포넌트 (17)</div>
+<ul><li>Button, IconButton</li><li>Input(Textfield · Textarea), Select</li><li>Checkbox, Radio, Switch</li><li>Tabs(Underline · Segmented)</li><li>Badge(Status · Count)</li><li>Card, MediaPlaceholder, List</li><li>Modal, Drawer, Tooltip, Toast</li><li>Skeleton, Pagination, TopNavigation</li></ul>
+</div>
+<div class="pl-spec pl-report">
+<div class="pl-spec__name">제외한 플랫폼 전용 컴포넌트</div>
+<ul><li>StatusBar, HomeBar, SafeArea, NavigationBar(Android)</li><li>BottomNavigation 및 iOS/Android Tab</li><li>DatePickerIOSWheel, PresentationPickerWheels</li><li>SafariBar, MobileTopNavigation(Float)</li><li>ActionArea 하단 고정 프리셋 — 웹은 우측 레일/모달 액션으로 대체</li></ul>
+</div>
+<div class="pl-spec pl-report">
+<div class="pl-spec__name">대체한 아이콘·에셋</div>
+<ul><li>깨진 원본 아이콘 → Lucide 스타일 인라인 SVG(24 그리드, stroke 2, currentColor) 12종: search, bell, plus, check, x, chevron-left/right, chevrons-left/right, filter, more, info, image</li><li>Select의 caret → Lucide chevron-down SVG(배경 이미지)</li><li>검은 사각형·빈 이미지 영역 → MediaPlaceholder(점선 프레임 + 비율 라벨)</li><li>사람·회사 비트맵 → 원형 avatar placeholder</li></ul>
+</div>
+<div class="pl-spec pl-report">
+<div class="pl-spec__name">수정한 대비·레이아웃 문제</div>
+<ul><li>Tab의 검은 배경 위 어두운 텍스트 → 흰 배경 + 밑줄 선택 표시</li><li>Segmented 선택 라벨을 primary blue → text-strong으로 변경(대비 확보)</li><li>Badge 전경색을 accent 원본 대신 어두운 단계로 조정(positive #00893A, cautionary #A35A00, negative #D92020), solid Danger 버튼은 전용 토큰 --pl-negative-solid #D01919로 분리해 흰 텍스트 대비 4.5:1 확보</li><li>Pagination 오버플로 → flex-wrap, "페이지" 라벨 잘림 제거</li><li>프레임 잘림·가로 스크롤 → 컨테이너 max-width 1060, auto-fit grid, min-width:0 + ellipsis</li><li>Placeholder 텍스트를 assistive 토큰으로 통일, disabled는 opacity 대신 전용 토큰 사용</li></ul>
+</div>
+</div>
+</section>
+
+</div>
+
+<div class="pl-scrim" data-scrim></div>
+<div class="pl-modal" data-modal role="dialog" aria-modal="true" aria-label="피치 삭제">
+<h3 style="font-size:20px;font-weight:700;color:var(--pl-text-strong)">피치를 삭제할까요?</h3>
+<p style="font-size:14px;line-height:1.6;letter-spacing:0.015em;color:var(--pl-text-sub)">삭제한 기록은 복구할 수 없습니다. 연결된 미팅 메모도 함께 삭제됩니다.</p>
+<div class="pl-overlay-actions"><button class="pl-btn pl-btn--ghost pl-btn--md" data-close>취소</button><button class="pl-btn pl-btn--danger pl-btn--md" data-close>삭제</button></div>
+</div>
+<aside class="pl-drawer" data-drawer role="dialog" aria-modal="true" aria-label="필터">
+<div class="pl-drawer__head"><strong style="font-size:16px;color:var(--pl-text-strong);flex:1">필터</strong><button class="pl-btn pl-btn--ghost pl-btn--sm pl-btn-icon" data-close aria-label="닫기"><i data-icon="x" data-size="18"></i></button></div>
+<div class="pl-drawer__body">
+<label class="pl-field"><span class="pl-field__label">라운드</span><select class="pl-select"><option>전체</option><option>Seed</option><option>Series A</option></select></label>
+<label class="pl-choice"><input type="checkbox" checked><span class="pl-choice__box"><i data-icon="check" data-size="14"></i></span>진행 중만 보기</label>
+<label class="pl-choice"><input type="checkbox"><span class="pl-choice__box"><i data-icon="check" data-size="14"></i></span>보상금 있는 포지션</label>
+</div>
+<div class="pl-drawer__foot"><button class="pl-btn pl-btn--outline pl-btn--md" style="flex:1" data-close>초기화</button><button class="pl-btn pl-btn--primary pl-btn--md" style="flex:1" data-close>적용</button></div>
+</aside>
+<div class="pl-toast-layer" data-toast-layer></div>
+
+<script>
+/* 데모 전용 테마 토글 — 시스템 → 라이트 → 다크 순환 */
+(()=>{const b=document.querySelector('[data-theme-toggle]');if(!b)return;
+const order=['system','light','dark'],label={system:'테마: 시스템',light:'테마: 라이트',dark:'테마: 다크'};
+let i=0;const apply=()=>{const m=order[i];
+  if(m==='system')document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme',m);
+  b.textContent=label[m]};
+b.addEventListener('click',()=>{i=(i+1)%order.length;apply()});apply()})();
+const PL_ICONS={search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',bell:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',plus:'<path d="M12 5v14M5 12h14"/>',check:'<path d="M20 6 9 17l-5-5"/>',x:'<path d="M18 6 6 18M6 6l12 12"/>','chevron-right':'<path d="m9 18 6-6-6-6"/>','chevron-left':'<path d="m15 18-6-6 6-6"/>','chevrons-left':'<path d="m11 17-5-5 5-5M18 17l-5-5 5-5"/>','chevrons-right':'<path d="m13 17 5-5-5-5M6 17l5-5-5-5"/>',filter:'<path d="M3 5h18M6 12h12M10 19h4"/>',more:'<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-4.5-4.5L6 21"/>'};
+document.querySelectorAll('[data-icon]').forEach(el=>{const n=el.dataset.icon,s=el.dataset.size||24,p=PL_ICONS[n];if(!p)return;el.outerHTML='<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+p+'</svg>'});
+document.querySelectorAll('[data-tabs]').forEach(g=>g.addEventListener('click',e=>{const b=e.target.closest('[role="tab"]');if(!b)return;g.querySelectorAll('[role="tab"]').forEach(t=>t.setAttribute('aria-selected',t===b))}));
+const scrim=document.querySelector('[data-scrim]'),modal=document.querySelector('[data-modal]'),drawer=document.querySelector('[data-drawer]');
+const closeAll=()=>{[scrim,modal,drawer].forEach(n=>n.dataset.open='false')};
+document.querySelector('[data-open-modal]').addEventListener('click',()=>{scrim.dataset.open='true';modal.dataset.open='true'});
+document.querySelector('[data-open-drawer]').addEventListener('click',()=>{scrim.dataset.open='true';drawer.dataset.open='true'});
+scrim.addEventListener('click',closeAll);
+document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',closeAll));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAll()});
+const layer=document.querySelector('[data-toast-layer]');
+document.querySelectorAll('[data-toast]').forEach(b=>b.addEventListener('click',()=>{const t=document.createElement('div');t.className='pl-toast';t.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+PL_ICONS.check+'</svg><span>'+b.dataset.toast+'</span>';layer.appendChild(t);setTimeout(()=>{t.classList.add('pl-toast--out');setTimeout(()=>t.remove(),200)},2400)}));
+document.querySelectorAll('[data-pagination]').forEach(p=>{const pages=[...p.querySelectorAll('.pl-page:not([data-nav])')];const sync=()=>{const i=pages.findIndex(x=>x.getAttribute('aria-current')==='page');p.querySelector('[data-nav="first"]').disabled=p.querySelector('[data-nav="prev"]').disabled=i===0;p.querySelector('[data-nav="last"]').disabled=p.querySelector('[data-nav="next"]').disabled=i===pages.length-1};const go=i=>{pages.forEach((x,k)=>k===i?x.setAttribute('aria-current','page'):x.removeAttribute('aria-current'));sync()};pages.forEach((x,i)=>x.addEventListener('click',()=>go(i)));p.addEventListener('click',e=>{const n=e.target.closest('[data-nav]');if(!n)return;const i=pages.findIndex(x=>x.getAttribute('aria-current')==='page');go({first:0,prev:Math.max(0,i-1),next:Math.min(pages.length-1,i+1),last:pages.length-1}[n.dataset.nav])});sync()});
+</script>
+</body>
+</html>
