@@ -79,7 +79,17 @@
     "allCompetitions": "All competitions",
     "allStatuses": "All",
     "noMatches": "No matches",
-    "noMatchesDesc": "No matches for the selected filters."
+    "noMatchesDesc": "No matches for the selected filters.",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "standingsPanel": "Standings",
+    "viewStandings": "View all",
+    "resetFilters": "Reset",
+    "statusLive": "Live",
+    "statusScheduled": "Upcoming",
+    "statusFinished": "Finished",
+    "liveMatchCount": "{{count}} live",
+    "matchCount": "{{count}} matches"
   },
   "standings": {
     "title": "Standings",
