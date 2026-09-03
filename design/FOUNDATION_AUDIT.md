@@ -120,7 +120,7 @@ Chromium 실제 렌더 후 계산된 스타일 기준 자동 측정입니다.
 |---|---|
 | **Pretendard 웹폰트** | `pitchlog-base-tokens.css`에 jsdelivr CDN `@import`를 넣었습니다. 이 컨테이너는 해당 CDN이 차단돼 **로드 검증을 못 했습니다.** 프로덕션에서는 self-host 서브셋을 권장합니다. |
 | **Dark mode** | ✅ 완료 — 6장 참조. |
-| **최종 브랜드 컬러** | `#3366FF`는 여전히 임시입니다. 교체 시 `--wds-primary` 하나로는 부족합니다 — `-strong`(hover) / `-heavy`(pressed)는 파생값이 아니라 독립 값이라 함께 잡아야 합니다. |
+| **최종 브랜드 컬러** | **확정 (2026-09-03) — `#3366FF` 유지.** 현재 라이트·다크 6개 값을 그대로 씁니다. 다만 UCL 직행 구역색(`blue-500`)과 색상환 8° 차이라, 순위표 안에서는 브랜드 색을 쓰지 않는 형태 분리 규칙이 필요합니다 (`docs/PRD.md` 9-2). |
 | **Wanted DS 원본 8개 값** | `line-strong`, `line-alternative`, `fill-alternative`, `text-assistive`, `interaction-disable`, `interaction-inactive`, shadow 3종은 원본 미확보. PitchLog 값으로 대체했습니다. 원본을 나중에 구하면 대조가 필요합니다. |
 | **`fig-assets.css`** | 참조하는 `assets/` 34개가 없고 사용처도 0건입니다. 삭제 후보입니다. |
 | **`styles.css`** | `./tokens/*` import 매니페스트이며 대상 파일이 전부 없습니다. 삭제 후보입니다. |
