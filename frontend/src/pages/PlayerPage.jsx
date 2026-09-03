@@ -49,7 +49,7 @@ export default function PlayerPage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
         <LoadingSkeleton rows={3} variant="text" />
         <LoadingSkeleton rows={5} variant="card" />
       </div>
@@ -58,7 +58,7 @@ export default function PlayerPage() {
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-16">
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '64px 16px' }}>
         <ErrorState title={t('player.errorTitle')} description={error} />
       </div>
     )
@@ -80,7 +80,7 @@ export default function PlayerPage() {
   const teamName = getLocalizedName({ id: team?.id, name: team?.name }, locale) || team?.name
 
   return (
-    <div className="max-w-4xl mx-auto px-4 lg:px-6 py-6 space-y-6">
+    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}><div style={{ maxWidth: 960, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8 space-y-5">
       {team && (
         <Link
           to={`/teams/${team.slug}`}
@@ -184,6 +184,6 @@ export default function PlayerPage() {
           </table>
         </section>
       )}
-    </div>
+    </div></div>
   )
 }

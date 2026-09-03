@@ -1,7 +1,5 @@
 /**
- * 팀 목록 (/teams)
- * 국내 리그별 그룹 + UCL 참가 표시.
- * 데이터: services/api.js → fetchTeamsByLeague
+ * 팀 목록 /teams — 국내 리그별 그룹 + UCL 참가 표시
  */
 
 import { Link } from 'react-router-dom'
@@ -19,53 +17,82 @@ export default function TeamsPage() {
   const { data: groups, loading, error } = useData(fetchTeamsByLeague, [])
 
   if (loading) return (
-    <div className="max-w-5xl mx-auto px-4 lg:px-6 py-6">
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
       <LoadingSkeleton rows={8} />
     </div>
   )
 
   if (error) return (
-    <div className="max-w-5xl mx-auto px-4 lg:px-6 py-16">
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 16px' }}>
       <ErrorState title={t('common.errorTitle')} description={error} />
     </div>
   )
 
   return (
-    <div className="max-w-5xl mx-auto px-4 lg:px-6 py-6 space-y-8">
-      <div>
-        <h1 className="text-xl font-bold text-foreground">{t('nav.teams')}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{t('common.season')}</p>
-      </div>
+    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8">
 
-      {(groups ?? []).map(({ comp, teams }) => (
-        <section key={comp.slug}>
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            {getLocalizedCompetitionName(comp, locale)}
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {teams.map(team => {
-              const isUCL = team.competitions.includes('champions-league')
-              return (
-                <Link
-                  key={team.id}
-                  to={`/teams/${team.slug}`}
-                  className="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-2 hover:bg-accent hover:border-ring transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group text-center"
-                >
-                  <TeamBadge initials={team.initials} color={team.color} size="lg" name={team.name} />
-                  <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors leading-tight line-clamp-2">
-                    {getLocalizedName({ id: team.id, name: team.name }, locale) || team.name}
-                  </span>
-                  {isUCL && (
-                    <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">
-                      {t('standings.legend.ucl')}
-                    </span>
-                  )}
-                </Link>
-              )
-            })}
-          </div>
-        </section>
-      ))}
+        <div style={{ marginBottom: 24 }}>
+          <h1 className="t-page" style={{ margin: 0, fontSize: 26 }}>{t('nav.teams')}</h1>
+          <span className="t-sub">2026-27</span>
+        </div>
+
+        <div style={{ display: 'grid', gap: 32 }}>
+          {(groups ?? []).map(({ comp, teams }) => (
+            <section key={comp.slug}>
+              <h2
+                className="t-cap"
+                style={{ marginBottom: 12, letterSpacing: '.04em', display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                {getLocalizedCompetitionName(comp, locale)}
+                <span style={{ fontWeight: 400, opacity: 0.7 }}>{teams.length}</span>
+              </h2>
+              <div
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}
+                className="teams-grid"
+              >
+                <style>{`@media(min-width:480px){.teams-grid{grid-template-columns:repeat(3,1fr)!important}}@media(min-width:768px){.teams-grid{grid-template-columns:repeat(4,1fr)!important}}@media(min-width:1024px){.teams-grid{grid-template-columns:repeat(5,1fr)!important}}`}</style>
+                {teams.map(team => {
+                  const isUCL = team.competitions?.includes('champions-league')
+                  const name  = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
+                  return (
+                    <Link
+                      key={team.id}
+                      to={`/teams/${team.slug}`}
+                      className="pl-card"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: 12,
+                        textDecoration: 'none',
+                        color: 'inherit',
+                        minHeight: 56,
+                      }}
+                    >
+                      <TeamBadge initials={team.initials} color={team.color} size="sm" name={team.name} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <span
+                          className="tname t-body"
+                          style={{ fontWeight: 600, display: 'block' }}
+                          title={name}
+                        >
+                          {name}
+                        </span>
+                        {isUCL && (
+                          <span className="t-cap" style={{ color: 'var(--z-ucl)' }}>
+                            {t('standings.legend.ucl')}
+                          </span>
+                        )}
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

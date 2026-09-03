@@ -1,16 +1,16 @@
 /**
- * 대회 목록 (/competitions)
- * 6개 대회 카드. UCL 카드에 녹아웃 대진 링크 포함.
- * 데이터: services/api.js → fetchCompetitionsOverview
+ * 대회 목록 /competitions
+ * 6개 대회를 3×2 그리드로 표시 — HomePage CompetitionCard와 같은 형태
  */
 
 import { Link } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
 import { fetchCompetitionsOverview } from '@/services/api'
+import TeamBadge from '@/components/ui/TeamBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
+import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import { getLocalizedCompetitionName } from '@/utils/localization'
 
 export default function CompetitionsPage() {
@@ -19,63 +19,97 @@ export default function CompetitionsPage() {
   const { data: competitions, loading, error } = useData(fetchCompetitionsOverview, [])
 
   if (loading) return (
-    <div className="max-w-3xl mx-auto px-4 lg:px-6 py-6">
-      <LoadingSkeleton rows={4} variant="card" />
+    <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+      <LoadingSkeleton rows={3} variant="card" />
     </div>
   )
 
   if (error) return (
-    <div className="max-w-3xl mx-auto px-4 lg:px-6 py-16">
+    <div style={{ maxWidth: 960, margin: '0 auto', padding: '64px 16px' }}>
       <ErrorState title={t('common.errorTitle')} description={error} />
     </div>
   )
 
   return (
-    <div className="max-w-3xl mx-auto px-4 lg:px-6 py-6 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-foreground">{t('nav.competition')}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{t('common.season')}</p>
-      </div>
+    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8">
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {(competitions ?? []).map(comp => {
-          const isUCL = comp.slug === 'champions-league'
-          const stageText = comp.stage
-            ? `${comp.stage.label} ${t(comp.stage.status === 'ongoing' ? 'standings.stageOngoing' : 'standings.stageCompleted')}`
-            : null
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 20 }}>
+          <h1 className="t-page" style={{ margin: 0, fontSize: 26 }}>{t('nav.competition')}</h1>
+          <span className="t-sub">6 · 2026-27</span>
+        </div>
 
-          return (
-            <div key={comp.slug} className="bg-card border border-border rounded-xl overflow-hidden hover:border-ring transition-colors">
+        <div
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}
+          className="comp-list-grid"
+        >
+          <style>{`@media(min-width:640px){.comp-list-grid{grid-template-columns:repeat(3,1fr)!important}}`}</style>
+
+          {(competitions ?? []).map(comp => {
+            const liveCount     = comp.liveCount ?? 0
+            const upcomingCount = comp.upcomingCount ?? 0
+            const isUCL         = comp.slug === 'champions-league'
+
+            return (
               <Link
+                key={comp.slug}
                 to={`/competitions/${comp.slug}`}
-                className="block p-4 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+                className="pl-card"
+                style={{ display: 'grid', gap: 12, padding: 16, textDecoration: 'none', color: 'inherit' }}
               >
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <h2 className="font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">
-                    {getLocalizedCompetitionName(comp, locale)}
-                  </h2>
-                  <ChevronRight size={16} className="text-muted-foreground flex-shrink-0 mt-0.5" aria-hidden="true" />
+                {/* 헤더 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span
+                    className="pl-emblem"
+                    style={{ width: 36, height: 36, fontSize: 11, fontWeight: 700, flexShrink: 0, borderRadius: 8 }}
+                  >
+                    {comp.shortName}
+                  </span>
+                  <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
+                    <span className="t-card tname" style={{ fontWeight: 600 }}>
+                      {getLocalizedCompetitionName(comp, locale)}
+                    </span>
+                    <span className="t-cap">{comp.country}</span>
+                  </div>
+                  <span style={{ flexShrink: 0 }}>
+                    {liveCount > 0 ? (
+                      <span className="pl-badge b-live">
+                        <span className="pl-dot pl-dot-pulse" aria-hidden="true" />
+                        LIVE {liveCount}
+                      </span>
+                    ) : (
+                      <span className="pl-badge b-sched">{upcomingCount}</span>
+                    )}
+                  </span>
                 </div>
-                <p className="text-xs text-muted-foreground">{comp.country}</p>
-                {stageText && (
-                  <p className="text-xs text-muted-foreground mt-1.5">{stageText}</p>
+
+                {/* 라운드 */}
+                <span className="t-sub">{comp.stage?.label}</span>
+
+                {/* 선두 */}
+                {comp.leader && (
+                  <div style={{ borderTop: '1px solid var(--pl-line)', paddingTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="t-cap">{t('home.leaderLabel')}</span>
+                    <TeamBadge initials={comp.leader.teamInitials} color={comp.leader.teamColor} size="xs" name={comp.leader.teamName} />
+                    <span className="tname t-body" style={{ fontWeight: 600, flex: 1 }}>{comp.leader.teamName}</span>
+                    {comp.leader.points != null && (
+                      <span className="num t-body" style={{ fontWeight: 700, flexShrink: 0 }}>
+                        {t('home.ptsUnit', { pts: comp.leader.points })}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* UCL 녹아웃 링크 */}
+                {isUCL && (
+                  <span className="pl-link" style={{ fontSize: 12 }}>
+                    {t('standings.leaguePhaseLink')} →
+                  </span>
                 )}
               </Link>
-
-              {isUCL && (
-                <div className="px-4 pb-3 border-t border-border/50 pt-2.5">
-                  <Link
-                    to="/competitions/champions-league/knockout"
-                    className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 w-fit focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
-                  >
-                    {t('competition.knockoutLink')}
-                    <ChevronRight size={10} aria-hidden="true" />
-                  </Link>
-                </div>
-              )}
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
