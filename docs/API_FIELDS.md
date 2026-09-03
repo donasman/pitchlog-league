@@ -81,6 +81,48 @@ team/league  id · name · logo · country · flag · season
 
 ---
 
+## 3-1. 추가 확인된 엔드포인트 (2026-09-03 2차 probe)
+
+수집 계획에 없던 것들을 점검했다. **하나 빼고 전부 사용 가능하다.**
+
+| 엔드포인트 | 결과 | 쓸 곳 |
+|---|---|---|
+| `/players/topscorers` | ✅ 20건 | 득점 랭킹 — **대회당 1콜** |
+| `/players/topassists` | ✅ 20건 | 도움 랭킹 — 대회당 1콜 |
+| `/players/topyellowcards` | ✅ 20건 | 카드 랭킹 — 대회당 1콜 |
+| `/teams/statistics` | ✅ | 팀 상세 화면. 아래 참조 |
+| `/fixtures/rounds` | ✅ 38건 | 라운드 목록. 문자열 파싱 대체 |
+| `/fixtures/headtohead` | ✅ 5건 | H2H. 자체 계산 대체 |
+| `/sidelined` | ⚠ | `league`·`season` 파라미터를 받지 않는다. **엔드포인트가 없는 게 아니라 호출 형태가 다르다** — `player`·`coach` 기준일 가능성. 필요해지면 재확인 |
+
+### 랭킹 전용 엔드포인트 — 콜 95% 절감
+
+원래 계획은 `/players`를 23페이지 전수 수집해(~400콜) 자체 집계하는 것이었다.
+전용 엔드포인트를 쓰면 **6대회 × 3종 = 18콜**이다.
+
+전체 선수 통계는 **선수 상세 화면용으로만** 남긴다.
+
+### `/teams/statistics` — 팀 상세를 공짜로 채운다
+
+최상위 키 11개가 온다.
+
+```
+league · team · form · fixtures · goals · biggest
+clean_sheet · failed_to_score · penalty · lineups · cards
+```
+
+- `form` — 최근 경기 결과 문자열
+- `fixtures` — 홈/원정 승·무·패
+- `biggest` — 최다 점수차 승리·패배
+- `clean_sheet` · `failed_to_score` — 무실점·무득점 경기 수
+- `lineups` — **포메이션별 출전 횟수**
+- `cards` — 시간대별 카드 분포로 추정
+
+팀 상세 화면 대부분을 자체 집계 없이 채울 수 있다.
+`lineups`는 "이 팀이 4-3-3을 몇 번 썼나"라서 다른 사이트에 흔치 않은 소재다.
+
+---
+
 ## 4. 없는 것
 
 | 항목 | 상태 | 대응 |
