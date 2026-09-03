@@ -220,6 +220,20 @@ export async function fetchTopAssisters() { return TOP_ASSISTERS }
 /** 득점 순위 (전체 대회 합산) */
 export async function fetchTopScorersAll() { return TOP_SCORERS_ALL }
 
+// ─── 알림 ───────────────────────────────────────────────────────
+
+import { NOTIFICATIONS, NOTIFICATION_SETTINGS } from '@/mocks/notifications'
+
+/** 알림 목록 */
+export async function fetchNotifications() {
+  return NOTIFICATIONS
+}
+
+/** 알림 설정 (권한 상태 포함) */
+export async function fetchNotificationSettings() {
+  return NOTIFICATION_SETTINGS
+}
+
 /**
  * 통계 — 전체 대회 합산 + 대회별 분해
  * stats 페이지의 "전체 합산" 탭용

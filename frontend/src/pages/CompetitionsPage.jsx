@@ -10,7 +10,6 @@ import { fetchCompetitionsOverview } from '@/services/api'
 import TeamBadge from '@/components/ui/TeamBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
-import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import { getLocalizedCompetitionName } from '@/utils/localization'
 
 export default function CompetitionsPage() {

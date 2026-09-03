@@ -246,7 +246,7 @@ const MOBILE_SCROLL_COLS = [
 ]
 const SCROLL_COL_W = 44  // px per scrollable column
 
-function MobileTable({ rows, competitionSlug, t, locale }) {
+function MobileTable({ rows, t, locale }) {
   const cellStyle = { height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }
 
   return (
@@ -473,7 +473,7 @@ export default function StandingsTable({
 
       {/* 모바일 */}
       <div className="md:hidden">
-        <MobileTable rows={rows} competitionSlug={competitionSlug} t={t} locale={locale} />
+        <MobileTable rows={rows} t={t} locale={locale} />
       </div>
 
       {/* 범례 */}
