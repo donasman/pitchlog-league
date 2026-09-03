@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Link, NavLink, useSearchParams } from 'react-router-dom'
+import { Link, NavLink, useSearchParams, useMatch } from 'react-router-dom'
 import { Home, Trophy, Calendar, Users, List, BarChart2, Search, Menu, X, ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { COMPETITIONS, SEASONS } from '@/mocks/competitions'
@@ -17,6 +17,7 @@ import { getLocalizedCompetitionName } from '@/utils/localization'
 export default function AppHeader() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
+  const isHome = useMatch('/')  // 홈에서 로고 밑줄 표시
 
   const [searchParams, setSearchParams] = useSearchParams()
   const [mobileOpen,  setMobileOpen]  = useState(false)
@@ -82,7 +83,10 @@ export default function AppHeader() {
             <div className="w-7 h-7 bg-primary rounded flex items-center justify-center flex-shrink-0">
               <span className="text-xs font-black text-primary-foreground select-none">PL</span>
             </div>
-            <span className="font-bold text-foreground text-sm tracking-tight hidden sm:block">PitchLog</span>
+            <span
+              className="font-bold text-foreground text-sm tracking-tight hidden sm:block"
+              style={{ boxShadow: isHome ? 'inset 0 -2px 0 var(--pl-primary)' : 'none', paddingBottom: 2 }}
+            >PitchLog</span>
           </Link>
 
           {/* 데스크톱 내비 */}

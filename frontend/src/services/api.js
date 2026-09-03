@@ -12,6 +12,7 @@
  * 페이지는 catch 후 ErrorState를 표시한다.
  */
 
+import { COMPETITION_OVERVIEW, LIVE_PULSE, NEXT_KICKOFF, DATA_AS_OF } from '@/mocks/overview'
 import { COMPETITIONS, SEASONS, getCompetitionBySlug } from '@/mocks/competitions'
 import { MATCHES, UCL_KNOCKOUT_TIES, getMatchById, getMatchesByCompetition, getMatchesByTeam } from '@/mocks/matches'
 import { STANDINGS, getStandings } from '@/mocks/standings'
@@ -208,6 +209,22 @@ export async function fetchTopScorersAll() { return TOP_SCORERS_ALL }
 export async function fetchUCLKnockout() { return UCL_KNOCKOUT_TIES }
 
 // ─── 홈 화면 묶음 ──────────────────────────────────────────────
+
+/**
+ * 홈 오버뷰 — 제품 앞장에 필요한 데이터를 한 번에 반환
+ * 백엔드 연결 시 GET /api/overview 로 교체
+ */
+export async function fetchOverview() {
+  const eplStandings = getStandings('premier-league')?.entries?.slice(0, 3) ?? []
+  return {
+    competitions: COMPETITION_OVERVIEW,
+    livePulse:    LIVE_PULSE,
+    nextKickoff:  NEXT_KICKOFF,
+    dataAsOf:     DATA_AS_OF,
+    topScorers:   TOP_SCORERS_ALL.slice(0, 3),
+    eplTop3:      eplStandings,
+  }
+}
 
 /**
  * 홈 초기 데이터 (필터링은 컴포넌트에서 수행)
