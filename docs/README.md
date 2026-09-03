@@ -4,6 +4,7 @@
 
 | 문서 | 용도 | 상태 |
 | --- | --- | --- |
+| [PRD.md](./PRD.md) | 화면 요구사항 — 디자인 작업의 입력 | **현재 기준 문서** |
 | [FRONTEND_GUIDE.md](./FRONTEND_GUIDE.md) | React·Vite·JavaScript 기술 결정과 화면 개발 기준 | **현재 기준 문서** |
 | [BACKEND_GUIDE.md](./BACKEND_GUIDE.md) | NestJS·Prisma·Socket.io 백엔드 개발 기준 | **현재 기준 문서** |
 | [FRONTEND_CLI_PROMPT.md](./FRONTEND_CLI_PROMPT.md) | CLI에 전달할 프론트엔드 작업 요청문 | 실행용 |
