@@ -134,7 +134,7 @@ UCL 리그 페이즈: 16강 직행 / 플레이오프 / 탈락
 | 상태 구분 | 색상 단독 금지 (4-2, 4-3) |
 | 애니메이션 | `prefers-reduced-motion`에서 정지 |
 
-`design/pitchlog-base-tokens.css`에 검증된 토큰이 있다. **새 색을 만들기 전에 그 토큰을 먼저 본다.**
+`design/pitchlog-tokens.css`에 검증된 토큰이 있다. **새 색을 만들기 전에 그 토큰을 먼저 본다.**
 
 ### 4-7. URL 상태 보존
 
@@ -366,7 +366,7 @@ UCL 리그 페이즈: 16강 직행 / 플레이오프 / 탈락
 | 다크 | `#6E93FF` 5.75:1 | `#8FACFF` 7.52:1 | `#A0BAFF` 8.66:1 |
 
 대비는 WCAG 2.1 상대휘도 기준 실측이다. 라이트는 `#FFFFFF`, 다크는 `#1E1E23` 위에서 측정했다.
-여섯 값 모두 이미 `design/pitchlog-base-tokens.css`와 `design/pitchlog-theme-dark.css`에
+여섯 값 모두 이미 `design/pitchlog-tokens.css`에
 들어 있고 Foundation 감사에서 검증됐다. **추가 교체 작업 없음.**
 
 근거: 데이터 서비스에서 블루는 신뢰 관습이 강하고, 토큰이 이미 검증돼 있어 재작업이 없다.
@@ -398,7 +398,7 @@ UCL 리그 페이즈: 16강 직행 / 플레이오프 / 탈락
 
 1. **hover·pressed는 파생값이 아니다.** 명도만 낮춘 값이 아니므로 자동 계산으로 대체하지 않는다.
 2. **다크는 반대로 밝아진다.** 라이트에서 hover가 어두워지는 것과 정반대다.
-3. `pitchlog-base-tokens.css`와 `pitchlog-theme-dark.css`를 **함께** 바꾼다. 한쪽만 바꾸면 어긋난다.
+3. `pitchlog-tokens.css` 한 파일에서 `:root`와 `.dark` 블록을 **함께** 바꾼다. 한쪽만 바꾸면 어긋난다.
 4. 다크의 밝은 primary 위에는 흰 글자가 무너진다(2.5~2.9:1). `--pl-on-primary`로 어두운 글자를 쓴다.
 
 ---

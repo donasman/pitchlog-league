@@ -1,5 +1,10 @@
 # PitchLog Web Foundation — Audit & 접근성 수정 기록
 
+> ⚠ **역사 기록 (2026-09-03 은퇴).** 이 문서가 다루는 4개 파일은 `archive/` 로 옮겼다.
+> 현재 토큰 기준은 `pitchlog-tokens.css` 다 — Claude Design 시안에서 나온 값이며,
+> 이 문서의 접근성 원칙(대비 4.5:1 / 3:1, 색상 단독 금지, focus-visible)은 그대로 이어진다.
+> 실제로 신규 토큰도 같은 방식으로 25쌍을 실측해 2건을 수정했다.
+
 작성: 2026-09-02 · 대상: `design/` 폴더의 Foundation 4개 파일
 
 ---
