@@ -12,6 +12,7 @@
 | [ADR-001-NODE-BACKEND.md](./ADR-001-NODE-BACKEND.md) | NestJS 통합 백엔드 기술 결정 | **확정 결정** |
 | [BACKEND_DESIGN_REVIEW.md](./BACKEND_DESIGN_REVIEW.md) | 백엔드 설계 재검토 — 착수 전 결정 사항 | **실행 체크리스트** |
 | [BACKEND_FEATURES.md](./BACKEND_FEATURES.md) | 백엔드 기능 목록 — 데이터 계층별 분류와 Phase 배치 | **실행 체크리스트** |
+| [API_FIELDS.md](./API_FIELDS.md) | API-Football 제공 데이터 실측 결과 | **실측 기준 문서** |
 | [V2_DESIGN.md](./V2_DESIGN.md) | 유럽 클럽축구 시스템 상세 설계 및 구현 로드맵 | 기준 문서 |
 | [V2_DESIGN_REVIEW.md](./V2_DESIGN_REVIEW.md) | 설계 위험요소 및 보완사항 검토 | 참고 문서 |
 | [FEATURE_PLAN.md](./FEATURE_PLAN.md) | 기능 현황과 확장 계획 | 참고 문서 |
