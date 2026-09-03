@@ -7,7 +7,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import TeamBadge from '@/components/ui/TeamBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
@@ -67,9 +66,9 @@ function TieCard({ tie, t }) {
 
       {/* 홈팀 */}
       {[
-        { team: tie.homeTeam, l1: tie.leg1Score?.home, l2: tie.leg2Score?.home, l2agg: tie.aggregateScore?.home },
-        { team: tie.awayTeam, l1: tie.leg1Score?.away, l2: tie.leg2Score?.away, l2agg: tie.aggregateScore?.away },
-      ].map(({ team, l1, l2, l2agg }, idx) => {
+        { team: tie.homeTeam, l1: tie.leg1Score?.home, l2: tie.leg2Score?.home },
+        { team: tie.awayTeam, l1: tie.leg1Score?.away, l2: tie.leg2Score?.away },
+      ].map(({ team, l1, l2 }, idx) => {
         if (!team) return null
         const isWinner = tie.winner === team.name
         return (

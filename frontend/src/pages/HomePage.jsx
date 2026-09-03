@@ -19,7 +19,6 @@ import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import { toKSTTime } from '@/utils/dateFormat'
-import { getLocalizedCompetitionName, getLocalizedName } from '@/utils/localization'
 
 /* ── 구역 색 (tokens.css --z-* 와 동일) ── */
 const ZONE_COLORS = ['#3B82F6','#EAB308','#F97316','#16A34A','#F87171','#DC2626']

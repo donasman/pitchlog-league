@@ -20,8 +20,9 @@ const TeamPage          = lazy(() => import('@/pages/TeamPage'))
 const TeamFixturesPage  = lazy(() => import('@/pages/TeamFixturesPage'))
 const PlayerPage        = lazy(() => import('@/pages/PlayerPage'))
 const StatsPage         = lazy(() => import('@/pages/StatsPage'))
-const NotFoundPage      = lazy(() => import('@/pages/NotFoundPage'))
-const PartsPage         = lazy(() => import('@/pages/PartsPage'))
+const NotFoundPage          = lazy(() => import('@/pages/NotFoundPage'))
+const PartsPage             = lazy(() => import('@/pages/PartsPage'))
+const NotificationsPage     = lazy(() => import('@/pages/NotificationsPage'))
 
 export const router = createBrowserRouter([
   {
@@ -52,6 +53,9 @@ export const router = createBrowserRouter([
 
       // 선수
       { path: 'players/:slug',                               element: <PlayerPage /> },
+
+      // 알림
+      { path: 'notifications/settings',                      element: <NotificationsPage /> },
 
       // 개발 전용: 부품 시트
       { path: 'dev/parts',                                   element: <PartsPage /> },

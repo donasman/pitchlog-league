@@ -13,7 +13,6 @@ import { useData } from '@/hooks/useData'
 import { fetchTeamFixtures } from '@/services/api'
 import { getLocalizedName, getLocalizedCompetitionShortName } from '@/utils/localization'
 import { isLive } from '@/utils/matchStatus'
-import { toKSTDate } from '@/utils/dateFormat'
 
 const MOCK_TODAY_KST = '2026-11-23'  // Mock 기준일 (경기 데이터 기준)
 
@@ -88,7 +87,6 @@ export default function TeamFixturesPage() {
   const past    = sorted.filter(m => getKSTDateKey(m.date) < MOCK_TODAY_KST)
   const today   = sorted.filter(m => getKSTDateKey(m.date) === MOCK_TODAY_KST)
   const future  = sorted.filter(m => getKSTDateKey(m.date) > MOCK_TODAY_KST)
-  const hasToday = today.length > 0 || past.length > 0  // show divider between past and future
 
   return (
     <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>

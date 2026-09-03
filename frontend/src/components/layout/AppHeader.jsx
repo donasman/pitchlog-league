@@ -4,7 +4,7 @@
  * 대회·시즌 선택 상태는 URL 검색 파라미터로 보존.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, NavLink, useSearchParams, useMatch } from 'react-router-dom'
 import { Home, Trophy, Calendar, Users, List, BarChart2, Search, Menu, X, ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -12,12 +12,17 @@ import { COMPETITIONS, SEASONS } from '@/mocks/competitions'
 import ThemeToggle from './ThemeToggle'
 import LanguageToggle from './LanguageToggle'
 import SearchPanel from './SearchPanel'
+import NotificationPanel from '@/components/notifications/NotificationPanel'
+import { useNotifications } from '@/contexts/NotificationContext'
 import { getLocalizedCompetitionName } from '@/utils/localization'
 
 export default function AppHeader() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
   const isHome = useMatch('/')  // 홈에서 로고 밑줄 표시
+
+  const { unreadCount, panelOpen, togglePanel, closePanel } = useNotifications()
+  const bellRef = useRef(null)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const [mobileOpen,  setMobileOpen]  = useState(false)
@@ -182,6 +187,57 @@ export default function AppHeader() {
           >
             <Search size={18} aria-hidden="true" />
           </button>
+
+          {/* 벨 + 알림 패널 */}
+          <div ref={bellRef} style={{ position: 'relative' }}>
+            <button
+              onClick={togglePanel}
+              aria-label={t('notif.bell')}
+              aria-expanded={panelOpen}
+              style={{
+                width: 44,
+                height: 44,
+                display: 'grid',
+                placeItems: 'center',
+                position: 'relative',
+                color: 'var(--pl-text)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                borderRadius: 8,
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                <path d="M10 3.2a5 5 0 0 0-5 5V12l-1.6 2.6h13.2L15 12V8.2a5 5 0 0 0-5-5zM8 17.2h4" />
+              </svg>
+              {/* 안 읽음 배지 — 브랜드 파랑 (빨강 금지) */}
+              {unreadCount > 0 && (
+                <span
+                  className="num"
+                  style={{
+                    position: 'absolute',
+                    top: 5,
+                    right: 4,
+                    minWidth: 18,
+                    height: 18,
+                    padding: '0 5px',
+                    borderRadius: 999,
+                    background: 'var(--pl-primary)',
+                    color: 'var(--pl-on-primary)',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    display: 'grid',
+                    placeItems: 'center',
+                    boxShadow: '0 0 0 2px var(--pl-card)',
+                  }}
+                  aria-label={t('notif.unreadCount', { count: unreadCount })}
+                >
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+            {panelOpen && <NotificationPanel onClose={closePanel} />}
+          </div>
 
           {/* 언어 전환 */}
           <LanguageToggle />
