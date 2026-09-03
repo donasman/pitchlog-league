@@ -29,8 +29,11 @@ pitchlog-league/                 ← 모노레포 루트
 │       ├── services/            ← 백엔드 API 연결 계층
 │       ├── mocks/               ← 화면 검증용 Mock Data
 │       └── utils/
-├── docker-compose.yml
+├── design/                      ← Web Foundation 토큰·다크 테마
+├── infra/                       ← docker-compose.yml, 배포 설정
 ├── docs/
+│   ├── BACKEND_GUIDE.md         ← 백엔드 개발 기준 (ADR-001 기반, 현재 기준)
+│   ├── FRONTEND_GUIDE.md        ← 프론트엔드 개발 기준 (현재 기준)
 │   ├── V2_DESIGN.md             ← 설계 원본 (이 저장소의 유일한 설계 근거)
 │   ├── V2_DESIGN_REVIEW.md      ← 설계 검토 결과 (확정 4건은 V2_DESIGN.md에 반영됨)
 │   ├── RETROSPECTIVE.md         ← v1 회고 — 이 문서의 코드 규칙 다수가 여기서 나옴
@@ -188,6 +191,8 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
 - API 오류를 빈 데이터로 바꾸지 않고 오류 상태를 UI에 노출
 - 프론트엔드의 현재 기준은 `docs/FRONTEND_GUIDE.md`를 우선 적용
 - CI에 무음 `catch {}` 검사(grep) 포함
+- 커밋 전 `frontend`에서 `npm run verify` 실행
+  (`validate:data` → `check:i18n` → `lint` → `build` 순차 실행)
 
 ---
 
@@ -216,13 +221,17 @@ API-Football API 키는 환경변수로만 주입한다.
 
 | Phase | 내용 | 검증 기준 | 상태 |
 |---|---|---|---|
-| **0** | 안전장치 + 배포 PoC (프로덕션 코드 없음) | 8-2 DoD 4항목 | 🔲 대기 (PR #1~#6) |
+| **0** | 안전장치 + 배포 PoC (프로덕션 코드 없음) | 8-2 DoD 4항목 | 🚧 진행 (저장소 골격·문서 완료 / CI·배포 PoC 미착수) |
 | **1** | `League`/`Team`/`Season` 도메인 + `Player` 이관 + EPL 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🔲 대기 |
 | **2** | 경기·라인업·순위 + 스케줄러 이관 | 실제 라운드 1회 무중단 관측 | 🔲 대기 |
-| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🔲 대기 |
+| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 (Mock 기반 화면·i18n 완료 / 실 API 연결·배포 미착수) |
 | **4** | `League` 다중화 → 5대 리그 + UCL | API 예산 재검산 | 🔲 대기 |
 
 Phase 0 DoD, PR 단위 분해(#1~#6), Phase 1의 구체적 작업 순서는 `V2_DESIGN.md` 8-1·8-3 참조.
+
+Phase 3은 백엔드보다 먼저 Mock Data 기반으로 진행했다. 화면·라우팅·i18n은 구현돼 있고
+`services/api.js`가 Mock을 반환하는 상태이므로, 실 API 연결과 배포가 남은 작업이다.
+현재 진행 상황과 다음 순서는 `docs/NEXT_STEPS.md`가 기준이다.
 
 ---
 

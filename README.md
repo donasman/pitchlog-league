@@ -21,6 +21,7 @@ AI는 데이터베이스나 외부 축구 API에 직접 접근하지 않습니�
 ```
 backend/    NestJS + TypeScript + Prisma (API·수집·실시간·AI 도구)
 frontend/   React + Vite + Tailwind + shadcn/ui
+design/     Web Foundation 토큰·다크 테마
 infra/      docker-compose 및 배포 설정
 docs/       기획·설계 문서
 ```

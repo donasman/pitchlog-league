@@ -13,7 +13,7 @@ PitchLog의 프론트엔드 화면을 React + Vite + JavaScript로 구성해 줘
 ## 작업 경계
 
 - 작업 범위는 `frontend` 디렉터리로 제한해.
-- `docs`, `output`, `archive`, `README.md`, `CLAUDE.md`, `CODEX.md`는 수정·삭제·이동하지 마.
+- `docs`, `design`, `output`, `archive`, `README.md`, `CLAUDE.md`는 수정·삭제·이동하지 마.
 - 백엔드, 데이터베이스, Redis, Socket.io 서버, 인증, AI 실제 연동은 구현하지 마.
 - 기존 코드가 있다면 먼저 목록을 확인하고 사용자 작성 코드를 덮어쓰지 마.
 - 삭제나 대규모 교체가 필요하면 대상과 이유를 먼저 보고하고 진행을 멈춰.
