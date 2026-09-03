@@ -79,7 +79,17 @@
     "allCompetitions": "전체 대회",
     "allStatuses": "전체",
     "noMatches": "경기 없음",
-    "noMatchesDesc": "선택한 필터에 해당하는 경기가 없습니다."
+    "noMatchesDesc": "선택한 필터에 해당하는 경기가 없습니다.",
+    "today": "오늘",
+    "tomorrow": "내일",
+    "standingsPanel": "순위",
+    "viewStandings": "전체 보기",
+    "resetFilters": "초기화",
+    "statusLive": "진행 중",
+    "statusScheduled": "예정",
+    "statusFinished": "종료",
+    "liveMatchCount": "진행 중 {{count}}",
+    "matchCount": "{{count}}경기"
   },
   "standings": {
     "title": "순위",
