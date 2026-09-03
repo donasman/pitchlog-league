@@ -22,7 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 async function loadMocks() {
   const base = path.join(__dirname, '../src/mocks')
   const toURL = f => pathToFileURL(path.join(base, f)).href
-  const [teams, matches, standings, players, competitions, matchStats, teamStats] = await Promise.all([
+  const [teams, matches, standings, players, competitions, matchStats, teamStats, lineups] = await Promise.all([
     import(toURL('teams.js')),
     import(toURL('matches.js')),
     import(toURL('standings.js')),
@@ -30,8 +30,9 @@ async function loadMocks() {
     import(toURL('competitions.js')),
     import(toURL('matchStats.js')),
     import(toURL('teamStats.js')),
+    import(toURL('lineups.js')),
   ])
-  return { teams, matches, standings, players, competitions, matchStats, teamStats }
+  return { teams, matches, standings, players, competitions, matchStats, teamStats, lineups }
 }
 
 // ANSI 색상
@@ -64,7 +65,7 @@ function checkDuplicates(items, field, label) {
 async function main() {
   console.log('\n=== Mock Data 검증 시작 ===\n')
 
-  const { teams, matches, standings, players, competitions, matchStats, teamStats } = await loadMocks()
+  const { teams, matches, standings, players, competitions, matchStats, teamStats, lineups } = await loadMocks()
 
   const TEAMS         = teams.TEAMS
   const MATCHES       = matches.MATCHES
@@ -78,6 +79,8 @@ async function main() {
   const COMPETITIONS  = competitions.COMPETITIONS
   const MATCH_TEAM_STATS   = matchStats.MATCH_TEAM_STATS
   const TEAM_SEASON_STATS  = teamStats.TEAM_SEASON_STATS
+  const LINEUPS            = lineups.LINEUPS
+  const MATCH_PLAYER_STATS = lineups.MATCH_PLAYER_STATS
 
   const teamSlugs = new Set(TEAMS.map(t => t.slug))
   const teamIds   = new Set(TEAMS.map(t => t.id))
@@ -356,6 +359,57 @@ async function main() {
       if (ts.form !== e.form.join('')) { fail(`${key} 폼 문자열이 순위표와 다름`); bad++ }
     }
     if (bad === 0) pass(`팀 시즌 통계 ${Object.keys(TEAM_SEASON_STATS).length}건 순위표와 일치`)
+  }
+
+  // ── 12. 라인업 · 선수 경기 통계 정합성 ──────────────────────
+  console.log('\n12. 라인업 · 선수 경기 통계 검사')
+  {
+    let bad = 0
+    for (const [id, lu] of Object.entries(LINEUPS)) {
+      const m = MATCHES.find(x => x.id === id)
+      if (!m) { fail(`라인업은 있는데 경기가 없음: ${id}`); bad++; continue }
+      for (const side of ['home', 'away']) {
+        const l = lu[side]
+        if (!l) { fail(`${id} ${side} 라인업 없음`); bad++; continue }
+        if (l.startingXI.length !== 11) { fail(`${id} ${side} 선발이 11명이 아님 (${l.startingXI.length})`); bad++ }
+        const nums = l.startingXI.concat(l.substitutes).map(p => p.number)
+        if (new Set(nums).size !== nums.length) { fail(`${id} ${side} 등번호 중복`); bad++ }
+        const caps = l.startingXI.filter(p => p.isCaptain)
+        if (caps.length !== 1) { fail(`${id} ${side} 주장이 ${caps.length}명`); bad++ }
+        const gks = l.startingXI.filter(p => p.position === 'GK')
+        if (gks.length !== 1) { fail(`${id} ${side} 선발 GK가 ${gks.length}명`); bad++ }
+      }
+      // 선수 통계 ↔ 경기 이벤트 대조
+      const ps = MATCH_PLAYER_STATS[id] ?? []
+      if (ps.length !== 22) { fail(`${id} 선수 통계가 22명이 아님 (${ps.length})`); bad++ }
+      for (const side of ['home', 'away']) {
+        const evGoals = (m.events ?? []).filter(e => e.type === 'goal' && e.team === side).length
+        const statGoals = ps.filter(p => p.side === side)
+                            .reduce((a, p) => a + p.statistics.goals.total, 0)
+        if (evGoals !== statGoals) {
+          fail(`${id} ${side} 이벤트 골(${evGoals}) != 선수 통계 합(${statGoals})`); bad++
+        }
+        // GK 선방 = 팀 통계와 일치
+        const gk = ps.find(p => p.side === side && p.position === 'GK')
+        const ts = MATCH_TEAM_STATS[id]
+        if (gk && ts && gk.statistics.goals.saves !== ts[side].goalkeeperSaves) {
+          fail(`${id} ${side} GK 선방이 팀 통계와 다름`); bad++
+        }
+      }
+      for (const p of ps) {
+        const st = p.statistics
+        if (st.shots.on > st.shots.total) { fail(`${id} ${p.name} 유효 슈팅 > 총 슈팅`); bad++ }
+        if (st.goals.total > st.shots.on) { fail(`${id} ${p.name} 골 > 유효 슈팅`); bad++ }
+        if (st.duels.won > st.duels.total) { fail(`${id} ${p.name} 듀얼 승 > 총 듀얼`); bad++ }
+        if (st.dribbles.success > st.dribbles.attempts) { fail(`${id} ${p.name} 드리블 성공 > 시도`); bad++ }
+        if (st.games.rating !== null && (st.games.rating < 1 || st.games.rating > 10)) {
+          fail(`${id} ${p.name} 평점 범위 이상 (${st.games.rating})`); bad++
+        }
+        if (p.position === 'GK' && st.goals.saves === null) { fail(`${id} ${p.name} GK인데 선방이 null`); bad++ }
+      }
+    }
+    const noLineup = MATCHES.length - Object.keys(LINEUPS).length
+    if (bad === 0) pass(`라인업 ${Object.keys(LINEUPS).length}경기 정합성 정상 (라인업 없는 경기 ${noLineup}건 — 정상)`)
   }
 
   // ── 결과 ─────────────────────────────────────────────────────
