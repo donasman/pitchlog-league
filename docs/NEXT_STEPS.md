@@ -1,14 +1,14 @@
 # PitchLog 다음 작업 순서
 
 > 갱신: 2026-09-03 · 이전 판(09-02 프론트엔드 중심)을 대체한다.
-> 근거 문서: `PRD.md` · `BACKEND_FEATURES.md` · `BACKEND_DESIGN_REVIEW.md` · `API_FIELDS.md`
+> 근거 문서: `PRD.md` · `BACKEND_FEATURES.md` · `BACKEND_DESIGN_REVIEW.md` · `API_INVENTORY.md` · `DATA_RULES.md`
 
 ---
 
-## ⚠ D-19 — API-Football 구독이 9월 22일 만료
+## ✅ API-Football 구독 — 해결됨 (2026-09-04)
 
-Phase 1 진행 중에 끊긴다. 자동 갱신이 아니면 수집이 어느 날 401을 받는다.
-**다른 무엇보다 먼저 갱신 일정을 확인한다.**
+09-22 만료 경고는 해소됐다. Pro 갱신으로 올해는 계속 쓸 수 있다.
+만료일은 미확인 — 사용이 막히는 시점이 정해지면 그때 반영한다.
 
 ---
 
@@ -31,7 +31,7 @@ Phase 1 진행 중에 끊긴다. 자동 갱신이 아니면 수집이 어느 날
 - [ ] **GitHub 설정** — 기본 브랜치 `dev`, `main`에 PR 필수 + CI 통과 Ruleset (웹에서만 가능)
 - [ ] pre-commit 훅 — null byte · 깨진 UTF-8 검사
 - [ ] 배포 PoC — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결 확인
-- [x] ~~API-Football 실호출 검증~~ ✅ 2026-09-03 (`API_FIELDS.md`)
+- [x] ~~API-Football 실호출 검증~~ ✅ 2026-09-03, 전수 재조사 2026-09-04 (`API_INVENTORY.md`)
 
 ---
 
@@ -48,7 +48,7 @@ v1은 보호장치 없이 수집부터 만들었고 회고가 그걸 지목했�
 |---|---|
 | `competition_seasons` 분리 | UCL 예선이 리그 개막 전에 시작 — 대회별 현재 시즌 필요 (BACKEND_DESIGN_REVIEW A-1) |
 | `player_match_stats.team_id` | 경기의 팀 귀속을 스쿼드로 되짚으면 최대 7일 어긋남 (A-2) |
-| `external_ids` 테이블 | `api_team_id` 컬럼 분리 — 2차 소스 도입 시 행 추가로 끝남 (API_FIELDS 7-4) |
+| `external_ids` 테이블 | `api_team_id` 컬럼 분리 — 2차 소스 도입 시 행 추가로 끝남 (DATA_RULES 1-3) |
 | `owner_key` | 푸시 구독에 — 로그인 도입 시 `user_id` 연결 자리 (PRD 8-1) |
 | `transfer_type` · `parent_team_id` | 임대와 완전이적 구분. `UNKNOWN`으로 시작 (A-4) |
 | `knockout_ties.win_reason` | 합산 / 연장 / 승부차기 (A-5) |

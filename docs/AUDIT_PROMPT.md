@@ -14,7 +14,7 @@ PitchLog 저장소(C:\Dev\pitchlog-league)의 방금 구현한 단계를 감사�
 ## 읽을 것
 - docs/IMPLEMENTATION_PLAN.md 의 "전 단계 공통 규칙"
 - docs/PRD.md 9장 (브랜드 컬러와 형태 분리)
-- docs/API_FIELDS.md 5장 (null 처리 규칙)
+- docs/DATA_RULES.md 3장 (값의 세 가지 상태 — 0 / null / 미제공)
 - design/pitchlog-tokens.css (토큰 기준값)
 
 ## 검사 1 · 자동 검사가 통과하는가
@@ -38,7 +38,7 @@ grep 으로 찾고, 애매하면 해당 파일을 읽어서 판단해.
 - 오류 화면과 빈 결과 화면이 시각적으로 구분되는가
 - 로딩 스켈레톤이 실제 콘텐츠와 높이가 비슷한가 (레이아웃이 튀지 않는가)
 
-## 검사 4 · null 처리 (API_FIELDS 5장)
+## 검사 4 · null 처리 (DATA_RULES 3장)
 Mock 이 실제 API 동작을 반영해 redCards 를 0 대신 null 로 준다.
 
 - null → 0 으로 바꿔야 하는 것: 카드·오프사이드·슈팅·파울·태클·듀얼·드리블·페널티

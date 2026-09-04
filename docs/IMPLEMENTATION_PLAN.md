@@ -63,7 +63,7 @@ cd frontend && npm ci && npm run verify
 로딩 · 오류 · 빈 결과 · 정상. **오류를 빈 데이터로 바꾸지 않는다.**
 무음 `catch {}`가 새로 들어오면 lint가 막는다.
 
-### 3. null 처리 (API_FIELDS 5장)
+### 3. null 처리 (DATA_RULES 3장)
 
 Mock이 실제 API 동작을 반영해 `redCards`를 0 대신 `null`로 준다.
 
