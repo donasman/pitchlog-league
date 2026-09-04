@@ -137,8 +137,8 @@ aggregate_home, aggregate_away, winner_team_id, status
 ### B-1. ~~API-Football 26-27 시즌 데이터를 실제로 한 번 호출해본다~~ ✅ 완료 (2026-09-03)
 
 > **해소됨.** `scripts/probe-api-football.mjs` 실행으로 26-27 시즌 접근과 커버리지를 확인했다.
-> 결과는 `API_FIELDS.md` 참조. **xG(`expected_goals`)가 팀 경기 통계에 있다는 것도 이때 확인했다.**
-> 다만 **구독 만료가 2026-09-22**로 19일 남았다는 사실이 함께 드러났다 — 갱신 확인 필요.
+> 결과는 `API_INVENTORY.md` 참조. **xG(`expected_goals`)가 팀 경기 통계에 있다는 것도 이때 확인했다.**
+> 이때 함께 드러난 구독 만료(2026-09-22)는 **해소됐다** (2026-09-04, Pro 갱신 — 올해 계속 사용 가능).
 
 
 S0이 "Pro 플랜 구독 완료"로 닫혀 있다. 그건 **결제 확인이지 데이터 확인이 아니다.**
