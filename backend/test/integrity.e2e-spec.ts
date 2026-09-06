@@ -19,7 +19,7 @@ describe('참조 무결성 (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close(); // beforeAll 이 실패했을 때 진짜 원인이 TypeError 에 가려지지 않게
   });
 
   it(`관계 ${REFERENCE_CHECKS.length}개에 고아 행이 없다`, async () => {

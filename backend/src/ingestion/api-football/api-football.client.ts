@@ -24,20 +24,32 @@ const MAX_ATTEMPTS = 3;
 @Injectable()
 export class ApiFootballClient {
   private readonly logger = new Logger(ApiFootballClient.name);
-  private readonly key: string;
+  /** 없을 수 있다 — 조회 API 서버·CI 는 키 없이 떠야 한다. 첫 호출에서 검사한다 */
+  private readonly key: string | null;
   /** 최근 60초 호출 시각 — 분당 제한 판단 */
   private readonly window: number[] = [];
   /** 프로세스 시작 이후 누적. 서비스가 run 단위로 차분을 계산한다 */
   private total = 0;
 
   constructor(config: ConfigService<EnvironmentVariables, true>) {
-    const key = config.get('API_FOOTBALL_KEY', { infer: true });
-    if (!key) throw new Error('API_FOOTBALL_KEY 가 없다 — 수집 기능을 켜려면 필수');
-    this.key = key;
+    // 생성자에서 throw 하면 AppModule 을 쓰는 모든 것(HTTP 서버 · e2e · CI)이 키 없이는 못 뜬다 (2026-09-07 CI 실패).
+    // 키는 수집 명령이 실제로 호출할 때만 필요하다.
+    this.key = config.get('API_FOOTBALL_KEY', { infer: true }) ?? null;
+    if (!this.key) this.logger.warn('API_FOOTBALL_KEY 없음 — 수집 기능은 호출 시 실패한다');
   }
 
   get callCount(): number {
     return this.total;
+  }
+
+  /** 키가 있어야 수집이 가능한지. CLI 가 실행 전에 확인한다 */
+  get isConfigured(): boolean {
+    return this.key !== null;
+  }
+
+  private requireKey(): string {
+    if (!this.key) throw new Error('API_FOOTBALL_KEY 가 없다 — 수집 기능을 켜려면 필수');
+    return this.key;
   }
 
   /**
@@ -48,6 +60,7 @@ export class ApiFootballClient {
     const qs = new URLSearchParams(Object.entries(query).map(([k, v]) => [k, String(v)])).toString();
     const url = `${BASE_URL}${path}${qs ? `?${qs}` : ''}`;
     const label = `${path}${qs ? `?${qs}` : ''}`;
+    const key = this.requireKey();
 
     let lastErr: unknown;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -57,7 +70,7 @@ export class ApiFootballClient {
       try {
         this.total++;
         this.window.push(Date.now());
-        const res = await fetch(url, { headers: { 'x-apisports-key': this.key }, signal: ctrl.signal });
+        const res = await fetch(url, { headers: { 'x-apisports-key': key }, signal: ctrl.signal });
         clearTimeout(timer);
 
         if (res.status === 429) {
