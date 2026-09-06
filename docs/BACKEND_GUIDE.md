@@ -5,13 +5,15 @@
 
 ## 기술 구성
 
-- Node.js 22
-- NestJS + TypeScript strict mode
-- PostgreSQL + Prisma
-- REST API + OpenAPI/Swagger
+- Node.js 22 (`backend/.nvmrc`)
+- NestJS 12 + TypeScript strict mode. **ESM** — 상대 import 에 `.js` 확장자를 붙인다
+- PostgreSQL + **Prisma 7** — `prisma.config.ts` 필수, 드라이버 어댑터(`@prisma/adapter-pg`) 필수,
+  생성 클라이언트는 `src/generated/prisma/` (gitignore 됨, `prisma generate` 로 만든다)
+- REST API + OpenAPI/Swagger — `/docs`. **Swagger 스펙이 응답 계약이다**
 - NestJS WebSocket Gateway + Socket.io
-- Jest + Supertest
+- **vitest + Supertest** (Nest 12 기본. Jest 아님) · **oxlint** (ESLint 아님)
 - Redis + BullMQ는 대량 작업 또는 다중 인스턴스 확장 시 도입
+- `@nestjs/observe`·`@nestjs/mau` 는 `nest new` 가 넣지만 **쓰지 않는다** (유료 SaaS)
 
 ## 모듈 경계
 
@@ -46,7 +48,15 @@ backend/src
   건너뛰지 말고 최소 정보로 `players` 를 먼저 만든다.
 
 partial unique index 3개(`competition_seasons` · `squad_entries` · `coach_tenures`)는
-Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴다.
+Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴다 — `prisma/sql/partial-indexes.sql`.
+
+`relationMode = "prisma"` + PostgreSQL 은 `NoAction` 을 **허용하지 않는다** (`Cascade`·`Restrict`·`SetNull` 만).
+전 관계에 `Restrict` 를 명시한다. Restrict 는 에뮬레이션이라 Prisma Client 로 부모를 지우면
+자식 확인 SELECT 가 먼저 나가고 있으면 에러다.
+안전장치로 두되, 보관 정책의 대량 삭제는 `$executeRaw` 로 순서대로 직접 한다.
+
+고아 행 검사는 `IntegrityService` (`src/prisma/integrity.service.ts`) — 관계 18개.
+`test/integrity.e2e-spec.ts` 가 CI 에서 돌고, L6 보정 잡이 일 1회 호출한다.
 
 ## 작업 실행
 
