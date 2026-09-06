@@ -100,9 +100,11 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 
 수집 기능보다 클라이언트를 먼저 만든다. v1은 보호장치 없이 수집부터 만들었고 회고가 그걸 지목했다.
 
-- [ ] timeout · 호출 제한 · 제한된 retry · exponential backoff
-- [ ] `/status` 적재 → `api_quota_snapshots`. **경고선 6,000콜/일 판단의 근거**
-- [ ] L0 기준 데이터 — 12대회 × 5시즌, 약 120콜
+- [x] timeout · 호출 제한 · 제한된 retry · exponential backoff — `ingestion/api-football/`
+- [x] `/status` 적재 → `api_quota_snapshots`. **경고선 6,000콜/일 판단의 근거** — `npm run ingest -- status`
+- [x] 배치 upsert 헬퍼 `prisma/batch-upsert.ts` — 행 단위 upsert 가 Supabase 왕복에 막혀(5초 트랜잭션 한도) 추가.
+      테이블당 1문장, ON CONFLICT 보장(설계검토 B-2 종결). 이후 모든 수집 계층이 이걸 쓴다
+- [ ] L0 기준 데이터 — 17대회(12 + 슈퍼컵 5) × 5시즌, 약 100콜 — `npm run ingest -- l0`. 코드·테스트 완료, 실 데이터 적재 대기
 - [ ] 로고는 내려받아 자체 저장 (media URL 직접 링크는 rate limit)
 
 ---
