@@ -38,3 +38,4 @@ backend/.env.local
 backend/.env.*.local
 backend/src/generated/
 backend/coverage/
+backend/*.tsbuildinfo
