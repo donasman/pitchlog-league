@@ -53,12 +53,15 @@ git push -u origin docs/api-data-inventory
 
 코드가 쌓이기 전이 가장 싸다.
 
-- [ ] **CI** — `.github/workflows/frontend.yml`, `paths: frontend/**` 필터, `npm run verify`
+- [x] ~~**CI**~~ ✅ `.github/workflows/frontend.yml` — `paths` 필터, `npm run verify`,
+      무음 catch 검사(빈 catch + `.catch(() => null)`). 이 검사가 `StandingsPage.jsx`의
+      기존 위반 1건을 잡아 같이 고쳤다
+- [x] ~~pre-commit 훅~~ ✅ `.githooks/pre-commit` — null byte · 깨진 UTF-8 · `.env` ·
+      하드코딩된 API 키. **각 개발 환경에서 `git config core.hooksPath .githooks` 1회 필요**
 - [ ] **GitHub 설정** — 기본 브랜치 `dev`, `main`에 PR 필수 + CI 통과 Ruleset (웹에서만 가능)
 - [ ] **Supabase 프로젝트 생성** — 무료는 **활성 2개 제한**이라 dev/prod로 딱 찬다. 지금 정하지 않으면 나중에 옮긴다
 - [ ] **NestJS 스켈레톤** (PR #5) — 헬스체크 하나만 도는 상태
 - [ ] 배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결
-- [ ] pre-commit 훅 — null byte · 깨진 UTF-8 검사
 
 ---
 
