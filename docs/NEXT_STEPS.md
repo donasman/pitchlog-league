@@ -59,7 +59,7 @@ git push -u origin docs/api-data-inventory
 - [x] ~~pre-commit 훅~~ ✅ `.githooks/pre-commit` — null byte · 깨진 UTF-8 · `.env` ·
       하드코딩된 API 키. **각 개발 환경에서 `git config core.hooksPath .githooks` 1회 필요**
 - [ ] **GitHub 설정** — 기본 브랜치 `dev`, `main`에 PR 필수 + CI 통과 Ruleset (웹에서만 가능)
-- [ ] **Supabase 프로젝트 생성** — 무료는 **활성 2개 제한**이라 dev/prod로 딱 찬다. 지금 정하지 않으면 나중에 옮긴다
+- [x] ~~Supabase 프로젝트 생성~~ ✅ `pitchlog-league-dev` (ap-southeast-1). prod 는 필요 시. Session pooler 5432 사용
 - [x] ~~NestJS 스켈레톤~~ ✅ Nest 12 · `/health` · Swagger `/docs` · 환경변수 검증 · PrismaService(adapter-pg)
 - [ ] 배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결
 
@@ -73,12 +73,12 @@ git push -u origin docs/api-data-inventory
 - [x] ~~partial unique index~~ ✅ `prisma/sql/partial-indexes.sql` — `--create-only` 로 만든
       init 마이그레이션 끝에 붙인다
 - [x] ~~고아 행 검사~~ ✅ `IntegrityService` 관계 18개 + 슬롯 순환 검사 · `test/integrity.e2e-spec.ts`
-- [ ] **Windows 에서 검증** — `npx prisma validate` · `prisma generate` · `npm run typecheck` · `npm run lint`.
-      VM 은 네트워크가 없어 Prisma 엔진을 못 받는다
-- [ ] **Supabase dev URL 로 `migrate dev`** — 2단계 Supabase 프로젝트가 먼저
+- [x] ~~Windows 에서 검증~~ ✅ validate · generate · typecheck · lint 통과
+- [x] ~~Supabase dev URL 로 `migrate dev`~~ ✅ `20260906144654_init` — 테이블 29 · 인덱스 90 · FK 0.
+      partial index 4개 SQL 끝에 수동 추가. `/health` db:true, e2e 3건 통과(고아 행 검사 포함)
 - [ ] **Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 쿼리 로그로 확인**
       아니면 `$executeRaw`로 바꾸고 **동시 호출 테스트를 같은 PR에** (설계검토 B-2)
-- [ ] 백엔드 CI — `backend.yml`. e2e 는 PostgreSQL 서비스 컨테이너가 필요하다
+- [x] ~~백엔드 CI~~ ✅ `backend.yml` — Postgres 16 컨테이너, partial index 존재 확인까지. **첫 실행은 PR 에서**
 
 관계 컬럼 `@@index` 누락은 리뷰 체크 항목이다 (`BACKEND_GUIDE.md`).
 
