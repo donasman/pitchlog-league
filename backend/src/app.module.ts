@@ -1,0 +1,28 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { validateEnv } from './config/env.validation.js';
+import { PrismaModule } from './prisma/prisma.module.js';
+import { HealthModule } from './health/health.module.js';
+
+/**
+ * 모듈 경계 (BACKEND_GUIDE):
+ *   competition/ team/ player/ squad/ match/ standing/ statistics/  ← 도메인 (Phase 1~2)
+ *   ingestion/                                                       ← API-Football 수집
+ *   realtime/                                                        ← Gateway (Phase 2)
+ *   ai/                                                              ← Phase 5
+ * 지금은 골격만 — Prisma · 환경변수 · 헬스체크 · 스케줄러 등록.
+ */
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: validateEnv,
+      envFilePath: ['.env.local', '.env'],
+    }),
+    ScheduleModule.forRoot(),
+    PrismaModule,
+    HealthModule,
+  ],
+})
+export class AppModule {}

@@ -60,24 +60,25 @@ git push -u origin docs/api-data-inventory
       하드코딩된 API 키. **각 개발 환경에서 `git config core.hooksPath .githooks` 1회 필요**
 - [ ] **GitHub 설정** — 기본 브랜치 `dev`, `main`에 PR 필수 + CI 통과 Ruleset (웹에서만 가능)
 - [ ] **Supabase 프로젝트 생성** — 무료는 **활성 2개 제한**이라 dev/prod로 딱 찬다. 지금 정하지 않으면 나중에 옮긴다
-- [ ] **NestJS 스켈레톤** (PR #5) — 헬스체크 하나만 도는 상태
+- [x] ~~NestJS 스켈레톤~~ ✅ Nest 12 · `/health` · Swagger `/docs` · 환경변수 검증 · PrismaService(adapter-pg)
 - [ ] 배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결
 
 ---
 
 ## 3. Prisma 스키마 — 2~3일
 
-`SCHEMA_DESIGN.md` 11장의 마이그레이션 6개를 순서대로. 테이블 정의는 그 문서가 기준이다.
+`SCHEMA_DESIGN.md` 기준. 초기 마이그레이션 1개 (11장 개정).
 
-**같이 하지 않으면 나중에 반드시 문제가 되는 것 셋:**
-
-- [ ] **partial unique index 3개를 마이그레이션 SQL에 직접 쓴다**
-      (`competition_seasons` · `squad_entries` · `coach_tenures`).
-      Prisma 스키마로 표현되지 않는다. 빠뜨리면 중복이 조용히 들어온다
-- [ ] **고아 행 검사 쿼리 + CI 통합 테스트** — 외래키를 안 쓰기로 한 대가다.
-      데이터가 들어오기 전에 걸어야 의미가 있다 (`SCHEMA_DESIGN.md` 2-3)
+- [x] ~~schema.prisma~~ ✅ 모델 29개 · enum 17개 · `relationMode="prisma"` · ID 컬럼 인덱스 전부
+- [x] ~~partial unique index~~ ✅ `prisma/sql/partial-indexes.sql` — `--create-only` 로 만든
+      init 마이그레이션 끝에 붙인다
+- [x] ~~고아 행 검사~~ ✅ `IntegrityService` 관계 18개 + 슬롯 순환 검사 · `test/integrity.e2e-spec.ts`
+- [ ] **Windows 에서 검증** — `npx prisma validate` · `prisma generate` · `npm run typecheck` · `npm run lint`.
+      VM 은 네트워크가 없어 Prisma 엔진을 못 받는다
+- [ ] **Supabase dev URL 로 `migrate dev`** — 2단계 Supabase 프로젝트가 먼저
 - [ ] **Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 쿼리 로그로 확인**
       아니면 `$executeRaw`로 바꾸고 **동시 호출 테스트를 같은 PR에** (설계검토 B-2)
+- [ ] 백엔드 CI — `backend.yml`. e2e 는 PostgreSQL 서비스 컨테이너가 필요하다
 
 관계 컬럼 `@@index` 누락은 리뷰 체크 항목이다 (`BACKEND_GUIDE.md`).
 
