@@ -26,7 +26,7 @@ export default function StandingsPage() {
   const competitionSlug = searchParams.get('competition') ?? 'premier-league'
 
   const { data: competitions, loading: loadingComps } = useData(fetchCompetitions, [])
-  // ⚠ .catch(() => null) 을 넣지 않는다 — 오류가 EmptyState 로 위장된다 (1단계 감사 §C).
+  // ⚠ 오류를 null 로 삼키는 catch 를 넣지 않는다 — EmptyState 로 위장된다 (1단계 감사 §C, CI 검사 대상).
   //   useData 가 오류를 error 로 보존하고, 화면은 ErrorState 로 분기한다.
   //   컵 대회는 순위표 자체가 없는 것이 정상이므로, 실 API 연결 시
   //   "없음"(EmptyState)과 "실패"(ErrorState)를 서비스 계층에서 구분한다.
