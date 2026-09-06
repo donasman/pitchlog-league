@@ -29,3 +29,12 @@ _v.tgz
 
 # 에이전트 로컬 설정
 .claude/settings.local.json
+
+# backend (NestJS + Prisma)
+backend/node_modules/
+backend/dist/
+backend/.env
+backend/.env.local
+backend/.env.*.local
+backend/src/generated/
+backend/coverage/

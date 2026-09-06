@@ -1,0 +1,950 @@
+// PitchLog — Prisma 스키마
+// 설계 근거: docs/SCHEMA_DESIGN.md (테이블 정의·검토 7종)
+//
+// 규칙 (docs/BACKEND_GUIDE.md):
+//   1. 외래키를 만들지 않는다 — relationMode = "prisma". 무결성은 애플리케이션 책임
+//   2. 다른 테이블의 ID 를 담는 모든 컬럼에 @@index 를 명시한다. 예외 없다
+//   3. 모든 @relation 은 onDelete/onUpdate: NoAction 을 명시한다.
+//      ⚠ relationMode="prisma" 에서 NoAction 은 Restrict 로 에뮬레이션된다 —
+//      Prisma Client 로 부모를 지우면 자식 존재 확인 SELECT 가 먼저 나가고, 있으면 에러다.
+//      이건 안전장치로 두되, 보관 정책의 대량 삭제는 SCHEMA_DESIGN 2-5 순서대로
+//      $executeRaw 로 직접 한다 (에뮬레이션 쿼리를 피한다)
+//   4. DB 는 snake_case, 모델은 PascalCase + @@map / @map
+//   5. partial unique index 3개는 Prisma 로 표현되지 않는다 → prisma/sql/partial-indexes.sql
+//      (competition_seasons.is_current · squad_entries.valid_to · coach_tenures.valid_to)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider     = "postgresql"
+  relationMode = "prisma"
+}
+
+// ─────────────────────────────────────────────────────────────
+// enum
+// ─────────────────────────────────────────────────────────────
+
+enum CompetitionType {
+  LEAGUE
+  CUP
+  SUPER_CUP
+}
+
+enum CompetitionFormat {
+  ROUND_ROBIN
+  LEAGUE_PHASE_KNOCKOUT
+  KNOCKOUT
+}
+
+enum SeasonStatus {
+  UPCOMING
+  IN_PROGRESS
+  FINISHED
+}
+
+/// 보관 정책 (SCHEMA_DESIGN 10장). AGGREGATED_ONLY 는 경기별 선수 기록을 지운 시즌
+enum DetailRetention {
+  FULL
+  AGGREGATED_ONLY
+}
+
+enum TransferType {
+  PERMANENT
+  LOAN
+  LOAN_RETURN
+  YOUTH
+  UNKNOWN
+}
+
+enum MatchLeg {
+  FIRST
+  SECOND
+  SINGLE
+}
+
+/// 원정 다득점은 2021년 폐지 — AWAY_GOALS 없음
+enum WinReason {
+  AGGREGATE
+  EXTRA_TIME
+  PENALTIES
+  WALKOVER
+}
+
+enum TieStatus {
+  SCHEDULED
+  IN_PROGRESS
+  DECIDED
+}
+
+/// 대진표 슬롯 3상태 (INGESTION_STRATEGY 2-3)
+enum SlotState {
+  CONFIRMED
+  PENDING_WINNER
+  UNDRAWN
+}
+
+enum RankingCategory {
+  SCORERS
+  ASSISTS
+  YELLOW_CARDS
+  RED_CARDS
+}
+
+/// 파생 테이블의 출처 — 자체 집계인지 API 공식값인지 (원칙 ①)
+enum StatsSource {
+  AGGREGATED
+  API
+}
+
+enum ExternalSource {
+  API_FOOTBALL
+  SPORTMONKS
+}
+
+enum EntityType {
+  COMPETITION
+  TEAM
+  PLAYER
+  COACH
+  VENUE
+  ROUND
+}
+
+enum LocaleSource {
+  MANUAL
+  API
+  AUTO
+}
+
+enum BackfillPhase {
+  PENDING
+  L0
+  FIXTURES
+  DETAILS
+  RANKINGS
+  DONE
+  FAILED
+}
+
+enum IngestionLayer {
+  L0
+  L1
+  L2
+  L3
+  L4
+  L5
+  L6
+  BACKFILL
+}
+
+enum RunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  PARTIAL
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3-1. 기준 데이터
+// ─────────────────────────────────────────────────────────────
+
+model Competition {
+  id               Int               @id @default(autoincrement())
+  apiCompetitionId Int               @unique @map("api_competition_id")
+  name             String
+  country          String
+  countryCode      String?           @map("country_code")
+  logoUrl          String?           @map("logo_url")
+  type             CompetitionType
+  format           CompetitionFormat
+  /// 컵 → 그 나라 1부 리그. 컷오프 판정의 근거 (INGESTION_STRATEGY 2-2)
+  topFlightCompetitionId Int?        @map("top_flight_competition_id")
+  /// 우리가 수집하는 12개 + 슈퍼컵 5개
+  isTracked        Boolean           @default(false) @map("is_tracked")
+  displayOrder     Int               @default(0) @map("display_order")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  topFlight        Competition?      @relation("TopFlight", fields: [topFlightCompetitionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cups             Competition[]     @relation("TopFlight")
+  seasons          CompetitionSeason[]
+
+  @@index([topFlightCompetitionId])
+  @@index([isTracked, displayOrder])
+  @@map("competitions")
+}
+
+/// 연도 마스터만. 시작·종료·현재 여부는 대회에 종속된다 (설계검토 A-1)
+model Season {
+  id     Int  @id @default(autoincrement())
+  year   Int  @unique
+
+  competitionSeasons CompetitionSeason[]
+
+  @@map("seasons")
+}
+
+model CompetitionSeason {
+  id               Int             @id @default(autoincrement())
+  competitionId    Int             @map("competition_id")
+  seasonId         Int             @map("season_id")
+  /// API-Football 이 쓰는 값 (대개 = year)
+  apiSeasonValue   Int             @map("api_season_value")
+  startDate        DateTime?       @map("start_date") @db.Date
+  endDate          DateTime?       @map("end_date") @db.Date
+  status           SeasonStatus    @default(UPCOMING)
+  /// partial unique: (competition_id) WHERE is_current — SQL 로 직접 건다
+  isCurrent        Boolean         @default(false) @map("is_current")
+  /// 참고용. 수집 조건으로 쓰지 않는다 (DATA_RULES 6장)
+  coverage         Json?
+  /// 1부 팀 최초 등장 라운드 — 계산 결과 캐시
+  listFromRoundId  Int?            @map("list_from_round_id")
+  detailCutoffRoundId Int?         @map("detail_cutoff_round_id")
+  detailRetention  DetailRetention @default(FULL) @map("detail_retention")
+  asOf             DateTime?       @map("as_of") @db.Timestamptz(6)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  competition      Competition     @relation(fields: [competitionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  season           Season          @relation(fields: [seasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rounds           CompetitionRound[]
+  entries          CompetitionEntry[]
+  matches          Match[]
+  ties             KnockoutTie[]
+  slots            BracketSlot[]
+  standings        Standing[]
+  playerSeasonStats PlayerSeasonStat[]
+  teamSeasonStats  TeamSeasonStat[]
+  topRankings      TopRanking[]
+  injuries         Injury[]
+  backfillJob      BackfillJob?
+
+  @@unique([competitionId, seasonId])
+  @@index([seasonId])
+  @@index([status])
+  @@index([listFromRoundId])
+  @@index([detailCutoffRoundId])
+  @@map("competition_seasons")
+}
+
+/// 라운드를 테이블로 — 이름에서 순서가 유도되지 않는다 (SCHEMA_DESIGN 3-1)
+model CompetitionRound {
+  id                  Int      @id @default(autoincrement())
+  competitionSeasonId Int      @map("competition_season_id")
+  /// API 원문. "Round of 16" · "1/8-finals" · "Regular Season - 12"
+  name                String
+  /// 시간순
+  ordinal             Int
+  teamCount           Int?     @map("team_count")
+  matchCount          Int?     @map("match_count")
+  /// 마지막 라운드부터 역순 연속 16팀 이하 → 16강 이상
+  isLateStage         Boolean  @default(false) @map("is_late_stage")
+  /// 1부 팀이 등장하는 라운드인가
+  hasTopFlight        Boolean  @default(false) @map("has_top_flight")
+  firstKickoffAt      DateTime? @map("first_kickoff_at") @db.Timestamptz(6)
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  matches             Match[]
+  ties                KnockoutTie[]
+  slots               BracketSlot[]
+
+  @@unique([competitionSeasonId, name])
+  @@index([competitionSeasonId, ordinal])
+  @@map("competition_rounds")
+}
+
+model Venue {
+  id         Int     @id @default(autoincrement())
+  apiVenueId Int     @unique @map("api_venue_id")
+  name       String
+  city       String?
+  country    String?
+  capacity   Int?
+  surface    String?
+  imageUrl   String? @map("image_url")
+
+  teams      Team[]
+  matches    Match[]
+
+  @@map("venues")
+}
+
+model Team {
+  id         Int     @id @default(autoincrement())
+  apiTeamId  Int     @unique @map("api_team_id")
+  name       String
+  shortName  String? @map("short_name")
+  code       String?
+  country    String?
+  founded    Int?
+  logoUrl    String? @map("logo_url")
+  venueId    Int?    @map("venue_id")
+  /// 컵 하부팀 진단용 — 처음 어느 대회에서 봤나
+  firstSeenCompetitionId Int? @map("first_seen_competition_id")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  venue      Venue?  @relation(fields: [venueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entries    CompetitionEntry[]
+  squadEntries SquadEntry[]
+  coachTenures CoachTenure[]
+  homeMatches  Match[] @relation("HomeTeam")
+  awayMatches  Match[] @relation("AwayTeam")
+  standings    Standing[]
+  teamSeasonStats TeamSeasonStat[]
+
+  @@index([venueId])
+  @@index([country])
+  @@index([firstSeenCompetitionId])
+  @@map("teams")
+}
+
+/// 1부 팀 집합의 근거. 컵 수집 판정 = 홈/원정이 1부 리그 시즌의 entries 에 있는가
+model CompetitionEntry {
+  id                  Int @id @default(autoincrement())
+  competitionSeasonId Int @map("competition_season_id")
+  teamId              Int @map("team_id")
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  team                Team @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([competitionSeasonId, teamId])
+  @@index([teamId])
+  @@map("competition_entries")
+}
+
+/// 2차 소스 전용. 1차(API-Football) id 는 각 테이블의 api_*_id 컬럼 (SCHEMA_DESIGN 2-6)
+model ExternalId {
+  id         Int            @id @default(autoincrement())
+  entityType EntityType     @map("entity_type")
+  entityId   Int            @map("entity_id")
+  source     ExternalSource
+  externalId String         @map("external_id")
+
+  @@unique([source, entityType, externalId])
+  @@index([entityType, entityId])
+  @@map("external_ids")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3-2. 사람과 이력
+// ─────────────────────────────────────────────────────────────
+
+model Player {
+  id           Int       @id @default(autoincrement())
+  apiPlayerId  Int       @unique @map("api_player_id")
+  name         String
+  firstname    String?
+  lastname     String?
+  birthDate    DateTime? @map("birth_date") @db.Date
+  birthPlace   String?   @map("birth_place")
+  birthCountry String?   @map("birth_country")
+  nationality  String?
+  heightCm     Int?      @map("height_cm")
+  weightKg     Int?      @map("weight_kg")
+  photoUrl     String?   @map("photo_url")
+  /// NULL 이면 라인업에서 이름만 보고 만든 행 (SCHEMA_DESIGN 2-4)
+  profileFetchedAt DateTime? @map("profile_fetched_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  squadEntries   SquadEntry[]
+  lineupEntries  LineupEntry[]
+  matchStats     PlayerMatchStat[]
+  seasonStats    PlayerSeasonStat[]
+  events         MatchEvent[] @relation("EventPlayer")
+  assists        MatchEvent[] @relation("EventAssist")
+  injuries       Injury[]
+  topRankings    TopRanking[]
+
+  @@map("players")
+}
+
+/// SCD Type 2. valid_from 은 실제 이적일이 아니라 수집일 — 집계 근거로 쓰지 않는다 (6장)
+model SquadEntry {
+  id           Int          @id @default(autoincrement())
+  playerId     Int          @map("player_id")
+  teamId       Int          @map("team_id")
+  seasonYear   Int          @map("season_year")
+  jerseyNumber Int?         @map("jersey_number")
+  position     String?
+  /// 유효시간 시작 (= 관측일)
+  validFrom    DateTime     @map("valid_from") @db.Date
+  /// NULL 이면 현재 소속. partial unique: (player_id, season_year) WHERE valid_to IS NULL
+  validTo      DateTime?    @map("valid_to") @db.Date
+  /// 기록시간 — 이 사실을 언제 수집했나
+  observedAt   DateTime     @map("observed_at") @db.Timestamptz(6)
+  transferType TransferType @default(UNKNOWN) @map("transfer_type")
+  /// 임대 시 원소속
+  parentTeamId Int?         @map("parent_team_id")
+
+  player       Player       @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([teamId, seasonYear])
+  @@index([playerId])
+  @@index([parentTeamId])
+  @@map("squad_entries")
+}
+
+model Coach {
+  id          Int       @id @default(autoincrement())
+  apiCoachId  Int       @unique @map("api_coach_id")
+  name        String
+  birthDate   DateTime? @map("birth_date") @db.Date
+  nationality String?
+  photoUrl    String?   @map("photo_url")
+
+  tenures     CoachTenure[]
+  lineups     MatchLineup[]
+
+  @@map("coaches")
+}
+
+/// SCD Type 2. partial unique: (team_id) WHERE valid_to IS NULL
+model CoachTenure {
+  id         Int       @id @default(autoincrement())
+  coachId    Int       @map("coach_id")
+  teamId     Int       @map("team_id")
+  validFrom  DateTime  @map("valid_from") @db.Date
+  validTo    DateTime? @map("valid_to") @db.Date
+  observedAt DateTime  @map("observed_at") @db.Timestamptz(6)
+
+  coach      Coach     @relation(fields: [coachId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  team       Team      @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([coachId])
+  @@index([teamId])
+  @@map("coach_tenures")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3-3. 경기
+// ─────────────────────────────────────────────────────────────
+
+model Match {
+  id                  Int       @id @default(autoincrement())
+  apiFixtureId        Int       @unique @map("api_fixture_id")
+  competitionSeasonId Int       @map("competition_season_id")
+  roundId             Int       @map("round_id")
+  kickoffAt           DateTime  @map("kickoff_at") @db.Timestamptz(6)
+  statusShort         String    @map("status_short")
+  statusLong          String?   @map("status_long")
+  elapsed             Int?
+  extraElapsed        Int?      @map("extra_elapsed")
+  venueId             Int?      @map("venue_id")
+  referee             String?
+  homeTeamId          Int       @map("home_team_id")
+  awayTeamId          Int       @map("away_team_id")
+  goalsHome           Int?      @map("goals_home")
+  goalsAway           Int?      @map("goals_away")
+  htHome              Int?      @map("ht_home")
+  htAway              Int?      @map("ht_away")
+  ftHome              Int?      @map("ft_home")
+  ftAway              Int?      @map("ft_away")
+  /// 연장·승부차기가 없었으면 NULL. 0 이 아니다 — win_reason 판정에 쓴다 (8-2)
+  etHome              Int?      @map("et_home")
+  etAway              Int?      @map("et_away")
+  penHome             Int?      @map("pen_home")
+  penAway             Int?      @map("pen_away")
+  winnerTeamId        Int?      @map("winner_team_id")
+  tieId               Int?      @map("tie_id")
+  leg                 MatchLeg?
+
+  /// 컷오프 규칙 결과. false 면 상세 4콜을 부르지 않는다
+  detailEligible      Boolean   @default(false) @map("detail_eligible")
+  /// 3값 논리: NULL=미확인 · false=확인했고 없음 · true=있음 (DATA_RULES 3장 세 번째 상태)
+  hasEvents           Boolean?  @map("has_events")
+  hasLineups          Boolean?  @map("has_lineups")
+  hasTeamStats        Boolean?  @map("has_team_stats")
+  hasPlayerStats      Boolean?  @map("has_player_stats")
+  detailCheckedAt     DateTime? @map("detail_checked_at") @db.Timestamptz(6)
+
+  /// 실시간 이벤트 순서 보장. WHERE data_version < ? 로 역행 갱신을 막는다
+  dataVersion         Int       @default(0) @map("data_version")
+  asOf                DateTime? @map("as_of") @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  venue               Venue?    @relation(fields: [venueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  homeTeam            Team      @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  awayTeam            Team      @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tie                 KnockoutTie? @relation(fields: [tieId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  events              MatchEvent[]
+  lineups             MatchLineup[]
+  lineupEntries       LineupEntry[]
+  teamStats           TeamMatchStat[]
+  playerStats         PlayerMatchStat[]
+  slots               BracketSlot[]
+  injuries            Injury[]
+
+  @@index([competitionSeasonId, kickoffAt])
+  @@index([roundId])
+  @@index([homeTeamId, kickoffAt])
+  @@index([awayTeamId, kickoffAt])
+  @@index([kickoffAt])
+  @@index([statusShort])
+  @@index([tieId])
+  @@index([venueId])
+  @@index([winnerTeamId])
+  @@map("matches")
+}
+
+/// 녹아웃 대진. UCL 전용이던 것이 컵 6개 포함 7개 대회에 적용된다 (설계검토 A-5)
+model KnockoutTie {
+  id                  Int        @id @default(autoincrement())
+  competitionSeasonId Int        @map("competition_season_id")
+  roundId             Int        @map("round_id")
+  homeTeamId          Int        @map("home_team_id")
+  awayTeamId          Int        @map("away_team_id")
+  firstLegMatchId     Int?       @map("first_leg_match_id")
+  secondLegMatchId    Int?       @map("second_leg_match_id")
+  aggregateHome       Int?       @map("aggregate_home")
+  aggregateAway       Int?       @map("aggregate_away")
+  winnerTeamId        Int?       @map("winner_team_id")
+  winReason           WinReason? @map("win_reason")
+  status              TieStatus  @default(SCHEDULED)
+  updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  matches             Match[]
+  slots               BracketSlot[]
+
+  @@index([competitionSeasonId, roundId])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
+  @@index([firstLegMatchId])
+  @@index([secondLegMatchId])
+  @@index([winnerTeamId])
+  @@map("knockout_ties")
+}
+
+/// 대진표 골격. 경기가 없어도 슬롯을 그린다 (INGESTION_STRATEGY 2-3)
+model BracketSlot {
+  id                  Int       @id @default(autoincrement())
+  competitionSeasonId Int       @map("competition_season_id")
+  roundId             Int       @map("round_id")
+  slotIndex           Int       @map("slot_index")
+  state               SlotState @default(UNDRAWN)
+  matchId             Int?      @map("match_id")
+  tieId               Int?      @map("tie_id")
+  /// 자기 참조 — 이전 라운드 슬롯. FK 없으므로 사이클 검사는 애플리케이션이
+  sourceSlotAId       Int?      @map("source_slot_a_id")
+  sourceSlotBId       Int?      @map("source_slot_b_id")
+  /// "Round of 32 승자" · "예선 통과"
+  placeholderLabel    String?   @map("placeholder_label")
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  match               Match?    @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tie                 KnockoutTie? @relation(fields: [tieId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([competitionSeasonId, roundId, slotIndex])
+  @@index([matchId])
+  @@index([tieId])
+  @@index([roundId])
+  @@index([sourceSlotAId])
+  @@index([sourceSlotBId])
+  @@map("bracket_slots")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3-4. 경기 상세 — 원본 (원칙 ①: 여기서 파생을 다시 만들 수 있어야 한다)
+// ─────────────────────────────────────────────────────────────
+
+model MatchEvent {
+  id             Int     @id @default(autoincrement())
+  matchId        Int     @map("match_id")
+  seq            Int
+  minute         Int
+  minuteExtra    Int?    @map("minute_extra")
+  teamId         Int     @map("team_id")
+  /// 팀 단위 이벤트(VAR 등)는 NULL
+  playerId       Int?    @map("player_id")
+  assistPlayerId Int?    @map("assist_player_id")
+  /// 실측 4종: Goal · Card · subst · Var. enum 으로 묶지 않는다 — API 가 늘릴 수 있다
+  type           String
+  detail         String?
+  comments       String?
+
+  match          Match   @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  player         Player? @relation("EventPlayer", fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  assist         Player? @relation("EventAssist", fields: [assistPlayerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([matchId, seq])
+  @@index([matchId, minute])
+  @@index([playerId])
+  @@index([assistPlayerId])
+  @@index([teamId])
+  @@map("match_events")
+}
+
+model MatchLineup {
+  id        Int     @id @default(autoincrement())
+  matchId   Int     @map("match_id")
+  teamId    Int     @map("team_id")
+  formation String?
+  coachId   Int?    @map("coach_id")
+
+  match     Match   @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  coach     Coach?  @relation(fields: [coachId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([matchId, teamId])
+  @@index([coachId])
+  @@index([teamId])
+  @@map("match_lineups")
+}
+
+model LineupEntry {
+  id           Int     @id @default(autoincrement())
+  matchId      Int     @map("match_id")
+  teamId       Int     @map("team_id")
+  playerId     Int     @map("player_id")
+  jerseyNumber Int?    @map("jersey_number")
+  position     String?
+  /// 벤치 선수는 NULL (실측)
+  grid         String?
+  isStarter    Boolean @map("is_starter")
+
+  match        Match   @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  player       Player  @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([matchId, playerId])
+  @@index([matchId, teamId, isStarter])
+  @@index([playerId])
+  @@index([teamId])
+  @@map("lineup_entries")
+}
+
+/// API 는 {type,value} 배열로 주지만 18종이 고정이라 컬럼으로 펼친다.
+/// expected_goals · goals_prevented 만 NULL 허용. 나머지는 null→0 정규화 (DATA_RULES 3-1)
+model TeamMatchStat {
+  id               Int      @id @default(autoincrement())
+  matchId          Int      @map("match_id")
+  teamId           Int      @map("team_id")
+  shotsOnGoal      Int      @default(0) @map("shots_on_goal")
+  shotsOffGoal     Int      @default(0) @map("shots_off_goal")
+  totalShots       Int      @default(0) @map("total_shots")
+  blockedShots     Int      @default(0) @map("blocked_shots")
+  shotsInsidebox   Int      @default(0) @map("shots_insidebox")
+  shotsOutsidebox  Int      @default(0) @map("shots_outsidebox")
+  fouls            Int      @default(0)
+  cornerKicks      Int      @default(0) @map("corner_kicks")
+  offsides         Int      @default(0)
+  /// 퍼센트 정수 (API "58%" → 58)
+  ballPossession   Int      @default(0) @map("ball_possession")
+  yellowCards      Int      @default(0) @map("yellow_cards")
+  redCards         Int      @default(0) @map("red_cards")
+  goalkeeperSaves  Int      @default(0) @map("goalkeeper_saves")
+  totalPasses      Int      @default(0) @map("total_passes")
+  passesAccurate   Int      @default(0) @map("passes_accurate")
+  passesPercentage Int      @default(0) @map("passes_percentage")
+  expectedGoals    Decimal? @map("expected_goals") @db.Decimal(5, 2)
+  goalsPrevented   Decimal? @map("goals_prevented") @db.Decimal(5, 2)
+
+  match            Match    @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([matchId, teamId])
+  @@index([teamId])
+  @@map("team_match_stats")
+}
+
+/// ★ 전체 용량의 30%. team_id 를 직접 저장한다 — squad_entries 로 되짚지 않는다 (설계검토 A-2)
+model PlayerMatchStat {
+  id                  Int      @id @default(autoincrement())
+  matchId             Int      @map("match_id")
+  playerId            Int      @map("player_id")
+  /// 비정규화 — 이 경기에서 뛴 팀. API 응답이 원본
+  teamId              Int      @map("team_id")
+  /// 비정규화 — 선수 상세 시즌별 집계용
+  competitionSeasonId Int      @map("competition_season_id")
+  minutes             Int      @default(0)
+  jerseyNumber        Int?     @map("jersey_number")
+  position            String?
+  /// 절대 0 으로 바꾸지 않는다 — 평점 0 과 평점 없음은 다르다
+  rating              Decimal? @db.Decimal(4, 2)
+  isCaptain           Boolean  @default(false) @map("is_captain")
+  isSubstitute        Boolean  @default(false) @map("is_substitute")
+  shotsTotal          Int      @default(0) @map("shots_total")
+  shotsOn             Int      @default(0) @map("shots_on")
+  goalsTotal          Int      @default(0) @map("goals_total")
+  goalsConceded       Int      @default(0) @map("goals_conceded")
+  assists             Int      @default(0)
+  saves               Int      @default(0)
+  passesTotal         Int      @default(0) @map("passes_total")
+  passesKey           Int      @default(0) @map("passes_key")
+  /// 패스 0회면 정의되지 않는다 → NULL 유지
+  passesAccuracy      Int?     @map("passes_accuracy")
+  tacklesTotal        Int      @default(0) @map("tackles_total")
+  blocks              Int      @default(0)
+  interceptions       Int      @default(0)
+  duelsTotal          Int      @default(0) @map("duels_total")
+  duelsWon            Int      @default(0) @map("duels_won")
+  dribblesAttempts    Int      @default(0) @map("dribbles_attempts")
+  dribblesSuccess     Int      @default(0) @map("dribbles_success")
+  dribblesPast        Int      @default(0) @map("dribbles_past")
+  foulsDrawn          Int      @default(0) @map("fouls_drawn")
+  foulsCommitted      Int      @default(0) @map("fouls_committed")
+  yellowCards         Int      @default(0) @map("yellow_cards")
+  redCards            Int      @default(0) @map("red_cards")
+  penaltyWon          Int      @default(0) @map("penalty_won")
+  /// API 오타 penalty.commited → 여기서 고친다
+  penaltyCommitted    Int      @default(0) @map("penalty_committed")
+  penaltyScored       Int      @default(0) @map("penalty_scored")
+  penaltyMissed       Int      @default(0) @map("penalty_missed")
+  penaltySaved        Int      @default(0) @map("penalty_saved")
+  offsides            Int      @default(0)
+
+  match               Match    @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  player              Player   @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([matchId, playerId])
+  @@index([playerId, competitionSeasonId])
+  @@index([competitionSeasonId, teamId])
+  @@index([matchId])
+  @@index([teamId])
+  @@map("player_match_stats")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3-5. 파생·집계
+// ─────────────────────────────────────────────────────────────
+
+/// 자체 계산하지 않는다 — API 공식 순위가 권위 있다 (SCHEMA_DESIGN 9장). 컵에는 행이 없다
+model Standing {
+  id                  Int      @id @default(autoincrement())
+  competitionSeasonId Int      @map("competition_season_id")
+  teamId              Int      @map("team_id")
+  groupName           String?  @map("group_name")
+  stage               String?
+  rank                Int
+  points              Int
+  played              Int
+  win                 Int
+  draw                Int
+  lose                Int
+  goalsFor            Int      @map("goals_for")
+  goalsAgainst        Int      @map("goals_against")
+  goalDiff            Int      @map("goal_diff")
+  homePlayed          Int      @default(0) @map("home_played")
+  homeWin             Int      @default(0) @map("home_win")
+  homeDraw            Int      @default(0) @map("home_draw")
+  homeLose            Int      @default(0) @map("home_lose")
+  homeGf              Int      @default(0) @map("home_gf")
+  homeGa              Int      @default(0) @map("home_ga")
+  awayPlayed          Int      @default(0) @map("away_played")
+  awayWin             Int      @default(0) @map("away_win")
+  awayDraw            Int      @default(0) @map("away_draw")
+  awayLose            Int      @default(0) @map("away_lose")
+  awayGf              Int      @default(0) @map("away_gf")
+  awayGa              Int      @default(0) @map("away_ga")
+  form                String?
+  /// 구역 설명. 없는 대회가 있다 (실측 null)
+  description         String?
+  status              String?
+  asOf                DateTime @map("as_of") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  team                Team     @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([competitionSeasonId, teamId, groupName])
+  @@index([competitionSeasonId, rank])
+  @@index([teamId])
+  @@map("standings")
+}
+
+model PlayerSeasonStat {
+  id                  Int         @id @default(autoincrement())
+  playerId            Int         @map("player_id")
+  teamId              Int         @map("team_id")
+  competitionSeasonId Int         @map("competition_season_id")
+  appearances         Int         @default(0)
+  lineupsCount        Int         @default(0) @map("lineups_count")
+  minutes             Int         @default(0)
+  goals               Int         @default(0)
+  assists             Int         @default(0)
+  yellowCards         Int         @default(0) @map("yellow_cards")
+  yellowredCards      Int         @default(0) @map("yellowred_cards")
+  redCards            Int         @default(0) @map("red_cards")
+  ratingAvg           Decimal?    @map("rating_avg") @db.Decimal(4, 2)
+  shotsTotal          Int         @default(0) @map("shots_total")
+  shotsOn             Int         @default(0) @map("shots_on")
+  passesKey           Int         @default(0) @map("passes_key")
+  tacklesTotal        Int         @default(0) @map("tackles_total")
+  interceptions       Int         @default(0)
+  duelsTotal          Int         @default(0) @map("duels_total")
+  duelsWon            Int         @default(0) @map("duels_won")
+  dribblesSuccess     Int         @default(0) @map("dribbles_success")
+  /// 자체 집계인지 API 공식값인지 — "화면 숫자가 API 와 다르다" 추적용
+  source              StatsSource @default(AGGREGATED)
+  asOf                DateTime    @map("as_of") @db.Timestamptz(6)
+
+  player              Player      @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([playerId, teamId, competitionSeasonId])
+  @@index([competitionSeasonId, goals(sort: Desc)])
+  @@index([playerId])
+  @@index([teamId])
+  @@map("player_season_stats")
+}
+
+model TeamSeasonStat {
+  id                  Int      @id @default(autoincrement())
+  competitionSeasonId Int      @map("competition_season_id")
+  teamId              Int      @map("team_id")
+  form                String?
+  playedHome          Int      @default(0) @map("played_home")
+  playedAway          Int      @default(0) @map("played_away")
+  playedTotal         Int      @default(0) @map("played_total")
+  winsHome            Int      @default(0) @map("wins_home")
+  winsAway            Int      @default(0) @map("wins_away")
+  drawsHome           Int      @default(0) @map("draws_home")
+  drawsAway           Int      @default(0) @map("draws_away")
+  losesHome           Int      @default(0) @map("loses_home")
+  losesAway           Int      @default(0) @map("loses_away")
+  goalsForHome        Int      @default(0) @map("goals_for_home")
+  goalsForAway        Int      @default(0) @map("goals_for_away")
+  goalsAgainstHome    Int      @default(0) @map("goals_against_home")
+  goalsAgainstAway    Int      @default(0) @map("goals_against_away")
+  biggestWinHome      String?  @map("biggest_win_home")
+  biggestWinAway      String?  @map("biggest_win_away")
+  biggestLoseHome     String?  @map("biggest_lose_home")
+  biggestLoseAway     String?  @map("biggest_lose_away")
+  cleanSheetTotal     Int      @default(0) @map("clean_sheet_total")
+  failedToScoreTotal  Int      @default(0) @map("failed_to_score_total")
+  penaltyScored       Int      @default(0) @map("penalty_scored")
+  penaltyMissed       Int      @default(0) @map("penalty_missed")
+  /// 포메이션별 출전 횟수 — 표시 전용이라 JSON
+  formations          Json?
+  /// 시간대별 카드 분포 — 표시 전용
+  cards               Json?
+  asOf                DateTime @map("as_of") @db.Timestamptz(6)
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  team                Team     @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([competitionSeasonId, teamId])
+  @@index([teamId])
+  @@map("team_season_stats")
+}
+
+/// 전용 엔드포인트가 대회당 1콜 — API 공식 순위를 그대로 저장 (원칙 ① 의 예외)
+model TopRanking {
+  id                  Int             @id @default(autoincrement())
+  competitionSeasonId Int             @map("competition_season_id")
+  category            RankingCategory
+  rank                Int
+  playerId            Int             @map("player_id")
+  teamId              Int             @map("team_id")
+  value               Int
+  asOf                DateTime        @map("as_of") @db.Timestamptz(6)
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  player              Player          @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([competitionSeasonId, category, rank])
+  @@index([playerId])
+  @@index([teamId])
+  @@map("top_rankings")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3-6. 운영
+// ─────────────────────────────────────────────────────────────
+
+model Injury {
+  id                  Int      @id @default(autoincrement())
+  competitionSeasonId Int      @map("competition_season_id")
+  playerId            Int      @map("player_id")
+  teamId              Int      @map("team_id")
+  matchId             Int?     @map("match_id")
+  type                String
+  reason              String?
+  fixtureDate         DateTime @map("fixture_date") @db.Date
+  asOf                DateTime @map("as_of") @db.Timestamptz(6)
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  player              Player   @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  match               Match?   @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([playerId, competitionSeasonId, fixtureDate])
+  @@index([teamId])
+  @@index([matchId])
+  @@map("injuries")
+}
+
+/// 백필 재시작 지점 (INGESTION_STRATEGY 5-2). 이 행이 L1 스킵 판단의 락이기도 하다
+model BackfillJob {
+  id                  Int           @id @default(autoincrement())
+  competitionSeasonId Int           @unique @map("competition_season_id")
+  phase               BackfillPhase @default(PENDING)
+  cursorMatchId       Int?          @map("cursor_match_id")
+  total               Int           @default(0)
+  done                Int           @default(0)
+  failed              Int           @default(0)
+  lastError           String?       @map("last_error")
+  startedAt           DateTime?     @map("started_at") @db.Timestamptz(6)
+  updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([cursorMatchId])
+  @@map("backfill_jobs")
+}
+
+model IngestionRun {
+  id                  Int            @id @default(autoincrement())
+  layer               IngestionLayer
+  competitionSeasonId Int?           @map("competition_season_id")
+  startedAt           DateTime       @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt          DateTime?      @map("finished_at") @db.Timestamptz(6)
+  status              RunStatus      @default(RUNNING)
+  callsUsed           Int            @default(0) @map("calls_used")
+  /// 한 주기 처리 시간 계측 — 오버랩 경고의 근거 (INGESTION_STRATEGY 6-5)
+  durationMs          Int?           @map("duration_ms")
+  error               String?
+
+  @@index([layer, startedAt])
+  @@index([competitionSeasonId])
+  @@map("ingestion_runs")
+}
+
+/// /status 응답 적재. 경고선 6,000콜 판단과 구독 만료 감시
+model ApiQuotaSnapshot {
+  id         Int      @id @default(autoincrement())
+  capturedAt DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  callsUsed  Int      @map("calls_used")
+  limitDay   Int      @map("limit_day")
+  plan       String?
+  expiresOn  DateTime? @map("expires_on") @db.Date
+
+  @@index([capturedAt])
+  @@map("api_quota_snapshots")
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3-7. 다국어
+// ─────────────────────────────────────────────────────────────
+
+/// ROUND 가 들어간다 — "1/128-finals" 를 한국어로 옮겨야 한다
+model LocalizedName {
+  id         Int          @id @default(autoincrement())
+  entityType EntityType   @map("entity_type")
+  entityId   Int          @map("entity_id")
+  locale     String
+  name       String
+  shortName  String?      @map("short_name")
+  source     LocaleSource @default(API)
+
+  @@unique([entityType, entityId, locale])
+  @@index([entityType, locale])
+  @@map("localized_names")
+}
