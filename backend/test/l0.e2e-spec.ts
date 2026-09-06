@@ -52,7 +52,8 @@ class FakeApiFootballClient {
     const entry = COMPETITIONS.find((c) => c.apiId === id)!;
     const years = SEASON_YEARS.filter((y) => !(NO_2026.has(id) && y === 2026));
     return {
-      league: { id, name: entry.name, type: entry.type === 'LEAGUE' ? 'League' : 'Cup', logo: `https://media.api-sports.io/football/leagues/${id}.png` },
+      // 실측: API 는 슈퍼컵 셋을 전부 "Super Cup" 으로 준다 — 카탈로그 이름이 이겨야 한다
+      league: { id, name: entry.type === 'SUPER_CUP' ? 'Super Cup' : entry.name, type: entry.type === 'LEAGUE' ? 'League' : 'Cup', logo: `https://media.api-sports.io/football/leagues/${id}.png` },
       country: { name: 'England', code: 'GB-ENG', flag: null },
       seasons: years.map((y) => ({ year: y, start: `${y}-08-01`, end: `${y + 1}-05-30`, current: y === Math.max(...years), coverage: COVERAGE })),
     };
@@ -141,6 +142,13 @@ describe('L0 적재 (e2e, 가짜 API)', () => {
     // 콜 수: /leagues 17 + /teams 시즌 수
     expect(fake.calls.length - callsBefore).toBe(COMPETITIONS.length + before.seasons);
   }, 120_000);
+
+  it('대회 이름은 API 가 아니라 카탈로그 표기다 (슈퍼컵 3개가 "Super Cup" 으로 합쳐지지 않는다)', async () => {
+    const names = (await prisma.competition.findMany({ where: { isTracked: true }, select: { name: true } })).map((c) => c.name);
+    expect(names).toHaveLength(new Set(names).size);
+    expect(names).not.toContain('Super Cup');
+    expect(names).toContain('Supercopa de España');
+  });
 
   it('first_seen_competition_id 는 첫 INSERT 때 값이 유지된다', async () => {
     // apiId 1000 은 base 0 인 대회(league % 7 === 0) 여러 곳에 나오지만 displayOrder 가 가장 앞선 대회가 먼저 넣는다

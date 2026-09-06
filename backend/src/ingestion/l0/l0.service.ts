@@ -96,11 +96,13 @@ export class L0Service {
       this.logger.warn(`${entry.name}: 1부 리그(${entry.topFlightApiId})가 아직 없다 — 카탈로그 순서 확인`);
     }
 
+    // 이름은 카탈로그(우리 표기)가 기준. API 는 스페인·독일·이탈리아 슈퍼컵을 전부 "Super Cup" 이라 부르고
+    // LaLiga 를 "La Liga" 로 준다 (2026-09-07 실측) — 그대로 저장하면 화면에 같은 이름이 셋 뜬다
     const competition = await this.prisma.competition.upsert({
       where: { apiCompetitionId: entry.apiId },
       create: {
         apiCompetitionId: entry.apiId,
-        name: league.league.name,
+        name: entry.name,
         country: league.country.name,
         countryCode: league.country.code,
         logoUrl: league.league.logo,
@@ -111,7 +113,7 @@ export class L0Service {
         displayOrder: entry.displayOrder,
       },
       update: {
-        name: league.league.name,
+        name: entry.name,
         country: league.country.name,
         countryCode: league.country.code,
         logoUrl: league.league.logo,
