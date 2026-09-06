@@ -10,6 +10,7 @@ import { Logger } from '@nestjs/common';
 import { AppModule } from '../app.module.js';
 import { L0Service } from '../ingestion/l0/l0.service.js';
 import { QuotaService } from '../ingestion/api-football/quota.service.js';
+import { ApiFootballClient } from '../ingestion/api-football/api-football.client.js';
 
 const logger = new Logger('ingest');
 
@@ -17,6 +18,11 @@ async function main(): Promise<void> {
   const [, , command] = process.argv;
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['log', 'warn', 'error'] });
   try {
+    if (!app.get(ApiFootballClient).isConfigured) {
+      logger.error('API_FOOTBALL_KEY 가 없다 — backend/.env 에 넣고 다시 실행');
+      process.exitCode = 1;
+      return;
+    }
     switch (command) {
       case 'status': {
         const q = await app.get(QuotaService).snapshot();
