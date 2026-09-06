@@ -15,7 +15,7 @@ describe('GET /health (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close(); // beforeAll 이 실패했을 때 진짜 원인이 TypeError 에 가려지지 않게
   });
 
   it('DB 가 붙어 있으면 ok + asOf', async () => {
