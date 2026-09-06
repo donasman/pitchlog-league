@@ -655,7 +655,11 @@ INDEX(entity_type, locale)
 라인업과 경기 통계에 스쿼드에 없는 선수가 나온다(2-4). 네 경로가 같은 선수를 동시에
 `INSERT`할 수 있다. → `api_player_id` UNIQUE + `ON CONFLICT DO NOTHING`.
 **Prisma `upsert()`가 항상 `ON CONFLICT`로 컴파일되지는 않는다** (설계검토 B-2).
-쿼리 로그로 확인하고, 아니면 `$executeRaw`를 쓴다. 동시 호출 통합 테스트를 같은 PR에 넣는다.
+→ **결정 (2026-09-07)**: 수집 경로의 upsert 는 전부 `backend/src/prisma/batch-upsert.ts` 를 쓴다.
+`INSERT … VALUES (…),(…) ON CONFLICT DO UPDATE … RETURNING` 을 테이블당 1문장으로 보내므로
+ON CONFLICT 가 코드로 보장되고, 행 단위 왕복(Supabase ≈60ms)도 사라진다.
+L0 실측: 20팀 시즌 하나가 행 단위 80왕복 → 3문장. `test/l0.e2e-spec.ts` 가 쿼리 로그로 확인한다.
+동시 호출 통합 테스트는 `players` 를 만드는 PR 에 넣는다.
 
 **③ `squad_entries` — L1과 백필이 겹치면 이중 이력이 생긴다.**
 백필이 현재 시즌 스쿼드를 넣는 동안 주간 diff가 돌면 같은 선수에 두 행이 열린다.
@@ -907,7 +911,7 @@ Prisma migration을 이 순서로 쪼갠다. 각 단계가 독립적으로 배�
 | 3 | 순위표 라운드별 스냅샷 | 500MB 여유가 확인되면. `standings`에 `round_id` 추가 + UNIQUE 확장 |
 | 4 | `injuries`의 멱등 키 | `/injuries` 응답에 안정적인 식별자가 없다. `(player_id, cs_id, fixture_date)`로 시작하고 중복이 생기면 조정 |
 | 5 | `localized_names`를 테이블로 둘지 JSON 파일로 둘지 | i18n 문서에서. 팀 64개 규모면 파일도 가능하다 |
-| 6 | Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 | **Phase 0 스켈레톤에서 쿼리 로그로 확인** (설계검토 B-2). 아니면 `$executeRaw` |
+| 6 | Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 | **해결 (2026-09-07)** — 확인 대신 `batch-upsert.ts` 로 강제. 5장 ② 참조 |
 
 ---
 

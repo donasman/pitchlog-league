@@ -4,6 +4,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { HealthModule } from './health/health.module.js';
+import { ApiFootballModule } from './ingestion/api-football/api-football.module.js';
+import { L0Module } from './ingestion/l0/l0.module.js';
 
 /**
  * 모듈 경계 (BACKEND_GUIDE):
@@ -23,6 +25,8 @@ import { HealthModule } from './health/health.module.js';
     ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
+    ApiFootballModule,
+    L0Module,
   ],
 })
 export class AppModule {}

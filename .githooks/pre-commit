@@ -14,7 +14,8 @@ for f in $files; do
   esac
 
   # null byte — 텍스트 파일에 들어가면 도구가 조용히 깨진다
-  if LC_ALL=C grep -qP '\x00' "$f" 2>/dev/null; then
+  # -a 가 없으면 grep 이 파일을 바이너리로 판정하고 매치를 보고하지 않는다 (2026-09-07 실제로 놓쳤다)
+  if LC_ALL=C grep -qaP '\x00' "$f" 2>/dev/null; then
     echo "pre-commit: null byte — $f"; fail=1
   fi
 
