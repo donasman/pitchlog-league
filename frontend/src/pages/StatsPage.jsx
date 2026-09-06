@@ -1,134 +1,237 @@
 /**
- * 통계 페이지 (/stats?competition=)
- * 대회별 득점 순위·도움 순위 표시.
- * 데이터: services/api.js → fetchCompetitionStats
+ * 통계 /stats?competition=
+ * 전체 합산 선택 시 대회별 분해 표기 (12골 = EPL 9 + UCL 3)
+ * 대회별 선택 시 해당 대회 득점·도움 순위
  */
 
 import { Link, useSearchParams } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import StatsRanking   from '@/components/ui/StatsRanking'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
-import ErrorState      from '@/components/ui/ErrorState'
-import EmptyState      from '@/components/ui/EmptyState'
-import { useData }     from '@/hooks/useData'
-import { fetchCompetitionStats } from '@/services/api'
-import { getLocalizedCompetitionName } from '@/utils/localization'
+import ErrorState from '@/components/ui/ErrorState'
+import EmptyState from '@/components/ui/EmptyState'
+import { useData } from '@/hooks/useData'
+import { fetchCompetitionStats, fetchAllStats } from '@/services/api'
+import { getLocalizedCompetitionName, getLocalizedName } from '@/utils/localization'
 
 const COMP_TABS = [
-  { slug:'premier-league',  label:'EPL'    },
-  { slug:'la-liga',         label:'LaLiga' },
-  { slug:'bundesliga',      label:'BL'     },
-  { slug:'serie-a',         label:'SA'     },
-  { slug:'ligue-1',         label:'L1'     },
-  { slug:'champions-league',label:'UCL'    },
+  { slug: 'all',             label: null },   // 전체 합산 — label은 i18n
+  { slug: 'premier-league',  label: 'EPL'    },
+  { slug: 'la-liga',         label: 'LaLiga' },
+  { slug: 'bundesliga',      label: 'BL'     },
+  { slug: 'serie-a',         label: 'SA'     },
+  { slug: 'ligue-1',         label: 'L1'     },
+  { slug: 'champions-league',label: 'UCL'    },
 ]
 
-const VALID_SLUGS = new Set(COMP_TABS.map(c => c.slug))
+/* ── 대회별 분해 포맷 ── */
+function Breakdown({ breakdown }) {
+  if (!breakdown || !Object.keys(breakdown).length) return null
+  const parts = Object.entries(breakdown).map(([k, v]) => `${k} ${v}`).join(' + ')
+  return <span className="t-cap num" style={{ color: 'var(--pl-sub)' }}>{parts}</span>
+}
 
+/* ── 득점/도움 테이블 행 ── */
+function StatRow({ rank, player, value, unit, breakdown, locale }) {
+  const name = getLocalizedName({ id: player.playerSlug, name: player.playerName }, locale) || player.playerName
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '28px 1fr auto',
+        gap: 10,
+        alignItems: 'center',
+        padding: '0 16px',
+        minHeight: 52,
+        borderTop: '1px solid var(--pl-line)',
+      }}
+    >
+      <span className="num t-sub" style={{ fontWeight: 700 }}>{rank}</span>
+      <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+        <span className="t-body" style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {name}
+          <span className="t-cap" style={{ marginLeft: 6, color: 'var(--pl-sub)' }}>
+            {player.teamName}
+          </span>
+        </span>
+        {breakdown && <Breakdown breakdown={breakdown} />}
+      </span>
+      <span className="num t-body" style={{ fontWeight: 700, flexShrink: 0 }}>
+        {value}{unit}
+      </span>
+    </div>
+  )
+}
+
+/* ── 전체 합산 패널 ── */
+function AllStatsPanel({ data, t, locale }) {
+  if (!data) return null
+  const scorers  = data.topScorers ?? []
+  const assisters = data.topAssisters ?? []
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }} className="stats-all-grid">
+      <style>{`@media(min-width:768px){.stats-all-grid{grid-template-columns:1.3fr 1fr!important}}`}</style>
+
+      {/* 득점 */}
+      <div className="pl-card" style={{ overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--pl-line)' }}>
+          <span className="t-card" style={{ flex: 1 }}>{t('stats.topScorers')}</span>
+          <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>{t('stats.allDesc')}</span>
+        </div>
+        {scorers.length === 0
+          ? <EmptyState />
+          : scorers.map((p, i) => (
+            <StatRow
+              key={p.playerSlug}
+              rank={p.rank ?? i + 1}
+              player={p}
+              value={p.value}
+              unit={t('stats.goals')}
+              breakdown={p.breakdown?.reduce((acc, b) => ({ ...acc, [b.competition]: b.goals }), {})}
+              locale={locale}
+            />
+          ))
+        }
+      </div>
+
+      {/* 도움 */}
+      <div className="pl-card" style={{ overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--pl-line)' }}>
+          <span className="t-card">{t('stats.topAssisters')}</span>
+        </div>
+        {assisters.length === 0
+          ? <EmptyState />
+          : assisters.map((p, i) => (
+            <StatRow
+              key={p.playerSlug ?? i}
+              rank={i + 1}
+              player={p}
+              value={p.value}
+              unit={t('stats.assists')}
+              locale={locale}
+            />
+          ))
+        }
+      </div>
+    </div>
+  )
+}
+
+/* ── 대회별 패널 ── */
+function CompStatsPanel({ data, comp, t, locale }) {
+  if (!data) return null
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }} className="stats-comp-grid">
+      <style>{`@media(min-width:768px){.stats-comp-grid{grid-template-columns:1fr 1fr!important}}`}</style>
+
+      <div className="pl-card" style={{ overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--pl-line)' }}>
+          <span className="t-card" style={{ flex: 1 }}>{t('stats.topScorers')}</span>
+          {comp && (
+            <Link to={`/competitions/${comp.slug}`} className="pl-link" style={{ fontSize: 12 }}>
+              {getLocalizedCompetitionName(comp, locale)}
+            </Link>
+          )}
+        </div>
+        {(data.topScorers ?? []).length === 0
+          ? <EmptyState title={t('stats.noData')} description={t('stats.noDataDesc')} />
+          : (data.topScorers ?? []).map((p, i) => (
+            <StatRow key={p.playerSlug ?? i} rank={i + 1} player={p} value={p.value} unit={t('stats.goals')} locale={locale} />
+          ))
+        }
+      </div>
+
+      <div className="pl-card" style={{ overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--pl-line)' }}>
+          <span className="t-card">{t('stats.topAssisters')}</span>
+        </div>
+        {(data.topAssisters ?? []).length === 0
+          ? <EmptyState title={t('stats.noData')} description={t('stats.noDataDesc')} />
+          : (data.topAssisters ?? []).map((p, i) => (
+            <StatRow key={p.playerSlug ?? i} rank={i + 1} player={p} value={p.value} unit={t('stats.assists')} locale={locale} />
+          ))
+        }
+      </div>
+    </div>
+  )
+}
+
+/* ── StatsPage ── */
 export default function StatsPage() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const slug = searchParams.get('competition') ?? 'all'
 
-  const rawSlug = searchParams.get('competition') ?? 'premier-league'
-  const slug    = VALID_SLUGS.has(rawSlug) ? rawSlug : 'premier-league'
+  const isAll = slug === 'all'
 
-  const { data, loading, error } = useData(
-    () => fetchCompetitionStats(slug),
-    [slug]
+  const { data: allData, loading: loadingAll, error: errorAll } = useData(
+    fetchAllStats,
+    []
+  )
+  const { data: compData, loading: loadingComp, error: errorComp } = useData(
+    () => isAll ? Promise.resolve(null) : fetchCompetitionStats(slug),
+    [slug, isAll]
   )
 
+  const loading = isAll ? loadingAll : loadingComp
+  const error   = isAll ? errorAll  : errorComp
+
+  function setSlug(s) {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (s === 'all') next.delete('competition')
+      else next.set('competition', s)
+      return next
+    }, { replace: true })
+  }
+
   return (
-    <div className="max-w-4xl mx-auto px-4 lg:px-6 py-6 space-y-6">
+    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8">
 
-      {/* 페이지 헤더 */}
-      <div>
-        <h1 className="text-xl font-bold text-foreground">{t('stats.pageTitle')}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{t('common.season')}</p>
-      </div>
-
-      {/* 대회 선택 탭 */}
-      <nav aria-label={t('header.competitionSelect')} className="flex gap-1.5 flex-wrap">
-        {COMP_TABS.map(c => (
-          <Link
-            key={c.slug}
-            to={`/stats?competition=${c.slug}`}
-            aria-current={c.slug === slug ? 'page' : undefined}
-            className={`px-3 py-1.5 rounded text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              c.slug === slug
-                ? 'bg-primary text-primary-foreground font-medium'
-                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
-            }`}
-          >
-            {c.label}
-          </Link>
-        ))}
-      </nav>
-
-      {/* 로딩 */}
-      {loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-card border border-border rounded-xl p-4">
-            <LoadingSkeleton rows={5} variant="row" />
-          </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <LoadingSkeleton rows={5} variant="row" />
-          </div>
+        {/* 헤더 */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16 }}>
+          <h1 className="t-page" style={{ margin: 0, fontSize: 26 }}>{t('stats.pageTitle')}</h1>
+          <span className="t-sub">2026-27</span>
         </div>
-      )}
 
-      {/* 오류 */}
-      {!loading && error && (
-        <ErrorState title={t('stats.errorTitle')} description={error} />
-      )}
-
-      {/* 데이터 */}
-      {!loading && !error && data && (
-        <>
-          {/* 대회 이름 안내 */}
-          <div className="flex items-center gap-2">
-            <Link
-              to={`/competitions/${slug}`}
-              className="text-sm text-primary hover:text-primary/80 flex items-center gap-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
+        {/* 대회 필터 */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--pl-line)', paddingBottom: 14, marginBottom: 14 }}>
+          <span className="t-cap" style={{ width: 44, flexShrink: 0 }}>{t('matches.filterComp')}</span>
+          {COMP_TABS.map(c => (
+            <button
+              key={c.slug}
+              className="pl-chip"
+              aria-pressed={slug === c.slug}
+              onClick={() => setSlug(c.slug)}
             >
-              {getLocalizedCompetitionName(data.comp, locale)}
-              <ChevronRight size={14} />
-            </Link>
-          </div>
-
-          {data.topScorers.length === 0 && data.topAssisters.length === 0 ? (
-            <EmptyState
-              title={t('stats.noData')}
-              description={t('stats.noDataDesc')}
-            />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 득점 순위 */}
-              <section>
-                <div className="bg-card border border-border rounded-xl p-4 sm:p-5">
-                  <StatsRanking
-                    title={t('stats.topScorers')}
-                    unit={t('stats.goals')}
-                    entries={data.topScorers}
-                  />
-                </div>
-              </section>
-
-              {/* 도움 순위 */}
-              <section>
-                <div className="bg-card border border-border rounded-xl p-4 sm:p-5">
-                  <StatsRanking
-                    title={t('stats.topAssisters')}
-                    unit={t('stats.assists')}
-                    entries={data.topAssisters}
-                  />
-                </div>
-              </section>
-            </div>
+              {c.slug === 'all' ? t('stats.allLeagues') : c.label}
+            </button>
+          ))}
+          {isAll && (
+            <span className="t-sub" style={{ marginLeft: 'auto' }}>{t('stats.allDesc')}</span>
           )}
-        </>
-      )}
+        </div>
+
+        {/* 로딩 */}
+        {loading && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="pl-card" style={{ padding: 16 }}><LoadingSkeleton rows={8} /></div>
+            <div className="pl-card" style={{ padding: 16 }}><LoadingSkeleton rows={8} /></div>
+          </div>
+        )}
+
+        {/* 오류 */}
+        {!loading && error && <ErrorState title={t('stats.errorTitle')} description={error} />}
+
+        {/* 데이터 */}
+        {!loading && !error && (
+          isAll
+            ? <AllStatsPanel data={allData} t={t} locale={locale} />
+            : <CompStatsPanel data={compData} comp={compData?.comp} t={t} locale={locale} />
+        )}
+      </div>
     </div>
   )
 }

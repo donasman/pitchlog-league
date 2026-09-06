@@ -29,6 +29,7 @@ docs/       기획·설계 문서
 ## 문서 및 발표 자료
 
 - [문서 목록](./docs/README.md)
+- [화면 요구사항 (PRD)](./docs/PRD.md)
 - [프론트엔드 기술 결정 및 개발 기준](./docs/FRONTEND_GUIDE.md)
 - [프론트엔드 CLI 작업 요청문](./docs/FRONTEND_CLI_PROMPT.md)
 - [상세 설계](./docs/V2_DESIGN.md)

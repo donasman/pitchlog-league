@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>PitchLog — 8단계 AI 어시스턴트</title>
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/components/core/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/styles.css">
+<link rel="stylesheet" href="pitchlog.css">
+<style>body{margin:0;background:#EBECEE;font-family:var(--font)}
+.wrap{display:flex;gap:28px;flex-wrap:wrap;padding:20px 32px 48px;align-items:flex-start}
+.ab{display:grid;gap:8px}
+.ab h4{margin:0;font-size:14px;font-weight:700}
+.ab p{margin:0;font-size:12px;line-height:1.6;opacity:.7;max-width:var(--w)}
+</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/_ds_bundle.js"></script>
+<script type="text/babel" src="pitchlog-kit.jsx"></script>
+<script type="text/babel" src="parts-2.jsx"></script>
+<script type="text/babel" src="matches-tab.jsx"></script>
+<script type="text/babel" src="assistant-8.jsx"></script>
+<script type="text/babel">
+const {useState,useEffect}=React;
+function Art({item,theme,onOpen}){
+  const el=item.render(theme);
+  return <div className="ab" style={{"--w":item.w*item.s+"px"}}>
+    <h4>{item.label}</h4>
+    <div className="scr-btn" role="button" tabIndex={0} onClick={()=>onOpen({...item,el})} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpen({...item,el})}}} aria-label={item.label+" 크게 보기"}>
+      <div className="frame" style={{width:item.w*item.s,height:item.h*item.s}}>
+        <div className="scaler" ref={n=>{if(n)n.setAttribute("inert","")}} aria-hidden="true" style={{transform:`scale(${item.s})`,width:item.w,height:item.h,pointerEvents:"none"}}>{el}</div>
+      </div>
+    </div>
+    {item.note&&<p>{item.note}</p>}
+  </div>;
+}
+function Lightbox({item,close}){
+  const [s,setS]=useState(1);
+  useEffect(()=>{
+    const fit=()=>setS(Math.min((window.innerHeight-110)/item.h,(window.innerWidth-64)/item.w,1));
+    fit();window.addEventListener("resize",fit);
+    const k=e=>{if(e.key==="Escape")close()};window.addEventListener("keydown",k);
+    return()=>{window.removeEventListener("resize",fit);window.removeEventListener("keydown",k)};
+  },[item]);
+  return <div className="ov" onClick={e=>{if(e.target.classList.contains("ov")||e.target.classList.contains("ovbody"))close()}} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(10,10,12,.74)",display:"grid",gridTemplateRows:"auto 1fr"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",color:"#fff",fontSize:14}}>
+      <b>{item.label}</b><span style={{opacity:.7}}>{item.w}×{item.h}</span>
+      <button onClick={close} style={{marginLeft:"auto",font:"600 13px/1 var(--font)",padding:"9px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.08)",color:"#fff",cursor:"pointer"}}>닫기 (Esc)</button>
+    </div>
+    <div className="ovbody" style={{display:"grid",placeItems:"center",overflow:"auto",padding:"0 20px 24px"}}>
+      <div className="frame" style={{width:item.w*s,height:item.h*s}}><div className="scaler" style={{transform:`scale(${s})`,width:item.w,height:item.h}}>{item.el}</div></div>
+    </div>
+  </div>;
+}
+const A=[
+ {label:"1. 닫힌 상태 — 진입 버튼",w:1440,h:900,s:.44,render:t=><AssistantDesk theme={t} fabOnly/>,
+  note:"우하단 고정 버튼. 브랜드 파랑 채움 + 흰 글자, 아이콘은 말풍선이 아니라 돋보기+물음. 알림 벨과 떨어뜨려 둡니다."},
+ {label:"2. 빈 상태 — 데스크톱 패널",w:1440,h:900,s:.44,render:t=><AssistantDesk theme={t} state="empty"/>,
+  note:"예시 질문 4개로 답할 수 있는 범위를 알립니다. “숫자는 데이터베이스에서 직접 가져옵니다” 한 줄과, 예측은 답하지 않는다는 경계도 함께."},
+ {label:"3. 대화 — 데이터 카드 2종 (경기 카드 + 순위 조각)",w:1440,h:900,s:.44,render:t=><AssistantDesk theme={t} state="normal"/>,
+  note:"숫자를 문장에 섞지 않고 기존 경기 카드·순위표 행을 그대로 답변 안에 렌더링합니다. 순위 조각은 앞뒤 팀까지 포함."},
+ {label:"4. 근거 카드 펼친 상태",w:1440,h:900,s:.44,render:t=><AssistantDesk theme={t} state="evidence"/>,
+  note:"접힌 상태가 기본. 펼치면 조회 도구 · 기준 시각 · 출처가 나옵니다."},
+ {label:"5. 재검증 중 값을 인용한 답변 ★",w:1440,h:900,s:.44,render:t=><AssistantDesk theme={t} state="recheck"/>,
+  note:"접힌 근거 옆에도 재검증 배지가 보입니다. 현재 값과 바뀔 수 있다는 사실, 확정 알림 받기까지 한 카드에."},
+ {label:"6. 생각 중",w:1440,h:900,s:.44,render:t=><AssistantDesk theme={t} state="thinking"/>,
+  note:"무엇을 하는지 밝힙니다 — “EPL 순위를 조회하는 중”, 호출 도구 목록 표기."},
+ {label:"7. 답할 수 없음",w:1440,h:900,s:.44,render:t=><AssistantDesk theme={t} state="cant"/>,
+  note:"예측은 거절하고 조회 가능한 질문 3개를 제안합니다."},
+ {label:"8. 오류",w:1440,h:900,s:.44,render:t=><AssistantDesk theme={t} state="error"/>,
+  note:"“답을 지어내지 않고 멈춘다”를 명시하고 재시도와 우회 경로를 줍니다."},
+ {label:"9. 모바일 바텀시트 — 빈 상태",w:390,h:844,s:.62,render:t=><AssistantMobile theme={t} state="empty"/>},
+ {label:"10. 모바일 전체 화면 — 대화",w:390,h:844,s:.62,render:t=><AssistantMobile theme={t} state="normal" full/>,
+  note:"위로 끌어올리면 전체 화면. 입력창은 항상 하단 고정, 본문만 스크롤합니다."},
+ {label:"11. 모바일 — 재검증 인용",w:390,h:844,s:.62,render:t=><AssistantMobile theme={t} state="recheck" full/>}
+];
+function App(){
+  const [theme,setTheme]=useState("light");
+  const [lb,setLb]=useState(null);
+  return <div>
+    <div style={{position:"sticky",top:0,zIndex:10,display:"flex",gap:12,alignItems:"center",padding:"14px 32px",background:"rgba(235,236,238,.9)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(112,115,124,.22)"}}>
+      <b style={{fontSize:16}}>PitchLog · 8단계 AI 어시스턴트</b>
+      <span style={{fontSize:13,opacity:.65}}>전역 패널 · 숫자는 데이터 카드 · 근거 + 기준 시각 + 신뢰도</span>
+      <span style={{marginLeft:"auto",display:"flex",gap:2,padding:3,borderRadius:999,background:"rgba(112,115,124,.16)"}}>
+        {[["light","라이트"],["dark","다크"]].map(([k,l])=><button key={k} onClick={()=>setTheme(k)} aria-pressed={theme===k} style={{border:0,padding:"7px 14px",borderRadius:999,cursor:"pointer",font:"600 13px/1 var(--font)",background:theme===k?"#3366FF":"transparent",color:theme===k?"#fff":"#171719"}}>{l}</button>)}
+      </span>
+    </div>
+    <div className="wrap">{A.map(it=><Art key={it.label} item={it} theme={theme} onOpen={setLb}/>)}</div>
+    {lb&&<Lightbox item={lb} close={()=>setLb(null)}/>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>

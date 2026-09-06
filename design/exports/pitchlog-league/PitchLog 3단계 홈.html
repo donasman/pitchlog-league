@@ -1,0 +1,86 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>PitchLog — 3단계 홈</title>
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/components/core/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/styles.css">
+<link rel="stylesheet" href="pitchlog.css">
+<style>body{margin:0;background:#EBECEE;font-family:var(--font)}
+.ab{display:grid;gap:8px}
+.ab>h4{margin:0;font-size:13px;font-weight:700}
+.ab>p{margin:0;font-size:12px;line-height:1.55;opacity:.66;max-width:var(--w)}
+.wrap{display:flex;gap:28px;flex-wrap:wrap;padding:24px 32px 48px;align-items:flex-start}
+.note{padding:0 32px;max-width:920px;font-size:13px;line-height:1.7;opacity:.72}
+h3.sec{margin:0;padding:28px 32px 0;font-size:19px;font-weight:700;letter-spacing:-.014em}
+</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/_ds_bundle.js"></script>
+<script type="text/babel" src="pitchlog-kit.jsx"></script>
+<script type="text/babel" src="parts-2.jsx"></script>
+<script type="text/babel" src="home-3.jsx"></script>
+<script type="text/babel">
+const {useState,useEffect}=React;
+function Art({w,h,s,label,note,children,onOpen}){
+  return <div className="ab" style={{"--w":w*s+"px"}}>
+    <h4>{label}</h4>
+    <div className="scr-btn" role="button" tabIndex={0} onClick={onOpen} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpen();}}} aria-label={label+" 크게 보기"}>
+      <div className="frame" style={{width:w*s,height:h*s}}>
+        <div className="scaler" ref={n=>{if(n)n.setAttribute("inert","")}} aria-hidden="true" style={{transform:`scale(${s})`,width:w,height:h,pointerEvents:"none"}}>{children}</div>
+      </div>
+    </div>
+    {note&&<p>{note}</p>}
+  </div>;
+}
+function Lightbox({item,close}){
+  const [s,setS]=useState(1);
+  useEffect(()=>{
+    const fit=()=>setS(Math.min((window.innerHeight-110)/item.h,(window.innerWidth-64)/item.w,1));
+    fit();window.addEventListener("resize",fit);
+    const k=e=>{if(e.key==="Escape")close()};window.addEventListener("keydown",k);
+    return()=>{window.removeEventListener("resize",fit);window.removeEventListener("keydown",k)};
+  },[item]);
+  return <div className="ov" onClick={e=>{if(e.target.classList.contains("ov")||e.target.classList.contains("ovbody"))close()}} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(10,10,12,.74)",display:"grid",gridTemplateRows:"auto 1fr"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",color:"#fff",fontSize:14}}>
+      <b>{item.label}</b><span style={{opacity:.7}}>{item.w}×{item.h}</span>
+      <button onClick={close} style={{marginLeft:"auto",font:"600 13px/1 var(--font)",padding:"9px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.08)",color:"#fff",cursor:"pointer"}}>닫기 (Esc)</button>
+    </div>
+    <div className="ovbody" style={{display:"grid",placeItems:"center",overflow:"auto",padding:"0 20px 24px"}}>
+      <div className="frame" style={{width:item.w*s,height:item.h*s}}>
+        <div className="scaler" style={{transform:`scale(${s})`,width:item.w,height:item.h}}>{item.el}</div>
+      </div>
+    </div>
+  </div>;
+}
+function App(){
+  const [lb,setLb]=useState(null);
+  const D=(theme,extra)=><HomeDesk theme={theme} {...extra}/>;
+  const arts=[
+    {k:"dl",label:"1. 데스크톱 · 라이트 (1440×900, 스크롤 전)",w:1440,h:900,s:.5,el:D("light"),note:"필터 칩 → 요약 스트립 → LIVE 히어로 + 보조 2건 → 오늘의 경기 8행. 사이드바는 대회 선택기 · 순위 Top5 · 득점 Top5 · UCL 진출."},
+    {k:"dd",label:"2. 데스크톱 · 다크",w:1440,h:900,s:.5,el:D("dark"),note:"다크의 채운 브랜드 파랑 위 글자는 #0B0B0D."},
+    {k:"ml",label:"3. 모바일 · 라이트 (390×844)",w:390,h:844,s:.62,el:<HomeMobile theme="light"/>,note:"순서 재배치: 필터 칩 → LIVE 히어로 → 요약 4칸 → 오늘의 경기 2행 + 전체 보기 → 순위 Top5. 득점·UCL은 그 아래."},
+    {k:"md",label:"4. 모바일 · 다크",w:390,h:844,s:.62,el:<HomeMobile theme="dark"/>},
+    {k:"el",label:"5. 빈 상태 · 데스크톱",w:1440,h:900,s:.5,el:D("light",{empty:true}),note:"오류로 위장하지 않는다. 무엇을 걸렀는지(L1) · 다음 경기 날짜 · 다음 행동을 준다."},
+    {k:"em",label:"6. 빈 상태 · 모바일",w:390,h:844,s:.62,el:<HomeMobile theme="light" empty/>},
+    {k:"scroll",label:"7. 데스크톱 전체 스크롤 (1440×1560)",w:1440,h:1560,s:.34,el:D("light",{tall:true}),note:"스크롤 아래: 최근 결과 · 다음 경기 · UCL 16강 3열."}
+  ];
+  return <div>
+    <div style={{position:"sticky",top:0,zIndex:10,display:"flex",gap:12,alignItems:"center",padding:"14px 32px",background:"rgba(235,236,238,.9)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(112,115,124,.22)"}}>
+      <b style={{fontSize:16}}>PitchLog · 3단계 홈</b><span style={{fontSize:13,opacity:.65}}>산출물 4장 + 빈 상태 + 전체 스크롤 · 클릭하면 실제 크기</span>
+    </div>
+    <h3 className="sec">화면</h3>
+    <div className="wrap">{arts.map(a=><Art key={a.k} {...a} onOpen={()=>setLb(a)}>{a.el}</Art>)}</div>
+    <h3 className="sec">이 화면에서 정한 것</h3>
+    <div className="note">
+      <p><b>두 개의 대회 컨트롤을 형태로 분리했습니다.</b> 상단은 “경기 필터 · 여러 개 선택” 라벨이 붙은 알약 칩(다중, 활성은 채움), 사이드바는 “순위 · 기록을 볼 대회 (하나만)” 라벨이 붙은 라디오 리스트(단일, 활성은 라디오 점 + 옅은 배경). 사이드바에는 채운 파랑을 쓰지 않아 같은 컨트롤로 읽히지 않습니다.</p>
+      <p><b>모바일 순서:</b> 데스크톱 순서를 그대로 쌓으면 순위가 화면 3장 아래로 밀립니다. LIVE 히어로를 요약 위로 올리고, 오늘의 경기는 3행 + “12건 모두 보기”로 잘라 순위 Top5를 첫 스크롤 안에 넣었습니다. 득점 Top5와 UCL 진출은 그 아래입니다.</p>
+      <p><b>통과 조건:</b> 데스크톱 첫 화면(스크롤 전)에 진행 중 3경기 · 오늘 12경기 · LIVE 스코어 · 오늘의 경기 8행이 모두 들어갑니다.</p>
+    </div>
+    {lb&&<Lightbox item={lb} close={()=>setLb(null)}/>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>

@@ -12,8 +12,11 @@
  * 페이지는 catch 후 ErrorState를 표시한다.
  */
 
+import { COMPETITION_OVERVIEW, LIVE_PULSE, NEXT_KICKOFF, DATA_AS_OF } from '@/mocks/overview'
 import { COMPETITIONS, SEASONS, getCompetitionBySlug } from '@/mocks/competitions'
 import { MATCHES, UCL_KNOCKOUT_TIES, getMatchById, getMatchesByCompetition, getMatchesByTeam } from '@/mocks/matches'
+import { MATCH_TEAM_STATS } from '@/mocks/matchStats'
+import { getLineup, getTopRated } from '@/mocks/lineups'
 import { STANDINGS, getStandings } from '@/mocks/standings'
 import { TEAMS, getTeamBySlug, getTeamsByCompetition } from '@/mocks/teams'
 import {
@@ -93,6 +96,21 @@ export async function fetchMatch(id) {
   const match = getMatchById(id)
   if (!match) throw new Error(`Match not found: ${id}`)
   return match
+}
+
+/**
+ * 경기 상세 + 팀 통계 + 라인업 + 평점 상위 선수
+ * 백엔드 연결 시 GET /api/matches/:id/detail 으로 대체
+ */
+export async function fetchMatchDetail(id) {
+  const match = getMatchById(id)
+  if (!match) throw new Error(`Match not found: ${id}`)
+  return {
+    match,
+    stats:    MATCH_TEAM_STATS[id] ?? null,
+    lineup:   getLineup(id),        // null = 라인업 미공개 (31경기)
+    topRated: getTopRated(id, 3),
+  }
 }
 
 // ─── 팀 ────────────────────────────────────────────────────────
@@ -202,12 +220,53 @@ export async function fetchTopAssisters() { return TOP_ASSISTERS }
 /** 득점 순위 (전체 대회 합산) */
 export async function fetchTopScorersAll() { return TOP_SCORERS_ALL }
 
+// ─── 알림 ───────────────────────────────────────────────────────
+
+import { NOTIFICATIONS, NOTIFICATION_SETTINGS } from '@/mocks/notifications'
+
+/** 알림 목록 */
+export async function fetchNotifications() {
+  return NOTIFICATIONS
+}
+
+/** 알림 설정 (권한 상태 포함) */
+export async function fetchNotificationSettings() {
+  return NOTIFICATION_SETTINGS
+}
+
+/**
+ * 통계 — 전체 대회 합산 + 대회별 분해
+ * stats 페이지의 "전체 합산" 탭용
+ */
+export async function fetchAllStats() {
+  return {
+    topScorers: TOP_SCORERS_ALL,
+    topAssisters: TOP_ASSISTERS,
+  }
+}
+
 // ─── UCL ───────────────────────────────────────────────────────
 
 /** UCL 녹아웃 대진 */
 export async function fetchUCLKnockout() { return UCL_KNOCKOUT_TIES }
 
 // ─── 홈 화면 묶음 ──────────────────────────────────────────────
+
+/**
+ * 홈 오버뷰 — 제품 앞장에 필요한 데이터를 한 번에 반환
+ * 백엔드 연결 시 GET /api/overview 로 교체
+ */
+export async function fetchOverview() {
+  const eplStandings = getStandings('premier-league')?.entries?.slice(0, 3) ?? []
+  return {
+    competitions: COMPETITION_OVERVIEW,
+    livePulse:    LIVE_PULSE,
+    nextKickoff:  NEXT_KICKOFF,
+    dataAsOf:     DATA_AS_OF,
+    topScorers:   TOP_SCORERS_ALL.slice(0, 3),
+    eplTop3:      eplStandings,
+  }
+}
 
 /**
  * 홈 초기 데이터 (필터링은 컴포넌트에서 수행)

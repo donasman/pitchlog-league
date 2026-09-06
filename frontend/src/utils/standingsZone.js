@@ -45,20 +45,20 @@ export const ZONE_BG_CLASS = {
 /**
  * sticky 열(순위·팀) 전용 배경 — 가로 스크롤 시 뒤쪽 콘텐츠를 가리는 불투명 배경.
  * 행 배경의 틴트를 카드 배경 위에 미리 합성한 hex 값:
- *   light: #ffffff + tint-500 @ 4% → 합성 rgb
- *   dark : rgb(15,23,41) + tint-400 @ 8% → 합성 rgb
+ *   light: #ffffff + zone-color @ 4% (color-mix 와 동일 공식)
+ *   dark : #0f172a + zone-color @ 4% (color-mix 와 동일 공식 — 이전 8%에서 수정)
  */
 export const ZONE_STICKY_BG = {
-  champions_league:          'bg-[#f7faff] dark:bg-[#15223a]',
-  champions_league_playoff:  'bg-[#fbfdff] dark:bg-[#1a253a]',
-  europa_league:             'bg-[#fff9f6] dark:bg-[#22212b]',
-  europa_conference:         'bg-[#f6fbf8] dark:bg-[#11252d]',
-  relegation_playoff:        'bg-[#fff9f9] dark:bg-[#221e2f]',
-  relegation:                'bg-[#fef6f6] dark:bg-[#211b2b]',
+  champions_league:          'bg-[#f7faff] dark:bg-[#111b32]',
+  champions_league_playoff:  'bg-[#fefcf5] dark:bg-[#181d29]',
+  europa_league:             'bg-[#fff9f6] dark:bg-[#181b29]',
+  europa_conference:         'bg-[#f6fbf8] dark:bg-[#0f1d2b]',
+  relegation_playoff:        'bg-[#fff9f9] dark:bg-[#181b2d]',
+  relegation:                'bg-[#fef6f6] dark:bg-[#17182a]',
   none:                      'bg-card',
-  ucl_direct:                'bg-[#f7faff] dark:bg-[#15223a]',
-  ucl_playoff:               'bg-[#fffcf5] dark:bg-[#222527]',
-  ucl_eliminated:            'bg-[#f9f9fa] dark:bg-[#1a2234]',
+  ucl_direct:                'bg-[#f7faff] dark:bg-[#111b32]',
+  ucl_playoff:               'bg-[#fefcf5] dark:bg-[#181d29]',
+  ucl_eliminated:            'bg-card',
 }
 
 /** 범례용 색상 배경 (범례 도트) — ZoneLegend 에서 직접 사용 */
@@ -72,4 +72,39 @@ export const ZONE_LEGEND_COLOR = {
   ucl_direct:               'bg-blue-500',
   ucl_playoff:              'bg-yellow-500',
   ucl_eliminated:           'bg-gray-500',
+}
+
+/**
+ * 구역별 좌측 표시선 패턴 (색을 빼도 구역 구분 가능).
+ * solid: 실선 | dash: 점선 | dot: 점 | block: 블록
+ * 패턴은 data-pat 속성으로 .zrow CSS에 전달된다.
+ */
+export const ZONE_PAT = {
+  champions_league:         'solid',
+  champions_league_playoff: 'dash',
+  europa_league:            'dash',
+  europa_conference:        'dot',
+  relegation_playoff:       'block',
+  relegation:               'solid',
+  none:                     null,
+  ucl_direct:               'solid',
+  ucl_playoff:              'dash',
+  ucl_eliminated:           'dot',
+}
+
+/**
+ * 구역별 CSS 변수값 (--z-* tokens).
+ * StandingsTable 에서 --zc 로 주입해 좌측 2px 표시선 + 4% 배경 틴트에 사용.
+ */
+export const ZONE_COLOR_VAR = {
+  champions_league:          'var(--z-ucl)',
+  champions_league_playoff:  'var(--z-uclpo)',
+  europa_league:             'var(--z-uel)',
+  europa_conference:         'var(--z-uecl)',
+  relegation_playoff:        'var(--z-relpo)',
+  relegation:                'var(--z-rel)',
+  none:                      null,
+  ucl_direct:                'var(--z-ucl)',
+  ucl_playoff:               'var(--z-uclpo)',
+  ucl_eliminated:            null,
 }

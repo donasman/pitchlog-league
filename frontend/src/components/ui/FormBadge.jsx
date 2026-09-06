@@ -1,29 +1,31 @@
 /**
  * 최근 경기 폼 배지 (W/D/L)
- * @param {{ result:'W'|'D'|'L', size?:'sm'|'md' }} props
+ * 단독 렌더링용. 여러 개를 나열할 때는 .pl-form wrapper 안에 배치한다.
+ *
+ * @param {{ result:'W'|'D'|'L' }} props
  */
 
 import { useTranslation } from 'react-i18next'
 
-const STYLE = {
-  W: { bg: 'bg-green-700', text: 'text-green-100', labelKey: 'standings.won' },
-  D: { bg: 'bg-yellow-700', text: 'text-yellow-100', labelKey: 'standings.drawn' },
-  L: { bg: 'bg-red-800', text: 'text-red-100', labelKey: 'standings.lost' },
+const CLS = { W: 'f-w', D: 'f-d', L: 'f-l' }
+const LABEL_KEY = {
+  W: 'standings.won',
+  D: 'standings.drawn',
+  L: 'standings.lost',
 }
 
-export default function FormBadge({ result, size = 'sm' }) {
+export default function FormBadge({ result }) {
   const { t } = useTranslation()
-  const { bg, text, labelKey } = STYLE[result] ?? STYLE.D
-  const label = t(labelKey)
-  const sizeClass = size === 'md' ? 'w-6 h-6 text-xs' : 'w-5 h-5 text-[10px]'
+  const cls   = CLS[result] ?? 'f-d'
+  const label = t(LABEL_KEY[result] ?? LABEL_KEY.D)
 
   return (
-    <span
-      className={`${bg} ${text} ${sizeClass} inline-flex items-center justify-center rounded font-bold`}
+    <i
+      className={`pl-form-badge ${cls}`}
       aria-label={label}
       title={label}
     >
       {result}
-    </span>
+    </i>
   )
 }

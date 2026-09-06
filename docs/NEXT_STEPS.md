@@ -1,118 +1,217 @@
 # PitchLog 다음 작업 순서
 
-> 갱신: 2026-09-03 (전체 페이지 i18n 완료 확인 · 문서 정합성 정리)  
-> 기준: 다국어 인프라(i18next) + Mock Data 균형화 + 홈/통계 UI 개선 + 브라우저 실측 회귀 수정
+> 갱신: 2026-09-06 · 이전 판(09-03)을 대체한다.
+> 근거 문서: `INGESTION_STRATEGY.md` · `SCHEMA_DESIGN.md` · `DATA_RULES.md` ·
+> `API_INVENTORY.md` · `PRD.md` · `BACKEND_FEATURES.md`
 
-## 1. 현재 확인된 상태
+**설계는 충분하다. 백엔드 코드가 0줄이므로 여기서 문서를 더 쓰면 계속 0줄이다.**
+아래는 코드로 넘어가는 순서다.
 
-- [x] `npm run validate:data` 통과 — 오류 0건, 경고 0건
-- [x] `npm run lint` 통과 — 오류 0건
-- [x] `npm run build` 성공
-- [x] 5대 리그 + UCL Mock Data 균형화 (각 리그 LIVE·예정·확정·recheck + 8행 순위)
-- [x] `TOP_SCORERS_ALL` 정렬 수정 (Son 9골 → 5위, 다국적 선수 포함)
-- [x] UCL R16 집계 점수 수정 (leg2Score home/away 방향 수정)
-- [x] 스테이지 표기 통일 (`MW 13` → `Matchweek 13`)
-- [x] 모바일 순위표 sticky 열 + 가로 스크롤 안내
-- [x] 모바일 LIVE 카드 메타 정보 줄바꿈 처리
-- [x] UCL 탈락 구역 범례 색상 통일 (`bg-gray-600`)
-- [x] `scripts/validateMockData.js` + `npm run validate:data` 추가
-- [x] i18next + react-i18next 설치
-- [x] `src/i18n/index.js` 초기화 (localStorage 언어 감지)
-- [x] `src/locales/ko.json`, `src/locales/en.json` 번역 리소스
-- [x] `src/i18n/entityNames.js` 팀·선수·대회 한국어 이름 테이블
-- [x] `src/utils/localization.js` `getLocalizedName`, `getLocalizedShortName`
-- [x] `LanguageToggle` Header에 통합 (데스크톱 + 모바일 메뉴)
-- [x] `AppHeader`, `StandingsTable`, `MatchCard`, `StatsRanking`, `LiveHeroCard`, `CompetitionChips`, `DataTimestamp`, `ErrorState`, `EmptyState`, `AppLayout` i18n 적용
-- [x] 홈 바로가기 섹션(QUICKLINKS) 제거
-- [x] 홈 사이드바 통합 대회 선택기 (6개 대회 → 순위+득점 동시 전환)
-- [x] 홈 요약 "EPL 득점 1위" (전체 합산 제거)
-- [x] 순위표 구역 색상: `border-l-{color}` + `ZONE_BG_CLASS` + `ZONE_STICKY_BG`
-- [x] `/stats` 페이지 생성 및 라우트 등록
-- [x] Header 통계 메뉴 활성화
-- [x] `fetchCompetitionStats` API 함수 추가
-- [x] 브라우저 실측 회귀 수정 — 팀명 잘림(StandingsTable) · LIVE 배지 줄바꿈(MatchStatusBadge)
-- [x] HomePage i18n 3곳 (`liveCount`, `goalsUnit`, `todayFiltered`)
-- [x] MatchCard `합산:` → `t('match.aggregate')`
-- [x] CompetitionChips 전체 대회 칩 i18n (`allCompetitionsChip` 신규 키)
-- [x] FormBadge `승/무/패` → `standings.won/drawn/lost`
-- [x] UnifiedMatchList `toKSTTime` locale 인자 추가
-- [x] Mock standings `stage` → `{ label, status }` 구조화 + StandingsPage 조합 로직
+---
 
-## 2. 즉시 해야 할 수동 검수
+## 0. 지금 어디까지 왔나
 
-`npm run dev` 실행 후 다음 URL에서 확인:
+| 영역 | 상태 |
+|---|---|
+| 설계 문서 | ✅ 완료 — docs 24개 + 디자인 브리프 9개 |
+| 디자인 | ✅ 완료 — 시안 13개, 토큰 1파일 |
+| API 실측 | ✅ 완료 — 엔드포인트 53종·컵 30개·5시즌·과거 깊이 전수 조사 |
+| 수집 전략 | ✅ 확정 — 12대회 × 5시즌, 컵 컷오프, 백필 계획 |
+| 스키마 설계 | ✅ 확정 — 테이블 30개, 외래키 미사용 |
+| 프론트엔드 | 🚧 Mock 기반. 1~8단계 화면 구현 완료, 1단계 감사 12건 수정 완료(`c6c43b4`). 실 API 연결·컵 화면 남음 |
+| **백엔드** | ❌ **코드 0줄** |
+| CI · 배포 · DB | ❌ 미구성. Supabase 프로젝트도 아직 없다 |
+| 백업 | ❌ 없음 — **백필 전 필수** |
 
-```
-/                                  — 홈 언어 전환, 오늘 경기 수/득점 단위 영어 전환
-/standings?competition=premier-league — 1440px에서 팀명(뉴캐슬 유나이티드 등) 잘림 없음
-/standings?competition=champions-league — UCL stage "League Phase — Matchday 4 ongoing"
-/matches                           — LIVE 배지 1줄 유지 (en/ko 모두)
-/teams/manchester-city             — 팀 상세 다국어
-/players/erling-haaland            — 선수 상세 다국어
-/competitions/champions-league/knockout — UCL 녹아웃 팀명
+### 확정된 범위
+
+| 항목 | 값 |
+|---|---|
+| 대회 | **12개** — 5대 리그 + UCL + 국내 컵 6개 (+슈퍼컵 5개) |
+| 시즌 | **최근 5시즌** (2022~2026) |
+| 컵 수집 | 목록은 1부 팀 최초 등장 라운드부터 · 상세는 (1부 참가 OR 16강 이상) |
+| DB | Supabase 무료 500MB. 추정 사용 266MB (53%) |
+| 백필 | 약 45,400콜 · **8~12일** |
+| 외래키 | **사용하지 않음.** 무결성은 백엔드 책임 |
+
+---
+
+## 1. 지금 당장 — 푸시
+
+커밋이 로컬에만 있다. 이번 조사 산출물(문서 8개, 스크립트 3개)이 한 대의 PC에만 있는 상태다.
+
+```bash
+cd /c/Dev/pitchlog-league
+git push -u origin docs/api-data-inventory
 ```
 
-확인 항목:
-- 언어 전환 즉시 반영
-- 새로고침 후 선택 언어 유지
-- 번역 키·`undefined`·빈 이름 없음
-- 가로 넘침 없음 (1440×900, 390×844)
+연결된 폴더의 셸은 리눅스 VM이라 Windows 자격 증명 관리자를 못 쓴다. **Windows 터미널에서 직접 실행한다.**
 
-## 3. 남은 i18n 작업
+---
 
-**한국어 하드코딩은 해소됨.** `npm run check:i18n` 1번 항목(한국어 문자 검출)이
-오류 0건으로 통과한다. 이전에 이 표에 있던 8개 파일(`MatchPage`, `CompetitionPage`,
-`TeamPage`, `PlayerPage`, `UCLKnockoutPage`, `MatchesPage`, `matchStatus.js`,
-`LoadingSkeleton`)은 모두 화이트리스트 대상이 아니며 검사를 통과한다.
+## 2. Phase 0 마무리 — 1~2일
 
-남은 것은 경고 57건이다. 빌드를 막지는 않지만 정리 대상이다.
+코드가 쌓이기 전이 가장 싸다.
 
-| 구분 | 건수 | 내용 |
+- [x] ~~**CI**~~ ✅ `.github/workflows/frontend.yml` — `paths` 필터, `npm run verify`,
+      무음 catch 검사(빈 catch + `.catch(() => null)`). 이 검사가 `StandingsPage.jsx`의
+      기존 위반 1건을 잡아 같이 고쳤다
+- [x] ~~pre-commit 훅~~ ✅ `.githooks/pre-commit` — null byte · 깨진 UTF-8 · `.env` ·
+      하드코딩된 API 키. **각 개발 환경에서 `git config core.hooksPath .githooks` 1회 필요**
+- [ ] **GitHub 설정** — 기본 브랜치 `dev`, `main`에 PR 필수 + CI 통과 Ruleset (웹에서만 가능)
+- [ ] **Supabase 프로젝트 생성** — 무료는 **활성 2개 제한**이라 dev/prod로 딱 찬다. 지금 정하지 않으면 나중에 옮긴다
+- [ ] **NestJS 스켈레톤** (PR #5) — 헬스체크 하나만 도는 상태
+- [ ] 배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결
+
+---
+
+## 3. Prisma 스키마 — 2~3일
+
+`SCHEMA_DESIGN.md` 11장의 마이그레이션 6개를 순서대로. 테이블 정의는 그 문서가 기준이다.
+
+**같이 하지 않으면 나중에 반드시 문제가 되는 것 셋:**
+
+- [ ] **partial unique index 3개를 마이그레이션 SQL에 직접 쓴다**
+      (`competition_seasons` · `squad_entries` · `coach_tenures`).
+      Prisma 스키마로 표현되지 않는다. 빠뜨리면 중복이 조용히 들어온다
+- [ ] **고아 행 검사 쿼리 + CI 통합 테스트** — 외래키를 안 쓰기로 한 대가다.
+      데이터가 들어오기 전에 걸어야 의미가 있다 (`SCHEMA_DESIGN.md` 2-3)
+- [ ] **Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 쿼리 로그로 확인**
+      아니면 `$executeRaw`로 바꾸고 **동시 호출 테스트를 같은 PR에** (설계검토 B-2)
+
+관계 컬럼 `@@index` 누락은 리뷰 체크 항목이다 (`BACKEND_GUIDE.md`).
+
+---
+
+## 4. 백업 — 반나절 · 백필 전 필수 ★
+
+Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 날아가면 다시 8~12일이다.
+
+- [ ] `pg_dump` 주 1회 잡
+- [ ] 저장 위치 결정 — R2 / GitHub Release / 로컬
+- [ ] 복원 1회 리허설 — 받아본 적 없는 백업은 백업이 아니다
+
+**이것 없이 백필을 시작하지 않는다.**
+
+---
+
+## 5. 공통 HTTP client + L0 — 2일
+
+수집 기능보다 클라이언트를 먼저 만든다. v1은 보호장치 없이 수집부터 만들었고 회고가 그걸 지목했다.
+
+- [ ] timeout · 호출 제한 · 제한된 retry · exponential backoff
+- [ ] `/status` 적재 → `api_quota_snapshots`. **경고선 6,000콜/일 판단의 근거**
+- [ ] L0 기준 데이터 — 12대회 × 5시즌, 약 120콜
+- [ ] 로고는 내려받아 자체 저장 (media URL 직접 링크는 rate limit)
+
+---
+
+## 6. 조회 API 2개 + 응답 계약 — 3~4일
+
+**DTO 계약을 별도 문서로 쓰지 않는다. Swagger 스펙이 계약이다.**
+문서로 쓰면 코드와 갈라진다.
+
+- [ ] `GET /competitions` · `GET /standings` — 여기서 처음 화면에 진짜 데이터가 붙는다
+- [ ] **모든 응답에 `asOf` 포함.** 프론트 `DataTimestamp`가 이미 기대하고 있고
+      나중에 붙이면 전 DTO를 고쳐야 한다 (설계검토 C-1)
+- [ ] 결손 표기 규약 — 컵 경기의 `hasTeamStats` 등을 응답에 어떻게 실을지
+- [ ] 프론트 `services/api.js`를 이 스펙에 맞춘다
+
+---
+
+## 7. 화면 구성 변경 — 6번과 병렬 가능
+
+컵과 5개년이 들어오면서 새로 필요한 것들이다.
+
+- [ ] **대진표** — 슬롯 3상태(`CONFIRMED` / `PENDING_WINNER` / `UNDRAWN`).
+      "Round of 32 승자" · "추첨 예정" · "예선 통과" 표기
+- [ ] **컵 경기 상세의 통계 탭 결손** — 오류가 아니라 정상 상태로 구분해 보여준다.
+      `EmptyState`에 `action` prop이 없다 (1단계 감사 #11)
+- [ ] **시즌 선택기** — 백필이 끝나지 않은 시즌은 노출하지 않는다.
+      부분적으로 찬 순위표는 사용자가 최신인 줄 안다
+- [ ] **컵 대회 화면** — 순위표가 없다. 리그와 구조가 달라야 한다
+- [x] ~~1단계 감사 12건~~ ✅ `c6c43b4`에서 전부 수정됨. 단 #11의 `EmptyState` `action` prop은
+      여전히 없다 — 컵 통계 탭 결손 표시에서 필요하다
+
+---
+
+## 8. L2 일정 + 백필 실행 — 8~12일
+
+`INGESTION_STRATEGY.md` 5장 그대로.
+
+- [ ] `competition_rounds` 적재 — 컷오프 판정의 근거
+- [ ] BullMQ Worker 승격 — 백필이 Redis를 실제로 도입하는 첫 작업
+- [ ] `backfill_jobs` 재시작 지점
+- [ ] **최신 시즌부터 역순.** 1일차에 2026 시즌이 끝나면 사이트를 열 수 있다
+- [ ] 백필은 비경기일에 몰고 경기일에는 폴링을 우선한다
+
+---
+
+## 9. L1 스쿼드 diff ★ 관문
+
+완료 기준은 "500선수가 DB에 있다"가 아니라
+**"스쿼드 diff 테스트가 이적 시나리오를 통과한다"** 이다.
+
+⚠ **백필 진행 중에는 해당 대회-시즌의 L1을 건너뛴다.** 이중 이력이 생기면
+partial unique index가 에러로 막아서 diff가 실패한다 (`SCHEMA_DESIGN.md` 5장 충돌 ③).
+
+---
+
+## 10. L3~L5 실시간 + 확정 처리
+
+- [ ] 라이브 폴링 윈도우 개폐 — 10초 × 24시간이면 8,640콜로 한도를 그것만으로 넘긴다
+- [ ] 주기 강등 규칙 — 누적 6,000 초과 / 백필 중 / 진행 경기 1개 이하면 15초
+- [ ] 오버랩 방지 + **한 주기 처리 시간 계측**
+- [ ] `data_version` 조건부 갱신 — FT 직후 폴링이 상태를 되돌리는 것을 막는다
+- [ ] 녹아웃 tie 확정 — 2차전 FT 후 합산·승자·`win_reason`
+
+---
+
+## 11. 프론트 실 API 연결 + 배포
+
+- [ ] `services/api.js` Mock → fetch
+- [ ] null 정규화 계층 — 아직 없다. 실 API 연결 직전에 `services/api.js`에 넣는다
+- [ ] Socket.io 연결 + REST 풀 싱크 fallback
+- [ ] i18n — `localized_names` 적재 후 프론트 `entityNames.js` 제거
+
+---
+
+## 12. 아직 안 쓴 문서 — 코드를 막지 않는다
+
+| 문서 | 언제 |
+|---|---|
+| 설계·기획 의도 변경 정리 | 7단계 즈음. 컵·5개년이 PRD 전제를 바꾼 것을 반영 |
+| i18n 범위 재산정 | 8단계 전. 라운드명 번역 체계, 컵 참가 팀 64개 |
+| 시즌 롤오버 운영 규칙 | 8단계 전. 대회마다 시즌 등록 시점이 다르다 |
+
+---
+
+## 13. Phase 대응
+
+| Phase | 이 문서의 단계 | 검증 |
 |---|---|---|
-| 미사용 키 (죽은 키) | 51 | `header.comingSoon`, `match.statusDesc_*` 9개, `standings.legend.*` 4개, `knockout.*` 9개, `player.*`, `team.*`, `home.quickLinks`(제거된 섹션의 잔여 키) 등 |
-| `entityNames` 누락 | 6 | `boniface`, `balogun`, `benganda`, `calhanoglu`, `harit`, `maruull` — 영어 이름만 노출됨 |
+| 0 | 2 | 배포 PoC + CI |
+| 1 | 3·4·5·6·9 | 스쿼드 diff 테스트 통과 |
+| 2 | 8·10 | **실제 라운드 1회 무중단 관측** |
+| 3 | 7·11 | 백엔드 다운 시 오류 노출 |
+| 4 | — | 최종 API 예산 실측 (6,000콜/일 경고선) |
+| 5 | — | AI 어시스턴트, 숫자 환각 0건 |
 
-미사용 키는 실제로 죽은 키인지 아직 붙이지 않은 화면의 키인지 구분해야 한다.
-`match.statusDesc_*`와 `standings.legend.*`는 후자일 가능성이 높으므로 삭제 전에 확인한다.
+로드맵 표의 Phase 4는 원래 "리그 다중화"였으나 **컵 6개가 Phase 1부터 범위에 들어왔다.**
+Phase 4의 실질 내용은 L6 보정·푸시 알림·예산 실측으로 바뀐다.
 
-## 4. 발표 캡처 (다음 순서)
+---
 
-발표용 URL은 `frontend/PRESENTATION_CAPTURE.md` 참조.
+## 14. 남은 미결정
 
-캡처 전 확인:
-- `npm run dev` 실행
-- 다크 테마 선택
-- 브라우저 확대 100%
-- 개발 도구 닫힘
-- 원하는 언어 선택 후 캡처
+| # | 항목 | 언제 |
+|---|---|---|
+| 2 | Tailwind 팔레트 통합 | 프론트 교체 시. 감사 #6(`--muted-foreground` 4.38:1)이 여기 걸린다 |
+| 4 | 모바일 필터 바 형태 | 경기 탭 모바일 구현 시 |
+| 6 | 다크 모드 기본값 | 배포 전 |
+| 7 | 팀 엠블럼 없을 때 | 컵 하부팀에서 상시 발생한다. 실 API 연결 시 |
+| — | 상시 백엔드 호스팅 (Railway Hobby $5) | Phase 2 전 |
+| — | 팀 최근 경기 질의 — `UNION ALL` vs 보조 테이블 | Phase 2 실측 후 |
+| — | 백필을 어느 Phase에 넣을지 | Phase 1 완료 시점에 판단 |
 
-## 5. 백엔드 착수 시 이름 매칭 작업
-
-1. `api_team_id`, `api_player_id`, `api_competition_id`를 내부 식별 기준으로 확정
-2. API 원본 이름을 변경 없이 저장
-3. Team·Player·Competition Localization 테이블 추가
-4. 한국어 이름, 짧은 이름, 검색 별칭 저장
-5. `요청 언어 → 영어 → API 원본` fallback 구현
-6. API DTO에 `displayName`, `shortDisplayName`, `originalName` 제공
-7. 한국어·영어 검색 별칭 정규화
-8. 신규 선수·미번역 항목 확인 관리 절차
-9. 백엔드 연결 후 `src/i18n/entityNames.js` 제거하고 API `displayName` 사용
-
-## 6. 권장 전체 진행 순서
-
-```text
-수동 브라우저 검수 (개발 서버)
-→ 남은 페이지 i18n 적용
-→ 발표 캡처 확정
-→ NestJS + TypeScript 백엔드 골격
-→ PostgreSQL·Prisma 연결과 대회·팀·선수 모델
-→ API-Football 공통 클라이언트와 EPL 스쿼드 수집
-→ NestJS REST API 구현
-→ Localization 테이블과 API 계약
-→ 실제 API 연결
-→ entityNames.js 제거 + API displayName 사용
-→ 검색 별칭과 미번역 관리
-→ 경기·순위·선수 통계 수집
-→ NestJS Socket.io Gateway 연결
-→ 필요 시 Redis·BullMQ Worker 추가
-```
+`SCHEMA_DESIGN.md` 12장과 `INGESTION_STRATEGY.md` 8장에 각 문서의 미결정이 따로 있다.

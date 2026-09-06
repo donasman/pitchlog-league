@@ -1,0 +1,1061 @@
+{
+  "meta": {
+    "probedAt": "2026-09-04T08:04:07.685Z",
+    "season": 2025,
+    "calls": 59
+  },
+  "cups": [
+    {
+      "country": "England",
+      "id": 46,
+      "name": "EFL Trophy",
+      "seasonCount": 16,
+      "from": 2011,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": true,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 45,
+      "name": "FA Cup",
+      "seasonCount": 16,
+      "from": 2011,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": false,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 47,
+      "name": "FA Trophy",
+      "seasonCount": 16,
+      "from": 2011,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 48,
+      "name": "League Cup",
+      "seasonCount": 16,
+      "from": 2011,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": true
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 528,
+      "name": "Community Shield",
+      "seasonCount": 15,
+      "from": 2012,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": true
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 698,
+      "name": "FA Women's Cup",
+      "seasonCount": 7,
+      "from": 2019,
+      "to": 2025,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 670,
+      "name": "Community Shield Women",
+      "seasonCount": 1,
+      "from": 2020,
+      "to": 2020,
+      "hasTargetSeason": false,
+      "coverageAtTarget": null,
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 697,
+      "name": "WSL Cup",
+      "seasonCount": 7,
+      "from": 2020,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": false,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 871,
+      "name": "Premier League Cup",
+      "seasonCount": 6,
+      "from": 2021,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": true,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 1068,
+      "name": "FA Youth Cup",
+      "seasonCount": 3,
+      "from": 2023,
+      "to": 2025,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "England",
+      "id": 1156,
+      "name": "National League Cup",
+      "seasonCount": 3,
+      "from": 2024,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Spain",
+      "id": 556,
+      "name": "Super Cup",
+      "seasonCount": 11,
+      "from": 2016,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": false,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Spain",
+      "id": 143,
+      "name": "Copa del Rey",
+      "seasonCount": 8,
+      "from": 2018,
+      "to": 2025,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Spain",
+      "id": 735,
+      "name": "Copa Federacion",
+      "seasonCount": 7,
+      "from": 2020,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": false,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Spain",
+      "id": 1058,
+      "name": "Supercopa Femenina",
+      "seasonCount": 4,
+      "from": 2023,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": false,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Germany",
+      "id": 529,
+      "name": "Super Cup",
+      "seasonCount": 16,
+      "from": 2011,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": true
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Germany",
+      "id": 81,
+      "name": "DFB Pokal",
+      "seasonCount": 16,
+      "from": 2011,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": true
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Germany",
+      "id": 715,
+      "name": "DFB Junioren Pokal",
+      "seasonCount": 7,
+      "from": 2020,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Germany",
+      "id": 947,
+      "name": "DFB Pokal - Women",
+      "seasonCount": 5,
+      "from": 2022,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Italy",
+      "id": 547,
+      "name": "Super Cup",
+      "seasonCount": 11,
+      "from": 2014,
+      "to": 2025,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Italy",
+      "id": 137,
+      "name": "Coppa Italia",
+      "seasonCount": 11,
+      "from": 2016,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Italy",
+      "id": 704,
+      "name": "Coppa Italia Primavera",
+      "seasonCount": 7,
+      "from": 2020,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Italy",
+      "id": 817,
+      "name": "Super Cup Primavera",
+      "seasonCount": 6,
+      "from": 2020,
+      "to": 2025,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Italy",
+      "id": 891,
+      "name": "Coppa Italia Serie C",
+      "seasonCount": 6,
+      "from": 2021,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Italy",
+      "id": 892,
+      "name": "Coppa Italia Serie D",
+      "seasonCount": 5,
+      "from": 2021,
+      "to": 2025,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Italy",
+      "id": 1171,
+      "name": "Coppa Italia Women",
+      "seasonCount": 2,
+      "from": 2024,
+      "to": 2025,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": false,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": false,
+        "lineups": false,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "Italy",
+      "id": 1198,
+      "name": "Serie A Cup Women",
+      "seasonCount": 2,
+      "from": 2025,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": false,
+        "stats_player": false,
+        "standings": false,
+        "players": false,
+        "top_scorers": false,
+        "injuries": false
+      }
+    },
+    {
+      "country": "France",
+      "id": 65,
+      "name": "Coupe de la Ligue",
+      "seasonCount": 9,
+      "from": 2011,
+      "to": 2019,
+      "hasTargetSeason": false,
+      "coverageAtTarget": null,
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "France",
+      "id": 66,
+      "name": "Coupe de France",
+      "seasonCount": 15,
+      "from": 2011,
+      "to": 2025,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    },
+    {
+      "country": "France",
+      "id": 526,
+      "name": "Trophée des Champions",
+      "seasonCount": 15,
+      "from": 2012,
+      "to": 2026,
+      "hasTargetSeason": true,
+      "coverageAtTarget": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      },
+      "coverageLatest": {
+        "events": true,
+        "lineups": true,
+        "stats_fixture": true,
+        "stats_player": true,
+        "standings": false,
+        "players": true,
+        "top_scorers": true,
+        "injuries": false
+      }
+    }
+  ],
+  "deep": [
+    {
+      "key": "FA Cup",
+      "country": "England",
+      "re": {},
+      "id": 45,
+      "found": true,
+      "fixtures": 872,
+      "finished": 812,
+      "samples": [
+        {
+          "label": "초반 라운드",
+          "fixtureId": 1419291,
+          "round": "Extra Preliminary Round",
+          "date": "2025-08-01",
+          "match": "Pickering Town 3-2 Penrith AFC",
+          "events": 0,
+          "lineups": 0,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "후반 라운드",
+          "fixtureId": 1542889,
+          "round": "Final",
+          "date": "2026-05-16",
+          "match": "Chelsea 0-1 Manchester City",
+          "events": 10,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "key": "League Cup",
+      "country": "England",
+      "re": {},
+      "id": 48,
+      "found": true,
+      "fixtures": 93,
+      "finished": 73,
+      "samples": [
+        {
+          "label": "초반 라운드",
+          "fixtureId": 1393256,
+          "round": "Preliminary Round",
+          "date": "2025-08-05",
+          "match": "Accrington ST 3-1 Oldham",
+          "events": 16,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "후반 라운드",
+          "fixtureId": 1518728,
+          "round": "Final",
+          "date": "2026-03-22",
+          "match": "Arsenal 0-2 Manchester City",
+          "events": 11,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "key": "Copa del Rey",
+      "country": "Spain",
+      "re": {},
+      "id": 143,
+      "found": true,
+      "fixtures": 137,
+      "finished": 108,
+      "samples": [
+        {
+          "label": "초반 라운드",
+          "fixtureId": 1477538,
+          "round": "1/128-finals",
+          "date": "2025-09-27",
+          "match": "Sant Just 3-0 Atletico Calatayud",
+          "events": 3,
+          "lineups": 0,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "후반 라운드",
+          "fixtureId": 1520393,
+          "round": "Semi-finals",
+          "date": "2026-03-04",
+          "match": "Real Sociedad 1-0 Athletic Club",
+          "events": 19,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "key": "DFB Pokal",
+      "country": "Germany",
+      "re": {},
+      "id": 81,
+      "found": true,
+      "fixtures": 63,
+      "finished": 49,
+      "samples": [
+        {
+          "label": "초반 라운드",
+          "fixtureId": 1378938,
+          "round": "1st Round",
+          "date": "2025-08-15",
+          "match": "SG Sonnenhof Grossaspach 0-4 Bayer Leverkusen",
+          "events": 21,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "후반 라운드",
+          "fixtureId": 1542721,
+          "round": "Final",
+          "date": "2026-05-23",
+          "match": "Bayern München 3-0 VfB Stuttgart",
+          "events": 14,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "key": "Coppa Italia",
+      "country": "Italy",
+      "re": {},
+      "id": 137,
+      "found": true,
+      "fixtures": 45,
+      "finished": 33,
+      "samples": [
+        {
+          "label": "초반 라운드",
+          "fixtureId": 1393795,
+          "round": "Preliminary Round",
+          "date": "2025-08-09",
+          "match": "Virtus Entella 4-0 Ternana",
+          "events": 14,
+          "lineups": 2,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "후반 라운드",
+          "fixtureId": 1542548,
+          "round": "Final",
+          "date": "2026-05-13",
+          "match": "Lazio 0-2 Inter",
+          "events": 19,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "key": "Coupe de France",
+      "country": "France",
+      "re": {},
+      "id": 66,
+      "found": true,
+      "fixtures": 201,
+      "finished": 147,
+      "samples": [
+        {
+          "label": "초반 라운드",
+          "fixtureId": 1485809,
+          "round": "1/128-finals",
+          "date": "2025-11-14",
+          "match": "Cannes 1-2 Annecy",
+          "events": 3,
+          "lineups": 2,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "후반 라운드",
+          "fixtureId": 1542551,
+          "round": "Final",
+          "date": "2026-05-22",
+          "match": "Lens 3-1 Nice",
+          "events": 16,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    }
+  ]
+}

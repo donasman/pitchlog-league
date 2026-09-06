@@ -8,18 +8,21 @@ import { useTranslation } from 'react-i18next'
 export default function NotFoundPage() {
   const { t } = useTranslation()
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 px-4 text-center">
-      <div className="text-6xl font-black text-slate-700">404</div>
-      <div>
-        <h1 className="text-xl font-bold text-foreground">{t('notFound.title')}</h1>
-        <p className="text-muted-foreground mt-2">{t('notFound.desc')}</p>
+    <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: '40px 24px' }}>
+      <div style={{ display: 'grid', gap: 16, justifyItems: 'center', textAlign: 'center', maxWidth: 520 }}>
+        <span className="num" style={{ fontSize: 56, fontWeight: 700, letterSpacing: '-.03em', color: 'var(--pl-text)' }}>
+          404
+        </span>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <h1 className="t-sec" style={{ margin: 0, fontSize: 22 }}>{t('notFound.title')}</h1>
+          <p className="t-sub" style={{ margin: 0 }}>{t('notFound.desc')}</p>
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <Link to="/" className="pl-btn">{t('notFound.home')}</Link>
+          <Link to="/matches" className="pl-btn pl-btn-ghost">{t('matches.pageTitle')}</Link>
+          <Link to="/standings" className="pl-btn pl-btn-ghost">{t('standings.title')}</Link>
+        </div>
       </div>
-      <Link
-        to="/"
-        className="px-5 py-2.5 rounded-lg bg-green-700 hover:bg-green-600 text-white font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
-      >
-        {t('notFound.home')}
-      </Link>
     </div>
   )
 }
