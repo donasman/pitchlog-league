@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>PitchLog — 경기 탭</title>
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/components/core/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/styles.css">
+<link rel="stylesheet" href="pitchlog.css">
+<style>body{margin:0;background:#EBECEE;font-family:var(--font)}
+.wrap{display:flex;gap:28px;flex-wrap:wrap;padding:20px 32px 48px;align-items:flex-start}
+.ab{display:grid;gap:8px}
+.ab h4{margin:0;font-size:14px;font-weight:700}
+.ab p{margin:0;font-size:12px;line-height:1.6;opacity:.7;max-width:var(--w)}
+</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/_ds_bundle.js"></script>
+<script type="text/babel" src="pitchlog-kit.jsx"></script>
+<script type="text/babel" src="parts-2.jsx"></script>
+<script type="text/babel" src="home-3.jsx"></script>
+<script type="text/babel" src="home-3-variants.jsx"></script>
+<script type="text/babel" src="home-3-c.jsx"></script>
+<script type="text/babel" src="matches-tab.jsx"></script>
+<script type="text/babel">
+const {useState,useEffect}=React;
+function Art({item,onOpen}){
+  return <div className="ab" style={{"--w":item.w*item.s+"px"}}>
+    <h4>{item.label}</h4>
+    <div className="scr-btn" role="button" tabIndex={0} onClick={onOpen} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpen()}}} aria-label={item.label+" 크게 보기"}>
+      <div className="frame" style={{width:item.w*item.s,height:item.h*item.s}}>
+        <div className="scaler" ref={n=>{if(n)n.setAttribute("inert","")}} aria-hidden="true" style={{transform:`scale(${item.s})`,width:item.w,height:item.h,pointerEvents:"none"}}>{item.el}</div>
+      </div>
+    </div>
+    {item.note&&<p>{item.note}</p>}
+  </div>;
+}
+function Lightbox({item,close}){
+  const [s,setS]=useState(1);
+  useEffect(()=>{
+    const fit=()=>setS(Math.min((window.innerHeight-110)/item.h,(window.innerWidth-64)/item.w,1));
+    fit();window.addEventListener("resize",fit);
+    const k=e=>{if(e.key==="Escape")close()};window.addEventListener("keydown",k);
+    return()=>{window.removeEventListener("resize",fit);window.removeEventListener("keydown",k)};
+  },[item]);
+  return <div className="ov" onClick={e=>{if(e.target.classList.contains("ov")||e.target.classList.contains("ovbody"))close()}} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(10,10,12,.74)",display:"grid",gridTemplateRows:"auto 1fr"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 20px",color:"#fff",fontSize:14}}>
+      <b>{item.label}</b><span style={{opacity:.7}}>{item.w}×{item.h}</span>
+      <button onClick={close} style={{marginLeft:"auto",font:"600 13px/1 var(--font)",padding:"9px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.28)",background:"rgba(255,255,255,.08)",color:"#fff",cursor:"pointer"}}>닫기 (Esc)</button>
+    </div>
+    <div className="ovbody" style={{display:"grid",placeItems:"center",overflow:"auto",padding:"0 20px 24px"}}>
+      <div className="frame" style={{width:item.w*s,height:item.h*s}}><div className="scaler" style={{transform:`scale(${s})`,width:item.w,height:item.h}}>{item.el}</div></div>
+    </div>
+  </div>;
+}
+function App(){
+  const [lb,setLb]=useState(null);
+  const items=[
+    {label:"1. 경기 목록 · 데스크톱 라이트 (1440×1280)",w:1440,h:1280,s:.44,el:<MatchesTab theme="light" h={1280}/>,
+     note:"날짜별 그룹핑으로 교체. 필터 5종(대회 레일 · 시즌 · 팀 · 라운드 · 날짜)와 UCL 스테이지 선택을 추가. 각 카드에 킥오프 KST 시각을 먼저 적음."},
+    {label:"2. 경기 목록 · 데스크톱 다크",w:1440,h:1280,s:.44,el:<MatchesTab theme="dark" h={1280}/>},
+    {label:"3. 스크롤 전 (1440×900)",w:1440,h:900,s:.44,el:<MatchesTab theme="light" h={900}/>,
+     note:"필터 → 선택 경기 히어로 → 오늘 날짜 그룹까지가 첫 화면입니다."},
+    {label:"4. 경기 목록 · 모바일 라이트 (390×1800)",w:390,h:1800,s:.44,el:<MatchesTabMobile theme="light"/>,
+     note:"2단계 모바일 처리 적용: 가로 스크롤 칩 + ‘필터 3’ 버튼(바텀시트). UCL 스테이지는 둘째 줄에 별도 노출."},
+    {label:"5. 경기 목록 · 모바일 다크",w:390,h:1800,s:.44,el:<MatchesTabMobile theme="dark"/>}
+  ];
+  return <div>
+    <div style={{position:"sticky",top:0,zIndex:10,display:"flex",gap:12,alignItems:"center",padding:"14px 32px",background:"rgba(235,236,238,.9)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(112,115,124,.22)"}}>
+      <b style={{fontSize:16}}>PitchLog · 경기 목록 (/matches)</b>
+      <span style={{fontSize:13,opacity:.65}}>5단계 5-1 반영 · 날짜별 그룹핑 · 필터 5종 + UCL 스테이지</span>
+    </div>
+    <div className="wrap">{items.map(it=><Art key={it.label} item={it} onOpen={()=>setLb(it)}/>)}</div>
+    {lb&&<Lightbox item={lb} close={()=>setLb(null)}/>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>

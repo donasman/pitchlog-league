@@ -20,6 +20,10 @@
 
 :root{
   /* ---- Brand ------------------------------------------------ */
+  /* 확정 2026-09-03 — 블루 유지 (docs/PRD.md 9장).
+     ⚠ 순위표 UCL 직행 구역색 blue-500(#3B82F6)과 색상환 8° 차이다.
+       같은 컴포넌트 안에서 브랜드 색과 구역 색을 함께 쓰지 않는다.
+       브랜드 = 채운 배경/밑줄 텍스트, 구역 = 좌측 표시선 + 틴트 (PRD 9-2) */
   --wds-primary:        rgb(51,102,255);   /* recovered · white text 4.68:1 */
   --wds-primary-strong: #025FEB;           /* recovered · hover   · 5.47:1 */
   --wds-primary-heavy:  #0054D1;           /* recovered · pressed · 6.59:1 */

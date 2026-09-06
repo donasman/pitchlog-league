@@ -1,0 +1,64 @@
+name: frontend
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+
+# 같은 브랜치에서 새 푸시가 오면 이전 실행을 취소한다
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      # validate:data → check:i18n → lint → build
+      - name: verify
+        run: npm run verify
+
+      # 무음 catch 검사 — 회고 4-6 "조용히 망가지는 것" 방지
+      # API 오류를 빈 데이터로 바꾸는 코드를 막는다 (CLAUDE.md 프론트엔드 규칙)
+      - name: 무음 catch 검사
+        run: |
+          # 주석 줄(// 또는 *)은 제외한다 — 규칙을 설명하는 주석이 규칙에 걸리면 안 된다
+          filter_comments() { grep -vE '^[^:]+:[0-9]+:\s*(//|\*|/\*)' || true; }
+
+          echo "빈 catch 블록 검사"
+          hits=$(grep -rnE 'catch\s*(\([^)]*\))?\s*\{\s*\}' src --include='*.js' --include='*.jsx' | filter_comments)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::빈 catch 블록이 있습니다. 오류를 UI에 노출하거나 최소한 로깅하세요."
+            exit 1
+          fi
+
+          echo "오류를 빈 데이터로 바꾸는 catch 검사"
+          hits=$(grep -rnE '\.catch\(\s*\(\s*\)\s*=>\s*(null|undefined|\[\]|\{\})\s*\)' src --include='*.js' --include='*.jsx' | filter_comments)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::오류를 빈 데이터로 바꾸고 있습니다. EmptyState 로 위장됩니다."
+            exit 1
+          fi
+          echo "통과"

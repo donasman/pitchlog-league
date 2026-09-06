@@ -34,6 +34,20 @@ backend/src
 - 외부 API ID에는 unique constraint를 두고 upsert를 멱등하게 구현한다.
 - 여러 데이터를 함께 확정할 때 Prisma transaction을 사용한다.
 
+## 데이터베이스 — 외래키를 쓰지 않는다 (2026-09-06 확정)
+
+`relationMode = "prisma"` 를 사용한다. 참조 무결성은 애플리케이션이 책임진다.
+상세는 `SCHEMA_DESIGN.md` 2장. 코드 리뷰에서 확인할 세 가지:
+
+- **다른 테이블의 ID를 담는 모든 컬럼에 `@@index` 를 명시한다. 예외 없다.**
+  FK가 없으면 Prisma가 인덱스를 만들어주지 않는다. 빠뜨려도 에러가 아니라 느려질 뿐이다.
+- **고아 행 검사를 L6 보정 잡과 CI 통합 테스트 양쪽에서 돌린다.** 자동 삭제하지 않는다.
+- **수집은 부모-먼저 순서를 지킨다.** 라인업·경기 통계에 스쿼드에 없는 선수가 나오면
+  건너뛰지 말고 최소 정보로 `players` 를 먼저 만든다.
+
+partial unique index 3개(`competition_seasons` · `squad_entries` · `coach_tenures`)는
+Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴다.
+
 ## 작업 실행
 
 - 다음 주기에 다시 실행해도 되는 짧은 작업은 NestJS Scheduler를 사용한다.

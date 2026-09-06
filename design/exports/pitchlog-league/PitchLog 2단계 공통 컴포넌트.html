@@ -1,0 +1,147 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>PitchLog — 2단계 공통 컴포넌트</title>
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/components/core/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/styles.css">
+<link rel="stylesheet" href="pitchlog.css">
+<style>body{margin:0;background:#EBECEE}.sh-title{display:flex;align-items:baseline;gap:12px;padding:28px 40px 0}.sh-title h2{margin:0;font-size:26px;font-weight:700;letter-spacing:-.024em}.grp{display:grid;gap:18px;padding:24px;border-radius:16px;background:var(--pl-card);box-shadow:inset 0 0 0 1px var(--pl-line)}.mobf{width:390px;border:1px solid var(--pl-line);border-radius:12px;overflow:hidden;background:var(--pl-card)}</style>
+</head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="_ds/wanted-design-system-200007bd-2f8a-4860-8223-df59d980c040/_ds_bundle.js"></script>
+<script type="text/babel" src="pitchlog-kit.jsx"></script>
+<script type="text/babel" src="parts-2.jsx"></script>
+<script type="text/babel">
+const {useState}=React;
+const ROWS=[
+ {no:1,t:T.liv,pl:28,w:20,d:5,l:3,gf:62,ga:28,gd:34,pts:65,zone:"ucl",form:["W","W","D","W","W"]},
+ {no:4,t:T.che,pl:28,w:15,d:7,l:6,gf:48,ga:33,gd:15,pts:52,zone:"ucl",form:["W","L","W","D","W"]},
+ {no:5,t:T.bri,pl:28,w:14,d:6,l:8,gf:44,ga:35,gd:9,pts:48,zone:"uclpo",form:["D","W","W","L","D"]},
+ {no:6,t:T.bmg,pl:28,w:13,d:6,l:9,gf:41,ga:37,gd:4,pts:45,zone:"uel",noEmblem:true,form:["L","W","D","W","L"]},
+ {no:7,t:T.psg,pl:28,w:12,d:7,l:9,gf:39,ga:38,gd:1,pts:43,zone:"uecl",form:["W","D","D","L","W"]},
+ {no:17,t:T.rma,pl:28,w:6,d:8,l:14,gf:26,ga:47,gd:-21,pts:26,zone:"relpo",form:["L","L","D","L","W"]},
+ {no:18,t:T.fcb,pl:28,w:5,d:6,l:17,gf:22,ga:50,gd:-28,pts:21,zone:"rel",form:["L","D","L","L","L"]}
+];
+function G({n,title,desc,warn,children}){
+  return <section className="spec">
+    <h3>{n}. {title}</h3>
+    {desc&&<p>{desc}</p>}
+    {warn&&<p className="warn">{warn}</p>}
+    <div className="grp">{children}</div>
+  </section>;
+}
+function Row({label,children,gap=16,wrap=true}){
+  return <div><span className="lab">{label}</span><div style={{display:"flex",gap,flexWrap:wrap?"wrap":"nowrap",alignItems:"flex-start"}}>{children}</div></div>;
+}
+function BtnMatrix(){
+  const st=[["기본",""],["hover","is-hover"],["pressed","is-pressed"],["포커스","is-focus"],["비활성","is-disabled"]];
+  return <div style={{display:"grid",gridTemplateColumns:"88px repeat(5,auto)",gap:"14px 18px",alignItems:"center",justifyItems:"start"}}>
+    <span/>{st.map(s=><span key={s[0]} className="lab" style={{margin:0}}>{s[1]?s[0]:"기본"}</span>)}
+    <span className="t-sub">주요</span>{st.map(s=><span key={s[0]} className={"btn "+s[1]}>지원하기</span>)}
+    <span className="t-sub">보조</span>{st.map(s=><span key={s[0]} className={"btn btn-ghost "+s[1]}>비교</span>)}
+    <span className="t-sub">텍스트</span>{st.map(s=><span key={s[0]} className={"link "+s[1]}>전체 보기</span>)}
+  </div>;
+}
+function Sheet({theme}){
+  return <div className={"pl "+(theme==="dark"?"dark":"")}>
+    <div className="sh-title"><h2>PitchLog 부품 시트</h2><span className="t-sub">2단계 공통 컴포넌트 · {theme==="dark"?"다크":"라이트"} · 데스크톱 1440 / 모바일 390</span></div>
+    <div className="sheet">
+      <G n="1" title="앱 헤더" desc="로고 · 주 메뉴 4개 · 검색 · 언어 토글 · 테마 토글. 모바일은 메뉴를 접고 검색·메뉴 아이콘만 남긴다. 아이콘 타깃 44px.">
+        <div style={{width:1392,maxWidth:"100%",borderRadius:12,overflow:"hidden",boxShadow:"inset 0 0 0 1px var(--pl-line)"}}><HeaderDesk theme={theme}/></div>
+        <Row label="모바일 — 접힘 / 펼침"><HeaderMobile/><HeaderMobile open/></Row>
+      </G>
+      <G n="2" title="대회 선택기" desc="축약 표기 EPL · LaLiga · BL · SA · L1 · UCL. 다중 선택형(상단 필터)과 단일 선택형(사이드바) 두 변형."
+         warn="활성 칩은 브랜드 파랑으로 채우고 흰 글자를 쓴다. 틴트 배경 + 파란 글자는 순위 구역 표시와 같은 층위로 읽히므로 금지.">
+        <Row label="다중 선택 — 기본 / hover / 활성"><CompChips/><span className="chip is-hover">EPL</span><span className="chip" aria-pressed="true">EPL</span><span className="chip is-focus" aria-pressed="true">UCL</span></Row>
+        <Row label="다중 선택 — 2개 활성 (데스크톱 34px)"><CompChips active={["UCL","EPL"]}/></Row>
+        <Row label="모바일 44px"><CompChips m active={["UCL","EPL"]}/></Row>
+        <Row label="단일 선택 — 사이드바"><CompSidebar/></Row>
+      </G>
+      <G n="3" title="경기 카드" desc="히어로(홈 LIVE 메인) · 기본(목록) · 컴팩트(3열). 팀명 정책: 히어로·기본은 정식명 + 폭 부족 시 말줄임, 컴팩트·모바일은 축약 사전(브라이턴 앤 호브 알비온 → 브라이턴). 어느 경우에도 줄바꿈하지 않는다."
+         warn="스코어·경과 시간은 tabular-nums. 상태 배지는 항상 한 줄.">
+        <Row label="히어로 — LIVE / 재검증 중">
+          <CardHero h={T.rma} a={T.fcb} hs={2} as={1} st="live" time="64′ 진행 중"/>
+          <CardHero h={T.liv} a={T.bri} hs={3} as={1} st="recheck" time="종료 · 대조 중" comp="EPL · 28R"/>
+        </Row>
+        <Row label="기본 — 예정 / LIVE / 재검증 중 / 확정">
+          <CardBasic h={T.psg} a={T.bmg} hs="-" as="-" st="sched" time="익일 04:45" comp="L1"/>
+          <CardBasic h={T.rma} a={T.fcb} hs={2} as={1} st="live" time="64′" comp="UCL"/>
+          <CardBasic h={T.liv} a={T.bri} hs={3} as={1} st="recheck" time="22:00 종료" comp="EPL"/>
+          <CardBasic h={T.che} a={T.psg} hs={0} as={2} st="final" time="9월 2일" comp="UCL"/>
+        </Row>
+        <Row label="컴팩트 — 3열 배치">
+          <CardCompact h={T.liv} a={T.bri} hs={3} as={1} st="final" time="9월 3일"/>
+          <CardCompact h={T.bmg} a={T.fcb} hs={1} as={1} st="recheck" time="9월 3일"/>
+          <CardCompact h={T.psg} a={T.rma} hs="-" as="-" st="sched" time="04:45"/>
+          <CardCompact h={T.che} a={T.liv} hs={0} as={2} st="live" time="71′"/>
+        </Row>
+      </G>
+      <G n="4" title="순위표 행" desc="열: 순위 · 팀 · 경기 · 승 · 무 · 패 · 득점 · 실점 · 득실차 · 승점 · 최근 5경기. 구역은 좌측 2px 표시선 + 4% 틴트, 범례는 항상 노출."
+         warn="팀 이름은 본문 색. 브랜드 파랑으로 칠하지 않고 행 hover로 클릭 가능함을 알린다. 폼 배지는 색 외에 승·무·패 글자를 함께 갖는다.">
+        <div className="card" style={{width:1000,maxWidth:"100%",overflow:"hidden"}}>
+          <SecHead title="EPL 2025/26" action="전체 보기"/>
+          <StandFullHead/>{ROWS.map(r=><StandFull key={r.no} r={r}/>)}
+          <div style={{padding:14,borderTop:"1px solid var(--pl-line)"}}><ZoneLegend/></div>
+        </div>
+        <Row label="모바일 축약 행 (390px) — 승점 · 폼 3경기만 남긴다">
+          <div className="mobf"><StandFullHeadMobileLabel/>{ROWS.slice(0,5).map(r=><StandMobile key={r.no} r={r}/>)}
+            <div style={{padding:12,borderTop:"1px solid var(--pl-line)"}}><ZoneLegend/></div></div>
+        </Row>
+      </G>
+      <G n="5" title="필터 바" desc="대회 · 시즌 · 팀 · 라운드 · 날짜 최대 5개. 모바일 처리 방식은 가로 스크롤 칩 + 바텀시트로 확정한다 — 접기는 활성 조건을 숨기고, 시트 단독은 현재 조건을 못 보여준다."
+         warn="적용된 필터 개수를 첫 칩에 노출한다. 시트 하단 버튼은 결과 수를 함께 말한다.">
+        <FilterBarDesk/>
+        <Row label="모바일 — 가로 스크롤 칩 / 바텀시트 열림"><FilterBarMobile/><FilterBarMobile sheet/></Row>
+      </G>
+      <G n="6" title="버튼 · 링크" desc="주요(채움) · 보조(외곽선) · 텍스트 링크. 5개 상태. 다크에서 채운 버튼의 글자는 #0B0B0D.">
+        <BtnMatrix/>
+      </G>
+      <G n="7" title="기타 반복 요소" desc="엠블럼 · 아바타 · 데이터 기준 시각 · 섹션 헤더.">
+        <Row label="팀 엠블럼 — 있을 때 / 없을 때(코드 대체)">
+          <span style={{display:"flex",gap:10,alignItems:"center"}}><Emblem t={T.liv} size={40}/><Emblem t={T.bmg} size={40} none/><Emblem t={T.liv} size={24}/><Emblem t={T.bmg} size={24} none/><Emblem t={T.liv} size={18}/><Emblem t={T.bmg} size={18} none/></span>
+        </Row>
+        <Row label="선수 아바타 — 사진 / 없음"><span style={{display:"flex",gap:10,alignItems:"center"}}><Avatar size={44}/><Avatar size={44} none/><Avatar size={32} none/><Avatar size={24} none/></span></Row>
+        <Row label="데이터 기준 시각"><Stamp/><Stamp t="21:58"/></Row>
+        <Row label="섹션 헤더 + 전체 보기"><div className="card" style={{width:420}}><SecHead title="오늘의 경기" action="전체 보기"/><div style={{padding:"0 16px 14px"}}><span className="t-sub">“전체 보기”는 표 안이 아니라 섹션 헤더에 둔다.</span></div></div></Row>
+      </G>
+      <G n="8" title="통과 조건 — 긴 팀명 × 390px" desc="브라이턴 앤 호브 알비온 / 보루시아 묀헨글라트바흐 / Borussia Mönchengladbach 를 모바일 폭에 넣는다."
+         warn="정식명은 말줄임(title 속성으로 전체 노출), 컴팩트·모바일 순위 행은 축약 사전을 쓴다. 두 방식을 한 화면에서 섞지 않는다.">
+        <Row label="기본 카드 390px 폭">
+          <CardBasic h={T.bri} a={T.bmg} hs={2} as={2} st="recheck" time="22:00 종료" comp="EPL" w={358}/>
+        </Row>
+        <Row label="좁은 카드 240px — 말줄임 발동 (전체 명칭은 title에 남는다)">
+          <CardBasic h={T.bri} a={T.bmg} hs={2} as={2} st="final" time="9월 3일" comp="EPL" w={240}/>
+          <CardHero h={T.bri} a={T.bmg} hs={2} as={2} st="final" time="종료" comp="EPL · 28R"/>
+        </Row>
+        <Row label="컴팩트 — 축약 사전 적용"><CardCompact h={T.bri} a={T.bmg} hs={2} as={2} st="final" time="9월 3일"/><CardCompact h={T.psg} a={T.rma} hs={1} as={3} st="final" time="9월 2일"/></Row>
+        <Row label="모바일 순위 행"><div className="mobf">{[ROWS[2],ROWS[3]].map(r=><StandMobile key={r.no} r={r}/>)}</div></Row>
+      </G>
+    </div>
+  </div>;
+}
+function StandFullHeadMobileLabel(){
+  return <div className="zrow t-cap" style={{gridTemplateColumns:"26px 1fr 68px 46px",height:32,padding:"0 12px 0 14px"}}>
+    <span>#</span><span>팀</span><span style={{textAlign:"center"}}>최근 3경기</span><span style={{textAlign:"right"}}>승점</span>
+  </div>;
+}
+function App(){
+  const [only,setOnly]=useState("both");
+  return <div>
+    <div style={{position:"sticky",top:0,zIndex:10,display:"flex",gap:12,alignItems:"center",padding:"14px 40px",background:"rgba(235,236,238,.9)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(112,115,124,.22)",fontFamily:"var(--font)"}}>
+      <b style={{fontSize:16}}>PitchLog · 2단계 공통 컴포넌트</b>
+      <span style={{fontSize:13,opacity:.65}}>1단계 파운데이션 값 그대로 사용</span>
+      <span className="tgl" style={{marginLeft:"auto",display:"flex",gap:2,padding:3,borderRadius:999,background:"rgba(112,115,124,.16)"}}>
+        {[["both","둘 다"],["light","라이트"],["dark","다크"]].map(([k,l])=>
+          <button key={k} onClick={()=>setOnly(k)} aria-pressed={only===k} style={{border:0,padding:"7px 14px",borderRadius:999,cursor:"pointer",font:"600 13px/1 var(--font)",background:only===k?"#3366FF":"transparent",color:only===k?"#fff":"#171719"}}>{l}</button>)}
+      </span>
+    </div>
+    {only!=="dark"&&<Sheet theme="light"/>}
+    {only!=="light"&&<Sheet theme="dark"/>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>

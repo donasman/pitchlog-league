@@ -1,8 +1,7 @@
 /**
- * 경기 카드
- * 예정 / LIVE / 종료 / 재검증 / 확정 상태를 모두 표현.
- * compact 모드는 목록, 기본 모드는 카드 레이아웃.
- * 팀명: getLocalizedName으로 현재 언어 표시.
+ * 경기 카드 — 세로 2행 레이아웃 (시안 CardBasic/CardCompact)
+ * 각 행: [팀 배지] [팀명 flex:1] [스코어]
+ * 예정 경기: 스코어 자리에 킥오프 시각
  *
  * @param {{ match:Object, compact?:boolean }} props
  */
@@ -15,82 +14,151 @@ import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
 import { isLive } from '@/utils/matchStatus'
 import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
 
+function TeamRow({ team, score, win, live, compact, locale }) {
+  const name = compact
+    ? getLocalizedShortName(team, locale) || team?.shortName || team?.name
+    : getLocalizedName(team, locale) || team?.name
+
+  const hasScore = score !== null && score !== undefined
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        minWidth: 0,
+      }}
+    >
+      <TeamBadge
+        initials={team?.initials}
+        color={team?.color}
+        size={compact ? 'xs' : 'sm'}
+        name={team?.name}
+      />
+      <span
+        className="tname"
+        style={{
+          flex: 1,
+          fontWeight: win ? 700 : 500,
+          fontSize: compact ? 13 : 14,
+          color: 'var(--pl-text)',
+        }}
+        title={getLocalizedName(team, locale) || team?.name}
+      >
+        {name}
+      </span>
+      {hasScore && (
+        <span
+          className="num"
+          style={{
+            fontWeight: win ? 700 : 600,
+            fontSize: compact ? 14 : 16,
+            color: live ? 'var(--st-neg-text)' : 'var(--pl-text)',
+            minWidth: 16,
+            textAlign: 'right',
+            flexShrink: 0,
+          }}
+        >
+          {score}
+        </span>
+      )}
+    </div>
+  )
+}
+
 export default function MatchCard({ match, compact = false }) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
 
   if (!match) return null
 
-  const live    = isLive(match.displayState)
+  const live     = isLive(match.displayState)
   const hasScore = match.score?.home !== null && match.score?.away !== null
   const homeWin  = hasScore && match.score.home > match.score.away
   const awayWin  = hasScore && match.score.away > match.score.home
 
-  const homeName  = compact
-    ? getLocalizedShortName(match.homeTeam, locale) || match.homeTeam?.shortName || match.homeTeam?.name
-    : getLocalizedName(match.homeTeam, locale) || match.homeTeam?.name
-  const awayName  = compact
-    ? getLocalizedShortName(match.awayTeam, locale) || match.awayTeam?.shortName || match.awayTeam?.name
-    : getLocalizedName(match.awayTeam, locale) || match.awayTeam?.name
+  const pad = compact ? 10 : 14
 
   return (
     <Link
       to={`/matches/${match.id}`}
-      className={`block bg-card border border-border rounded-lg hover:bg-accent transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${live ? 'border-destructive' : ''} ${compact ? 'p-3' : 'p-4'}`}
+      className="pl-card"
+      style={{
+        display: 'block',
+        padding: pad,
+        textDecoration: 'none',
+        color: 'inherit',
+        transition: 'box-shadow .12s, background .12s',
+        boxShadow: live
+          ? `inset 0 0 0 1.5px var(--st-neg), var(--sh-card)`
+          : `inset 0 0 0 1px var(--pl-line), var(--sh-card)`,
+      }}
     >
-      {!compact && (
-        <div className="flex items-center justify-between mb-3 text-xs text-muted-foreground">
-          <span>{match.round ?? match.stage}</span>
-          <MatchStatusBadge state={match.displayState} />
+      {/* 헤더: 라운드 + 상태 배지 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: compact ? 6 : 8,
+          gap: 8,
+        }}
+      >
+        <span className="t-cap" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {match.competition?.shortName ?? match.round ?? match.stage}
+        </span>
+        <MatchStatusBadge state={match.displayState} />
+      </div>
+
+      {/* 홈팀 행 */}
+      <TeamRow
+        team={match.homeTeam}
+        score={hasScore ? match.score.home : null}
+        win={homeWin}
+        live={live}
+        compact={compact}
+        locale={locale}
+      />
+
+      {/* 원정팀 행 */}
+      <div style={{ marginTop: compact ? 4 : 6 }}>
+        <TeamRow
+          team={match.awayTeam}
+          score={hasScore ? match.score.away : null}
+          win={awayWin}
+          live={live}
+          compact={compact}
+          locale={locale}
+        />
+      </div>
+
+      {/* 예정 경기: 킥오프 시각 */}
+      {!hasScore && (
+        <div
+          className="t-cap num"
+          style={{ marginTop: compact ? 4 : 6, textAlign: 'right' }}
+        >
+          {toKSTTime(match.date, locale)} · {toKSTDate(match.date, locale)}
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        {/* 홈팀 */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <TeamBadge initials={match.homeTeam?.initials} color={match.homeTeam?.color} size={compact ? 'sm' : 'md'} name={match.homeTeam?.name} />
-          <span className={`text-sm font-medium truncate ${homeWin ? 'text-foreground font-bold' : 'text-muted-foreground'}`}>
-            {homeName}
-          </span>
-        </div>
-
-        {/* 스코어 / 시각 */}
-        <div className="flex flex-col items-center gap-0.5 min-w-[64px]">
-          {hasScore ? (
-            <>
-              <span className={`text-lg font-bold tabular-nums ${live ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>
-                {match.score.home} – {match.score.away}
-              </span>
-              {compact && <MatchStatusBadge state={match.displayState} />}
-            </>
-          ) : (
-            <div className="text-center">
-              <div className="text-sm font-semibold text-foreground">{toKSTTime(match.date, locale)}</div>
-              <div className="text-xs text-muted-foreground">{toKSTDate(match.date, locale)}</div>
-            </div>
-          )}
-        </div>
-
-        {/* 원정팀 */}
-        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-          <span className={`text-sm font-medium truncate text-right ${awayWin ? 'text-foreground font-bold' : 'text-muted-foreground'}`}>
-            {awayName}
-          </span>
-          <TeamBadge initials={match.awayTeam?.initials} color={match.awayTeam?.color} size={compact ? 'sm' : 'md'} name={match.awayTeam?.name} />
-        </div>
-      </div>
-
       {/* UCL 합산 점수 */}
       {!compact && match.aggregateScore && (
-        <div className="mt-2 text-center text-xs text-muted-foreground">
+        <div
+          className="t-cap num"
+          style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--pl-line)' }}
+        >
           {t('match.aggregate')}: {match.aggregateScore.home} – {match.aggregateScore.away}
-          {match.qualifier && <span className="ml-2 text-primary">({match.qualifier})</span>}
+          {match.qualifier && (
+            <span style={{ marginLeft: 6, color: 'var(--pl-primary)' }}>({match.qualifier})</span>
+          )}
         </div>
       )}
 
       {/* 경기장 */}
       {!compact && match.venue && (
-        <div className="mt-1 text-xs text-muted-foreground/70 text-center truncate">{match.venue}</div>
+        <div className="t-cap" style={{ marginTop: 4 }}>{match.venue}</div>
       )}
     </Link>
   )

@@ -1,10 +1,15 @@
 /**
  * 공통 레이아웃 — 헤더 + 콘텐츠 + 푸터
+ * 전역 레이어: Toast · PermissionCard · AssistantFab · AssistantPanel
  */
 
 import { Outlet, ScrollRestoration } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import AppHeader from '@/components/layout/AppHeader'
+import ToastContainer from '@/components/notifications/ToastContainer'
+import PermissionCard from '@/components/notifications/PermissionCard'
+import AssistantFab from '@/components/assistant/AssistantFab'
+import AssistantPanel from '@/components/assistant/AssistantPanel'
 
 export default function AppLayout() {
   const { t } = useTranslation()
@@ -18,6 +23,14 @@ export default function AppLayout() {
         PitchLog — {t('common.mockNotice')}
       </footer>
       <ScrollRestoration />
+
+      {/* 전역 알림 레이어 */}
+      <ToastContainer />
+      <PermissionCard />
+
+      {/* AI 어시스턴트 전역 레이어 */}
+      <AssistantFab />
+      <AssistantPanel />
     </div>
   )
 }
