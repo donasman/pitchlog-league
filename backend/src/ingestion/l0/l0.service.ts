@@ -6,6 +6,7 @@
  *
  * 콜: /leagues?id= 17콜 (시즌 없이 부르면 전 시즌이 온다) + /teams 17대회 × 5시즌 = 약 100콜
  * 멱등: 전부 api_*_id 기준 upsert. 두 번 돌려도 같은 결과.
+ * 쿼리: 대회·시즌은 Prisma upsert(대회당 ≈11쿼리), 팀·경기장·참가는 batchUpsert 로 대회시즌당 3문장.
  *
  * ⚠ 커버리지 플래그는 저장만 하고 수집 조건으로 쓰지 않는다 (DATA_RULES 6장).
  */
@@ -16,6 +17,7 @@ import { IngestionRunService } from '../ingestion-run.service.js';
 import type { ApiLeague, ApiLeagueSeason, ApiTeam } from '../api-football/api-football.types.js';
 import { COMPETITIONS, SEASON_YEARS, type CatalogEntry } from './competitions.catalog.js';
 import { IngestionLayer, SeasonStatus } from '../../generated/prisma/client.js';
+import { batchUpsert } from '../../prisma/batch-upsert.js';
 
 export interface L0Summary {
   competitions: number;
@@ -53,13 +55,16 @@ export class L0Service {
       }
 
       // 2. 팀 · 경기장 · 참가 관계 — 대회시즌마다
+      // 순서가 결과를 정한다: 팀·경기장은 마지막에 쓴 시즌 값이 남으므로 오래된 시즌 → 최신 시즌,
+      // first_seen_competition_id 는 같은 시즌 안에서 displayOrder 앞선 대회. 두 번 돌려도 같은 결과가 되는 조건.
       const seasons = await this.prisma.competitionSeason.findMany({
         where: { competition: { isTracked: true }, season: { year: { in: [...SEASON_YEARS] } } },
         include: { competition: true, season: true },
+        orderBy: [{ season: { year: 'asc' } }, { competition: { displayOrder: 'asc' } }],
       });
       for (const cs of seasons) {
         try {
-          const r = await this.upsertTeamsFor(cs.id, cs.competition.apiCompetitionId, cs.season.year, cs.competition.name);
+          const r = await this.upsertTeamsFor(cs.id, cs.competition.id, cs.competition.apiCompetitionId, cs.season.year, cs.competition.name);
           summary.teams += r.teams; summary.venues += r.venues; summary.entries += r.entries;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -143,7 +148,7 @@ export class L0Service {
           update: data,
         });
       }
-    });
+    }, { timeout: 30_000 });
 
     return { competitionId: competition.id, seasons: wanted.length };
   }
@@ -166,8 +171,14 @@ export class L0Service {
     };
   }
 
-  /** /teams?league=&season= 1콜 → venues · teams · competition_entries */
-  private async upsertTeamsFor(competitionSeasonId: number, apiCompetitionId: number, year: number, label: string) {
+  /**
+   * /teams?league=&season= 1콜 → venues · teams · competition_entries — 테이블당 1문장, 총 3문장.
+   *
+   * 트랜잭션으로 묶지 않는다: 세 upsert 모두 멱등이라 중간에 끊겨도 다음 실행이 같은 결과로 수렴하고,
+   * 인터랙티브 트랜잭션은 Supabase 왕복(≈60ms)이 쌓이면 5초 한도를 넘긴다 (2026-09-07 실측).
+   * 부모-먼저 순서(SCHEMA_DESIGN 2-4)만 지키면 고아 행은 생기지 않는다.
+   */
+  private async upsertTeamsFor(competitionSeasonId: number, competitionId: number, apiCompetitionId: number, year: number, label: string) {
     const { response } = await this.api.get<ApiTeam[]>('/teams', { league: apiCompetitionId, season: year });
     if (response.length === 0) {
       // 시즌 등록 전이거나 컵 참가팀 미확정. 실패가 아니라 "아직 없음"
@@ -175,37 +186,46 @@ export class L0Service {
       return { teams: 0, venues: 0, entries: 0 };
     }
 
-    let venues = 0;
-    await this.prisma.$transaction(async (tx) => {
-      for (const { team, venue } of response) {
-        let venueId: number | null = null;
-        if (venue.id && venue.name) {
-          const v = await tx.venue.upsert({
-            where: { apiVenueId: venue.id },
-            create: { apiVenueId: venue.id, name: venue.name, city: venue.city, country: team.country, capacity: venue.capacity, surface: venue.surface, imageUrl: venue.image },
-            update: { name: venue.name, city: venue.city, country: team.country, capacity: venue.capacity, surface: venue.surface, imageUrl: venue.image },
-          });
-          venueId = v.id;
-          venues++;
-        }
-        const t = await tx.team.upsert({
-          where: { apiTeamId: team.id },
-          create: {
-            apiTeamId: team.id, name: team.name, code: team.code, country: team.country,
-            founded: team.founded, logoUrl: team.logo, venueId,
-            firstSeenCompetitionId: (await tx.competitionSeason.findUniqueOrThrow({ where: { id: competitionSeasonId }, select: { competitionId: true } })).competitionId,
-          },
-          update: { name: team.name, code: team.code, country: team.country, founded: team.founded, logoUrl: team.logo, venueId },
-        });
-        await tx.competitionEntry.upsert({
-          where: { competitionSeasonId_teamId: { competitionSeasonId, teamId: t.id } },
-          create: { competitionSeasonId, teamId: t.id },
-          update: {},
-        });
-      }
-    });
+    // 1. venues — 같은 경기장을 두 팀이 쓰는 경우(공유 구장)는 헬퍼가 dedupe 한다
+    const venueRows = response
+      .filter(({ venue }) => venue.id && venue.name)
+      .map(({ team, venue }) => ({
+        api_venue_id: venue.id as number, name: venue.name as string, city: venue.city, country: team.country,
+        capacity: venue.capacity, surface: venue.surface, image_url: venue.image,
+      }));
+    const venues = await batchUpsert<(typeof venueRows)[number], { id: number; api_venue_id: number }>(this.prisma, {
+      table: 'venues',
+      columns: { api_venue_id: 'int', name: 'text', city: 'text', country: 'text', capacity: 'int', surface: 'text', image_url: 'text' },
+      conflict: ['api_venue_id'],
+      returning: ['id', 'api_venue_id'],
+    }, venueRows);
+    const venueIdByApi = new Map(venues.returned.map((v) => [v.api_venue_id, v.id]));
 
-    this.logger.log(`${label} ${year}: 팀 ${response.length}`);
-    return { teams: response.length, venues, entries: response.length };
+    // 2. teams — first_seen_competition_id 는 최초 INSERT 때만 (update 목록에서 제외)
+    const teamRows = response.map(({ team, venue }) => ({
+      api_team_id: team.id, name: team.name, code: team.code, country: team.country, founded: team.founded, logo_url: team.logo,
+      venue_id: venue.id ? (venueIdByApi.get(venue.id) ?? null) : null,
+      first_seen_competition_id: competitionId,
+    }));
+    const teams = await batchUpsert<(typeof teamRows)[number], { id: number; api_team_id: number }>(this.prisma, {
+      table: 'teams',
+      columns: { api_team_id: 'int', name: 'text', code: 'text', country: 'text', founded: 'int', logo_url: 'text', venue_id: 'int', first_seen_competition_id: 'int' },
+      conflict: ['api_team_id'],
+      update: ['name', 'code', 'country', 'founded', 'logo_url', 'venue_id'],
+      updatedAtColumn: 'updated_at',
+      returning: ['id', 'api_team_id'],
+    }, teamRows);
+
+    // 3. competition_entries — 갱신할 컬럼이 없으니 DO NOTHING
+    const entryRows = teams.returned.map((t) => ({ competition_season_id: competitionSeasonId, team_id: t.id }));
+    const entries = await batchUpsert<(typeof entryRows)[number]>(this.prisma, {
+      table: 'competition_entries',
+      columns: { competition_season_id: 'int', team_id: 'int' },
+      conflict: ['competition_season_id', 'team_id'],
+      update: [],
+    }, entryRows);
+
+    this.logger.log(`${label} ${year}: 팀 ${teams.rows} · 경기장 ${venues.rows} · 참가 ${entries.rows}`);
+    return { teams: teams.rows, venues: venues.rows, entries: entries.rows };
   }
 }
