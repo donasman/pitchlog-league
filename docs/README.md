@@ -13,6 +13,8 @@
 | [ADR-001-NODE-BACKEND.md](./ADR-001-NODE-BACKEND.md) | NestJS 통합 백엔드 기술 결정 | **확정 결정** |
 | [BACKEND_DESIGN_REVIEW.md](./BACKEND_DESIGN_REVIEW.md) | 백엔드 설계 재검토 — 착수 전 결정 사항 | **실행 체크리스트** |
 | [BACKEND_FEATURES.md](./BACKEND_FEATURES.md) | 백엔드 기능 목록 — 데이터 계층별 분류와 Phase 배치 | **실행 체크리스트** |
+| [INGESTION_STRATEGY.md](./INGESTION_STRATEGY.md) | 수집 범위·콜 예산·백필 실행·실시간 윈도우 | **현재 기준 문서** (V2_DESIGN 3장 대체) |
+| [SCHEMA_DESIGN.md](./SCHEMA_DESIGN.md) | 테이블 정의와 설계 검토 7종 — 외래키 없는 설계 포함 | **현재 기준 문서** (V2_DESIGN 1장 구체화) |
 | [DATA_RULES.md](./DATA_RULES.md) | 데이터 판단·결정 — null 처리, 소스 규칙, 컵 라운드 정책 | **현재 기준 문서** |
 | [API_INVENTORY.md](./API_INVENTORY.md) | 내 키로 가져올 수 있는 데이터 전량 (생성) | 실측 — 스크립트가 덮어씀 |
 | [API_FIELDS_FULL.md](./API_FIELDS_FULL.md) | 엔드포인트별 전체 필드 (생성) | 실측 — 스크립트가 덮어씀 |
