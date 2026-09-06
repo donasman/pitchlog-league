@@ -43,13 +43,21 @@ jobs:
       # API 오류를 빈 데이터로 바꾸는 코드를 막는다 (CLAUDE.md 프론트엔드 규칙)
       - name: 무음 catch 검사
         run: |
+          # 주석 줄(// 또는 *)은 제외한다 — 규칙을 설명하는 주석이 규칙에 걸리면 안 된다
+          filter_comments() { grep -vE '^[^:]+:[0-9]+:\s*(//|\*|/\*)' || true; }
+
           echo "빈 catch 블록 검사"
-          if grep -rnE 'catch\s*(\([^)]*\))?\s*\{\s*\}' src --include='*.js' --include='*.jsx'; then
+          hits=$(grep -rnE 'catch\s*(\([^)]*\))?\s*\{\s*\}' src --include='*.js' --include='*.jsx' | filter_comments)
+          if [ -n "$hits" ]; then
+            echo "$hits"
             echo "::error::빈 catch 블록이 있습니다. 오류를 UI에 노출하거나 최소한 로깅하세요."
             exit 1
           fi
-          echo "오류를 null 로 바꾸는 catch 검사"
-          if grep -rnE '\.catch\(\s*\(\s*\)\s*=>\s*(null|undefined|\[\]|\{\})\s*\)' src --include='*.js' --include='*.jsx'; then
+
+          echo "오류를 빈 데이터로 바꾸는 catch 검사"
+          hits=$(grep -rnE '\.catch\(\s*\(\s*\)\s*=>\s*(null|undefined|\[\]|\{\})\s*\)' src --include='*.js' --include='*.jsx' | filter_comments)
+          if [ -n "$hits" ]; then
+            echo "$hits"
             echo "::error::오류를 빈 데이터로 바꾸고 있습니다. EmptyState 로 위장됩니다."
             exit 1
           fi
