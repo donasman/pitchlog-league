@@ -1,0 +1,744 @@
+{
+  "meta": {
+    "probedAt": "2026-09-04T08:39:17.959Z",
+    "season": 2025,
+    "lateMax": 16,
+    "calls": 100
+  },
+  "results": [
+    {
+      "cup": 45,
+      "cupName": "FA Cup",
+      "league": 39,
+      "leagueName": "Premier League",
+      "topTeamCount": 20,
+      "rounds": [
+        {
+          "name": "Extra Preliminary Round",
+          "teams": 444,
+          "matches": 222,
+          "firstDate": "2025-08-01T18:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Extra Preliminary Round Replays",
+          "teams": 102,
+          "matches": 51,
+          "firstDate": "2025-08-04T18:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Preliminary Round",
+          "teams": 272,
+          "matches": 136,
+          "firstDate": "2025-08-15T18:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Preliminary Round Replays",
+          "teams": 48,
+          "matches": 24,
+          "firstDate": "2025-08-18T18:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "1st Round Qualifying",
+          "teams": 224,
+          "matches": 112,
+          "firstDate": "2025-08-29T18:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "1st Round Qualifying Replays",
+          "teams": 46,
+          "matches": 23,
+          "firstDate": "2025-09-01T18:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "2nd Round Qualifying",
+          "teams": 158,
+          "matches": 79,
+          "firstDate": "2025-09-12T19:00:00+00:00",
+          "late": false
+        },
+        {
+          "name": "2nd Round Qualifying Replays",
+          "teams": 30,
+          "matches": 15,
+          "firstDate": "2025-09-16T18:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "3rd Round Qualifying",
+          "teams": 104,
+          "matches": 87,
+          "firstDate": "2025-09-27T11:30:00+00:00",
+          "late": false
+        },
+        {
+          "name": "1/128-finals",
+          "teams": 80,
+          "matches": 40,
+          "firstDate": "2025-10-31T19:30:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 128",
+          "teams": 40,
+          "matches": 20,
+          "firstDate": "2025-12-05T19:30:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 64",
+          "teams": 64,
+          "matches": 32,
+          "firstDate": "2026-01-09T19:30:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 32",
+          "teams": 32,
+          "matches": 16,
+          "firstDate": "2026-02-13T19:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 16",
+          "teams": 16,
+          "matches": 8,
+          "firstDate": "2026-03-06T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Quarter-finals",
+          "teams": 8,
+          "matches": 4,
+          "firstDate": "2026-04-04T11:45:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Semi-finals",
+          "teams": 4,
+          "matches": 2,
+          "firstDate": "2026-04-25T16:15:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Final",
+          "teams": 2,
+          "matches": 1,
+          "firstDate": "2026-05-16T14:00:00+00:00",
+          "late": true
+        }
+      ],
+      "total": 812,
+      "both": 9,
+      "mixed": 25,
+      "none": 778,
+      "keep": 34,
+      "keepByTier": 34,
+      "addedByLate": 0,
+      "keepPct": 4.2,
+      "samples": [
+        {
+          "label": "1부 vs 하부 (가장 이른)",
+          "fixtureId": 1490820,
+          "round": "Round of 64",
+          "date": "2026-01-10",
+          "match": "Wolves 6-1 Shrewsbury",
+          "events": 17,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이전",
+          "fixtureId": 1419291,
+          "round": "Extra Preliminary Round",
+          "date": "2025-08-01",
+          "match": "Pickering Town 3-2 Penrith AFC",
+          "events": 0,
+          "lineups": 0,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "1부 vs 1부 (가장 이른)",
+          "fixtureId": 1490818,
+          "round": "Round of 64",
+          "date": "2026-01-10",
+          "match": "Tottenham 1-2 Aston Villa",
+          "events": 17,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "cup": 48,
+      "cupName": "League Cup",
+      "league": 39,
+      "leagueName": "Premier League",
+      "topTeamCount": 20,
+      "rounds": [
+        {
+          "name": "Preliminary Round",
+          "teams": 4,
+          "matches": 2,
+          "firstDate": "2025-07-29T18:30:00+00:00",
+          "late": true
+        },
+        {
+          "name": "1st Round",
+          "teams": 70,
+          "matches": 35,
+          "firstDate": "2025-08-12T18:00:00+00:00",
+          "late": false
+        },
+        {
+          "name": "2nd Round",
+          "teams": 46,
+          "matches": 23,
+          "firstDate": "2025-08-26T18:00:00+00:00",
+          "late": false
+        },
+        {
+          "name": "3rd Round",
+          "teams": 32,
+          "matches": 16,
+          "firstDate": "2025-09-16T18:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "4th Round",
+          "teams": 16,
+          "matches": 8,
+          "firstDate": "2025-10-28T19:45:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Quarter-finals",
+          "teams": 8,
+          "matches": 4,
+          "firstDate": "2025-12-16T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Semi-finals",
+          "teams": 4,
+          "matches": 4,
+          "firstDate": "2026-01-13T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Final",
+          "teams": 2,
+          "matches": 1,
+          "firstDate": "2026-03-22T16:30:00+00:00",
+          "late": true
+        }
+      ],
+      "total": 73,
+      "both": 14,
+      "mixed": 17,
+      "none": 42,
+      "keep": 33,
+      "keepByTier": 31,
+      "addedByLate": 2,
+      "keepPct": 45.2,
+      "samples": [
+        {
+          "label": "1부 vs 하부 (가장 이른)",
+          "fixtureId": 1436801,
+          "round": "2nd Round",
+          "date": "2025-08-26",
+          "match": "Burnley 2-1 Derby",
+          "events": 14,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이상",
+          "fixtureId": 1393256,
+          "round": "Preliminary Round",
+          "date": "2025-08-05",
+          "match": "Accrington ST 3-1 Oldham",
+          "events": 16,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이전",
+          "fixtureId": 1393285,
+          "round": "1st Round",
+          "date": "2025-08-12",
+          "match": "Swansea 3-1 Crawley Town",
+          "events": 16,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "1부 vs 1부 (가장 이른)",
+          "fixtureId": 1436269,
+          "round": "2nd Round",
+          "date": "2025-08-26",
+          "match": "Wolves 3-2 West Ham",
+          "events": 16,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "cup": 143,
+      "cupName": "Copa del Rey",
+      "league": 140,
+      "leagueName": "LaLiga",
+      "topTeamCount": 20,
+      "rounds": [
+        {
+          "name": "1/128-finals",
+          "teams": 20,
+          "matches": 20,
+          "firstDate": "2025-09-27T14:30:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 128",
+          "teams": 112,
+          "matches": 56,
+          "firstDate": "2025-10-28T18:00:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 64",
+          "teams": 56,
+          "matches": 28,
+          "firstDate": "2025-12-02T18:00:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 32",
+          "teams": 32,
+          "matches": 16,
+          "firstDate": "2025-12-16T18:00:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 16",
+          "teams": 16,
+          "matches": 8,
+          "firstDate": "2026-01-13T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Quarter-finals",
+          "teams": 8,
+          "matches": 4,
+          "firstDate": "2026-02-03T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Semi-finals",
+          "teams": 4,
+          "matches": 4,
+          "firstDate": "2026-02-11T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Final",
+          "teams": 2,
+          "matches": 1,
+          "firstDate": "2026-04-18T19:00:00+00:00",
+          "late": true
+        }
+      ],
+      "total": 108,
+      "both": 10,
+      "mixed": 40,
+      "none": 58,
+      "keep": 50,
+      "keepByTier": 50,
+      "addedByLate": 0,
+      "keepPct": 46.3,
+      "samples": [
+        {
+          "label": "1부 vs 하부 (가장 이른)",
+          "fixtureId": 1480743,
+          "round": "Round of 128",
+          "date": "2025-10-28",
+          "match": "Maracena 0-5 Valencia",
+          "events": 15,
+          "lineups": 2,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이전",
+          "fixtureId": 1477538,
+          "round": "1/128-finals",
+          "date": "2025-09-27",
+          "match": "Sant Just 3-0 Atletico Calatayud",
+          "events": 3,
+          "lineups": 0,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "1부 vs 1부 (가장 이른)",
+          "fixtureId": 1490974,
+          "round": "Round of 32",
+          "date": "2025-12-17",
+          "match": "Alaves 1-0 Sevilla",
+          "events": 14,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "cup": 81,
+      "cupName": "DFB Pokal",
+      "league": 78,
+      "leagueName": "Bundesliga",
+      "topTeamCount": 19,
+      "rounds": [
+        {
+          "name": "1st Round",
+          "teams": 64,
+          "matches": 32,
+          "firstDate": "2025-08-15T16:00:00+00:00",
+          "late": false
+        },
+        {
+          "name": "2nd Round",
+          "teams": 32,
+          "matches": 16,
+          "firstDate": "2025-10-28T17:30:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 16",
+          "teams": 16,
+          "matches": 8,
+          "firstDate": "2025-12-02T17:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Quarter-finals",
+          "teams": 8,
+          "matches": 4,
+          "firstDate": "2026-02-03T19:45:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Semi-finals",
+          "teams": 4,
+          "matches": 2,
+          "firstDate": "2026-04-22T18:45:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Final",
+          "teams": 2,
+          "matches": 1,
+          "firstDate": "2026-05-23T18:00:00+00:00",
+          "late": true
+        }
+      ],
+      "total": 49,
+      "both": 10,
+      "mixed": 25,
+      "none": 14,
+      "keep": 36,
+      "keepByTier": 35,
+      "addedByLate": 1,
+      "keepPct": 73.5,
+      "samples": [
+        {
+          "label": "1부 vs 하부 (가장 이른)",
+          "fixtureId": 1378938,
+          "round": "1st Round",
+          "date": "2025-08-15",
+          "match": "SG Sonnenhof Grossaspach 0-4 Bayer Leverkusen",
+          "events": 21,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이상",
+          "fixtureId": 1485261,
+          "round": "Round of 16",
+          "date": "2025-12-02",
+          "match": "Hertha BSC 6-1 1. FC Kaiserslautern",
+          "events": 21,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이전",
+          "fixtureId": 1378954,
+          "round": "1st Round",
+          "date": "2025-08-15",
+          "match": "FC Saarbrücken 1-3 1. FC Magdeburg",
+          "events": 17,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "1부 vs 1부 (가장 이른)",
+          "fixtureId": 1463461,
+          "round": "2nd Round",
+          "date": "2025-10-28",
+          "match": "1. FC Heidenheim 0-1 Hamburger SV",
+          "events": 17,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "cup": 137,
+      "cupName": "Coppa Italia",
+      "league": 135,
+      "leagueName": "Serie A",
+      "topTeamCount": 20,
+      "rounds": [
+        {
+          "name": "Preliminary Round",
+          "teams": 8,
+          "matches": 4,
+          "firstDate": "2025-08-09T18:30:00+00:00",
+          "late": true
+        },
+        {
+          "name": "1st Round",
+          "teams": 32,
+          "matches": 16,
+          "firstDate": "2025-08-15T16:00:00+00:00",
+          "late": false
+        },
+        {
+          "name": "2nd Round",
+          "teams": 16,
+          "matches": 8,
+          "firstDate": "2025-09-23T15:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "3rd Round",
+          "teams": 16,
+          "matches": 8,
+          "firstDate": "2025-12-02T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Quarter-finals",
+          "teams": 8,
+          "matches": 4,
+          "firstDate": "2026-02-04T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Semi-finals",
+          "teams": 4,
+          "matches": 4,
+          "firstDate": "2026-03-03T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Final",
+          "teams": 2,
+          "matches": 1,
+          "firstDate": "2026-05-13T19:00:00+00:00",
+          "late": true
+        }
+      ],
+      "total": 33,
+      "both": 15,
+      "mixed": 12,
+      "none": 6,
+      "keep": 31,
+      "keepByTier": 27,
+      "addedByLate": 4,
+      "keepPct": 93.9,
+      "samples": [
+        {
+          "label": "1부 vs 하부 (가장 이른)",
+          "fixtureId": 1393800,
+          "round": "1st Round",
+          "date": "2025-08-15",
+          "match": "Sassuolo 1-0 Catanzaro",
+          "events": 11,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이상",
+          "fixtureId": 1393795,
+          "round": "Preliminary Round",
+          "date": "2025-08-09",
+          "match": "Virtus Entella 4-0 Ternana",
+          "events": 14,
+          "lineups": 2,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이전",
+          "fixtureId": 1393802,
+          "round": "1st Round",
+          "date": "2025-08-16",
+          "match": "Venezia 4-0 Mantova",
+          "events": 19,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "1부 vs 1부 (가장 이른)",
+          "fixtureId": 1446012,
+          "round": "2nd Round",
+          "date": "2025-09-23",
+          "match": "AC Milan 3-0 Lecce",
+          "events": 18,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    },
+    {
+      "cup": 66,
+      "cupName": "Coupe de France",
+      "league": 61,
+      "leagueName": "Ligue 1",
+      "topTeamCount": 19,
+      "rounds": [
+        {
+          "name": "1/128-finals",
+          "teams": 184,
+          "matches": 92,
+          "firstDate": "2025-11-14T19:00:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 128",
+          "teams": 92,
+          "matches": 46,
+          "firstDate": "2025-11-28T18:30:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 64",
+          "teams": 64,
+          "matches": 32,
+          "firstDate": "2025-12-19T19:45:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 32",
+          "teams": 32,
+          "matches": 16,
+          "firstDate": "2026-01-10T14:30:00+00:00",
+          "late": false
+        },
+        {
+          "name": "Round of 16",
+          "teams": 16,
+          "matches": 8,
+          "firstDate": "2026-02-03T19:30:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Quarter-finals",
+          "teams": 8,
+          "matches": 4,
+          "firstDate": "2026-03-03T20:00:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Semi-finals",
+          "teams": 4,
+          "matches": 2,
+          "firstDate": "2026-04-21T19:10:00+00:00",
+          "late": true
+        },
+        {
+          "name": "Final",
+          "teams": 2,
+          "matches": 1,
+          "firstDate": "2026-05-22T19:00:00+00:00",
+          "late": true
+        }
+      ],
+      "total": 147,
+      "both": 10,
+      "mixed": 27,
+      "none": 110,
+      "keep": 38,
+      "keepByTier": 37,
+      "addedByLate": 1,
+      "keepPct": 25.9,
+      "samples": [
+        {
+          "label": "1부 vs 하부 (가장 이른)",
+          "fixtureId": 1485845,
+          "round": "1/128-finals",
+          "date": "2025-11-15",
+          "match": "Quetigny 1-3 Saint Etienne",
+          "events": 4,
+          "lineups": 2,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이상",
+          "fixtureId": 1506882,
+          "round": "Round of 16",
+          "date": "2026-02-03",
+          "match": "Reims 3-0 Le Mans",
+          "events": 16,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        },
+        {
+          "label": "하부 vs 하부 · 16강 이전",
+          "fixtureId": 1485809,
+          "round": "1/128-finals",
+          "date": "2025-11-14",
+          "match": "Cannes 1-2 Annecy",
+          "events": 3,
+          "lineups": 2,
+          "stats_fixture": 0,
+          "stats_player": 0
+        },
+        {
+          "label": "1부 vs 1부 (가장 이른)",
+          "fixtureId": 1488849,
+          "round": "Round of 64",
+          "date": "2025-12-21",
+          "match": "Nice 2-1 Saint Etienne",
+          "events": 12,
+          "lineups": 2,
+          "stats_fixture": 2,
+          "stats_player": 2
+        }
+      ]
+    }
+  ]
+}
