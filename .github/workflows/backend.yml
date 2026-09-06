@@ -1,0 +1,108 @@
+name: backend
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pitchlog_test
+  NODE_ENV: test
+  PORT: 3000
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    # 외래키가 없으므로 고아 행 검사(e2e)가 참조 무결성의 유일한 자동 검증이다.
+    # 실제 PostgreSQL 에 스키마를 올려 마이그레이션·partial index·e2e 까지 돌린다.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pitchlog_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: backend/.nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: prisma validate
+        run: npx prisma validate
+
+      # 마이그레이션이 있으면 그걸로, 아직 없으면 스키마를 직접 올린다.
+      # init 마이그레이션(--create-only + partial-indexes.sql)이 생기면 자동으로 migrate 경로를 탄다.
+      - name: 스키마 적용
+        run: |
+          if [ -d prisma/migrations ] && [ -n "$(ls -A prisma/migrations 2>/dev/null)" ]; then
+            echo "migrate deploy"
+            npx prisma migrate deploy
+          else
+            echo "db push (마이그레이션 없음)"
+            npx prisma db push --skip-generate --accept-data-loss
+          fi
+
+      # partial unique index 3개 — Prisma 가 표현 못 하는 것. IF NOT EXISTS 라 중복 적용 안전
+      - name: partial index 적용
+        run: npx prisma db execute --file prisma/sql/partial-indexes.sql
+
+      - name: partial index 존재 확인
+        run: |
+          cat > /tmp/check.sql <<'SQL'
+          DO $$
+          DECLARE missing text[];
+          BEGIN
+            SELECT array_agg(n) INTO missing FROM unnest(ARRAY[
+              'competition_seasons_current_uq',
+              'squad_entries_current_uq',
+              'coach_tenures_current_uq'
+            ]) AS n WHERE NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = n);
+            IF missing IS NOT NULL THEN
+              RAISE EXCEPTION 'partial unique index 누락: %', missing;
+            END IF;
+          END $$;
+          SQL
+          npx prisma db execute --file /tmp/check.sql
+
+      - run: npx prisma generate
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: lint
+        run: npm run lint
+
+      - name: 단위 테스트
+        run: npm run test
+
+      - name: e2e — 헬스체크 + 고아 행 검사
+        run: npm run test:e2e
