@@ -50,8 +50,9 @@ backend/src
 partial unique index 3개(`competition_seasons` · `squad_entries` · `coach_tenures`)는
 Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴다 — `prisma/sql/partial-indexes.sql`.
 
-`relationMode = "prisma"` 에서 `onDelete: NoAction` 은 **Restrict 로 에뮬레이션된다.**
-Prisma Client 로 부모를 지우면 자식 확인 SELECT 가 먼저 나가고 있으면 에러다.
+`relationMode = "prisma"` + PostgreSQL 은 `NoAction` 을 **허용하지 않는다** (`Cascade`·`Restrict`·`SetNull` 만).
+전 관계에 `Restrict` 를 명시한다. Restrict 는 에뮬레이션이라 Prisma Client 로 부모를 지우면
+자식 확인 SELECT 가 먼저 나가고 있으면 에러다.
 안전장치로 두되, 보관 정책의 대량 삭제는 `$executeRaw` 로 순서대로 직접 한다.
 
 고아 행 검사는 `IntegrityService` (`src/prisma/integrity.service.ts`) — 관계 18개.

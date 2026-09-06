@@ -4,11 +4,11 @@
 // 규칙 (docs/BACKEND_GUIDE.md):
 //   1. 외래키를 만들지 않는다 — relationMode = "prisma". 무결성은 애플리케이션 책임
 //   2. 다른 테이블의 ID 를 담는 모든 컬럼에 @@index 를 명시한다. 예외 없다
-//   3. 모든 @relation 은 onDelete/onUpdate: NoAction 을 명시한다.
-//      ⚠ relationMode="prisma" 에서 NoAction 은 Restrict 로 에뮬레이션된다 —
-//      Prisma Client 로 부모를 지우면 자식 존재 확인 SELECT 가 먼저 나가고, 있으면 에러다.
-//      이건 안전장치로 두되, 보관 정책의 대량 삭제는 SCHEMA_DESIGN 2-5 순서대로
-//      $executeRaw 로 직접 한다 (에뮬레이션 쿼리를 피한다)
+//   3. 모든 @relation 은 onDelete/onUpdate: Restrict 를 명시한다.
+//      relationMode="prisma" + PostgreSQL 은 NoAction 을 허용하지 않는다 (Cascade·Restrict·SetNull 만).
+//      Restrict 는 에뮬레이션이다 — Prisma Client 로 부모를 지우면 자식 존재 확인 SELECT 가
+//      먼저 나가고, 있으면 에러다. 안전장치로 두되, 보관 정책의 대량 삭제는
+//      SCHEMA_DESIGN 2-5 순서대로 $executeRaw 로 직접 한다 (에뮬레이션 쿼리를 피한다)
 //   4. DB 는 snake_case, 모델은 PascalCase + @@map / @map
 //   5. partial unique index 3개는 Prisma 로 표현되지 않는다 → prisma/sql/partial-indexes.sql
 //      (competition_seasons.is_current · squad_entries.valid_to · coach_tenures.valid_to)
@@ -168,7 +168,7 @@ model Competition {
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  topFlight        Competition?      @relation("TopFlight", fields: [topFlightCompetitionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topFlight        Competition?      @relation("TopFlight", fields: [topFlightCompetitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   cups             Competition[]     @relation("TopFlight")
   seasons          CompetitionSeason[]
 
@@ -208,8 +208,8 @@ model CompetitionSeason {
   createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competition      Competition     @relation(fields: [competitionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  season           Season          @relation(fields: [seasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competition      Competition     @relation(fields: [competitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  season           Season          @relation(fields: [seasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   rounds           CompetitionRound[]
   entries          CompetitionEntry[]
   matches          Match[]
@@ -246,7 +246,7 @@ model CompetitionRound {
   hasTopFlight        Boolean  @default(false) @map("has_top_flight")
   firstKickoffAt      DateTime? @map("first_kickoff_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   matches             Match[]
   ties                KnockoutTie[]
   slots               BracketSlot[]
@@ -287,7 +287,7 @@ model Team {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  venue      Venue?  @relation(fields: [venueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  venue      Venue?  @relation(fields: [venueId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   entries    CompetitionEntry[]
   squadEntries SquadEntry[]
   coachTenures CoachTenure[]
@@ -308,8 +308,8 @@ model CompetitionEntry {
   competitionSeasonId Int @map("competition_season_id")
   teamId              Int @map("team_id")
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  team                Team @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team                Team @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, teamId])
   @@index([teamId])
@@ -381,8 +381,8 @@ model SquadEntry {
   /// 임대 시 원소속
   parentTeamId Int?         @map("parent_team_id")
 
-  player       Player       @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  team         Team         @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  player       Player       @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([teamId, seasonYear])
   @@index([playerId])
@@ -413,8 +413,8 @@ model CoachTenure {
   validTo    DateTime? @map("valid_to") @db.Date
   observedAt DateTime  @map("observed_at") @db.Timestamptz(6)
 
-  coach      Coach     @relation(fields: [coachId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  team       Team      @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  coach      Coach     @relation(fields: [coachId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team       Team      @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([coachId])
   @@index([teamId])
@@ -469,12 +469,12 @@ model Match {
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  venue               Venue?    @relation(fields: [venueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  homeTeam            Team      @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  awayTeam            Team      @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tie                 KnockoutTie? @relation(fields: [tieId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  venue               Venue?    @relation(fields: [venueId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  homeTeam            Team      @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  awayTeam            Team      @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  tie                 KnockoutTie? @relation(fields: [tieId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   events              MatchEvent[]
   lineups             MatchLineup[]
   lineupEntries       LineupEntry[]
@@ -511,8 +511,8 @@ model KnockoutTie {
   status              TieStatus  @default(SCHEDULED)
   updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   matches             Match[]
   slots               BracketSlot[]
 
@@ -540,10 +540,10 @@ model BracketSlot {
   /// "Round of 32 승자" · "예선 통과"
   placeholderLabel    String?   @map("placeholder_label")
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  match               Match?    @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tie                 KnockoutTie? @relation(fields: [tieId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  match               Match?    @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  tie                 KnockoutTie? @relation(fields: [tieId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, roundId, slotIndex])
   @@index([matchId])
@@ -573,9 +573,9 @@ model MatchEvent {
   detail         String?
   comments       String?
 
-  match          Match   @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  player         Player? @relation("EventPlayer", fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  assist         Player? @relation("EventAssist", fields: [assistPlayerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  match          Match   @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player         Player? @relation("EventPlayer", fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  assist         Player? @relation("EventAssist", fields: [assistPlayerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, seq])
   @@index([matchId, minute])
@@ -592,8 +592,8 @@ model MatchLineup {
   formation String?
   coachId   Int?    @map("coach_id")
 
-  match     Match   @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  coach     Coach?  @relation(fields: [coachId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  match     Match   @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  coach     Coach?  @relation(fields: [coachId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, teamId])
   @@index([coachId])
@@ -612,8 +612,8 @@ model LineupEntry {
   grid         String?
   isStarter    Boolean @map("is_starter")
 
-  match        Match   @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  player       Player  @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  match        Match   @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player       Player  @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, playerId])
   @@index([matchId, teamId, isStarter])
@@ -648,7 +648,7 @@ model TeamMatchStat {
   expectedGoals    Decimal? @map("expected_goals") @db.Decimal(5, 2)
   goalsPrevented   Decimal? @map("goals_prevented") @db.Decimal(5, 2)
 
-  match            Match    @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  match            Match    @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, teamId])
   @@index([teamId])
@@ -701,8 +701,8 @@ model PlayerMatchStat {
   penaltySaved        Int      @default(0) @map("penalty_saved")
   offsides            Int      @default(0)
 
-  match               Match    @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  player              Player   @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  match               Match    @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player              Player   @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, playerId])
   @@index([playerId, competitionSeasonId])
@@ -751,8 +751,8 @@ model Standing {
   asOf                DateTime @map("as_of") @db.Timestamptz(6)
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  team                Team     @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team                Team     @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, teamId, groupName])
   @@index([competitionSeasonId, rank])
@@ -786,8 +786,8 @@ model PlayerSeasonStat {
   source              StatsSource @default(AGGREGATED)
   asOf                DateTime    @map("as_of") @db.Timestamptz(6)
 
-  player              Player      @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  player              Player      @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([playerId, teamId, competitionSeasonId])
   @@index([competitionSeasonId, goals(sort: Desc)])
@@ -828,8 +828,8 @@ model TeamSeasonStat {
   cards               Json?
   asOf                DateTime @map("as_of") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  team                Team     @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team                Team     @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, teamId])
   @@index([teamId])
@@ -847,8 +847,8 @@ model TopRanking {
   value               Int
   asOf                DateTime        @map("as_of") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  player              Player          @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player              Player          @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, category, rank])
   @@index([playerId])
@@ -871,9 +871,9 @@ model Injury {
   fixtureDate         DateTime @map("fixture_date") @db.Date
   asOf                DateTime @map("as_of") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  player              Player   @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  match               Match?   @relation(fields: [matchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player              Player   @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  match               Match?   @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([playerId, competitionSeasonId, fixtureDate])
   @@index([teamId])
@@ -894,7 +894,7 @@ model BackfillJob {
   startedAt           DateTime?     @map("started_at") @db.Timestamptz(6)
   updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([cursorMatchId])
   @@map("backfill_jobs")
