@@ -866,6 +866,17 @@ $25/월. 8GB에 일 백업 7일치가 붙는다.
 
 ## 11. 마이그레이션 순서
 
+> **2026-09-06 개정.** 아래 6단계 분할은 그린필드 DB 에서는 실익이 없고 스키마 파일을
+> 6번 나눠 적용해야 해서 오히려 위험하다. **초기 마이그레이션 1개**로 간다.
+>
+> ```bash
+> npx prisma migrate dev --create-only --name init
+> #  → prisma/migrations/<ts>_init/migration.sql 끝에 prisma/sql/partial-indexes.sql 을 붙인다
+> npx prisma migrate dev
+> ```
+>
+> 분할 순서는 **이후 변경**의 단위로만 참고한다. 표의 그룹이 곧 모듈 경계다.
+
 Prisma migration을 이 순서로 쪼갠다. 각 단계가 독립적으로 배포 가능해야 한다.
 
 | # | 이름 | 내용 |
