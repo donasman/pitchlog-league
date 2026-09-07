@@ -11,6 +11,8 @@ import { L2Module } from './ingestion/l2/l2.module.js';
 import { LogoModule } from './ingestion/logos/logo.module.js';
 import { CompetitionModule } from './competition/competition.module.js';
 import { TeamModule } from './team/team.module.js';
+import { MatchModule } from './match/match.module.js';
+import { StandingModule } from './standing/standing.module.js';
 
 /**
  * 모듈 경계 (BACKEND_GUIDE):
@@ -37,6 +39,8 @@ import { TeamModule } from './team/team.module.js';
     LogoModule,
     CompetitionModule,
     TeamModule,
+    MatchModule,
+    StandingModule,
   ],
 })
 export class AppModule {}
