@@ -159,7 +159,7 @@ v1의 주차 단위(`v0.2-wk2`) 대신 **Phase 기반**으로 태그한다 (V2_D
 # main에 Phase 완료 내용이 머지된 시점에 실행
 git checkout main
 git pull origin main
-git tag -a v0-phase0 -m "Phase 0: 안전장치 + 배포 PoC 완료"
+git tag -a v0-phase0 -m "Phase 0: 안전장치 + 배포 완료"
 git push origin v0-phase0
 ```
 
@@ -179,7 +179,7 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
 - Prisma migration을 DB 구조의 단일 기준으로 사용
 - 테스트는 vitest·Supertest와 PostgreSQL 테스트 환경 사용 (e2e 는 같은 DB 를 쓰므로 파일 병렬 끔)
 - 외부 API 호출에는 timeout·호출 제한·제한된 retry·backoff 적용
-- Redis·BullMQ는 대량 작업 또는 다중 인스턴스 확장 시에만 도입
+- Redis·BullMQ는 다중 인스턴스 확장 시에만 도입. **5개년 백필도 안 쓴다** — `backfill_jobs` 체크포인트 + 단일 루프 (09-07)
 
 ### Frontend (JavaScript)
 
@@ -234,9 +234,9 @@ API-Football API 키는 환경변수로만 주입한다.
 
 | Phase | 내용 | 검증 기준 | 상태 |
 |---|---|---|---|
-| **0** | 안전장치 + 배포 PoC (프로덕션 코드 없음) | 8-2 DoD 4항목 | 🚧 CI·Ruleset·pre-commit·Supabase·스켈레톤 완료 / 배포 PoC 만 남음 |
+| **0** | 안전장치 + 배포 (PoC 는 재정의 — Railway + Pages + CORS) | 8-2 DoD 4항목 | 🚧 CI·Ruleset·pre-commit·Supabase·스켈레톤 완료 / 배포는 `NEXT_STEPS` 1장 4번 |
 | **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — 스키마 29테이블 · L0 · 조회 API 4개 · 백업·복원 리허설 · **L1 스쿼드**(155팀·선수 4,863, 테스트 21건) / L1 #9~#11 남음 |
-| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 | 실제 라운드 1회 무중단 관측 | 🔲 대기 |
+| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | 🚧 **L2-a 현재 시즌 적재(09-07)** / 백필-1 → 상세 → L4 순 (`NEXT_STEPS` 1장) |
 | **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 (화면·i18n 완료 · **실 API 첫 연결**(대회·팀) / 나머지 화면 전환·배포 미착수) |
 | **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🔲 대기 |
 
@@ -252,7 +252,8 @@ Phase 3은 백엔드보다 먼저 Mock Data 기반으로 진행했다. `services
 **`VITE_USE_MOCK` 으로 `mock.js`·`live.js` 중 하나를 고르는 전환 스위치**다 (09-07).
 대회·팀은 실 API 를 타고, 경기·순위·선수는 백엔드에 아직 없어 `NotImplementedError` 로 드러난다.
 남은 것은 나머지 화면의 실 API 전환과 배포다.
-현재 진행 상황과 다음 순서는 `docs/NEXT_STEPS.md`가 기준이다.
+**09-07 중간 점검(`docs/PLAN_REVIEW.md`)** 이 순서를 확정했다 — 기록 백필 먼저, 실시간은 그 뒤.
+현재 진행 상황과 다음 순서는 `docs/NEXT_STEPS.md` 1장이 기준이다.
 
 ---
 

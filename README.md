@@ -4,7 +4,7 @@
 검증 가능한 통계 조회를 제공하는 축구 데이터 서비스입니다.
 
 - 범위: **12대회 × 최근 5시즌** — 5대 리그 + UCL + 국내 컵 6개 (2026-09-04 확정)
-- 현재: 6대회 2026 시즌 적재 완료 (팀 155 · 선수 4,863)
+- 현재: 6대회 2026 시즌 적재 — 팀 155 · 선수 4,863 · 경기 1,930 · 순위 132 (2026-09-07). 다음 순서는 [docs/NEXT_STEPS.md](./docs/NEXT_STEPS.md) 1장
 - 프론트엔드: React + Vite + JavaScript + Tailwind CSS + shadcn/ui
 - 백엔드: NestJS + TypeScript + PostgreSQL + Prisma
 - 실시간: NestJS WebSocket Gateway + Socket.io → 브라우저

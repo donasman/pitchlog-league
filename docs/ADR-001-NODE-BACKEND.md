@@ -15,7 +15,7 @@ PitchLog 백엔드는 **NestJS + TypeScript 기반 모듈형 모놀리스**로 �
 - 일반 API: NestJS REST Controller
 - 실시간: NestJS WebSocket Gateway + Socket.io
 - 단기 스케줄: `@nestjs/schedule`
-- 대량·재시작 가능 작업: Redis + BullMQ Worker(필요 시 도입)
+- 대량·재시작 가능 작업: DB 체크포인트(`backfill_jobs`) 위의 단일 루프. Redis + BullMQ 는 다중 인스턴스가 필요해질 때만 (2026-09-07 확정)
 - 입력 검증: DTO + ValidationPipe
 - API 명세: OpenAPI/Swagger
 - 테스트: vitest + Supertest (Nest 12 기본. 2026-09-06 스켈레톤에서 확정)

@@ -73,6 +73,9 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 
 - 다음 주기에 다시 실행해도 되는 짧은 작업은 NestJS Scheduler를 사용한다.
 - 수백 건 처리, 진행률, 실패 지점 재개가 필요하면 BullMQ Job으로 승격한다.
+  **단 5개년 백필은 승격하지 않는다 (2026-09-07)** — `backfill_jobs` 가 DB 체크포인트라 단일 루프로 충분하다.
+  워커는 `/status` 를 읽어 **일일 상한(5,700콜)** 을 스스로 지킨다 (`INGESTION_STRATEGY.md` 5-1).
+- 경기 상세 워커는 백필이 끝난 뒤에도 같은 코드로 "어제 끝난 경기" 를 하루 1회 받는다. L4 실시간은 그 뒤에 얹는다.
 - 스케줄러와 Worker의 중복 실행을 막는 lock·job key를 둔다.
 - API 호출 제한, timeout, 제한된 retry와 exponential backoff를 공통 HTTP client에 적용한다.
 
