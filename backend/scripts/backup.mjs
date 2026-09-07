@@ -24,7 +24,7 @@
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
-import { mkdir, readdir, stat, unlink, appendFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, stat, unlink, appendFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -41,6 +41,9 @@ loadEnv({ path: join(BACKEND_DIR, '.env') })
 const KEEP_RECENT = 8
 const KEEP_MONTHLY = 12
 
+/** 마지막 성공이 이보다 오래됐으면 경고한다. 주 1회 기준 + 하루 여유 */
+const STALE_DAYS = 8
+
 /** 서버보다 낮으면 덤프가 거부된다. 서버가 더 올라가면 이 값을 올린다 */
 const DEFAULT_PG_IMAGE = 'postgres:17'
 
@@ -49,9 +52,46 @@ const PG_ENV_KEYS = ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', '
 
 const checkOnly = process.argv.slice(2).includes('--check')
 
+/** 실패는 한 곳(맨 아래)에서 처리한다 — 로그를 남기고 나가야 해서 즉시 종료하지 않는다 */
+class BackupError extends Error {}
+
 function fail(message) {
-  console.error(`\n✗ ${message}\n`)
-  process.exit(1)
+  throw new BackupError(message)
+}
+
+function backupDir() {
+  return process.env.BACKUP_DIR
+    ? resolve(process.env.BACKUP_DIR)
+    : join(homedir(), 'PitchLogBackups')
+}
+
+const LOG_NAME = 'backup.log'
+
+async function logLine(line) {
+  const dir = backupDir()
+  await mkdir(dir, { recursive: true })
+  await appendFile(join(dir, LOG_NAME), `${new Date().toISOString()} ${line}\n`)
+}
+
+/**
+ * 마지막 성공 이후 며칠 지났는지. 로그가 없으면 null.
+ * 수동 실행이라 "언제 마지막으로 받았더라" 를 사람이 기억해야 하는데, 그게 안 된다.
+ */
+async function daysSinceLastOk() {
+  let text
+  try {
+    text = await readFile(join(backupDir(), LOG_NAME), 'utf8')
+  } catch {
+    // 로그가 없으면 아직 한 번도 안 받은 것 — 경고할 이력 자체가 없다
+    return null
+  }
+  const last = text
+    .split('\n')
+    .filter((l) => l.includes(' ok '))
+    .pop()
+  if (!last) return null
+  const at = Date.parse(last.slice(0, last.indexOf(' ')))
+  return Number.isNaN(at) ? null : (Date.now() - at) / 86_400_000
 }
 
 function versionOf(command) {
@@ -132,16 +172,20 @@ function safeUrl(url) {
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL
-  const backupDir = process.env.BACKUP_DIR
-    ? resolve(process.env.BACKUP_DIR)
-    : join(homedir(), 'PitchLogBackups')
-
+  const dir = backupDir()
   const runner = chooseRunner()
+  const stale = await daysSinceLastOk()
 
   console.log('환경 점검')
   console.log(`  실행 방식     ${runner ? `${runner.kind} — ${runner.label}` : '없음'}`)
   console.log(`  DATABASE_URL ${databaseUrl ? safeUrl(databaseUrl) : '없음'}`)
-  console.log(`  저장 위치     ${backupDir}`)
+  console.log(`  저장 위치     ${dir}`)
+  console.log(`  마지막 성공   ${stale === null ? '없음' : `${stale.toFixed(1)}일 전`}`)
+
+  // 수동 실행이라 잊는 것이 가장 흔한 실패 방식이다
+  if (stale !== null && stale > STALE_DAYS) {
+    console.warn(`\n⚠ 마지막 백업이 ${stale.toFixed(0)}일 전이다. 주 1회를 넘겼다.`)
+  }
 
   if (!runner) {
     fail(
@@ -173,8 +217,8 @@ async function main() {
     fail(`DATABASE_URL 을 해석하지 못했다: ${cause.message}`)
   }
 
-  await mkdir(backupDir, { recursive: true })
-  const outPath = join(backupDir, `pitchlog-${stamp()}.dump`)
+  await mkdir(dir, { recursive: true })
+  const outPath = join(dir, `pitchlog-${stamp()}.dump`)
 
   console.log(`\n덤프 시작 → ${outPath}`)
   const startedAt = Date.now()
@@ -199,13 +243,10 @@ async function main() {
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1)
   console.log(`\n✓ ${human(size)} · ${elapsed}초`)
 
-  const removed = await rotate(backupDir)
+  const removed = await rotate(dir)
   if (removed.length > 0) console.log(`  오래된 백업 ${removed.length}개 삭제`)
 
-  await appendFile(
-    join(backupDir, 'backup.log'),
-    `${new Date().toISOString()} ok ${outPath} ${size} ${elapsed}s removed=${removed.length}\n`,
-  )
+  await logLine(`ok ${outPath} ${size}B ${elapsed}s removed=${removed.length}`)
 }
 
 async function runDump(runner, pgEnv, outPath) {
@@ -278,4 +319,14 @@ async function rotate(dir) {
   return removed
 }
 
-await main()
+try {
+  await main()
+} catch (cause) {
+  const message = cause instanceof BackupError ? cause.message : (cause?.stack ?? String(cause))
+  console.error(`\n✗ ${message}\n`)
+  // 실패를 남기지 않으면 몇 주째 백업이 없는 것을 모른다
+  await logLine(`fail ${message.split('\n')[0]}`).catch(() => {
+    console.error('  (로그에 실패를 남기지 못했다)')
+  })
+  process.exit(1)
+}
