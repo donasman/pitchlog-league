@@ -105,9 +105,17 @@ describe('L0 적재 (e2e, 가짜 API)', () => {
   }, 60_000);
 
   afterAll(async () => {
-    await app.close();
+    // beforeAll 이 가드에서 죽으면 app 이 없다. 여기서 또 던지면 진짜 원인이 가려진다
+    await app?.close();
   });
 
+  /**
+   * ⚠ 여기의 카운트는 **전역**이다 — 이 파일이 만든 것만 세지 않는다.
+   * 다른 e2e 가 추적 대회(isTracked)나 팀을 남기면 시즌 수·문장 수·현재 시즌 수·
+   * 팀 수·참가 수·콜 수가 한꺼번에 어긋난다. 실제로 l1 e2e 픽스처가 그렇게 깨뜨렸다(09-07).
+   * 스코프를 좁히는 대신 **다른 테스트가 자기 픽스처를 치우는 것**을 규칙으로 둔다 —
+   * 여섯 어설션이 서로 물려 있어(콜 수가 before.seasons 를 재사용) 부분 수정이 더 위험하다.
+   */
   const snapshot = async () => {
     const [teams, venues, entries, seasons, current] = await Promise.all([
       prisma.team.findMany({ select: { id: true, apiTeamId: true, firstSeenCompetitionId: true, venueId: true }, orderBy: { apiTeamId: 'asc' } }),
