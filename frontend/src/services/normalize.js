@@ -11,7 +11,7 @@
  * 컴포넌트가 "없음" 상태로 렌더링하게 둔다. 빈 문자열로 위장하지 않는다.
  */
 
-import { getDisplayState, isFinished } from '../utils/matchStatus.js'
+import { getDisplayState, isFinished, isLive } from '../utils/matchStatus.js'
 import { now } from './clock.js'
 
 /**
@@ -144,7 +144,9 @@ export function normalizeTeam(dto) {
     apiId: dto.apiId,
 
     name:      dto.displayName,
-    shortName: dto.shortDisplayName,
+    // 백엔드 shortDisplayName 은 shortName 이 없으면 code(ARS) 로 떨어진다 — 카드에 "ARS ARS" 가 찍힌다.
+    // code 와 같으면 이름을 쓴다. 진짜 짧은 이름은 localized_names 적재(NEXT_STEPS 11장) 때 온다
+    shortName: dto.shortDisplayName && dto.shortDisplayName !== dto.code ? dto.shortDisplayName : dto.displayName,
     /** 로고가 못 뜰 때만 쓰인다 — code(MUN) 가 없으면 이름에서 만든다 */
     initials:  teamInitials(dto),
     logoUrl:   localLogo('teams', dto.apiId, dto.logoUrl),
@@ -277,7 +279,8 @@ export function normalizeMatch(dto) {
     statusCode:   dto.statusShort,
     statsState,
     displayState: getDisplayState(dto.statusShort, statsState),
-    minute:   dto.elapsed ?? null,
+    // 경과 분은 진행 중일 때만 뜻이 있다 — 끝난 경기에 "90'" 을 찍지 않는다 (실 API 화면 실측 09-07)
+    minute:   isLive(getDisplayState(dto.statusShort, statsState)) ? (dto.elapsed ?? null) : null,
     events:   [],
     headToHead:     null,
     aggregateScore: null,
