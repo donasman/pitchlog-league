@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { HealthModule } from './health/health.module.js';
 import { ApiFootballModule } from './ingestion/api-football/api-football.module.js';
 import { L0Module } from './ingestion/l0/l0.module.js';
+import { LogoModule } from './ingestion/logos/logo.module.js';
 import { CompetitionModule } from './competition/competition.module.js';
 import { TeamModule } from './team/team.module.js';
 
@@ -29,6 +30,7 @@ import { TeamModule } from './team/team.module.js';
     HealthModule,
     ApiFootballModule,
     L0Module,
+    LogoModule,
     CompetitionModule,
     TeamModule,
   ],
