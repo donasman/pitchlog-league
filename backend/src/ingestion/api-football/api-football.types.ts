@@ -65,3 +65,17 @@ export interface ApiTeam {
     image: string | null;
   };
 }
+
+/** `/players/squads?team=` — 현재 스냅샷만 준다. season 파라미터가 없다 (실측) */
+export interface ApiSquad {
+  team: { id: number; name: string; logo: string | null };
+  players: {
+    id: number;
+    name: string;
+    /** 생년월일은 없다. 나이만 준다 — 프로필은 /players?id= 로 따로 받는다 (L1 #9) */
+    age: number | null;
+    number: number | null;
+    position: string | null;
+    photo: string | null;
+  }[];
+}

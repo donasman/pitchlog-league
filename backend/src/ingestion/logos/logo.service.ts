@@ -20,12 +20,7 @@ import { mkdir, writeFile, access } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service.js';
-
-/**
- * 화면에 나오는 대회만 받는다. 컵·슈퍼컵(displayOrder 110~)은 화면이 아직 없다.
- * 프론트의 `VISIBLE_COMPETITION_API_IDS` 와 같은 범위 — 한쪽만 바뀌면 로고가 빈다.
- */
-const SCREEN_DISPLAY_ORDER_MAX = 100;
+import { SCREEN_DISPLAY_ORDER_MAX } from '../screen-scope.js';
 
 /** 배지 최대 표시 크기가 56px 이므로 2배수. contain 이라 원본 비율은 유지된다 */
 const SIZE_PX = 96;
