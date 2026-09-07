@@ -70,7 +70,7 @@ export default function TeamsPage() {
                         minHeight: 56,
                       }}
                     >
-                      <TeamBadge initials={team.initials} color={team.color} size="sm" name={team.name} />
+                      <TeamBadge initials={team.initials} color={team.color} logoUrl={team.logoUrl} size="sm" name={team.name} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <span
                           className="tname t-body"

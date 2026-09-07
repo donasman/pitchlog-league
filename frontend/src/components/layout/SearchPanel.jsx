@@ -10,7 +10,8 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { searchAll } from '@/utils/searchIndex'
+import { getSearchIndex, searchAll } from '@/utils/searchIndex'
+import { useData } from '@/hooks/useData'
 import TeamBadge from '@/components/ui/TeamBadge'
 import { getLocalizedName } from '@/utils/localization'
 
@@ -22,7 +23,9 @@ export default function SearchPanel({ onClose }) {
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(-1)
 
-  const results = useMemo(() => searchAll(query), [query])
+  // 인덱스는 서비스 계층에서 받는다 — 실 API 모드면 대회·팀을 실제로 조회한다
+  const { data: index, error: indexError } = useData(getSearchIndex, [])
+  const results = useMemo(() => searchAll(index, query), [index, query])
   const flat = useMemo(
     () => [...results.teams, ...results.players, ...results.competitions],
     [results]
@@ -111,7 +114,11 @@ export default function SearchPanel({ onClose }) {
 
           {/* 결과 영역 */}
           <div className="max-h-[60vh] overflow-y-auto">
-            {showNoResults && (
+            {indexError && (
+              <p className="text-sm text-destructive text-center py-8">{indexError}</p>
+            )}
+
+            {!indexError && showNoResults && (
               <p className="text-sm text-muted-foreground text-center py-8">
                 {t('header.searchNoResults')}
               </p>
@@ -181,7 +188,7 @@ function ResultGroup({ label, items, startIdx, activeIdx, locale, onSelect }) {
             }`}
           >
             {item.type === 'team' && (
-              <TeamBadge initials={item.initials} color={item.color} size="xs" name={item.label} />
+              <TeamBadge initials={item.initials} color={item.color} logoUrl={item.logoUrl} size="xs" name={item.label} />
             )}
             {item.type === 'player' && (
               <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-muted-foreground">
