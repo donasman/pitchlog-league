@@ -47,8 +47,9 @@
       `VITE_API_BASE_URL` 환경변수, 백엔드 CORS 허용이 같이 필요하다
 - [ ] **`protect-dev` Ruleset** — PR 필수 + `backend-verify`·`frontend-verify` 통과. dev 에 체크 조건이 없어서
       PR #8 이 CI 빨강인 채 머지됐다 (#9 에서 수정)
-- [ ] **`output/` 정리** — 추적 .md 3개 삭제가 작업 폴더에 미커밋 상태. 커밋(폴더 제거 + `.gitignore`)할지
-      `git checkout -- output/` 으로 되돌릴지. pptx 6개는 git 에 없어 복구 불가
+- [x] ~~**`output/` 정리**~~ ✅ 추적 .md 3개(변경요약 · 발표대본 2) 삭제 커밋 + `.gitignore` 에 `output/`.
+      발표 산출물은 저장소 밖(로컬 · GitHub Release)에서 관리한다는 기존 pptx 정책과 일치.
+      참조하던 `README.md` · `CLAUDE.md` · `FRONTEND_CLI_PROMPT.md` · `archive/README.md` 4곳 같이 정리
 - [ ] 원격 브랜치 정리 — `docs/next-steps-0907` · `fix/l0-e2e-remote-guard` · `feature/read-api` 는 머지됨. `git push origin --delete …`
 
 연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma 는 Windows 터미널에서 직접 실행한다.**

@@ -35,7 +35,6 @@ docs/       기획·설계 문서
 - [상세 설계](./docs/V2_DESIGN.md)
 - [백엔드 기술 결정](./docs/ADR-001-NODE-BACKEND.md)
 - [백엔드 개발 기준](./docs/BACKEND_GUIDE.md)
-- [슬라이드별 변경 요약](./output/PitchLog_슬라이드별_변경요약.md)
 - [발표 자료 보관 안내](./archive/README.md)
 
-최신 로컬 발표본은 `output/PitchLog_1차_기획설계_발표_v5.pptx`이며, 배포 시 GitHub Release로 관리합니다.
+발표본(`.pptx`)은 저장소에 포함하지 않습니다. 로컬에서 관리하며 배포 시 GitHub Release로 올립니다.
