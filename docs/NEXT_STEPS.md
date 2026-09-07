@@ -127,7 +127,8 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 
 - [x] ~~`pg_dump` 잡~~ ✅ 09-07 — `npm run backup` (`backend/scripts/backup.mjs`)
 - [x] ~~저장 위치 결정~~ ✅ **로컬**. 홈 디렉터리 아래 `PitchLogBackups`, `BACKUP_DIR` 로 변경 가능
-- [x] ~~첫 백업~~ ✅ 09-07 — **448KB · 22초**(대부분 이미지 받는 시간). L0 만 든 상태
+- [x] ~~첫 백업~~ ✅ 09-07 — 448KB · 22초(대부분 이미지 받는 시간). L0 만 든 상태.
+      단 목차를 보니 Supabase 내부 스키마까지 딸려 와 있었다 → `--schema=public` 로 좁힘
 - [ ] **복원 1회 리허설** — 받아본 적 없는 백업은 백업이 아니다
 - [ ] 자동 실행 — 지금은 **수동**. 백필 전에 다시 정한다 (아래)
 
@@ -156,6 +157,11 @@ Docker 쪽이 버전 사고를 막는다. `pg_dump` 가 서버보다 낮으면 �
 볼륨 마운트는 하지 않는다 — Windows 경로 변환에서 깨지기 쉬워서 덤프를 stdout 으로
 받아 Node 가 파일에 쓴다. `docker -e` 는 이름만 넘겨 비밀번호가 명령줄에 남지 않게 한다.
 
+- **`--schema=public` 만 받는다.** 안 주면 Supabase 내부 스키마(`auth`·`storage`·`realtime`·
+  `vault`·`graphql`·`pgbouncer`·`extensions`)까지 통째로 딸려 온다. 그건 우리 것이 아니고,
+  평범한 `postgres` 컨테이너에는 `supabase_admin` 롤도 `supabase_vault` 확장도 없어
+  **복원이 그 자리에서 깨진다.** `vault` 는 시크릿 저장소라 로컬 덤프에 남길 이유도 없다.
+  우리 객체는 전부 `public` 에 있다 — Prisma 가 멀티스키마를 안 쓰고 확장 함수 의존도 없다
 - 형식 `custom`(-Fc) — 자체 압축, `pg_restore` 부분 복원 가능
 - `--no-owner --no-privileges` — 다른 서버(로컬·Docker)에 그대로 복원된다
 - 앱을 띄우지 않는다. 백업이 애플리케이션 부팅에 의존하면 **앱이 못 뜰 때 백업도 못 받는다**
@@ -185,7 +191,7 @@ schtasks /Create /TN "PitchLog DB Backup" ^
 형식만 확인하는 것은 복원이 아니다. **빈 DB 에 실제로 넣어 보고** 테이블 29개와
 행 수를 확인한다. 운영 DB 에 하지 않는다 — 덮어쓴다.
 
-목차만 보는 것은 이걸로 된다:
+목차만 보는 것은 이걸로 된다 — 09-07 에 이걸로 스키마 범위 문제를 잡았다:
 
 ```bash
 docker run --rm -i postgres:17 pg_restore --list < <덤프 경로>
