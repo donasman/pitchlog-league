@@ -22,7 +22,7 @@
 | **백엔드** | 🚧 Nest 12 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0 실 적재 완료**(17대회 · 82대회시즌 · 고유 팀 1,888) · **조회 API 4개**(`/api/competitions`(+:ref) · `/api/teams`(+:ref), Swagger `/docs`) |
 | CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 5파일 28건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` |
 | 배포 | ❌ 배포 PoC 미착수 |
-| 백업 | ❌ 없음 — **백필 전 필수** |
+| 백업 | 🚧 `npm run backup` 스크립트 완료(로컬 보관). **스케줄러 등록·복원 리허설 남음 — 백필 전 필수** |
 
 ### 확정된 범위
 
@@ -40,8 +40,8 @@
 ## 1. 지금 당장 — 다음 세션 첫 작업
 
 09-07 에 끝낸 것: 서울 리전 이전 · L0 재실행 · 조회 API 4개(PR #12) · `output/` 정리 ·
-`protect-dev` Ruleset · 원격 브랜치 4개 삭제 · 프론트 첫 연결 · **브라우저 실측** ·
-**로고 자체 저장 CLI**(5장을 앞으로 당김).
+`protect-dev` Ruleset · 원격 브랜치 정리 · **프론트 첫 실 API 연결**(PR #14·#15) ·
+**브라우저 실측** · **로고 자체 저장**(5장을 앞으로 당김) · **백업 스크립트**(4장 일부).
 
 ### 실측에서 나온 것 (09-07, 브라우저)
 
@@ -55,20 +55,18 @@
 **폴백이 작동하지 않는다는 게 더 큰 문제였다.** 실패가 아니라 "영원히 로딩 중" 이라
 `<img onError>` 가 불리지 않아 이니셜로 넘어가지 못하고 회색 사각형만 남는다.
 그래서 5장 "로고 자체 저장" 을 8단계 백필보다 앞으로 당겼다.
+받아서 96×96 webp 로 줄이니 161개 1.1MB(평균 4.3KB) — 원본 그대로면 14.5MB 였다.
 
 ### 남은 일
 
-- [ ] **Windows 에서 로고 받기** — `cd backend && npm install && npm run ingest -- logos`
-      (`sharp` 신규 의존성. 로고는 공개 media 라 API 키가 필요 없다)
-      → `frontend/public/logos/{teams,competitions}/<apiId>.webp` 96×96, 6대회 참가팀 155개.
-      받은 뒤 저장소에 커밋한다
-- [ ] **재실측** — 팀 목록에서 로고가 뜨는지, 파일 없는 팀이 이니셜로 폴백하는지
-- [ ] `npm run verify`(프론트 build 포함) · 백엔드 `lint`·`typecheck` — 리눅스 VM 에서는
-      네이티브 바인딩(rollup·oxlint·sharp)이 Windows 용이라 못 돈다
+- [ ] **PostgreSQL 클라이언트 도구 설치 + 첫 백업** — `cd backend && npm run backup -- --check`
+      로 점검한 뒤 `npm run backup`. **`pg_dump` 는 서버(Supabase) 메이저 버전 이상**이어야 한다
+- [ ] **작업 스케줄러 등록** — 주 1회. 명령은 4장에
+- [ ] **복원 리허설** — 4장의 마지막 항목이자 관문. 백필 전에 반드시
 
-그 뒤는 **4단계 백업**이다. 8단계 백필 전에 반드시 끝내야 한다.
+그 뒤 **L1 스쿼드**(9단계).
 
-연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma 는 Windows 터미널에서 직접 실행한다.**
+연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma·pg_dump 는 Windows 터미널에서 직접 실행한다.**
 
 ---
 
@@ -125,15 +123,67 @@
 
 ---
 
-## 4. 백업 — 반나절 · 백필 전 필수 ★
+## 4. 백업 — 백필 전 필수 ★
 
 Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 날아가면 다시 8~12일이다.
 
-- [ ] `pg_dump` 주 1회 잡
-- [ ] 저장 위치 결정 — R2 / GitHub Release / 로컬
-- [ ] 복원 1회 리허설 — 받아본 적 없는 백업은 백업이 아니다
+- [x] ~~`pg_dump` 잡~~ ✅ 09-07 — `npm run backup` (`backend/scripts/backup.mjs`)
+- [x] ~~저장 위치 결정~~ ✅ **로컬**. 홈 디렉터리 아래 `PitchLogBackups`, `BACKUP_DIR` 로 변경 가능
+- [ ] **주 1회 자동 실행** — Windows 작업 스케줄러 등록 (아래)
+- [ ] **복원 1회 리허설** — 받아본 적 없는 백업은 백업이 아니다
 
-**이것 없이 백필을 시작하지 않는다.**
+**리허설 없이 백필을 시작하지 않는다.**
+
+### 왜 로컬인가
+
+저장소가 **Public** 이라 GitHub Release 에 올리면 덤프가 전 세계에 공개된다.
+API-Football 에서 받은 데이터를 통째로 재배포하는 셈이라 약관 확인 없이는 못 쓴다.
+R2 는 계정·키 설정이 앞서야 한다. 로컬은 지금 바로 되고 되돌리기도 쉽다.
+대신 **PC 디스크가 죽으면 백업도 같이 죽는다** — 백필 직전에 사본 위치를 하나 더 정한다.
+
+### 스크립트
+
+```bash
+npm run backup -- --check   # pg_dump 유무·버전, DATABASE_URL, 저장 위치만 점검
+npm run backup              # 받는다
+```
+
+- 형식 `custom`(-Fc) — 자체 압축, `pg_restore` 부분 복원 가능
+- `--no-owner --no-privileges` — 다른 서버(로컬·Docker)에 그대로 복원된다
+- 앱을 띄우지 않는다. 백업이 애플리케이션 부팅에 의존하면 **앱이 못 뜰 때 백업도 못 받는다**
+- 비밀번호는 `PG*` 환경변수로 넘긴다 — 인자로 주면 프로세스 목록에 노출된다
+- 보관: 최근 8개 + 그 앞은 달마다 1개씩 12개월. 나머지는 지운다
+- `backup.log` 에 시각·크기·소요시간을 남긴다
+
+### 작업 스케줄러 등록 (주 1회, 일요일 03:00)
+
+```cmd
+schtasks /Create /TN "PitchLog DB Backup" ^
+  /TR "C:\Dev\pitchlog-league\backend\scripts\backup.cmd" ^
+  /SC WEEKLY /D SUN /ST 03:00
+```
+
+확인·수동 실행·삭제:
+
+```cmd
+schtasks /Query /TN "PitchLog DB Backup"
+schtasks /Run   /TN "PitchLog DB Backup"
+schtasks /Delete /TN "PitchLog DB Backup" /F
+```
+
+PC 가 꺼져 있으면 그 주는 건너뛴다. `backup.log` 로 확인한다.
+
+### 복원 리허설 (미실행)
+
+받은 덤프를 **빈 DB 에** 복원해 보고, 테이블 29개와 행 수가 맞는지 확인한다.
+운영 DB 에 하지 않는다 — 덮어쓴다.
+
+```bash
+pg_restore --no-owner --no-privileges -d "<빈 DB 접속 문자열>" <덤프 경로>
+```
+
+대상 후보: Docker `postgres` 컨테이너 / 로컬 PostgreSQL 의 별도 DB / 두 번째 Supabase 프로젝트.
+어디로 할지 정하는 것이 이 항목의 첫 단계다.
 
 ---
 
