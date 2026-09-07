@@ -284,6 +284,16 @@ WebSocket으로 푸시하므로 외부 API 폴링 주기와 사용자 연결 수
 
 ## 4. 배포 전략 — 렌더링 모델 결정
 
+> ⚠️ **이 장은 무효다 (2026-09-07 중간 점검, `PLAN_REVIEW.md` 1-1).** 아래 4-1~4-5 는 Next.js
+> `output: export` · `generateStaticParams` · Deploy Hook 재빌드를 전제로 썼는데, 프론트는 09-01 에
+> **React + Vite SPA** 로 바뀌었다. 정적 빌드도 ISR 도 빌드 훅으로 다시 만들 페이지도 없다 —
+> 4-2 가 "배제한다" 고 한 **A안(정적 + 전량 CSR)이 지금 구조**다.
+> `deployment_requests` 테이블 · 디바운스 · 4-5 PoC 5항목은 만들지 않는다.
+>
+> 현재 기준: 배포 = **Railway 에 Nest 컨테이너 1개 + Cloudflare Pages SPA fallback + `CORS_ORIGIN`**.
+> SEO 는 공개 초기엔 하지 않는다 (`FRONTEND_GUIDE.md` 7장). 순서는 `NEXT_STEPS.md` 1장 4번.
+> 아래는 판단 기록으로만 남긴다 — 4-0 의 "실시간은 배포 방식의 문제가 아니다" 는 지금도 맞다.
+
 ### 4-0. 먼저 정리 — "실시간"은 배포 방식의 문제가 아니다
 
 라우트를 **데이터가 변하는 속도**로 나누면 논점이 분리된다.
@@ -467,6 +477,10 @@ BullMQ를 설치하지 않는다.
 | v2 해당 작업 | 스쿼드 **4,863명** 적재(09-07 실측), 선수통계 백필(~400콜), 시즌 롤오버, 과거 라운드 라인업 | `live=all` 10초, 라인업 5분, 순위 10분, 부상 1일 |
 
 즉 **재시작 지점을 기억해야 하면 BullMQ Job으로 승격하고, 아니면 Scheduler로 충분하다.**
+
+> 2026-09-07 보정: 재시작 지점이 **DB 에 있으면**(`backfill_jobs.cursor_fixture_id`) 승격이 필요 없다.
+> 5개년 백필은 그래서 BullMQ 없이 단일 루프로 돈다 (`INGESTION_STRATEGY.md` 5-1). 승격 조건은
+> "다중 인스턴스 · 동시 처리 · 재시도 정책" 이 실제로 필요해질 때로 좁힌다.
 
 ### 5-4. 현재 구조 — 수집 경로가 같은 도메인 규칙을 사용한다
 
@@ -849,9 +863,9 @@ fix 커밋 35건 중 절반을 없앴을 것"이었다.
 
 | Phase | 내용 | 산출물 | 검증 |
 |---|---|---|---|
-| **0** | 안전장치 + 배포 PoC (프로덕션 코드 없음) | 빈 스켈레톤 + 녹색 CI | 아래 8-2 완료 기준 |
+| **0** | 안전장치 + ~~배포 PoC~~ **배포(재정의 — 4장 경고)** | 빈 스켈레톤 + 녹색 CI → 배포된 `/health` | 아래 8-2 완료 기준 |
 | **1** | `Competition`/`Team`/`Season`/`CompetitionEntry` + `Player` 이관 + Localization 기반 + 스쿼드 수집 | **6대회 155팀 · 4,863선수 적재**(09-07 실측), 영어 원본·한국어 표시명 구조 | 스쿼드 diff·다중 대회 참가·이름 fallback 테스트 통과 |
-| **2** | 경기·라인업·순위·종료 후 통계 + NestJS Scheduler·Socket.io Gateway | EPL 매치데이 자동 갱신·푸시 | 실제 라운드 1회 무중단 관측, 재연결 복구 |
+| **2** | 경기·라인업·순위·종료 후 통계 + NestJS Scheduler·Socket.io Gateway. **순서: 기록 백필 → 상세 백필 → 실시간** (09-07, `NEXT_STEPS` 1장) | 5시즌 완전 + 매치데이 자동 갱신·푸시 | 실제 라운드 1회 무중단 관측, 재연결 복구 |
 | **3** | 다중 대회·한국어/영어 프론트 + 배포 파이프라인 | EPL 공개 사이트, 언어 전환, 5대 리그/UCL 공통 화면 구조 | 양 언어 반응형 화면, Lighthouse, 백엔드·Socket 장애 시 오류/fallback 확인 |
 | **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | **범위는 Phase 1 에서 이미 6대회로 활성화됐다** | 최종 API 예산, 5,000+페이지 배포, UCL 녹아웃 검증 |
 | **5** | 결정적 조회 도구 + AI 챗봇 | 사실 조회·선수 비교·근거 공개가 가능한 AI 패널 | 숫자 환각 0건, 동일 데이터 버전의 판정 일치, 도구 한도·실패 처리 검증 |
@@ -881,7 +895,7 @@ S0·S1 모두 해결 완료 (2026-08-27) — Phase 0 착수를 막던 두 선행
 | **#3** | 브랜치 보호 Ruleset — `main`에 PR 필수 + CI 통과 필수, 기본 브랜치 `dev` | GitHub 설정 | **본인** (Settings 권한) |
 | **#4** | pre-commit 훅 — null byte·깨진 UTF-8 + ESLint + 10파일 초과 경고 | `.githooks/pre-commit` | |
 | **#5** | NestJS 스켈레톤 — Prisma 초기 schema, `/health`, **vitest**·Supertest, 모듈 경계 ESLint 규칙 | `npm run build`·`npm test` 통과 | |
-| **#6** | **배포 PoC** — 4-5의 5가지 확인 | 배포 방식 확정 | |
+| **#6** | ~~**배포 PoC** — 4-5의 5가지 확인~~ → **재정의**: Railway + Pages + CORS + `/health` (4장 경고). `NEXT_STEPS` 1장 4번 | 배포된 서버 | |
 
 > **#2에서 `npm run lint`와 `npm run build`를 CI에 넣는 것이 요점이다.** 화면 구현 단계는
 > 고정 Mock Data로 Vite 빌드를 검증하고, 백엔드 연결 후에는 API 계약 테스트를 별도로 추가함.
@@ -892,8 +906,8 @@ S0·S1 모두 해결 완료 (2026-08-27) — Phase 0 착수를 막던 두 선행
 - [x] PR 하나가 CI **2잡** 통과 → `dev` 머지 → `main` 직접 push가 보호규칙에 막히는 것 확인
       (`pull_request` 에는 `paths` 필터를 두지 않는다 — 필터에 걸리면 required check 가 영원히 대기)
 - [ ] `npm run build`·`npm test`가 PostgreSQL 테스트 환경에서 통과
-- [ ] ESLint 모듈 경계 규칙 — 실제 모듈은 `ingestion/{api-football,l0,l1,logos}` 다
-- [ ] 배포 PoC 5항목 확인 → **10장 #2 닫기**
+- [ ] ESLint 모듈 경계 규칙 — 실제 모듈은 `ingestion/{api-football,l0,l1,l2,logos}` 다
+- [ ] ~~배포 PoC 5항목 확인~~ → 재정의된 배포(Railway + Pages + CORS) 로 `/health` 확인 → **10장 #2 닫기**
 
 ### 8-3. Phase 1 — 첫 도메인 코드
 
@@ -902,7 +916,7 @@ S0·S1 모두 해결 완료 (2026-08-27) — Phase 0 착수를 막던 두 선행
 3. API-Football HTTP client + 호출 제한·재시도·백오프
 4. EPL 20팀 적재 기능 — **첫 upsert 로직이므로 테스트 동반**
 5. 스쿼드 수집 + **diff 로직** — v2 최대 리스크(1-3). 테스트 필수
-6. 스쿼드 벌크 적재 Job 1개 — BullMQ 도입 전에는 DB 체크포인트, 도입 후 job 재시작 사용
+6. 스쿼드 벌크 적재 Job 1개 — DB 체크포인트 (BullMQ 는 도입하지 않기로 했다, 09-07)
 
 Phase 1의 검증 기준은 "155팀 4,863선수가 DB에 있다"가 아니라
 **"스쿼드 diff 테스트가 이적 시나리오를 통과한다"** 이다.
@@ -942,12 +956,12 @@ git push origin chore/cleanup
 | # | 항목 | 결정 시점 | 비고 |
 |---|---|---|---|
 | 1 | ~~저장소 이름~~ | **확정 (2026-08-27)** | **`pitchlog-league`** |
-| 2 | 배포 방식 (B 정적+빌드훅 / C Workers+OpenNext / D Vercel) | Phase 0 PR #6 PoC 후 | 4-5의 5항목이 기준. A(전량 CSR)는 SEO 손실로 배제 |
-| 3 | 상시 백엔드 (Railway Hobby $5) | Phase 2 전 | 아카이브는 평시 $0였음 — 성격이 다른 결정 |
+| ~~2~~ | ~~배포 방식 (B 정적+빌드훅 / C Workers+OpenNext / D Vercel)~~ | **확정 (2026-09-07)** | Vite SPA 전환으로 B·C·D 전제가 사라졌다. **Railway + Pages(CSR)**. SEO 는 공개 초기엔 안 한다 — 4장 경고 |
+| ~~3~~ | ~~상시 백엔드 (Railway Hobby $5)~~ | **확정 (2026-09-07)** — Railway | `NEXT_STEPS` 1장 4번. 슬립하는 무료 티어는 스케줄러가 조용히 멈춰 배제. 요금은 결제 전 확인 |
 | 4 | ~~API-Football Pro 구독 시점~~ | **완료 (2026-08-27)** | Pro 플랜 구독 완료 — 26-27 시즌 데이터 접근 가능 |
 | 5 | 이적 이력 정밀도 (`/transfers` 사용 여부) | Phase 3 | 선수당 1콜 — 비쌈 |
 | 6 | ~~ORM 선택~~ | **확정 (2026-09-02)** | Prisma 사용. PostgreSQL unique·transaction 기준 |
-| 7 | ~~실시간 레이어 적용 여부·시점~~ | **확정: Phase 2** | NestJS Gateway + Socket.io. REST 동기화·fallback 포함 |
+| 7 | ~~실시간 레이어 적용 여부·시점~~ | **확정: Phase 2, 백필-2 뒤** (09-07) | NestJS Gateway + Socket.io. REST 동기화·fallback 포함 |
 | 8 | AI 제공 모델·호스팅·월 호출 예산 | Phase 5 착수 전 | 기능 설계는 모델 비종속. 비용·응답시간·한국어 품질을 PoC로 비교 |
 | 9 | AI 패널 진입 방식 (`/assistant` 전용 / 전역 패널) | Phase 3 화면 설계 시 | 모바일 사용성, 현재 화면 문맥 전달 범위와 함께 결정 |
 

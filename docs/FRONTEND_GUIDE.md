@@ -48,11 +48,12 @@ Header에 언어 전환 버튼 포함. 선택 언어는 `localStorage`('pitchlog
 - `/stats` 통계 페이지 생성 및 라우트 등록, Header 메뉴 활성화
 - `fetchCompetitionStats()` API 함수 추가
 
-**남은 작업**: 일부 페이지(`MatchPage`, `StandingsPage` 등)의 한국어 하드코딩
-문구가 아직 `useTranslation`으로 교체되지 않음. 영어 전환 시 해당 문구는 한국어 그대로 표시됨.
-상세 목록은 `docs/NEXT_STEPS.md` 3절 참조.
+**남은 작업 (2026-09-07 중간 점검, `docs/PLAN_REVIEW.md` 2-1)**: 화면은 발표용 **고정 시계**로
+만들어져 있다 — "오늘" 이 `2026-11-23` 으로 `MatchesPage`·`TeamFixturesPage`·`utils/matchSort.js` 에,
+`calcAge` 의 기준일이 `2026-09-01` 로 박혀 있고 `getKSTDateKey` 가 두 페이지에 복사돼 있다.
+실 API 연결 PR 에서 `services/clock.js` 로 모으고 테스트를 붙인다 (10장). 순서는 `docs/NEXT_STEPS.md` 11장.
 
-**남은 화면 검수**: 브라우저 실제 실행이 필요한 항목은 `docs/NEXT_STEPS.md` 2절 참조.
+하드코딩 한국어는 `npm run check:i18n` 이 막는다 — 남아 있지 않다.
 
 현재 품질 검사 결과는 다음과 같음.
 
@@ -189,6 +190,11 @@ Vite 기반 React SPA는 Next.js처럼 SSR, 정적 경로 생성, 메타데이�
 
 SEO 대응이 확정되기 전에는 Vite SPA만으로 검색 노출 요구사항이 완료됐다고 판단하지 않음.
 
+**2026-09-07 결정: 공개 초기에는 하지 않는다.** 정적 `sitemap.xml`·`robots.txt` 만 둔다.
+라이브 데이터 사이트라 프리렌더 가치가 낮고, 빌드 시 백엔드 의존(v1 placeholder 사고의 조건)을
+다시 만들 이유가 없다. 검색 유입이 실제로 필요해지면 위 1·2 부터 본다. `V2_DESIGN.md` 4장의
+정적 + Deploy Hook 안은 Next.js 전제라 **무효**다 (그 장 머리의 경고).
+
 ## 8. Next.js 전용 기능 대체표
 
 | Next.js 기능 | React + Vite 적용 방식 |
@@ -229,6 +235,9 @@ TypeScript의 정적 타입 검사를 사용하지 않는 대신 다음 기준�
 - `undefined`, `null`, 빈 배열, 누락 필드를 구분함
 - 외부 API 응답은 화면에 전달하기 전에 검증·정규화함
 - 경기 상태, 시간 변환, 순위 구역, UCL 합산 점수는 단위 테스트 대상으로 둠
+  — **2026-09-07 결정: vitest 를 도입한다.** 지금 프론트 로직 테스트는 0개다. `utils/dateFormat.js` ·
+  `utils/matchStatus.js` · `utils/standingsZone.js` 부터. `npm run verify` 와 CI `frontend-verify` 에 넣는다.
+  회고 4-5 가 지목한 "KST/UTC fix 3회 반복" 이 이 자리다 (`docs/PLAN_REVIEW.md` 3-2)
 
 Tailwind CSS 클래스와 shadcn/ui 컴포넌트는 `.jsx`에서 사용함. shadcn/ui가 생성한 파일에
 TypeScript 타입, `interface`, `type` 선언, `as const` 등 JavaScript에서 실행되지 않는 문법이
@@ -284,6 +293,8 @@ UI 문구가 많아지는 시점에는 JavaScript에서 사용 가능한 `i18nex
 - 한국어 검색을 위한 별칭과 띄어쓰기 변형을 관리함
 - 신규 선수처럼 한국어 이름이 없는 데이터는 영어 원본으로 fallback함
 - 자동 음역만으로 한국어 선수 이름을 생성하지 않으며 주요 선수부터 검수된 이름을 적용함
+  — **2026-09-07 범위 결정: 팀명 110개(5대 리그 96 + UCL 리그페이즈 14)만 한국어. 선수명은 영어.**
+  검수 소스가 없어서다. `localized_names` 는 CSV → 적재 CLI 로 채운다 (`docs/NEXT_STEPS.md` 11장)
 - API 요청 언어와 fallback 규칙을 모든 조회 API에 동일하게 적용함
 - 이름 변경과 이적이 발생해도 내부 ID와 URL slug는 유지함
 

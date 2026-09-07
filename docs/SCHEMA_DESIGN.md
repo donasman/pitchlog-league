@@ -329,6 +329,10 @@ matches(
   has_player_stats NULL,
   detail_checked_at NULL,
 
+  -- 통계 확정 상태 (PRD 4-2 recheck → confirmed, 2026-09-07 추가 결정 · 1장 1번 PR 에서 마이그레이션)
+  stats_state,                    -- NONE | RECHECK | CONFIRMED. L2 는 NONE 만 쓴다. L5 가 올린다
+  confirmed_at NULL,
+
   data_version,                   -- 실시간 이벤트 순서 보장
   as_of, updated_at
 )
@@ -344,6 +348,9 @@ INDEX(tie_id)
 **`detail_eligible`이 컷오프를 물리적으로 표현한다.** 라운드 단위가 아니라 경기 단위인 이유는
 실측 때문이다 — Copa del Rey `Round of 128`의 Maracena 0-5 Valencia는 1부 팀이 있는데도
 팀통계·선수통계가 0이었다. 대회나 라운드로 뭉뚱그리면 이 케이스를 못 담는다.
+
+**`stats_state` 가 프론트 `displayState` 의 `recheck`·`confirmed` 를 만드는 유일한 소스다** (09-07). `status_short` 만으로는
+`final` 까지밖에 못 만든다. `has_*` 에서 파생하지 않는 이유: "확인했고 없음(false)" 인 컵 경기가 영원히 `recheck` 가 된다.
 
 `has_*`가 **3값 논리**다. `NULL`은 미확인, `false`는 확인했고 없음, `true`는 있음.
 `false`인 경기는 다시 부르지 않는다. 단 **FT 후 24시간 이내는 `NULL`로 되돌려 재시도**한다 —
@@ -910,8 +917,9 @@ Prisma migration을 이 순서로 쪼갠다. 각 단계가 독립적으로 배�
 | 2 | 팀 최근 경기 질의 — `UNION ALL` vs `match_participants` 보조 테이블 | Phase 2에서 실측 후 |
 | 3 | 순위표 라운드별 스냅샷 | 500MB 여유가 확인되면. `standings`에 `round_id` 추가 + UNIQUE 확장 |
 | 4 | `injuries`의 멱등 키 | `/injuries` 응답에 안정적인 식별자가 없다. `(player_id, cs_id, fixture_date)`로 시작하고 중복이 생기면 조정 |
-| 5 | `localized_names`를 테이블로 둘지 JSON 파일로 둘지 | i18n 문서에서. 팀 64개 규모면 파일도 가능하다 |
+| ~~5~~ | ~~`localized_names`를 테이블로 둘지 JSON 파일로 둘지~~ | **결정 (2026-09-07)** — 테이블 유지. **팀 110개만** 채운다(5대 리그 96 + UCL 리그페이즈 14), 선수는 영어. CSV → 적재 CLI (`NEXT_STEPS` 11장) |
 | 6 | Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 | **해결 (2026-09-07)** — 확인 대신 `batch-upsert.ts` 로 강제. 5장 ② 참조 |
+| 7 | `matches.stats_state` 추가 | **결정 (2026-09-07)** — 3-3. `NEXT_STEPS` 1장 1번 PR 에서 마이그레이션 |
 
 ---
 
