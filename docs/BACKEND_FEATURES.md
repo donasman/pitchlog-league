@@ -137,7 +137,7 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 | 31 | 순위 재계산 | `/standings` | 1 | **화면에 실패 노출** |
 | 32 | UCL 녹아웃 합산·진출 판정 | — | 0 | 재시도 |
 | 33 | H2H 기록 갱신 | `/fixtures/headtohead?h2h=A-B` | 경기당 1 | ✅ 확인됨. 자체 계산 불필요 |
-| 34 | `recheck → confirmed` 상태 전이 | — | 0 | **`matches.stats_state`** (`NONE`·`RECHECK`·`CONFIRMED`) + `confirmed_at` — 09-07 결정. 상세 4개(#28·#29·#29-1·라인업)가 다 들어오면 `CONFIRMED`. 프론트 배지의 유일한 소스 |
+| 34 | `recheck → confirmed` 상태 전이 | — | 0 | **`matches.stats_state`** (`NONE`·`RECHECK`·`CONFIRMED`) + `confirmed_at` — ✅ 컬럼·마이그레이션 09-07 적용(`20260907120000_match_stats_state`). 지금은 전부 `NONE`. 상세 4개(#28·#29·#29-1·라인업)가 다 들어오면 `CONFIRMED`. 프론트 배지의 유일한 소스 |
 
 > **#29-1은 2026-09-03에 추가됐다.** 원래 계획에서 빠져 있었다.
 > 점유율·슈팅 6종·패스 정확도와 **`expected_goals`·`goals_prevented`** 가 전부 여기서 온다.
@@ -195,9 +195,9 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 | 엔드포인트 | 화면 | 비고 |
 |---|---|---|
 | `GET /competitions` | 헤더, 필터 | 6개 |
-| `GET /competitions?includeStage=true` | 홈, 대회 목록 | 진행 상태 포함 |
+| ~~`GET /competitions?includeStage=true`~~ | 홈, 대회 목록 | **없다** — `forbidNonWhitelisted` 라 보내면 400. 진행 상태(stage)는 프론트가 경기 목록에서 계산한다(`deriveStage`) |
 | `GET /competitions/:slug` | 대회 상세 | |
-| `GET /competitions/:slug/hub` | 대회 허브 | **묶음 응답** — 순위+일정+득점+참가팀 |
+| ~~`GET /competitions/:slug/hub`~~ | 대회 허브 | **만들지 않는다 (09-07)** — 프론트 `live.js` 가 `/matches` · `/standings` · `/teams` 를 조합한다. 홈도 같다 |
 | `GET /competitions/:slug/stats` | 통계 | 득점·도움·카드 랭킹 |
 | `GET /competitions/champions-league/knockout` | UCL 녹아웃 | 대진·합산·진출 |
 
@@ -205,14 +205,14 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 
 | 엔드포인트 | 화면 |
 |---|---|
-| `GET /matches?competition=&state=&date=&team=&round=` | 경기 목록 |
-| `GET /matches/:fixtureId` | 경기 상세 (라인업·통계·H2H 포함) |
+| `GET /matches?competition=&season=&from=&to=&team=` | 경기 목록 — ✅ 09-07. 대회 생략 시 화면 6대회 · `from`/`to` 는 KST 날짜(`YYYY-MM-DD`, 양끝 포함, 역순·형식 오류 400) · 페이지 없음, 킥오프 오름차순. `state`·`date`·`round` 는 **없다** — 상태는 프론트가 `statusShort + statsState` 로 만든다 |
+| `GET /matches/:ref` | 경기 상세 — ✅ 09-07. 경기 행만(스코어 5종 · 상태 원문 · `statsState` · `has_*` 3값). 라인업·통계·H2H 는 L3~L5 뒤 — 프론트가 탭 단위로 "아직 없음" |
 
 ### 순위
 
 | 엔드포인트 | 화면 |
 |---|---|
-| `GET /standings?competition=&season=` | 순위 (구역 정보 포함) |
+| `GET /standings?competition=&season=` | 순위 — ✅ 09-07. 대회 생략 시 6대회 전부. **컵(KNOCKOUT)은 404 가 아니라 200 + `rows: []` + `unavailableReason: 'KNOCKOUT'`**, 리그 0행은 `'EMPTY'` — 프론트가 "없음"과 "실패"를 구분해야 한다(DATA_RULES 5-3). 구역(zone)은 프론트가 `description` 으로 만든다, UCL 은 rank 폴백 |
 
 ### 팀
 
@@ -248,7 +248,8 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 - **대회시즌마다 `dataState`** — `NONE`(아직 안 받음) · `PARTIAL`(백필 중) · `COMPLETE`. `backfill_jobs.phase` 에서 계산.
   프론트 시즌 선택기는 `COMPLETE` 만 노출한다. `status`(UPCOMING/IN_PROGRESS/FINISHED)는 시즌 진행 상태라 별개다.
 - `ref` 형식 오류 400 · 없는 것 404 · 모르는 쿼리 파라미터 400 (`forbidNonWhitelisted`). 오류를 빈 배열로 바꾸지 않는다.
-- 구현됨: `GET /api/competitions` · `/api/competitions/:ref` · `/api/teams?competition=&season=` · `/api/teams/:ref`. 나머지는 데이터가 들어오는 계층과 같이.
+- 구현됨: `GET /api/competitions` · `/api/competitions/:ref` · `/api/teams?competition=&season=` · `/api/teams/:ref` · **`/api/matches` · `/api/matches/:ref` · `/api/standings` (09-07)**. 나머지는 데이터가 들어오는 계층과 같이.
+- 상태는 백엔드가 만들지 않는다 — `statusShort` 원문 + `statsState` 를 주고 프론트 `normalize.js` 의 진리표가 `displayState` 를 만든다(PRD 4-2). 백엔드가 `displayState` 를 주면 두 곳에서 규칙이 갈린다.
 
 ---
 

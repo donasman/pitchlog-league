@@ -18,9 +18,9 @@
 | API 실측 | ✅ 완료 — 엔드포인트 53종·컵 30개·5시즌·과거 깊이 전수 조사 |
 | 수집 전략 | ✅ 확정 — 12대회 × 5시즌, 컵 컷오프, 백필 계획 |
 | 스키마 설계 | ✅ 확정 — 테이블 30개, 외래키 미사용 |
-| 프론트엔드 | 🚧 1~8단계 화면 구현 완료. **실 API 첫 연결**(`VITE_USE_MOCK` 전환 · 대회·팀) — 경기·순위·선수는 아직 Mock 전용, 컵 화면 남음 |
-| **백엔드** | 🚧 Nest 12 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0**(17대회 · 82대회시즌 · 팀 1,888) · **조회 API 4개** · **L1 스쿼드**(155팀 · 선수 4,863 적재, 관문 테스트 21건 통과) · **L2-a 일정·라운드·순위**(라운드 192 · 경기 1,930 · 순위 132) |
-| CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 7파일 42건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` |
+| 프론트엔드 | 🚧 1~8단계 화면 구현 완료. **실 API 연결**(`VITE_USE_MOCK` 전환) — 대회·팀·**경기·순위·허브·팀 일정·홈** (09-07). 선수·통계·경기 상세 탭·알림·AI 는 Mock 전용, 컵 화면 남음 |
+| **백엔드** | 🚧 Nest 12 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0**(17대회 · 82대회시즌 · 팀 1,888) · **조회 API 7개**(대회·팀·**경기·순위**) · **L1 스쿼드**(155팀 · 선수 4,863 적재, 관문 테스트 21건 통과) · **L2-a 일정·라운드·순위**(라운드 192 · 경기 1,930 · 순위 132) |
+| CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 8파일 50건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` |
 | 배포 | ❌ 미착수 — 1장 **4번**. "배포 PoC" 는 재정의됐다(2장): 정적 빌드가 아니라 Railway + Pages + CORS |
 | 백업 | ✅ 백업·복원 리허설 통과(244KB · public 만 · 로컬 · 수동). 자동화와 사본 이중화는 백필 전에 |
 
@@ -74,7 +74,7 @@
 
 | # | 할 일 | 장 | 콜 | 끝나면 보이는 것 |
 |---|---|---|---|---|
-| 1 | **꺼내기** — 경기·순위·대회 허브 조회 API + 프론트 4화면. 같은 PR 에 `matches.stats_state` 컬럼 · `clock.js` + vitest 첫 테스트 · 홈 블록별 결손 표시 | 6·11 | 0 | 현재 시즌 결과·순위·일정 |
+| ~~1~~ | ~~**꺼내기**~~ ✅ 09-07 PR #24 — `/api/matches`·`/api/standings` · `stats_state` · `live.js` 6함수 · `clock.js` · vitest 3파일 · 블록 결손. **브라우저 실측 6화면 전부 정상** | 6·11 | 0 | ✅ 현재 시즌 결과·순위·일정·홈 |
 | 2 | **백필-1 기록** — 5시즌 × 12대회 일정·결과·순위 + 선수 시즌 통계·랭킹·팀 시즌 통계. 앞에 백업 수동 1회. 같이 L1 2차 실행 · UCL 예선 전용 팀 정리 | 8-b | ~2,000 (1일) | 시즌 선택기 2022~2026 · 통계 화면 · 선수 시즌 기록 |
 | 3 | **경기 상세 쓰기 코드 + 현재 시즌만** — L3·L5 (4 엔드포인트 → 테이블 5개) · `RECHECK → CONFIRMED`. 현재 시즌 2,200경기만 돌리고 **화면으로 본다** ★ 멈춤 지점 | 8-c·10 | ~8,700 (1.5일) | 라인업 · 타임라인 · xG |
 | 4 | **서버화** — 스케줄러 3잡 + 백필 워커(일일 상한)를 한 프로세스에 · Railway + Pages + CORS · 백업 자동화(호스팅 크론 → 객체 저장소) + 리허설 재실행 → **백필-2 나머지 4시즌 무인** | 2·4·8-c | ~35,000 (6일 무인) | 외부 접속 · 5시즌 경기 상세 |
@@ -291,7 +291,7 @@ docker run --rm -i postgres:17 pg_restore --list < <덤프 경로>
 - [x] ~~모든 응답에 `asOf`~~ ✅ `common/as-of.ts` — 목록은 최신 행, 단건은 그 행
 - [x] **식별자 `ref` = `<apiId>-<slug>`** 결정 — `common/ref.ts`. 근거는 BACKEND_FEATURES 2장
 - [x] **대회시즌 `dataState`**(NONE/PARTIAL/COMPLETE) — `common/data-state.ts`. 시즌 선택기 노출 기준
-- [ ] 결손 표기 규약 — 컵 경기의 `hasTeamStats` 등을 응답에 어떻게 실을지 (경기 API 만들 때)
+- [x] ~~결손 표기 규약~~ ✅ 09-07 — 경기 DTO 에 `hasEvents`·`hasLineups`·`hasTeamStats`·`hasPlayerStats` 3값 그대로 + `statsState`. 컵 순위표는 200 + `unavailableReason`
 - [x] ~~프론트 `services/api.js`를 이 스펙에 맞춘다~~ ✅ 09-07 — 대회 목록·상세 · 팀 목록·상세.
       `VITE_USE_MOCK` 으로 Mock/실 API 를 통째로 전환한다. 백엔드는 `CORS_ORIGIN` 으로 출처를 받는다
 
@@ -516,17 +516,18 @@ FT 뒤에 부를 L5 코드가 먼저 있어야 하기 때문이다.
 - [x] ~~`services/api.js` Mock → fetch~~ ✅ 09-07 — 대회·팀만
 - [x] ~~null 정규화 계층~~ ✅ `services/normalize.js` — `ref`→slug, format enum, 시즌 객체→라벨,
       상세에만 있는 값(경기장 등)을 목록에서도 `null` 로 맞춘다
-- [ ] **1장 1번** — 경기 목록 · 경기 상세 상단 · 순위 · 대회 허브. `live.js` 의 `fetchAllMatches` ·
+- [x] ~~**1장 1번**~~ ✅ 09-07 PR #24 — 아래 항목 전부. 브라우저 실측에서 잡은 3건(Mock 안내 푸터 · 팀 shortName=code · 끝난 경기 minute)은 후속 fix
+- [x] ~~경기 목록 · 경기 상세 상단 · 순위 · 대회 허브~~ — `live.js` 의 `fetchAllMatches` ·
       `fetchMatchesByCompetition` · `fetchMatch` · `fetchTeamFixtures` · `fetchStandings` · `fetchCompetitionHub` 교체
-  - [ ] **시계 통일** — `services/clock.js`. Mock 은 `2026-11-23` 고정, 실 API 는 `new Date()`.
+  - [x] ~~**시계 통일**~~ ✅ — `services/clock.js`. Mock 은 `2026-11-23` 고정, 실 API 는 `new Date()`.
         `MatchesPage` · `TeamFixturesPage` · `matchSort` 의 고정 날짜 3곳과 `calcAge` 의 `2026-09-01` 을 여기로
         (`PLAN_REVIEW` 2-1). 발표용 고정 시계가 실 데이터에서 "오늘 = 11월 23일" 을 만든다
-  - [ ] `getKSTDateKey` 를 `utils/dateFormat.js` 로 — 두 페이지에 복사돼 있다
-  - [ ] **vitest 도입** — `dateFormat` · `matchStatus` · `standingsZone` 첫 테스트. `verify` 와 CI `frontend-verify` 에 추가.
+  - [x] ~~`getKSTDateKey` 를 `utils/dateFormat.js` 로~~ ✅ `kstDateKey`
+  - [x] ~~**vitest 도입**~~ ✅ — `dateFormat` · `matchStatus`(진리표 + Mock 37경기 대조) · `normalize` 3파일. `verify` 와 CI `frontend-verify` 에 추가.
         회고 4-5 의 "KST/UTC fix 3회 반복" 이 이 자리다. 프론트 로직 테스트는 지금 0개다
-  - [ ] 홈 — 없는 블록(LIVE 히어로 · 득점 Top5)은 **블록 단위** `NotImplemented`. 홈 전체를 막지 않는다.
+  - [x] ~~홈~~ ✅ — 득점 Top5 는 **블록 단위** `NotImplementedState`. LIVE 히어로는 실 데이터(진행 중 없으면 다음 킥오프). 홈 전체를 막지 않는다.
         `EmptyState` 에 `action` prop (1단계 감사 #11 이후 방치)
-  - [ ] `displayState` 는 `status_short` + `stats_state` 에서 `normalize.js` 가 만든다.
+  - [x] ~~`displayState` 는 `status_short` + `stats_state` 에서 `normalize.js` 가 만든다.~~ ✅
         Mock 의 `displayState` 직접 값과 같은 결과여야 한다 — 그 대조가 테스트다
 - [ ] 1장 4번 뒤 — 경기 상세 탭(라인업 · 통계 · 타임라인) · 선수 상세 · 통계 화면
 - [ ] Socket.io 연결 + REST 풀 싱크 fallback — L4 와 같이
