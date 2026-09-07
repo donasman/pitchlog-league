@@ -194,7 +194,11 @@ npm run backup:verify -- <경로>    # 특정 덤프
 npm run backup:verify -- --keep    # 끝나고 컨테이너를 남긴다
 ```
 
-일회용 `postgres` 컨테이너를 띄워 복원하고 지운다. 운영 DB 는 건드리지 않는다.
+일회용 `postgres` 컨테이너에 `pitchlog_verify` DB 를 만들어 복원하고, 컨테이너째 지운다.
+운영 DB 는 건드리지 않는다.
+
+`--schema=public` 으로 뜬 덤프는 `CREATE SCHEMA public` 을 들고 있는데 새 DB 에는 이미
+`public` 이 있다. 그대로 넣으면 `already exists` 로 멈추므로 복원 전에 비운다.
 
 **검증 기준은 "복원됐다" 가 아니라 "원본과 행 수가 같다" 이다.** 복원은 성공했는데
 테이블이 비어 있는 경우를 잡아야 한다. 테이블마다 `count(*)` 를 운영 DB 와 맞춰 보고
