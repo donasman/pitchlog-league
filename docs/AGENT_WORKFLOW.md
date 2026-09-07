@@ -55,7 +55,19 @@ sub 에게 보내는 지시문은 이 여섯 칸을 전부 채운다. 빈 칸이
 - `dev`·`main` 은 PR 필수. 커밋은 항상 브랜치에서
 - 커밋 하나에 파일 10개 이하가 목표. 문서 동기화는 예외
 
-## 5. 반복 절차는 스킬로
+## 5. 파일 위치 — Cowork 와 CLI 가 같은 것을 본다
+
+```
+.claude/agents/   explorer.md · planner.md · implementer.md · verifier.md   ← 1장의 역할. tools 로 권한을 제한
+.claude/skills/   pitchlog-pr-flow · pitchlog-e2e-fixture · pitchlog-docs-sync  ← 반복 절차
+CLAUDE.md         항상 읽히는 규칙. 이 문서로의 포인터
+```
+
+`verifier` 와 `explorer` 는 `tools` 에 Edit/Write 가 없다 — "쓴 에이전트가 검증하지 않는다" 를 파일 수준에서 강제한다.
+Claude Code CLI 에서는 `/agents` 로 보이고, 스킬은 `/pitchlog-pr-flow` 처럼 강제 호출할 수 있다. 부르지 않아도
+설명(description)이 작업과 맞으면 자동으로 읽힌다.
+
+## 6. 반복 절차는 스킬로
 
 PR 절차 · e2e 픽스처 규칙 · 문서 동기화 — 이 셋은 세션마다 반복돼서 스킬로 저장한다.
 스킬이 있으면 지시문의 "읽을 것" 에 스킬 이름을 적는 것으로 끝난다.
