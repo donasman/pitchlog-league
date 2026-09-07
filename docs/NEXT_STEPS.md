@@ -18,9 +18,9 @@
 | API 실측 | ✅ 완료 — 엔드포인트 53종·컵 30개·5시즌·과거 깊이 전수 조사 |
 | 수집 전략 | ✅ 확정 — 12대회 × 5시즌, 컵 컷오프, 백필 계획 |
 | 스키마 설계 | ✅ 확정 — 테이블 30개, 외래키 미사용 |
-| 프론트엔드 | 🚧 Mock 기반. 1~8단계 화면 구현 완료, 1단계 감사 12건 수정 완료(`c6c43b4`). 실 API 연결·컵 화면 남음 |
+| 프론트엔드 | 🚧 1~8단계 화면 구현 완료. **실 API 첫 연결**(`VITE_USE_MOCK` 전환 · 대회·팀) — 경기·순위·선수는 아직 Mock 전용, 컵 화면 남음 |
 | **백엔드** | 🚧 Nest 12 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0 실 적재 완료**(17대회 · 82대회시즌 · 고유 팀 1,888) · **조회 API 4개**(`/api/competitions`(+:ref) · `/api/teams`(+:ref), Swagger `/docs`) |
-| CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 5파일 28건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · `main` Ruleset |
+| CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 5파일 28건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` |
 | 배포 | ❌ 배포 PoC 미착수 |
 | 백업 | ❌ 없음 — **백필 전 필수** |
 
@@ -39,20 +39,40 @@
 
 ## 1. 지금 당장 — 다음 세션 첫 작업
 
-09-07 에 끝낸 것: 서울 리전 이전 · L0 재실행(이름 카탈로그 표기, 유일 확인) · e2e 가 dev DB 에 남긴 가짜 팀 제거 · 조회 API 4개(PR #12).
+09-07 에 끝낸 것: 서울 리전 이전 · L0 재실행 · 조회 API 4개(PR #12) · `output/` 정리 ·
+`protect-dev` Ruleset · 머지된 원격 브랜치 4개 삭제 · **프론트 첫 연결**.
 
-- [ ] **프론트에 진짜 데이터 첫 연결** — `frontend/src/services/api.js` 의 `fetchCompetitions` · `fetchTeams` 두 개만
-      `GET /api/competitions` · `GET /api/teams?competition=` 로. Mock 형태(`slug`·`shortName`·`currentSeason:'2026-27'`)와
-      응답(`ref`·`shortDisplayName`·`currentSeason.label`)이 달라 **매핑 한 겹**이 필요한데, 그 자리가 11단계 "null 정규화 계층" 이다.
-      `VITE_API_BASE_URL` 환경변수, 백엔드 CORS 허용이 같이 필요하다
-- [ ] **`protect-dev` Ruleset** — PR 필수 + `backend-verify`·`frontend-verify` 통과. dev 에 체크 조건이 없어서
-      PR #8 이 CI 빨강인 채 머지됐다 (#9 에서 수정)
-- [x] ~~**`output/` 정리**~~ ✅ 추적 .md 3개(변경요약 · 발표대본 2) 삭제 커밋 + `.gitignore` 에 `output/`.
-      발표 산출물은 저장소 밖(로컬 · GitHub Release)에서 관리한다는 기존 pptx 정책과 일치.
-      참조하던 `README.md` · `CLAUDE.md` · `FRONTEND_CLI_PROMPT.md` · `archive/README.md` 4곳 같이 정리
-- [ ] 원격 브랜치 정리 — `docs/next-steps-0907` · `fix/l0-e2e-remote-guard` · `feature/read-api` 는 머지됨. `git push origin --delete …`
+- [ ] **실측 확인** — Windows 에서 백엔드(`npm run start:dev`)와 프론트(`npm run dev`)를 같이 띄우고
+      `frontend/.env.local` 에 `VITE_USE_MOCK=false` · `VITE_API_BASE_URL=http://localhost:3000`,
+      백엔드 `.env` 에 `CORS_ORIGIN=http://localhost:5173`. 확인할 것:
+      `/competitions` 6개 · `/teams` 5개 리그 그룹 · 헤더 대회 선택기 · 검색(팀·대회) ·
+      나머지 화면이 "아직 백엔드에 없는 데이터입니다" 로 뜨는지
+- [ ] **로고 직링크 판단** — 팀 배지가 지금 API-Football `logoUrl` 을 직접 건다.
+      5장 "로고 자체 저장" 이 끝나기 전까지는 rate limit 를 탈 수 있다. 실측에서 몇 개나
+      깨지는지 보고, 심하면 5장을 8단계 백필보다 앞으로 당긴다
+- [ ] `npm run verify` (프론트 build 포함) · `npm run lint` (백엔드) — 리눅스 VM 에서는
+      네이티브 바인딩이 Windows 용이라 못 돈다. Windows 나 CI 에서 확인한다
+
+그 뒤는 **4단계 백업**이다. 8단계 백필 전에 반드시 끝내야 한다.
 
 연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma 는 Windows 터미널에서 직접 실행한다.**
+
+---
+
+### 09-07 프론트 첫 연결에서 정한 것
+
+| 항목 | 결정 |
+|---|---|
+| Mock ↔ 실 API | `VITE_USE_MOCK` 로 **통째로** 전환. 한 화면에 섞지 않는다 |
+| 미구현 화면 | `NotImplementedError` 로 드러낸다. 빈 목록으로 위장하면 "없음"과 "아직 없음"을 구분 못 한다 |
+| 팀 배지 | `logoUrl` 우선, 실패·null 이면 이니셜 폴백 (컵 하부팀은 대개 null) |
+| 대회 노출 | 백엔드 17개 중 화면은 6개 — `normalize.js` 의 `VISIBLE_COMPETITION_API_IDS` |
+| 라우팅 | 기존 slug 유지. 대회 6개는 별칭 표로 `ref`→기존 slug·id 로 옮긴다 |
+| 팀 한국어 이름 | 없다. `entityNames` 는 Mock id 키라 1,888팀에 못 붙인다 — 11단계 `localized_names` 적재로 해결 |
+| 선수 검색 | 실 API 모드에서는 인덱스에서 뺀다 (9단계 L1 전까지 조회 API 없음) |
+
+파일: `services/http.js`(fetch 래퍼) · `services/normalize.js`(정규화 계층 = 11장) ·
+`services/live.js`(실 API) · `services/mock.js`(기존 api.js) · `services/api.js`(전환 스위치)
 
 ---
 
@@ -65,7 +85,7 @@
       기존 위반 1건을 잡아 같이 고쳤다
 - [x] ~~pre-commit 훅~~ ✅ `.githooks/pre-commit` — null byte · 깨진 UTF-8 · `.env` ·
       하드코딩된 API 키. **각 개발 환경에서 `git config core.hooksPath .githooks` 1회 필요**
-- [x] ~~GitHub 설정~~ ✅ 기본 브랜치 `dev`, `protect-main`(PR 필수 + `frontend-verify`·`backend-verify`). **`protect-dev` 는 1장**
+- [x] ~~GitHub 설정~~ ✅ 기본 브랜치 `dev`, `protect-main` · `protect-dev` 둘 다 (PR 필수 + `frontend-verify`·`backend-verify`, 09-07)
 - [x] ~~Supabase 프로젝트 생성~~ ✅ `pitchlog-league-dev` (ap-southeast-1). prod 는 필요 시. Session pooler 5432 사용
 - [x] ~~NestJS 스켈레톤~~ ✅ Nest 12 · `/health` · Swagger `/docs` · 환경변수 검증 · PrismaService(adapter-pg)
 - [ ] 배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결
@@ -115,7 +135,9 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 - [x] ~~L0 기준 데이터~~ ✅ 09-07 첫 실 적재 — 17대회 · 82대회시즌(2026 미제공 컵 3개) · 고유 팀 1,888 · 3분 20초 · 건너뜀 0.
       `test/l0.e2e-spec.ts` 가 가짜 API 로 같은 흐름을 CI 마다 돈다. 이름 반영 재실행은 1장
 - [x] `API_FOOTBALL_KEY` 없이도 앱이 뜬다 — 키는 첫 호출에서만 요구 (CI·조회 서버용, PR #9)
-- [ ] 로고는 내려받아 자체 저장 (media URL 직접 링크는 rate limit)
+- [ ] 로고는 내려받아 자체 저장 (media URL 직접 링크는 rate limit).
+      **프론트가 이미 이 URL 을 직접 쓴다** — 팀 배지가 `logoUrl` 을 그대로 건다(09-07).
+      깨지면 이니셜로 폴백하지만, 그건 증상을 가릴 뿐이다. 1장 실측 결과에 따라 순서를 당긴다
 
 ---
 
@@ -130,7 +152,8 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 - [x] **식별자 `ref` = `<apiId>-<slug>`** 결정 — `common/ref.ts`. 근거는 BACKEND_FEATURES 2장
 - [x] **대회시즌 `dataState`**(NONE/PARTIAL/COMPLETE) — `common/data-state.ts`. 시즌 선택기 노출 기준
 - [ ] 결손 표기 규약 — 컵 경기의 `hasTeamStats` 등을 응답에 어떻게 실을지 (경기 API 만들 때)
-- [ ] 프론트 `services/api.js`를 이 스펙에 맞춘다 — `fetchCompetitions` · `fetchTeams` 부터
+- [x] ~~프론트 `services/api.js`를 이 스펙에 맞춘다~~ ✅ 09-07 — 대회 목록·상세 · 팀 목록·상세.
+      `VITE_USE_MOCK` 으로 Mock/실 API 를 통째로 전환한다. 백엔드는 `CORS_ORIGIN` 으로 출처를 받는다
 
 ---
 
@@ -184,8 +207,9 @@ partial unique index가 에러로 막아서 diff가 실패한다 (`SCHEMA_DESIGN
 
 ## 11. 프론트 실 API 연결 + 배포
 
-- [ ] `services/api.js` Mock → fetch
-- [ ] null 정규화 계층 — 아직 없다. 실 API 연결 직전에 `services/api.js`에 넣는다
+- [x] ~~`services/api.js` Mock → fetch~~ ✅ 09-07 — 대회·팀만. 나머지는 L1·L2 뒤
+- [x] ~~null 정규화 계층~~ ✅ `services/normalize.js` — `ref`→slug, format enum, 시즌 객체→라벨,
+      상세에만 있는 값(경기장 등)을 목록에서도 `null` 로 맞춘다
 - [ ] Socket.io 연결 + REST 풀 싱크 fallback
 - [ ] i18n — `localized_names` 적재 후 프론트 `entityNames.js` 제거
 

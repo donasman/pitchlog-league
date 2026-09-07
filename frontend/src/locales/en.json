@@ -274,7 +274,6 @@
     "winner": "Through",
     "through": "{{team}} through",
     "inProgress": "In progress",
-    "tbd": "TBD",
     "tieTbd": "TBD",
     "tieComplete": "FT",
     "noWinner": "No teams confirmed yet",
@@ -476,5 +475,23 @@
     "phase5": "Phase 5",
     "season": "2026-27 season",
     "country": "Country"
+  },
+  "errors": {
+    "notImplemented": "Not available from the backend yet ({{what}})",
+    "networkFailed": "Could not reach the backend: {{detail}}",
+    "requestFailed": "Request failed ({{status}}): {{detail}}",
+    "competitionRequired": "A competition must be specified",
+    "competitionNotFound": "Competition not found: {{ref}}",
+    "feature": {
+      "competition_hub": "competition detail — matches, standings, scorers",
+      "matches": "matches",
+      "team_detail": "team detail — matches, players, standings",
+      "standings": "standings",
+      "players": "players",
+      "stats": "stats",
+      "knockout": "knockout bracket",
+      "home": "home screen",
+      "notifications": "notifications"
+    }
   }
 }
