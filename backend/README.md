@@ -17,11 +17,11 @@ NestJS 기반 핵심 서비스. 외부 축구 API 수집, REST API, 실시간 Ga
 | 영역 | 상태 |
 |---|---|
 | 스키마 | Prisma 모델 29 · enum 17 · 인덱스 90 · 외래키 0. partial unique 4개는 `prisma/sql/partial-indexes.sql` |
-| 수집 | **L0**(대회 17 · 대회시즌 82 · 팀 1,888) · **L1 스쿼드**(155팀 · 선수 4,863) · 로고 자체 저장 |
+| 수집 | **L0**(대회 17 · 대회시즌 82 · 팀 1,888) · **L1 스쿼드**(155팀 · 선수 4,863) · **L2-a 일정·라운드·순위**(코드 완료, 실 적재 전) · 로고 자체 저장 |
 | 조회 API | `/api/competitions`(+`/:ref`) · `/api/teams`(+`/:ref`). Swagger `/docs` 가 계약 |
 | 백업 | `pg_dump` 주기 백업 + 복원 리허설 (로컬 보관 · 수동 실행) |
-| 테스트 | 단위 18 · e2e 6파일 (`l0`·`l1` 은 로컬 DB·CI 에서만) |
-| 남은 것 | L1 #9~#11 · L2 일정 · 배포 |
+| 테스트 | 단위 27 · e2e 7파일 (`l0`·`l1`·`l2` 는 로컬 DB·CI 에서만) |
+| 남은 것 | L2-a 실 적재 + 조회 API·프론트 연결 · L1 #9~#11 · L2-b 백필 · 배포 |
 
 ## 실행
 
@@ -35,10 +35,10 @@ npm run start:dev         # http://localhost:3000 · Swagger /docs · /health
 
 ```bash
 npm run verify            # prisma validate · typecheck · lint · 단위 테스트
-npm run test:e2e          # e2e 6파일
+npm run test:e2e          # e2e 7파일
 ```
 
-`l0`·`l1` e2e 는 도메인 테이블에 가짜 행을 쓴다. **원격 DB 에서는 스스로 거부한다** —
+`l0`·`l1`·`l2` e2e 는 도메인 테이블에 가짜 행을 쓴다. **원격 DB 에서는 스스로 거부한다** —
 로컬 Postgres 를 쓰거나 CI 에서 돌린다 (2026-09-07 에 Supabase dev 로 돌려 가짜 팀이
 실 데이터에 섞인 적이 있다).
 
@@ -48,6 +48,7 @@ npm run test:e2e          # e2e 6파일
 npm run ingest -- status  # API 쿼터 스냅샷
 npm run ingest -- l0      # 대회·시즌·팀·경기장
 npm run ingest -- l1      # 스쿼드 스냅샷 + diff (155콜)
+npm run ingest -- l2      # 라운드·경기·순위 — 화면 6대회 현재 시즌 (18콜)
 npm run ingest -- logos   # 로고를 받아 ../frontend/public/logos 에 저장
 ```
 

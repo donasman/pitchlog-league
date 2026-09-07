@@ -7,6 +7,7 @@ import { HealthModule } from './health/health.module.js';
 import { ApiFootballModule } from './ingestion/api-football/api-football.module.js';
 import { L0Module } from './ingestion/l0/l0.module.js';
 import { L1Module } from './ingestion/l1/l1.module.js';
+import { L2Module } from './ingestion/l2/l2.module.js';
 import { LogoModule } from './ingestion/logos/logo.module.js';
 import { CompetitionModule } from './competition/competition.module.js';
 import { TeamModule } from './team/team.module.js';
@@ -32,6 +33,7 @@ import { TeamModule } from './team/team.module.js';
     ApiFootballModule,
     L0Module,
     L1Module,
+    L2Module,
     LogoModule,
     CompetitionModule,
     TeamModule,

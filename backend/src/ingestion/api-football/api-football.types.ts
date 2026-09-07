@@ -79,3 +79,47 @@ export interface ApiSquad {
     photo: string | null;
   }[];
 }
+
+/** `/fixtures?league=&season=` — 시즌 전체 일정. 미래 경기도 status NS 로 함께 온다 */
+export interface ApiFixture {
+  fixture: {
+    id: number;
+    referee: string | null;
+    timestamp: number;
+    date: string;
+    venue: { id: number | null; name: string | null; city: string | null };
+    status: { long: string | null; short: string; elapsed: number | null; extra: number | null };
+  };
+  league: { id: number; season: number; round: string };
+  teams: {
+    home: { id: number; name: string; winner: boolean | null };
+    away: { id: number; name: string; winner: boolean | null };
+  };
+  goals: { home: number | null; away: number | null };
+  /** 연장·승부차기가 없었으면 null 이다. 0 이 아니다 — win_reason 판정에 쓴다 */
+  score: {
+    halftime: { home: number | null; away: number | null };
+    fulltime: { home: number | null; away: number | null };
+    extratime: { home: number | null; away: number | null };
+    penalty: { home: number | null; away: number | null };
+  };
+}
+
+export interface ApiStandingRow {
+  rank: number;
+  team: { id: number; name: string };
+  points: number;
+  goalsDiff: number;
+  group: string;
+  form: string | null;
+  status: string | null;
+  description: string | null;
+  all: { played: number; win: number; draw: number; lose: number; goals: { for: number; against: number } };
+  home: { played: number; win: number; draw: number; lose: number; goals: { for: number; against: number } };
+  away: { played: number; win: number; draw: number; lose: number; goals: { for: number; against: number } };
+}
+
+/** `/standings?league=&season=` — standings 는 그룹별 배열의 배열이다 */
+export interface ApiStandings {
+  league: { id: number; season: number; standings: ApiStandingRow[][] };
+}
