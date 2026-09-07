@@ -31,6 +31,8 @@ loadEnv({ path: join(BACKEND_DIR, '.env') })
 const PG_IMAGE = process.env.BACKUP_PG_IMAGE ?? 'postgres:17'
 const SCHEMA = process.env.BACKUP_SCHEMA ?? 'public'
 const CONTAINER_PASSWORD = 'verify-only-throwaway'
+/** 기본 postgres DB 를 그대로 쓰지 않는다 — 복원 대상임을 이름으로 드러낸다 */
+const TARGET_DB = 'pitchlog_verify'
 const READY_TIMEOUT_MS = 60_000
 
 /** 테이블마다 count(*) 를 한 번의 왕복으로 받는다 */
@@ -97,6 +99,14 @@ function run(command, cmdArgs, { env, stdinFile, quiet } = {}) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/** 컨테이너 안에서 psql 한 번 */
+function psql(container, db, sql) {
+  return run('docker', [
+    'exec', '-e', 'PGPASSWORD=' + CONTAINER_PASSWORD, container,
+    'psql', '-U', 'postgres', '-d', db, '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-c', sql,
+  ], { quiet: true })
+}
+
 /** "이름 개수" 줄들을 Map 으로 */
 function parseCounts(text) {
   const m = new Map()
@@ -158,19 +168,27 @@ async function main() {
     }
     console.log('   준비됨')
 
-    console.log('\n2. 복원')
+    console.log(`\n2. 빈 DB 준비 (${TARGET_DB})`)
+    // --schema=public 으로 뜬 덤프는 CREATE SCHEMA public 을 들고 있다.
+    // 새 DB 에는 public 이 이미 있어서 그대로 넣으면 "already exists" 로 멈춘다
+    await psql(name, 'postgres', `CREATE DATABASE ${TARGET_DB}`)
+    await psql(name, TARGET_DB, 'DROP SCHEMA IF EXISTS public CASCADE')
+    console.log('   public 비움')
+
+    console.log('\n3. 복원')
     // --exit-on-error: 조용히 넘어가는 오류가 있으면 리허설의 의미가 없다
-    await run('docker', [
-      'exec', '-i', '-e', 'PGPASSWORD=' + CONTAINER_PASSWORD, name,
-      'pg_restore', '--no-owner', '--no-privileges', '--exit-on-error', '-U', 'postgres', '-d', 'postgres',
-    ], { stdinFile: dumpPath })
+    try {
+      await run('docker', [
+        'exec', '-i', '-e', 'PGPASSWORD=' + CONTAINER_PASSWORD, name,
+        'pg_restore', '--no-owner', '--no-privileges', '--exit-on-error', '-U', 'postgres', '-d', TARGET_DB,
+      ], { stdinFile: dumpPath })
+    } catch (cause) {
+      fail(`복원이 실패했다 (위 pg_restore 오류 참조).\n  ${cause.message.split('\n')[0]}`)
+    }
     console.log('   오류 없이 끝남')
 
-    console.log('\n3. 행 수 비교 (복원본 ↔ 운영 DB)')
-    const restored = parseCounts(await run('docker', [
-      'exec', '-e', 'PGPASSWORD=' + CONTAINER_PASSWORD, name,
-      'psql', '-U', 'postgres', '-d', 'postgres', '-t', '-A', '-c', COUNT_SQL,
-    ], { quiet: true }))
+    console.log('\n4. 행 수 비교 (복원본 ↔ 운영 DB)')
+    const restored = parseCounts(await psql(name, TARGET_DB, COUNT_SQL))
 
     const databaseUrl = process.env.DATABASE_URL
     if (!databaseUrl) fail('DATABASE_URL 이 없어 운영 DB 와 비교할 수 없다.')
