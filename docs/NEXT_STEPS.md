@@ -22,7 +22,7 @@
 | **백엔드** | 🚧 Nest 12 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0 실 적재 완료**(17대회 · 82대회시즌 · 고유 팀 1,888) · **조회 API 4개**(`/api/competitions`(+:ref) · `/api/teams`(+:ref), Swagger `/docs`) |
 | CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 5파일 28건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` |
 | 배포 | ❌ 배포 PoC 미착수 |
-| 백업 | 🚧 `npm run backup` 동작 확인(448KB · 로컬 보관 · 수동). **복원 리허설·자동화 남음 — 백필 전 필수** |
+| 백업 | 🚧 `npm run backup` 동작 확인(244KB · public 만 · 로컬 · 수동) + `backup:verify` 절차. **리허설 실행·자동화 남음 — 백필 전 필수** |
 
 ### 확정된 범위
 
@@ -59,8 +59,7 @@
 
 ### 남은 일
 
-- [ ] **복원 리허설** — 4장의 관문. 백필 전에 반드시. Docker 로 `postgres` 컨테이너를
-      띄워 실제로 복원해 보고 테이블 29개·행 수를 확인한다
+- [ ] **복원 리허설 실행** — `npm run backup:verify`. 4장의 관문. 통과해야 백필을 시작한다
 
 그 뒤 **L1 스쿼드**(9단계).
 
@@ -127,9 +126,10 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 
 - [x] ~~`pg_dump` 잡~~ ✅ 09-07 — `npm run backup` (`backend/scripts/backup.mjs`)
 - [x] ~~저장 위치 결정~~ ✅ **로컬**. 홈 디렉터리 아래 `PitchLogBackups`, `BACKUP_DIR` 로 변경 가능
-- [x] ~~첫 백업~~ ✅ 09-07 — 448KB · 22초(대부분 이미지 받는 시간). L0 만 든 상태.
-      단 목차를 보니 Supabase 내부 스키마까지 딸려 와 있었다 → `--schema=public` 로 좁힘
-- [ ] **복원 1회 리허설** — 받아본 적 없는 백업은 백업이 아니다
+- [x] ~~첫 백업~~ ✅ 09-07 — 목차를 보니 Supabase 내부 스키마까지 딸려 와 있었다
+      → `--schema=public` 로 좁히니 448KB → **244KB · 4.2초**. L0 만 든 상태
+- [x] ~~복원 리허설 절차~~ ✅ `npm run backup:verify` — 일회용 컨테이너에 복원 후 행 수 대조
+- [ ] **리허설 1회 실행** — 통과해야 백필 관문이 열린다
 - [ ] 자동 실행 — 지금은 **수동**. 백필 전에 다시 정한다 (아래)
 
 **리허설 없이 백필을 시작하지 않는다.**
@@ -186,19 +186,28 @@ schtasks /Create /TN "PitchLog DB Backup" ^
   /SC WEEKLY /D SUN /ST 03:00
 ```
 
-### 복원 리허설 (미실행)
+### 복원 리허설
 
-형식만 확인하는 것은 복원이 아니다. **빈 DB 에 실제로 넣어 보고** 테이블 29개와
-행 수를 확인한다. 운영 DB 에 하지 않는다 — 덮어쓴다.
+```bash
+npm run backup:verify              # 가장 최근 덤프
+npm run backup:verify -- <경로>    # 특정 덤프
+npm run backup:verify -- --keep    # 끝나고 컨테이너를 남긴다
+```
+
+일회용 `postgres` 컨테이너를 띄워 복원하고 지운다. 운영 DB 는 건드리지 않는다.
+
+**검증 기준은 "복원됐다" 가 아니라 "원본과 행 수가 같다" 이다.** 복원은 성공했는데
+테이블이 비어 있는 경우를 잡아야 한다. 테이블마다 `count(*)` 를 운영 DB 와 맞춰 보고
+하나라도 다르면 실패로 끝낸다. `pg_restore --exit-on-error` 라서 조용히 넘어가는
+오류도 없다.
+
+수집이 도는 중이면 행 수가 달라질 수 있다 — 그때는 수집을 멈추고 다시 돌린다.
 
 목차만 보는 것은 이걸로 된다 — 09-07 에 이걸로 스키마 범위 문제를 잡았다:
 
 ```bash
 docker run --rm -i postgres:17 pg_restore --list < <덤프 경로>
 ```
-
-백업이 이미 Docker 로 도는 만큼 리허설도 같은 이미지로 하는 것이 자연스럽다 —
-`postgres` 컨테이너를 띄우고 복원한 뒤 버리면 운영 DB 를 건드릴 위험이 없다.
 
 ---
 
