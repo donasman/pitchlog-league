@@ -18,7 +18,7 @@ PitchLog 백엔드는 **NestJS + TypeScript 기반 모듈형 모놀리스**로 �
 - 대량·재시작 가능 작업: Redis + BullMQ Worker(필요 시 도입)
 - 입력 검증: DTO + ValidationPipe
 - API 명세: OpenAPI/Swagger
-- 테스트: Jest + Supertest
+- 테스트: vitest + Supertest (Nest 12 기본. 2026-09-06 스켈레톤에서 확정)
 
 초기에는 REST API, 외부 축구 API 수집, 경기일 스케줄러, Socket.io를 하나의 백엔드
 애플리케이션에서 운영한다. 수집량이나 접속량이 커지면 같은 저장소와 도메인 모듈을 공유하면서
@@ -27,7 +27,8 @@ API, Worker, Realtime Gateway를 독립 프로세스로 분리한다.
 ## 이유
 
 - 현재 백엔드 구현물이 없어 전환 비용이 낮다.
-- React 프론트엔드와 TypeScript 생태계를 공유할 수 있다.
+- React 프론트엔드와 Node·npm 생태계를 공유할 수 있다. (프론트는 JavaScript 다 — TypeScript 는 NestJS 가
+  DI·DTO 검증에 컴파일러 메타데이터를 쓰기 때문에 백엔드에만 따라온 선택이지, 프론트와 공유하는 것이 아니다. 09-07 정정)
 - PitchLog 작업은 외부 API·DB·WebSocket·AI 호출 중심의 I/O 작업이다.
 - Spring Boot와 별도 Node 게이트웨이 두 서버를 운영하는 복잡도를 줄일 수 있다.
 - 초기 단순성과 향후 프로세스 분리를 동시에 확보할 수 있다.
