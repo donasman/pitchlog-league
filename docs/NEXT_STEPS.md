@@ -22,7 +22,7 @@
 | **백엔드** | 🚧 Nest 12 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0 실 적재 완료**(17대회 · 82대회시즌 · 고유 팀 1,888) · **조회 API 4개**(`/api/competitions`(+:ref) · `/api/teams`(+:ref), Swagger `/docs`) |
 | CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 5파일 28건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` |
 | 배포 | ❌ 배포 PoC 미착수 |
-| 백업 | 🚧 `npm run backup` 스크립트 완료(로컬 보관). **스케줄러 등록·복원 리허설 남음 — 백필 전 필수** |
+| 백업 | 🚧 `npm run backup` 동작 확인(448KB · 로컬 보관 · 수동). **복원 리허설·자동화 남음 — 백필 전 필수** |
 
 ### 확정된 범위
 
@@ -41,7 +41,7 @@
 
 09-07 에 끝낸 것: 서울 리전 이전 · L0 재실행 · 조회 API 4개(PR #12) · `output/` 정리 ·
 `protect-dev` Ruleset · 원격 브랜치 정리 · **프론트 첫 실 API 연결**(PR #14·#15) ·
-**브라우저 실측** · **로고 자체 저장**(5장을 앞으로 당김) · **백업 스크립트**(4장 일부).
+**브라우저 실측** · **로고 자체 저장**(5장을 앞으로 당김) · **백업 스크립트 + 첫 백업**(4장 일부).
 
 ### 실측에서 나온 것 (09-07, 브라우저)
 
@@ -59,10 +59,8 @@
 
 ### 남은 일
 
-- [ ] **첫 백업** — `cd backend && npm run backup -- --check` 로 점검한 뒤 `npm run backup`.
-      이 PC 에는 `pg_dump` 가 없고 Docker 만 있어 컨테이너로 돈다 (첫 실행은 이미지 받느라 느리다)
-- [ ] **작업 스케줄러 등록** — 주 1회. 명령은 4장에
-- [ ] **복원 리허설** — 4장의 마지막 항목이자 관문. 백필 전에 반드시
+- [ ] **복원 리허설** — 4장의 관문. 백필 전에 반드시. Docker 로 `postgres` 컨테이너를
+      띄워 실제로 복원해 보고 테이블 29개·행 수를 확인한다
 
 그 뒤 **L1 스쿼드**(9단계).
 
@@ -129,8 +127,9 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 
 - [x] ~~`pg_dump` 잡~~ ✅ 09-07 — `npm run backup` (`backend/scripts/backup.mjs`)
 - [x] ~~저장 위치 결정~~ ✅ **로컬**. 홈 디렉터리 아래 `PitchLogBackups`, `BACKUP_DIR` 로 변경 가능
-- [ ] **주 1회 자동 실행** — Windows 작업 스케줄러 등록 (아래)
+- [x] ~~첫 백업~~ ✅ 09-07 — **448KB · 22초**(대부분 이미지 받는 시간). L0 만 든 상태
 - [ ] **복원 1회 리허설** — 받아본 적 없는 백업은 백업이 아니다
+- [ ] 자동 실행 — 지금은 **수동**. 백필 전에 다시 정한다 (아래)
 
 **리허설 없이 백필을 시작하지 않는다.**
 
@@ -145,7 +144,7 @@ R2 는 계정·키 설정이 앞서야 한다. 로컬은 지금 바로 되고 �
 
 ```bash
 cd backend
-npm run backup -- --check   # 실행 방식·버전, DATABASE_URL, 저장 위치만 점검
+npm run backup -- --check   # 실행 방식·데몬·DATABASE_URL·저장 위치·마지막 성공
 npm run backup              # 받는다
 ```
 
@@ -155,16 +154,25 @@ npm run backup              # 받는다
 Docker 쪽이 버전 사고를 막는다. `pg_dump` 가 서버보다 낮으면 덤프를 거부하는데,
 이미지 태그로 고정하면 그 문제가 없다 (`BACKUP_PG_IMAGE`, 기본 `postgres:17`).
 볼륨 마운트는 하지 않는다 — Windows 경로 변환에서 깨지기 쉬워서 덤프를 stdout 으로
-받아 Node 가 파일에 쓴다.
+받아 Node 가 파일에 쓴다. `docker -e` 는 이름만 넘겨 비밀번호가 명령줄에 남지 않게 한다.
 
 - 형식 `custom`(-Fc) — 자체 압축, `pg_restore` 부분 복원 가능
 - `--no-owner --no-privileges` — 다른 서버(로컬·Docker)에 그대로 복원된다
 - 앱을 띄우지 않는다. 백업이 애플리케이션 부팅에 의존하면 **앱이 못 뜰 때 백업도 못 받는다**
-- 비밀번호는 `PG*` 환경변수로 넘긴다 — 인자로 주면 프로세스 목록에 노출된다
-- 보관: 최근 8개 + 그 앞은 달마다 1개씩 12개월. 나머지는 지운다
-- `backup.log` 에 시각·크기·소요시간을 남긴다
+- 실패하면 반쯤 쓰인 덤프를 지운다. 남기면 다음에 정상 백업으로 오인한다
+- 보관: 최근 8개 + 그 앞은 달마다 1개씩 12개월
+- `backup.log` 에 **성공과 실패를 모두** 남기고, 마지막 성공이 8일을 넘으면 경고한다
 
-### 작업 스케줄러 등록 (주 1회, 일요일 03:00)
+### 자동 실행을 미룬 이유
+
+백업이 Docker 로 도는데, 작업 스케줄러가 새벽에 돌 때 **Docker Desktop 이 꺼져 있으면
+조용히 실패한다.** 그래서 지금은 수동으로 두고, 실패를 로그로 잡을 수 있게만 해뒀다.
+
+백필(8~12일 무인 실행) 전에는 반드시 자동화해야 한다. 그때 둘 중 하나를 고른다:
+
+1. **PostgreSQL 클라이언트 도구 설치** — `pg_dump` 가 PATH 에 있으면 스크립트가 자동으로
+   그쪽을 쓴다. Docker 와 무관하게 돌아 가장 확실하다
+2. Docker Desktop 자동 시작 + 스케줄러
 
 ```cmd
 schtasks /Create /TN "PitchLog DB Backup" ^
@@ -172,27 +180,19 @@ schtasks /Create /TN "PitchLog DB Backup" ^
   /SC WEEKLY /D SUN /ST 03:00
 ```
 
-확인·수동 실행·삭제:
-
-```cmd
-schtasks /Query /TN "PitchLog DB Backup"
-schtasks /Run   /TN "PitchLog DB Backup"
-schtasks /Delete /TN "PitchLog DB Backup" /F
-```
-
-PC 가 꺼져 있으면 그 주는 건너뛴다. `backup.log` 로 확인한다.
-
 ### 복원 리허설 (미실행)
 
-받은 덤프를 **빈 DB 에** 복원해 보고, 테이블 29개와 행 수가 맞는지 확인한다.
-운영 DB 에 하지 않는다 — 덮어쓴다.
+형식만 확인하는 것은 복원이 아니다. **빈 DB 에 실제로 넣어 보고** 테이블 29개와
+행 수를 확인한다. 운영 DB 에 하지 않는다 — 덮어쓴다.
+
+목차만 보는 것은 이걸로 된다:
 
 ```bash
-pg_restore --no-owner --no-privileges -d "<빈 DB 접속 문자열>" <덤프 경로>
+docker run --rm -i postgres:17 pg_restore --list < <덤프 경로>
 ```
 
 백업이 이미 Docker 로 도는 만큼 리허설도 같은 이미지로 하는 것이 자연스럽다 —
-`postgres` 컨테이너를 띄우고 거기에 복원한 뒤 버리면 운영 DB 를 건드릴 위험이 없다.
+`postgres` 컨테이너를 띄우고 복원한 뒤 버리면 운영 DB 를 건드릴 위험이 없다.
 
 ---
 
