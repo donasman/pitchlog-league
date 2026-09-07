@@ -23,6 +23,9 @@ frontend/.env.*.local
 # 발표 자료 바이너리 (저장소 미포함, 로컬/Release 로 관리)
 *.pptx
 
+# 발표 산출물 작업 폴더 (로컬 전용, 저장소 미포함)
+output/
+
 # 로컬 백업 아카이브
 _v.tgz
 *.tgz

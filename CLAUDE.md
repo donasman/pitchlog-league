@@ -38,7 +38,6 @@ pitchlog-league/                 ← 모노레포 루트
 │   ├── V2_DESIGN_REVIEW.md      ← 설계 검토 결과 (확정 4건은 V2_DESIGN.md에 반영됨)
 │   ├── RETROSPECTIVE.md         ← v1 회고 — 이 문서의 코드 규칙 다수가 여기서 나옴
 │   └── FEATURE_PLAN.md          ← v1 기능 현황 + v2 초안 (참고용)
-├── output/                      ← 현재 발표본과 변경 요약
 ├── archive/presentations/       ← 이전 발표본 보관
 └── README.md
 ```
