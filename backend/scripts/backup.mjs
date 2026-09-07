@@ -59,17 +59,30 @@ function versionOf(command) {
   return r.error || r.status !== 0 ? null : (r.stdout ?? '').trim()
 }
 
-/** 어떻게 돌릴지 정한다 */
+/**
+ * 어떻게 돌릴지 정한다.
+ * docker 는 CLI 가 있어도 데몬이 죽어 있으면 못 쓴다 — 여기서 같이 확인한다.
+ * 점검(--check)이 통과했는데 덤프에서 실패하면 점검이 점검 구실을 못 한 것이다.
+ */
 function chooseRunner() {
   const local = versionOf('pg_dump')
-  if (local) return { kind: 'local', label: local }
+  if (local) return { kind: 'local', label: local, ready: true }
 
   const docker = versionOf('docker')
-  if (docker) {
-    const image = process.env.BACKUP_PG_IMAGE ?? DEFAULT_PG_IMAGE
-    return { kind: 'docker', label: `${docker} · 이미지 ${image}`, image }
+  if (!docker) return null
+
+  const image = process.env.BACKUP_PG_IMAGE ?? DEFAULT_PG_IMAGE
+  const ping = spawnSync('docker', ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8' })
+  const daemonUp = !ping.error && ping.status === 0
+
+  return {
+    kind: 'docker',
+    image,
+    ready: daemonUp,
+    label: daemonUp
+      ? `${docker} · 데몬 ${(ping.stdout ?? '').trim()} · 이미지 ${image}`
+      : `${docker} · 데몬 응답 없음`,
   }
-  return null
 }
 
 /**
@@ -138,6 +151,13 @@ async function main() {
       '  직접 설치할 때는 서버(Supabase) 메이저 버전 이상이어야 한다.',
     )
   }
+  if (!runner.ready) {
+    fail(
+      'Docker CLI 는 있는데 데몬이 응답하지 않는다.\n' +
+      '  Docker Desktop 을 실행하고 고래 아이콘이 "Running" 이 될 때까지 기다린 뒤 다시 시도한다.\n' +
+      '  Docker 를 쓰지 않으려면 PostgreSQL 클라이언트 도구를 설치한다 (서버 메이저 버전 이상).',
+    )
+  }
   if (!databaseUrl) {
     fail('DATABASE_URL 이 없다 — backend/.env 에 넣는다.')
   }
@@ -168,8 +188,10 @@ async function main() {
     })
     fail(
       `덤프 실패: ${cause.message}\n` +
-      '  버전 오류라면 BACKUP_PG_IMAGE 를 서버 버전 이상으로 올린다 (예: BACKUP_PG_IMAGE=postgres:18).\n' +
-      '  연결 오류라면 DATABASE_URL 을 확인한다 — Session pooler 가 막히면 direct connection 으로 바꾼다.',
+      '  위에 찍힌 오류를 먼저 본다.\n' +
+      '  docker API 연결 실패 → Docker Desktop 이 떠 있는지 확인한다.\n' +
+      '  server version mismatch → BACKUP_PG_IMAGE 를 올린다 (예: BACKUP_PG_IMAGE=postgres:18).\n' +
+      '  연결·인증 오류 → DATABASE_URL 을 확인한다. Session pooler 가 막으면 direct connection 으로 바꾼다.',
     )
   }
 
