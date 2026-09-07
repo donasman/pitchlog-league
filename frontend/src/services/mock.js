@@ -256,8 +256,13 @@ export async function fetchUCLKnockout() { return UCL_KNOCKOUT_TIES }
  */
 export async function fetchOverview() {
   const eplStandings = getStandings('premier-league')?.entries?.slice(0, 3) ?? []
+  // 실 API 대회 객체와 같이 currentSeason 을 붙인다 — 홈 푸터가 읽는다 (오버뷰 Mock 에는 없음)
+  const competitions = COMPETITION_OVERVIEW.map(o => ({
+    ...o,
+    currentSeason: COMPETITIONS.find(c => c.slug === o.slug)?.currentSeason ?? null,
+  }))
   return {
-    competitions: COMPETITION_OVERVIEW,
+    competitions,
     livePulse:    LIVE_PULSE,
     nextKickoff:  NEXT_KICKOFF,
     dataAsOf:     DATA_AS_OF,

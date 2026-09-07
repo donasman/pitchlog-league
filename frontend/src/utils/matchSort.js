@@ -4,6 +4,9 @@
  * 단위 테스트 대상: 시각 오름차순, LIVE 우선 정렬.
  */
 
+import { kstDateKey } from './dateFormat.js'
+import { todayKstKey } from '../services/clock.js'
+
 /**
  * 경기 목록을 킥오프 시각 오름차순으로 정렬
  * LIVE 경기는 항상 앞으로, 같은 상태끼리는 시각 순.
@@ -31,12 +34,12 @@ export function mergeAndSort(matchArrays) {
 }
 
 /**
- * 오늘의 경기만 필터 (고정 기준일 기준 — 발표 데이터가 날짜에 따라 달라지지 않도록 고정)
- * 실제 서비스에서는 기준일을 제거하고 new Date()를 사용
+ * 오늘의 경기만 필터 — KST 날짜 키로 비교한다 (UTC 접두 비교는 KST 자정 전후 경기를 놓친다)
+ * 기준일은 `services/clock.js` 가 정한다: Mock 은 고정 기준일, 실 API 는 실제 오늘
  * @param {Array<Object>} matches
- * @param {string} [referenceDate='2026-11-23']  YYYY-MM-DD
+ * @param {string} [todayKey=todayKstKey()]  YYYY-MM-DD (KST)
  * @returns {Array<Object>}
  */
-export function filterTodayMatches(matches, referenceDate = '2026-11-23') {
-  return matches.filter(m => m.date?.startsWith(referenceDate))
+export function filterTodayMatches(matches, todayKey = todayKstKey()) {
+  return matches.filter(m => m.date != null && kstDateKey(m.date) === todayKey)
 }

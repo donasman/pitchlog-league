@@ -35,7 +35,7 @@ export default function CompetitionsPage() {
 
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 20 }}>
           <h1 className="t-page" style={{ margin: 0, fontSize: 26 }}>{t('nav.competition')}</h1>
-          <span className="t-sub">6 · 2026-27</span>
+          <span className="t-sub">{(competitions ?? []).length}{(competitions ?? []).find(c => c.currentSeason)?.currentSeason ? ` · ${(competitions ?? []).find(c => c.currentSeason).currentSeason}` : ''}</span>
         </div>
 
         <div
