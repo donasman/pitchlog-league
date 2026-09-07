@@ -1,5 +1,9 @@
 name: frontend
 
+# pull_request 에는 paths 필터를 두지 않는다.
+# 필터에 걸려 워크플로가 안 돌면 required status check 는 "보고 대기" 로 영원히 멈춘다.
+# 09-07 에 backend 만 바꾼 PR 이 그렇게 막혔다. push 에는 필터를 남긴다 —
+# 거기서는 required check 판정이 없고 관계없는 커밋으로 러너를 쓸 이유도 없다.
 on:
   push:
     branches: [dev, main]
@@ -8,9 +12,6 @@ on:
       - '.github/workflows/frontend.yml'
   pull_request:
     branches: [dev, main]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend.yml'
 
 # 같은 브랜치에서 새 푸시가 오면 이전 실행을 취소한다
 concurrency:

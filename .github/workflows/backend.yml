@@ -1,5 +1,6 @@
 name: backend
 
+# pull_request 에는 paths 필터를 두지 않는다 — 이유는 frontend.yml 주석 참조
 on:
   push:
     branches: [dev, main]
@@ -8,9 +9,6 @@ on:
       - '.github/workflows/backend.yml'
   pull_request:
     branches: [dev, main]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/backend.yml'
 
 concurrency:
   group: backend-${{ github.ref }}
