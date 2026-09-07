@@ -174,7 +174,7 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
 - 서비스 중 외부 API 호출 절대 금지 (배치·스케줄러 시점에만 허용)
 - Prisma unique·upsert·transaction으로 중복 수집과 동시 쓰기를 방지
 - Prisma migration을 DB 구조의 단일 기준으로 사용
-- 테스트는 Jest·Supertest와 PostgreSQL 테스트 환경 사용
+- 테스트는 vitest·Supertest와 PostgreSQL 테스트 환경 사용 (e2e 는 같은 DB 를 쓰므로 파일 병렬 끔)
 - 외부 API 호출에는 timeout·호출 제한·제한된 retry·backoff 적용
 - Redis·BullMQ는 대량 작업 또는 다중 인스턴스 확장 시에만 도입
 
@@ -221,8 +221,8 @@ API-Football API 키는 환경변수로만 주입한다.
 
 | Phase | 내용 | 검증 기준 | 상태 |
 |---|---|---|---|
-| **0** | 안전장치 + 배포 PoC (프로덕션 코드 없음) | 8-2 DoD 4항목 | 🚧 진행 (저장소 골격·문서 완료 / CI·배포 PoC 미착수) |
-| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🔲 대기 |
+| **0** | 안전장치 + 배포 PoC (프로덕션 코드 없음) | 8-2 DoD 4항목 | 🚧 CI·Ruleset·pre-commit·Supabase·스켈레톤 완료 / 배포 PoC 만 남음 |
+| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 스키마 29테이블 · L0(대회·시즌·팀·경기장) 실 적재 완료 / 백업·조회 API·L1 남음 |
 | **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 | 실제 라운드 1회 무중단 관측 | 🔲 대기 |
 | **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 (Mock 기반 화면·i18n 완료 / 실 API 연결·배포 미착수) |
 | **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🔲 대기 |
