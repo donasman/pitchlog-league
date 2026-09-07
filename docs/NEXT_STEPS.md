@@ -1,6 +1,6 @@
 # PitchLog 다음 작업 순서
 
-> 갱신: 2026-09-07 · 이전 판(09-06)을 대체한다.
+> 갱신: 2026-09-07 (2차, 조회 API 후) · 이전 판(09-06)을 대체한다.
 > 근거 문서: `INGESTION_STRATEGY.md` · `SCHEMA_DESIGN.md` · `DATA_RULES.md` ·
 > `API_INVENTORY.md` · `PRD.md` · `BACKEND_FEATURES.md`
 
@@ -19,8 +19,8 @@
 | 수집 전략 | ✅ 확정 — 12대회 × 5시즌, 컵 컷오프, 백필 계획 |
 | 스키마 설계 | ✅ 확정 — 테이블 30개, 외래키 미사용 |
 | 프론트엔드 | 🚧 Mock 기반. 1~8단계 화면 구현 완료, 1단계 감사 12건 수정 완료(`c6c43b4`). 실 API 연결·컵 화면 남음 |
-| **백엔드** | 🚧 Nest 12 스켈레톤 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0 실 적재 완료** (09-07, 17대회 · 82대회시즌 · 팀 1,888) |
-| CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 포함) · Supabase dev(ap-southeast-1) · 기본 브랜치 `dev` · `main` Ruleset |
+| **백엔드** | 🚧 Nest 12 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0 실 적재 완료**(17대회 · 82대회시즌 · 고유 팀 1,888) · **조회 API 4개**(`/api/competitions`(+:ref) · `/api/teams`(+:ref), Swagger `/docs`) |
+| CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 5파일 28건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · `main` Ruleset |
 | 배포 | ❌ 배포 PoC 미착수 |
 | 백업 | ❌ 없음 — **백필 전 필수** |
 
@@ -37,20 +37,19 @@
 
 ---
 
-## 1. 지금 당장 — 09-07 밤 작업이 남긴 것
+## 1. 지금 당장 — 다음 세션 첫 작업
 
-전부 작다. 다음 세션 첫 30분 안에 끝난다.
+09-07 에 끝낸 것: 서울 리전 이전 · L0 재실행(이름 카탈로그 표기, 유일 확인) · e2e 가 dev DB 에 남긴 가짜 팀 제거 · 조회 API 4개(PR #12).
 
-- [ ] **Supabase 리전** — dev 프로젝트가 `ap-southeast-1`(싱가포르). L0 실측에서 대회 하나(12쿼리)에 ~8초,
-      즉 **쿼리당 왕복 500ms+**. 백필 8~12일 계산에 그대로 곱해지므로 `ap-northeast-2`(서울)로
-      재생성할지 지금 정한다. 데이터는 L0 뿐이라(100콜) 옮기는 비용이 없다. 옮기면 `.env` 갱신 → `migrate deploy` →
-      `partial-indexes.sql` → `ingest -- l0`
-- [ ] **L0 재실행** `npm run ingest -- l0` (~100콜) — 대회 이름을 카탈로그 표기로 덮어쓴다 (09-07 fix 이전 적재분은
-      슈퍼컵 3개가 전부 "Super Cup"). 끝나면 `select name from competitions` 17개 유일 확인
+- [ ] **프론트에 진짜 데이터 첫 연결** — `frontend/src/services/api.js` 의 `fetchCompetitions` · `fetchTeams` 두 개만
+      `GET /api/competitions` · `GET /api/teams?competition=` 로. Mock 형태(`slug`·`shortName`·`currentSeason:'2026-27'`)와
+      응답(`ref`·`shortDisplayName`·`currentSeason.label`)이 달라 **매핑 한 겹**이 필요한데, 그 자리가 11단계 "null 정규화 계층" 이다.
+      `VITE_API_BASE_URL` 환경변수, 백엔드 CORS 허용이 같이 필요하다
 - [ ] **`protect-dev` Ruleset** — PR 필수 + `backend-verify`·`frontend-verify` 통과. dev 에 체크 조건이 없어서
       PR #8 이 CI 빨강인 채 머지됐다 (#9 에서 수정)
 - [ ] **`output/` 정리** — 추적 .md 3개 삭제가 작업 폴더에 미커밋 상태. 커밋(폴더 제거 + `.gitignore`)할지
       `git checkout -- output/` 으로 되돌릴지. pptx 6개는 git 에 없어 복구 불가
+- [ ] 원격 브랜치 정리 — `docs/next-steps-0907` · `fix/l0-e2e-remote-guard` · `feature/read-api` 는 머지됨. `git push origin --delete …`
 
 연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma 는 Windows 터미널에서 직접 실행한다.**
 
