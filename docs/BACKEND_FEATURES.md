@@ -228,11 +228,19 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 |---|---|---|
 | `GET /home` | 홈 | 현재 프론트가 `fetchHomeData` 한 번으로 6종을 받는다 |
 
-**모든 응답 공통 규칙 (검토 C-1):**
+**모든 응답 공통 규칙 (검토 C-1 · 2026-09-07 확정, 코드는 `backend/src/common/`):**
 
-- `asOf` 또는 `updatedAt`을 **반드시 포함**한다. 프론트 `DataTimestamp`가 이미 기대 중이다.
+- 경로는 `/api/...`. `/health` 만 접두사 없이 둔다 (인프라 감시용).
+- `asOf` 를 **반드시 포함**한다 — 목록은 행들의 갱신 시각 중 최신, 단건은 그 행. 프론트 `DataTimestamp`가 이미 기대 중이다.
 - 팀·선수·대회 이름은 `displayName` / `shortDisplayName` / `originalName` 3종을 준다.
-- 오류를 빈 배열로 바꾸지 않는다. 실패는 실패로 응답한다.
+  `localized_names` 적재 전까지 셋 다 원본. 대회의 short 는 카탈로그 상수(`competitions.catalog.ts`).
+- **식별자 `ref` = `<apiId>-<slug>`** (`39-premier-league` · `33-manchester-united`). 숫자가 기준이고 slug 는 읽기용이라
+  `33` 만 보내도, slug 가 틀려도 같은 것을 돌려준다. 위 표의 `:slug` 는 전부 이 `ref` 다.
+  이유: 스키마에 slug 컬럼이 없고, 팀 1,888개엔 같은 이름(Arsenal 잉글랜드·아르헨티나)이 있어 이름만으론 유일하지 않다.
+- **대회시즌마다 `dataState`** — `NONE`(아직 안 받음) · `PARTIAL`(백필 중) · `COMPLETE`. `backfill_jobs.phase` 에서 계산.
+  프론트 시즌 선택기는 `COMPLETE` 만 노출한다. `status`(UPCOMING/IN_PROGRESS/FINISHED)는 시즌 진행 상태라 별개다.
+- `ref` 형식 오류 400 · 없는 것 404 · 모르는 쿼리 파라미터 400 (`forbidNonWhitelisted`). 오류를 빈 배열로 바꾸지 않는다.
+- 구현됨: `GET /api/competitions` · `/api/competitions/:ref` · `/api/teams?competition=&season=` · `/api/teams/:ref`. 나머지는 데이터가 들어오는 계층과 같이.
 
 ---
 

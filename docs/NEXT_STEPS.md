@@ -124,11 +124,13 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 **DTO 계약을 별도 문서로 쓰지 않는다. Swagger 스펙이 계약이다.**
 문서로 쓰면 코드와 갈라진다.
 
-- [ ] `GET /competitions` · `GET /standings` — 여기서 처음 화면에 진짜 데이터가 붙는다
-- [ ] **모든 응답에 `asOf` 포함.** 프론트 `DataTimestamp`가 이미 기대하고 있고
-      나중에 붙이면 전 DTO를 고쳐야 한다 (설계검토 C-1)
-- [ ] 결손 표기 규약 — 컵 경기의 `hasTeamStats` 등을 응답에 어떻게 실을지
-- [ ] 프론트 `services/api.js`를 이 스펙에 맞춘다
+- [x] ~~`GET /competitions` · `GET /standings`~~ → **`/api/competitions`(+`/:ref`) · `/api/teams`(+`/:ref`)** ✅ 09-07.
+      순위표는 L2 전엔 데이터가 없어 `/standings` 는 L2 와 같이. Swagger `/docs` 가 계약. e2e 11건
+- [x] ~~모든 응답에 `asOf`~~ ✅ `common/as-of.ts` — 목록은 최신 행, 단건은 그 행
+- [x] **식별자 `ref` = `<apiId>-<slug>`** 결정 — `common/ref.ts`. 근거는 BACKEND_FEATURES 2장
+- [x] **대회시즌 `dataState`**(NONE/PARTIAL/COMPLETE) — `common/data-state.ts`. 시즌 선택기 노출 기준
+- [ ] 결손 표기 규약 — 컵 경기의 `hasTeamStats` 등을 응답에 어떻게 실을지 (경기 API 만들 때)
+- [ ] 프론트 `services/api.js`를 이 스펙에 맞춘다 — `fetchCompetitions` · `fetchTeams` 부터
 
 ---
 
