@@ -52,7 +52,7 @@ API_FOOTBALL_KEY=키 node scripts/probe-cups.mjs            # 약 60콜
 ```
 external_ids(
   id, entity_type,   -- TEAM | PLAYER | COMPETITION
-  entity_id FK,
+  entity_id,   -- 외래키 없음. 참조 무결성은 백엔드 책임
   source,            -- API_FOOTBALL | SPORTMONKS | ...
   external_id,
   UNIQUE(source, entity_type, external_id)
@@ -119,10 +119,13 @@ Phase 2 완료 후. 그때 다음이 전부 참이면 도입한다.
 실제로 `null`이 관측된 필드 전량은 `API_FIELDS_FULL.md`의
 "null 로 온 필드" 절에 엔드포인트별로 있다. 정규화 계층은 그 목록을 기준으로 짠다.
 
-### 3-3. 정규화 계층은 2단계 착수 전에 넣는다
+### 3-3. 정규화 계층 — `services/normalize.js`
 
-`services/api.js`에 정규화가 없어 `matchStats.js`·`lineups.js`의 `null`이
-경기 상세·선수 상세로 그대로 간다. 화면이 늘어난 뒤 넣으면 전부 고쳐야 한다.
+**2026-09-07 생겼다.** 실 API 첫 연결(대회·팀)과 같이 들어왔다.
+`ref`→slug, format enum, 시즌 객체→라벨을 옮기고 목록/상세의 `null` 형태를 맞춘다.
+
+아직 지나가지 않은 것: `matchStats.js`·`lineups.js` 의 `null` 이다.
+그 화면들은 백엔드에 API 가 없어 Mock 전용이고, 실 API 로 바뀔 때 이 계층을 지난다.
 
 ---
 
