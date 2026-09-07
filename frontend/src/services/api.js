@@ -12,9 +12,10 @@
 
 import * as mock from './mock'
 import * as live from './live'
+import { USE_MOCK } from './env'
 
-/** 문자열 'false' 만 실 API 로 본다 — 오타로 실 API 가 켜지지 않게 */
-export const USE_MOCK = String(import.meta.env.VITE_USE_MOCK ?? 'true') !== 'false'
+/** 기존 import 경로 유지 (`searchIndex.js` 가 여기서 읽는다). 계산은 `env.js` — 순환 import 방지 */
+export { USE_MOCK }
 
 const impl = USE_MOCK ? mock : live
 

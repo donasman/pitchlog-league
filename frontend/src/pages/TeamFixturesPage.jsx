@@ -13,12 +13,8 @@ import { useData } from '@/hooks/useData'
 import { fetchTeamFixtures } from '@/services/api'
 import { getLocalizedName, getLocalizedCompetitionShortName } from '@/utils/localization'
 import { isLive } from '@/utils/matchStatus'
-
-const MOCK_TODAY_KST = '2026-11-23'  // Mock 기준일 (경기 데이터 기준)
-
-function getKSTDateKey(isoString) {
-  return new Date(isoString).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
-}
+import { kstDateKey } from '@/utils/dateFormat'
+import { todayKstKey } from '@/services/clock'
 
 /* 오늘 구분선 */
 function TodayDivider({ t }) {
@@ -83,10 +79,16 @@ export default function TeamFixturesPage() {
   /* 날짜 순 정렬 */
   const sorted = [...filtered].sort((a, b) => a.date.localeCompare(b.date))
 
-  /* 오늘 기준으로 분리: 과거 / 오늘 / 미래 */
-  const past    = sorted.filter(m => getKSTDateKey(m.date) < MOCK_TODAY_KST)
-  const today   = sorted.filter(m => getKSTDateKey(m.date) === MOCK_TODAY_KST)
-  const future  = sorted.filter(m => getKSTDateKey(m.date) > MOCK_TODAY_KST)
+  /* 오늘 기준으로 분리: 과거 / 오늘 / 미래 — "오늘" 은 services/clock 이 정한다 (Mock 고정, 실 API 실제) */
+  const todayKey = todayKstKey()
+  const past    = sorted.filter(m => kstDateKey(m.date) < todayKey)
+  const today   = sorted.filter(m => kstDateKey(m.date) === todayKey)
+  const future  = sorted.filter(m => kstDateKey(m.date) > todayKey)
+
+  /* 시즌 라벨은 응답에서 — 참가 대회의 currentSeason, 없으면 경기의 seasonId */
+  const season = (competitions ?? []).find(c => c.currentSeason)?.currentSeason
+    ?? matches.find(m => m.seasonId)?.seasonId
+    ?? null
 
   return (
     <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
@@ -100,7 +102,7 @@ export default function TeamFixturesPage() {
           <h1 className="t-page" style={{ margin: '4px 0 2px', fontSize: 22 }}>
             {teamName} — {t('team.fixtures')}
           </h1>
-          <span className="t-sub">2026-27 · {t('team.allCompetitions')}</span>
+          <span className="t-sub">{season ? `${season} · ` : ''}{t('team.allCompetitions')}</span>
         </div>
 
         {/* 대회 필터 */}

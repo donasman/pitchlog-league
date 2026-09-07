@@ -103,8 +103,12 @@ export default function PlayerPage() {
             <span>{player.position}</span>
             <span>·</span>
             <span>{player.nationality}</span>
-            <span>·</span>
-            <span>{t('player.age', { age })}</span>
+            {age != null && (
+              <>
+                <span>·</span>
+                <span>{t('player.age', { age })}</span>
+              </>
+            )}
           </div>
           {team && (
             <Link to={`/teams/${team.slug}`} className="inline-flex items-center gap-2 mt-3 group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded">

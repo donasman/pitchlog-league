@@ -5,6 +5,9 @@
  * timeZone: 'Asia/Seoul' 항상 유지.
  */
 
+// clock.js 와 서로 import 한다 — 양쪽 다 top-level 에서는 부르지 않는다 (함수 본문·기본 인자 안에서만)
+import { now } from '../services/clock.js'
+
 const LOCALE_MAP = { ko: 'ko-KR', en: 'en-US' }
 function toIntl(locale) { return LOCALE_MAP[locale] ?? 'ko-KR' }
 
@@ -57,12 +60,23 @@ export function toKSTDateTime(isoString, locale = 'ko') {
 }
 
 /**
- * 선수 생년월일로 나이 계산 (고정 기준일 사용)
- * @param {string} dateOfBirth  ISO date (YYYY-MM-DD)
- * @param {string} [referenceDate='2026-09-01']
- * @returns {number}
+ * ISO datetime(또는 Date)을 KST 날짜 키로 변환 — "오늘"·"같은 날" 판정의 유일한 기준
+ * '2026-03-01T15:00:00Z' → '2026-03-02' (KST = UTC+9)
+ * @param {string|Date} isoOrDate
+ * @returns {string} YYYY-MM-DD
  */
-export function calcAge(dateOfBirth, referenceDate = '2026-09-01') {
+export function kstDateKey(isoOrDate) {
+  return new Date(isoOrDate).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
+}
+
+/**
+ * 선수 생년월일로 나이 계산. 기준일은 `services/clock.js` 의 now() — Mock 은 고정, 실 API 는 실제 시각
+ * @param {string|null|undefined} dateOfBirth  ISO date (YYYY-MM-DD)
+ * @param {string|Date} [referenceDate=now()]
+ * @returns {number|null}  생년월일이 없으면 null — 0 이 아니다
+ */
+export function calcAge(dateOfBirth, referenceDate = now()) {
+  if (dateOfBirth == null) return null
   const birth = new Date(dateOfBirth)
   const ref = new Date(referenceDate)
   let age = ref.getFullYear() - birth.getFullYear()
