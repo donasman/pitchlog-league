@@ -2,7 +2,8 @@
  * L2 — 라운드 · 경기 · 순위 (BACKEND_FEATURES #13·#15, INGESTION_STRATEGY 2-2)
  *
  * 지금은 **화면 6대회의 현재 시즌만** 받는다. 대회당 3콜(rounds · fixtures · standings).
- * 5개년 백필과 컵 6개, 녹아웃 tie·대진표 슬롯은 L2-b 다 (NEXT_STEPS 8장).
+ * 5개년 백필은 이 코드를 전체 대회시즌으로 돌리는 것이고(NEXT_STEPS 8-b, isCurrent 조건만 푼다),
+ * 녹아웃 tie·대진표 슬롯은 L2-b 다 (8-d, 2027-02 실 데이터 뒤).
  *
  * ## 왜 라운드를 먼저 받나
  * 라운드 이름으로 자르지 않기 때문이다. `/fixtures/rounds` 가 주는 **순서**가 ordinal 이고,
