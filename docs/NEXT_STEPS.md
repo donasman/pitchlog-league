@@ -59,8 +59,8 @@
 
 ### 남은 일
 
-- [ ] **PostgreSQL 클라이언트 도구 설치 + 첫 백업** — `cd backend && npm run backup -- --check`
-      로 점검한 뒤 `npm run backup`. **`pg_dump` 는 서버(Supabase) 메이저 버전 이상**이어야 한다
+- [ ] **첫 백업** — `cd backend && npm run backup -- --check` 로 점검한 뒤 `npm run backup`.
+      이 PC 에는 `pg_dump` 가 없고 Docker 만 있어 컨테이너로 돈다 (첫 실행은 이미지 받느라 느리다)
 - [ ] **작업 스케줄러 등록** — 주 1회. 명령은 4장에
 - [ ] **복원 리허설** — 4장의 마지막 항목이자 관문. 백필 전에 반드시
 
@@ -144,9 +144,18 @@ R2 는 계정·키 설정이 앞서야 한다. 로컬은 지금 바로 되고 �
 ### 스크립트
 
 ```bash
-npm run backup -- --check   # pg_dump 유무·버전, DATABASE_URL, 저장 위치만 점검
+cd backend
+npm run backup -- --check   # 실행 방식·버전, DATABASE_URL, 저장 위치만 점검
 npm run backup              # 받는다
 ```
+
+**실행 방식은 자동으로 고른다** — PATH 에 `pg_dump` 가 있으면 그것을, 없고 `docker` 가
+있으면 `postgres` 이미지 안에서 돌린다. 이 PC 에는 Docker 만 있어서 컨테이너로 돈다.
+
+Docker 쪽이 버전 사고를 막는다. `pg_dump` 가 서버보다 낮으면 덤프를 거부하는데,
+이미지 태그로 고정하면 그 문제가 없다 (`BACKUP_PG_IMAGE`, 기본 `postgres:17`).
+볼륨 마운트는 하지 않는다 — Windows 경로 변환에서 깨지기 쉬워서 덤프를 stdout 으로
+받아 Node 가 파일에 쓴다.
 
 - 형식 `custom`(-Fc) — 자체 압축, `pg_restore` 부분 복원 가능
 - `--no-owner --no-privileges` — 다른 서버(로컬·Docker)에 그대로 복원된다
@@ -182,8 +191,8 @@ PC 가 꺼져 있으면 그 주는 건너뛴다. `backup.log` 로 확인한다.
 pg_restore --no-owner --no-privileges -d "<빈 DB 접속 문자열>" <덤프 경로>
 ```
 
-대상 후보: Docker `postgres` 컨테이너 / 로컬 PostgreSQL 의 별도 DB / 두 번째 Supabase 프로젝트.
-어디로 할지 정하는 것이 이 항목의 첫 단계다.
+백업이 이미 Docker 로 도는 만큼 리허설도 같은 이미지로 하는 것이 자연스럽다 —
+`postgres` 컨테이너를 띄우고 거기에 복원한 뒤 버리면 운영 DB 를 건드릴 위험이 없다.
 
 ---
 
