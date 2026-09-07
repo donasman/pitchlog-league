@@ -18,10 +18,10 @@ NestJS 기반 핵심 서비스. 외부 축구 API 수집, REST API, 실시간 Ga
 |---|---|
 | 스키마 | Prisma 모델 29 · enum 17 · 인덱스 90 · 외래키 0. partial unique 4개는 `prisma/sql/partial-indexes.sql` |
 | 수집 | **L0**(대회 17 · 대회시즌 82 · 팀 1,888) · **L1 스쿼드**(155팀 · 선수 4,863) · **L2-a 일정·라운드·순위**(라운드 192 · 경기 1,930 · 순위 132) · 로고 자체 저장 |
-| 조회 API | `/api/competitions`(+`/:ref`) · `/api/teams`(+`/:ref`). Swagger `/docs` 가 계약 |
+| 조회 API | `/api/competitions`(+`/:ref`) · `/api/teams`(+`/:ref`) · **`/api/matches`(+`/:ref`) · `/api/standings`** (09-07). Swagger `/docs` 가 계약 |
 | 백업 | `pg_dump` 주기 백업 + 복원 리허설 (로컬 보관 · 수동 실행) |
-| 테스트 | 단위 27 · e2e 7파일 (`l0`·`l1`·`l2` 는 로컬 DB·CI 에서만) |
-| 남은 것 | 조회 API 확장(경기·순위)·프론트 연결 → 백필-1 기록 → L3·L5 상세 → 서버화·배포 → L4 실시간 (`docs/NEXT_STEPS.md` 1장, 09-07 확정) |
+| 테스트 | 단위 32 · e2e 8파일 50건 (`l0`·`l1`·`l2` 는 로컬 DB·CI 에서만) |
+| 남은 것 | 백필-1 기록(1장 2번) → L3·L5 상세 → 서버화·배포 → L4 실시간 (`docs/NEXT_STEPS.md` 1장) |
 
 ## 실행
 

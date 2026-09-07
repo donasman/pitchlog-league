@@ -21,7 +21,7 @@ pitchlog-league/                 ← 모노레포 루트
 │   │   └── common/ config/ prisma/ health/
 │   ├── prisma/                  ← schema·migration·partial-indexes.sql
 │   ├── scripts/                 ← backup.mjs · restore-check.mjs (DB 백업·복원 리허설)
-│   └── test/                    ← e2e 7파일
+│   └── test/                    ← e2e 8파일
 ├── frontend/                    ← React + Vite + JavaScript, Node 22 고정
 │   └── src/
 │       ├── pages/               ← teams, players, matches, standings, stats
