@@ -47,7 +47,25 @@ const STALE_DAYS = 8
 /** 서버보다 낮으면 덤프가 거부된다. 서버가 더 올라가면 이 값을 올린다 */
 const DEFAULT_PG_IMAGE = 'postgres:17'
 
-const PG_DUMP_ARGS = ['--format=custom', '--no-owner', '--no-privileges']
+/**
+ * public 만 받는다.
+ *
+ * 아무것도 안 주면 Supabase 내부 스키마(auth·storage·realtime·vault·graphql·pgbouncer·
+ * extensions)까지 통째로 딸려 온다. 그건 우리 것이 아니고, 평범한 postgres 컨테이너에는
+ * supabase_admin 롤도 supabase_vault 확장도 없어서 복원이 그 자리에서 깨진다.
+ * vault 는 시크릿 저장소라 로컬 덤프에 남길 이유도 없다.
+ *
+ * 우리 객체는 전부 public 에 있다 — Prisma 가 멀티스키마를 안 쓰고, 확장 함수 의존도 없다.
+ * Supabase 의 auth 는 Supabase 가 관리하며 지금 앱에는 인증이 없다.
+ */
+const DEFAULT_SCHEMA = 'public'
+
+const PG_DUMP_ARGS = [
+  '--format=custom',
+  '--no-owner',
+  '--no-privileges',
+  `--schema=${process.env.BACKUP_SCHEMA ?? DEFAULT_SCHEMA}`,
+]
 const PG_ENV_KEYS = ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSSLMODE']
 
 const checkOnly = process.argv.slice(2).includes('--check')
@@ -179,6 +197,7 @@ async function main() {
   console.log('환경 점검')
   console.log(`  실행 방식     ${runner ? `${runner.kind} — ${runner.label}` : '없음'}`)
   console.log(`  DATABASE_URL ${databaseUrl ? safeUrl(databaseUrl) : '없음'}`)
+  console.log(`  대상 스키마   ${process.env.BACKUP_SCHEMA ?? DEFAULT_SCHEMA}`)
   console.log(`  저장 위치     ${dir}`)
   console.log(`  마지막 성공   ${stale === null ? '없음' : `${stale.toFixed(1)}일 전`}`)
 
