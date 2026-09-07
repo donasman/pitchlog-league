@@ -739,10 +739,10 @@ partial unique index가 막아주지만 그건 **에러로 막는 것**이라 di
 | `lineup_entries` | 432,000 | 35 MB | 경기 × 40명(벤치 포함) |
 | `match_events` | 162,000 | 19 MB | 경기 × 15 |
 | `player_season_stats` | ~30,000 | 9 MB | 선수 × 팀 × 대회시즌 |
-| `players` | ~15,000 | 8 MB | 5시즌 누적, 이적 포함 |
+| `players` | ~15,000 | 8 MB | 5시즌 누적, 이적 포함. **09-07 실측: 현재 시즌 6대회만으로 4,863명** |
 | `team_match_stats` | 21,600 | 5 MB | 경기 × 2 |
 | `matches` | **12,410** | 4 MB | 리그 9,705 + 컵 목록 2,705 |
-| `squad_entries` | ~16,500 | 2 MB | |
+| `squad_entries` | ~16,500 | 2 MB | **09-07 실측: 한 시즌 첫 적재가 4,863행.** 5시즌 + 이적 이력(SCD2)이면 재산정 필요 |
 | `injuries` | ~12,000 | 2 MB | |
 | `bracket_slots` | ~1,500 | 0.2 MB | 컵 7개 × 5시즌 × 15슬롯 |
 | `standings` | 600 | 0.1 MB | 리그만 |

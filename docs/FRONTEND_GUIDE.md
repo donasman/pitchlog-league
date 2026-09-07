@@ -31,8 +31,9 @@ Vite SPA와 NestJS API를 분리하는 방식이므로 사용하지 않음. 이�
 
 ## 2. 현재 프론트엔드 상태
 
-2026-11-23 기준 `frontend`는 **React + Vite + JavaScript**로 구현되어 있으며 주요 화면과
-Mock Data가 연결된 상태임.
+2026-09-07 기준 `frontend`는 **React + Vite + JavaScript**로 구현되어 있으며,
+`VITE_USE_MOCK` 으로 **Mock 과 실 API 를 통째로 전환**함. 대회·팀은 실 API 를 타고
+나머지 화면은 백엔드에 아직 없어 Mock 전용임.
 
 **다국어 지원**: i18next + react-i18next로 한국어(기본)·영어 전환 구현 완료.  
 Header에 언어 전환 버튼 포함. 선택 언어는 `localStorage`('pitchlog-lang')에 저장.  
@@ -132,8 +133,21 @@ frontend/
 
 ## 5. 데이터 처리 기준
 
-화면 설계 단계에서는 `src/mocks`의 Mock Data를 사용함. 페이지 컴포넌트 안에 데이터를
-중복 작성하지 않음. 백엔드 연결 후에는 `src/services`에서 API 호출을 관리함.
+페이지 컴포넌트 안에 데이터를 중복 작성하지 않음. 데이터는 `src/services` 를 통해서만 받음.
+페이지는 `services/api.js` 만 import 함 — 나머지는 직접 부르지 않음.
+
+| 파일 | 역할 |
+|---|---|
+| `api.js` | `VITE_USE_MOCK` 으로 `mock.js`·`live.js` 중 하나를 고르는 전환 스위치 |
+| `mock.js` | 화면 검증용 Mock (`src/mocks` 를 읽음) |
+| `live.js` | 실 API. 백엔드에 없는 것은 `NotImplementedError` 로 드러냄 |
+| `normalize.js` | 정규화 계층 — `ref`→slug, enum, 시즌 객체→라벨, `null` 형태 통일 |
+| `http.js` | fetch 래퍼. 오류를 throw 하고 메시지는 i18n 을 거침 |
+
+**한 화면에서 Mock 과 실 데이터를 섞지 않음.** 섞이면 어디까지 진짜인지 화면만 봐서는 알 수 없음.
+미구현 화면을 빈 목록으로 위장하면 "없음" 과 "아직 없음" 을 구분할 수 없음.
+
+환경변수: `VITE_USE_MOCK`(기본 Mock) · `VITE_API_BASE_URL` · `VITE_LOGO_BASE_URL`.
 
 - 로딩, 오류, 빈 결과를 서로 다른 화면 상태로 표시함
 - 오류를 빈 배열로 바꾸어 정상 화면처럼 숨기지 않음
