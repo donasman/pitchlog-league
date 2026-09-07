@@ -9,6 +9,12 @@
  *   - 끝난 뒤 고아 행이 없다
  *
  * 이 파일은 도메인 테이블에 가짜 행을 쓴다 — 로컬 DB 나 CI 에서만 돈다.
+ *
+ * ## 끝나면 반드시 치운다
+ * `l0.e2e-spec.ts` 는 대회시즌·팀·참가를 **전역으로** 센다. 여기서 만든 추적 대회 하나가
+ * 남아 있으면 그쪽 어설션 여섯 개가 한꺼번에 어긋난다 — 시즌 수·문장 수·현재 시즌 수·
+ * 팀 수·참가 수·콜 수. 실제로 그렇게 깨졌다(09-07 CI).
+ * 파일 실행 순서는 보장되지 않으므로 순서에 기대지 않고 afterAll 에서 되돌린다.
  */
 import 'dotenv/config';
 import { Test } from '@nestjs/testing';
@@ -111,9 +117,40 @@ describe('L1 스쿼드 diff (e2e, 가짜 API)', () => {
   }, 120_000);
 
   afterAll(async () => {
-    // beforeAll 이 가드에서 죽으면 app 이 없다. 여기서 또 던지면 진짜 원인이 가려진다
+    // beforeAll 이 가드에서 죽으면 prisma 가 없다. 정리 실패가 테스트 결과를 덮지 않게 감싼다
+    if (prisma) {
+      try {
+        await cleanupFixture();
+      } catch (cause) {
+        // 여기서 던지면 진짜 실패 원인이 가려진다. 대신 남은 것을 알린다
+        console.warn('[l1 e2e] 픽스처 정리 실패 — 다음 e2e 가 영향을 받을 수 있다:', cause);
+      }
+    }
     await app?.close();
   });
+
+  /**
+   * L1 이 만든 것을 전부 되돌린다. 순서가 곧 제약이다 —
+   * relationMode="prisma" 의 Restrict 는 자식이 남아 있으면 부모 삭제를 막는다.
+   * seasons 는 지우지 않는다. l0 도 같은 연도를 쓴다.
+   */
+  const cleanupFixture = async () => {
+    // 이 테스트의 가짜 선수는 전부 700_000 이상이다 (픽스처 990_1xx · 기본 명단 700_xxx)
+    const created = await prisma.player.findMany({ where: { apiPlayerId: { gte: 700_000 } }, select: { id: true } });
+    if (created.length > 0) {
+      await prisma.squadEntry.deleteMany({ where: { playerId: { in: created.map((p) => p.id) } } });
+      await prisma.player.deleteMany({ where: { apiPlayerId: { gte: 700_000 } } });
+    }
+    if (competitionSeasonId) {
+      await prisma.backfillJob.deleteMany({ where: { competitionSeasonId } });
+      // L0 e2e 가 먼저 돌았다면 이 대회시즌에 저쪽 팀들도 참가로 붙어 있다 — 대회시즌 기준으로 지운다
+      await prisma.competitionEntry.deleteMany({ where: { competitionSeasonId } });
+      await prisma.competitionSeason.deleteMany({ where: { id: competitionSeasonId } });
+    }
+    await prisma.competition.deleteMany({ where: { apiCompetitionId: FIXTURE_COMPETITION_API_ID } });
+    const fixtureTeamIds = [...teamIdByApi.values()];
+    if (fixtureTeamIds.length > 0) await prisma.team.deleteMany({ where: { id: { in: fixtureTeamIds } } });
+  };
 
   /** 픽스처 선수들의 소속 이력 (닫힌 것 포함) */
   const historyOf = async (apiPlayerId: number) => {
