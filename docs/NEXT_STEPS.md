@@ -40,18 +40,31 @@
 ## 1. 지금 당장 — 다음 세션 첫 작업
 
 09-07 에 끝낸 것: 서울 리전 이전 · L0 재실행 · 조회 API 4개(PR #12) · `output/` 정리 ·
-`protect-dev` Ruleset · 머지된 원격 브랜치 4개 삭제 · **프론트 첫 연결**.
+`protect-dev` Ruleset · 원격 브랜치 4개 삭제 · 프론트 첫 연결 · **브라우저 실측** ·
+**로고 자체 저장 CLI**(5장을 앞으로 당김).
 
-- [ ] **실측 확인** — Windows 에서 백엔드(`npm run start:dev`)와 프론트(`npm run dev`)를 같이 띄우고
-      `frontend/.env.local` 에 `VITE_USE_MOCK=false` · `VITE_API_BASE_URL=http://localhost:3000`,
-      백엔드 `.env` 에 `CORS_ORIGIN=http://localhost:5173`. 확인할 것:
-      `/competitions` 6개 · `/teams` 5개 리그 그룹 · 헤더 대회 선택기 · 검색(팀·대회) ·
-      나머지 화면이 "아직 백엔드에 없는 데이터입니다" 로 뜨는지
-- [ ] **로고 직링크 판단** — 팀 배지가 지금 API-Football `logoUrl` 을 직접 건다.
-      5장 "로고 자체 저장" 이 끝나기 전까지는 rate limit 를 탈 수 있다. 실측에서 몇 개나
-      깨지는지 보고, 심하면 5장을 8단계 백필보다 앞으로 당긴다
-- [ ] `npm run verify` (프론트 build 포함) · `npm run lint` (백엔드) — 리눅스 VM 에서는
-      네이티브 바인딩이 Windows 용이라 못 돈다. Windows 나 CI 에서 확인한다
+### 실측에서 나온 것 (09-07, 브라우저)
+
+`/competitions` 6개 · `/teams` 5그룹(EPL 20 · 라리가 20 · 분데스 18) · 헤더 선택기 ·
+미구현 화면 오류 표시 — 전부 의도대로 동작했다. **로고만 빼고.**
+
+팀 목록 한 화면의 로고 96개가 **11초가 지나도 전부 로딩 미완료**였다
+(`loaded: 0, failed: 0, pending: 96`). 같은 URL 을 하나만 받으면 200·90KB 로 멀쩡하다.
+원본이 1개당 90KB 이고 media 호스트가 동시 연결을 조인다. 한 화면에 8.6MB 다.
+
+**폴백이 작동하지 않는다는 게 더 큰 문제였다.** 실패가 아니라 "영원히 로딩 중" 이라
+`<img onError>` 가 불리지 않아 이니셜로 넘어가지 못하고 회색 사각형만 남는다.
+그래서 5장 "로고 자체 저장" 을 8단계 백필보다 앞으로 당겼다.
+
+### 남은 일
+
+- [ ] **Windows 에서 로고 받기** — `cd backend && npm install && npm run ingest -- logos`
+      (`sharp` 신규 의존성. 로고는 공개 media 라 API 키가 필요 없다)
+      → `frontend/public/logos/{teams,competitions}/<apiId>.webp` 96×96, 6대회 참가팀 155개.
+      받은 뒤 저장소에 커밋한다
+- [ ] **재실측** — 팀 목록에서 로고가 뜨는지, 파일 없는 팀이 이니셜로 폴백하는지
+- [ ] `npm run verify`(프론트 build 포함) · 백엔드 `lint`·`typecheck` — 리눅스 VM 에서는
+      네이티브 바인딩(rollup·oxlint·sharp)이 Windows 용이라 못 돈다
 
 그 뒤는 **4단계 백업**이다. 8단계 백필 전에 반드시 끝내야 한다.
 
@@ -65,7 +78,7 @@
 |---|---|
 | Mock ↔ 실 API | `VITE_USE_MOCK` 로 **통째로** 전환. 한 화면에 섞지 않는다 |
 | 미구현 화면 | `NotImplementedError` 로 드러낸다. 빈 목록으로 위장하면 "없음"과 "아직 없음"을 구분 못 한다 |
-| 팀 배지 | `logoUrl` 우선, 실패·null 이면 이니셜 폴백 (컵 하부팀은 대개 null) |
+| 팀 배지 | 우리 정적 파일(`/logos/teams/<apiId>.webp`) 우선, 없으면 404 즉시 → 이니셜 폴백. media URL 직링크는 실측에서 못 쓴다는 게 확인됐다 |
 | 대회 노출 | 백엔드 17개 중 화면은 6개 — `normalize.js` 의 `VISIBLE_COMPETITION_API_IDS` |
 | 라우팅 | 기존 slug 유지. 대회 6개는 별칭 표로 `ref`→기존 slug·id 로 옮긴다 |
 | 팀 한국어 이름 | 없다. `entityNames` 는 Mock id 키라 1,888팀에 못 붙인다 — 11단계 `localized_names` 적재로 해결 |
@@ -135,9 +148,12 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 - [x] ~~L0 기준 데이터~~ ✅ 09-07 첫 실 적재 — 17대회 · 82대회시즌(2026 미제공 컵 3개) · 고유 팀 1,888 · 3분 20초 · 건너뜀 0.
       `test/l0.e2e-spec.ts` 가 가짜 API 로 같은 흐름을 CI 마다 돈다. 이름 반영 재실행은 1장
 - [x] `API_FOOTBALL_KEY` 없이도 앱이 뜬다 — 키는 첫 호출에서만 요구 (CI·조회 서버용, PR #9)
-- [ ] 로고는 내려받아 자체 저장 (media URL 직접 링크는 rate limit).
-      **프론트가 이미 이 URL 을 직접 쓴다** — 팀 배지가 `logoUrl` 을 그대로 건다(09-07).
-      깨지면 이니셜로 폴백하지만, 그건 증상을 가릴 뿐이다. 1장 실측 결과에 따라 순서를 당긴다
+- [x] ~~로고는 내려받아 자체 저장~~ ✅ 09-07 — `ingest -- logos` 가 받아 96×96 webp 로 줄여
+      `frontend/public/logos/` 에 쓴다. 저장소 안이라 배포 인프라(백엔드 호스팅·R2) 결정에
+      묶이지 않고 Cloudflare Pages 가 그대로 서빙한다. 옮기려면 `VITE_LOGO_BASE_URL` 접두사만 바꾼다.
+      동시 4개 · 재시도 2회 · 이미 있는 파일은 건너뜀(`--force` 로 전체 재수집).
+      범위는 화면에 나오는 6대회 현재 시즌 참가팀 — 백필로 팀이 늘면 다시 돌린다.
+      **`npm install` 과 첫 실행은 Windows 에서** (1장)
 
 ---
 
