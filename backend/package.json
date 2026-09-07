@@ -26,7 +26,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "verify": "npm run prisma:validate && npm run typecheck && npm run lint && npm run test",
     "ingest": "nest build && node dist/cli/ingest.js",
-    "backup": "node scripts/backup.mjs"
+    "backup": "node scripts/backup.mjs",
+    "backup:verify": "node scripts/restore-check.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
