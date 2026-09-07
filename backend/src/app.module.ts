@@ -6,6 +6,8 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { HealthModule } from './health/health.module.js';
 import { ApiFootballModule } from './ingestion/api-football/api-football.module.js';
 import { L0Module } from './ingestion/l0/l0.module.js';
+import { CompetitionModule } from './competition/competition.module.js';
+import { TeamModule } from './team/team.module.js';
 
 /**
  * 모듈 경계 (BACKEND_GUIDE):
@@ -27,6 +29,8 @@ import { L0Module } from './ingestion/l0/l0.module.js';
     HealthModule,
     ApiFootballModule,
     L0Module,
+    CompetitionModule,
+    TeamModule,
   ],
 })
 export class AppModule {}
