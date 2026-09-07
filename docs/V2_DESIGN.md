@@ -464,7 +464,7 @@ BullMQ를 설치하지 않는다.
 | 중간에 죽으면 | **이어서 해야 함** → 재시작 지점 저장 필요 | 다음 주기에 다시 함 → 상태 불필요 |
 | 실패의 결과 | 데이터가 덜 찬다 (사이트는 돎) | **사이트가 틀린 값을 보여준다** |
 | 실행 방식 | 수동 트리거 / 주 1회 / 시즌 초 | 10초~1일 주기 |
-| v2 해당 작업 | 스쿼드 500명 적재, 선수통계 백필(~400콜), 시즌 롤오버, 과거 라운드 라인업 | `live=all` 10초, 라인업 5분, 순위 10분, 부상 1일 |
+| v2 해당 작업 | 스쿼드 **4,863명** 적재(09-07 실측), 선수통계 백필(~400콜), 시즌 롤오버, 과거 라운드 라인업 | `live=all` 10초, 라인업 5분, 순위 10분, 부상 1일 |
 
 즉 **재시작 지점을 기억해야 하면 BullMQ Job으로 승격하고, 아니면 Scheduler로 충분하다.**
 
@@ -850,10 +850,10 @@ fix 커밋 35건 중 절반을 없앴을 것"이었다.
 | Phase | 내용 | 산출물 | 검증 |
 |---|---|---|---|
 | **0** | 안전장치 + 배포 PoC (프로덕션 코드 없음) | 빈 스켈레톤 + 녹색 CI | 아래 8-2 완료 기준 |
-| **1** | `Competition`/`Team`/`Season`/`CompetitionEntry` + `Player` 이관 + Localization 기반 + EPL 스쿼드 수집 | EPL 20팀 ~500선수 DB 적재, 영어 원본·한국어 표시명 구조 | 스쿼드 diff·다중 대회 참가·이름 fallback 테스트 통과 |
+| **1** | `Competition`/`Team`/`Season`/`CompetitionEntry` + `Player` 이관 + Localization 기반 + 스쿼드 수집 | **6대회 155팀 · 4,863선수 적재**(09-07 실측), 영어 원본·한국어 표시명 구조 | 스쿼드 diff·다중 대회 참가·이름 fallback 테스트 통과 |
 | **2** | 경기·라인업·순위·종료 후 통계 + NestJS Scheduler·Socket.io Gateway | EPL 매치데이 자동 갱신·푸시 | 실제 라운드 1회 무중단 관측, 재연결 복구 |
 | **3** | 다중 대회·한국어/영어 프론트 + 배포 파이프라인 | EPL 공개 사이트, 언어 전환, 5대 리그/UCL 공통 화면 구조 | 양 언어 반응형 화면, Lighthouse, 백엔드·Socket 장애 시 오류/fallback 확인 |
-| **4** | 라리가·분데스리가·세리에 A·리그 1 + UCL 데이터 활성화 | **최종 확정 범위 완성** | 최종 API 예산, 5,000+페이지 배포, UCL 녹아웃 검증 |
+| **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | **범위는 Phase 1 에서 이미 6대회로 활성화됐다** | 최종 API 예산, 5,000+페이지 배포, UCL 녹아웃 검증 |
 | **5** | 결정적 조회 도구 + AI 챗봇 | 사실 조회·선수 비교·근거 공개가 가능한 AI 패널 | 숫자 환각 0건, 동일 데이터 버전의 판정 일치, 도구 한도·실패 처리 검증 |
 
 > Socket.io Gateway(5-6)는 Phase 0/1에는 넣지 않는다. Phase 2에서 NestJS 경기 스케줄러와
@@ -877,10 +877,10 @@ S0·S1 모두 해결 완료 (2026-08-27) — Phase 0 착수를 막던 두 선행
 | PR | 내용 | 산출물 | 담당 |
 |---|---|---|---|
 | **#1** | 저장소 생성(`pitchlog-league`), 모노레포 골격(`backend/`·`frontend/`·`.github/`), `.gitignore`, `CLAUDE.md` | 빈 뼈대 | repo 생성만 본인 |
-| **#2** | CI 이관 — `file-integrity`/`frontend`/`backend` 3잡 + **Vite lint·build 추가** | 녹색 CI | |
+| **#2** | CI 이관 — `frontend-verify`/`backend-verify` **2잡** + **Vite lint·build 추가**. 파일 무결성은 `.githooks/pre-commit` 으로 갔다 | 녹색 CI | |
 | **#3** | 브랜치 보호 Ruleset — `main`에 PR 필수 + CI 통과 필수, 기본 브랜치 `dev` | GitHub 설정 | **본인** (Settings 권한) |
 | **#4** | pre-commit 훅 — null byte·깨진 UTF-8 + ESLint + 10파일 초과 경고 | `.githooks/pre-commit` | |
-| **#5** | NestJS 스켈레톤 — Prisma 초기 schema, `/health`, Jest·Supertest, 모듈 경계 ESLint 규칙 | `npm run build`·`npm test` 통과 | |
+| **#5** | NestJS 스켈레톤 — Prisma 초기 schema, `/health`, **vitest**·Supertest, 모듈 경계 ESLint 규칙 | `npm run build`·`npm test` 통과 | |
 | **#6** | **배포 PoC** — 4-5의 5가지 확인 | 배포 방식 확정 | |
 
 > **#2에서 `npm run lint`와 `npm run build`를 CI에 넣는 것이 요점이다.** 화면 구현 단계는
@@ -889,9 +889,10 @@ S0·S1 모두 해결 완료 (2026-08-27) — Phase 0 착수를 막던 두 선행
 
 ### 8-2. Phase 0 완료 기준 (DoD)
 
-- [ ] PR 하나가 CI 3잡 통과 → `dev` 머지 → `main` 직접 push가 보호규칙에 막히는 것 확인
+- [x] PR 하나가 CI **2잡** 통과 → `dev` 머지 → `main` 직접 push가 보호규칙에 막히는 것 확인
+      (`pull_request` 에는 `paths` 필터를 두지 않는다 — 필터에 걸리면 required check 가 영원히 대기)
 - [ ] `npm run build`·`npm test`가 PostgreSQL 테스트 환경에서 통과
-- [ ] ESLint 모듈 경계 규칙이 `ingestion/schedule` → `ingestion/jobs` 직접 의존을 실패시킴
+- [ ] ESLint 모듈 경계 규칙 — 실제 모듈은 `ingestion/{api-football,l0,l1,logos}` 다
 - [ ] 배포 PoC 5항목 확인 → **10장 #2 닫기**
 
 ### 8-3. Phase 1 — 첫 도메인 코드
@@ -903,8 +904,9 @@ S0·S1 모두 해결 완료 (2026-08-27) — Phase 0 착수를 막던 두 선행
 5. 스쿼드 수집 + **diff 로직** — v2 최대 리스크(1-3). 테스트 필수
 6. 스쿼드 벌크 적재 Job 1개 — BullMQ 도입 전에는 DB 체크포인트, 도입 후 job 재시작 사용
 
-Phase 1의 검증 기준은 "20팀 500선수가 DB에 있다"가 아니라
+Phase 1의 검증 기준은 "155팀 4,863선수가 DB에 있다"가 아니라
 **"스쿼드 diff 테스트가 이적 시나리오를 통과한다"** 이다.
+**2026-09-07 통과** — 판정 13건(`squad-diff.spec.ts`) + 쓰기 불변식 8건(`l1.e2e-spec.ts`).
 
 ---
 ## 9. 기술 부채 — 가져갈 것 / 버릴 것

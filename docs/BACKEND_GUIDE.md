@@ -17,17 +17,28 @@
 
 ## 모듈 경계
 
+수집 계층(L0~L6)이 디렉터리 이름이다. 아래는 2026-09-07 현재 실재하는 것과
+아직 없는 것을 구분한 것이다.
+
 ```text
 backend/src
-├── competition/ season/ team/ player/ squad/
-├── match/ standing/ statistics/
-├── ingestion/api-football/
-├── ingestion/schedule/
-├── ingestion/jobs/
-├── realtime/
-├── ai/
+├── competition/ team/            조회 API — 있음
+├── player/ match/ standing/ statistics/   Phase 2
+├── ingestion/
+│   ├── api-football/             HTTP client · 쿼터 — 있음
+│   ├── l0/                       대회·시즌·팀·경기장 — 있음
+│   ├── l1/                       스쿼드 스냅샷 + diff — 있음
+│   ├── logos/                    로고 자체 저장 — 있음
+│   ├── screen-scope.ts           "화면에 나오는 대회" 단일 정의 — 있음
+│   └── l2/ l3/ l4/ l5/ l6/       Phase 2
+├── realtime/                     Phase 2 (Gateway)
+├── ai/                           Phase 5
+├── cli/ config/ health/ prisma/  있음
 └── common/
 ```
+
+`scripts/`(백업·복원 리허설)는 `src` 밖이다 — 앱 부팅에 의존하지 않아야 한다.
+백업이 애플리케이션에 의존하면 앱이 못 뜰 때 백업도 못 받는다.
 
 - Controller, Scheduler, Worker, Gateway는 도메인 규칙을 복제하지 않는다.
 - 외부 API 응답 DTO와 내부 응답 DTO를 분리한다.
@@ -87,7 +98,11 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 필수 후보:
 
 - `DATABASE_URL`
-- `API_FOOTBALL_KEY`
+- `API_FOOTBALL_KEY` — 없이도 앱은 뜬다. 첫 호출에서만 요구한다 (조회 서버·CI 용)
+- `CORS_ORIGIN` — 프론트 출처 허용 목록(쉼표). **비우면 CORS 를 켜지 않는다**
+- `LOGO_OUTPUT_DIR` · `BACKUP_DIR` · `BACKUP_PG_IMAGE` · `BACKUP_SCHEMA` — 운영 스크립트용
 - `JWT_SECRET`(관리 기능 도입 시)
 - `REDIS_URL`(BullMQ 또는 다중 인스턴스 도입 시)
 - `LLM_API_KEY`(Phase 5)
+
+기준은 `backend/.env.example` 이다. 새 변수는 거기에 먼저 넣는다.

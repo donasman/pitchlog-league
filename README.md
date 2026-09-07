@@ -3,8 +3,8 @@
 유럽 5대 리그와 UEFA Champions League의 경기·팀·선수 데이터를 수집하고, 실시간 경기 정보와
 검증 가능한 통계 조회를 제공하는 축구 데이터 서비스입니다.
 
-- 첫 구현: EPL 2026–27 시즌
-- 최종 범위: EPL, 라리가, 분데스리가, 세리에 A, 리그 1, UCL
+- 범위: **12대회 × 최근 5시즌** — 5대 리그 + UCL + 국내 컵 6개 (2026-09-04 확정)
+- 현재: 6대회 2026 시즌 적재 완료 (팀 155 · 선수 4,863)
 - 프론트엔드: React + Vite + JavaScript + Tailwind CSS + shadcn/ui
 - 백엔드: NestJS + TypeScript + PostgreSQL + Prisma
 - 실시간: NestJS WebSocket Gateway + Socket.io → 브라우저
@@ -22,9 +22,23 @@ AI는 데이터베이스나 외부 축구 API에 직접 접근하지 않습니�
 backend/    NestJS + TypeScript + Prisma (API·수집·실시간·AI 도구)
 frontend/   React + Vite + Tailwind + shadcn/ui
 design/     Web Foundation 토큰·다크 테마
-infra/      docker-compose 및 배포 설정
+infra/      배포 설정 (docker-compose 는 예정)
 docs/       기획·설계 문서
+scripts/    API 실측 조사 스크립트
+.github/    CI (frontend-verify · backend-verify)
 ```
+
+## 실행
+
+```bash
+cd backend  && npm install && npm run start:dev   # http://localhost:3000 · /docs
+cd frontend && npm install && npm run dev         # http://localhost:5173
+```
+
+프론트는 기본이 Mock 이다. 실 API 로 붙이려면 `frontend/.env.local` 에
+`VITE_USE_MOCK=false` · `VITE_API_BASE_URL=http://localhost:3000`,
+백엔드 `.env` 에 `CORS_ORIGIN=http://localhost:5173`.
+자세한 것은 [backend/README.md](./backend/README.md).
 
 ## 문서 및 발표 자료
 
