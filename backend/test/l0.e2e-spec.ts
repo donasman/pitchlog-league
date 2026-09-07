@@ -105,7 +105,8 @@ describe('L0 적재 (e2e, 가짜 API)', () => {
   }, 60_000);
 
   afterAll(async () => {
-    await app.close();
+    // beforeAll 이 가드에서 죽으면 app 이 없다. 여기서 또 던지면 진짜 원인이 가려진다
+    await app?.close();
   });
 
   const snapshot = async () => {
