@@ -77,7 +77,7 @@ partial index(3.8+)와 `ON CONFLICT`(3.24+)도 지원한다. 그래도 제외한
 - enum 포기와 전 환경 SQLite 통일을 받아들임
 
 **비용이 이유라면 DB를 바꾸지 않는다.** NestJS와 같은 VPS에 Docker PostgreSQL을 띄운다
-(`infra/docker-compose.yml`). Supabase 무료 티어는 7일 비활성 시 정지, Neon은 컴퓨트 시간
+(도입 시 `infra/docker-compose.yml` — 아직 없다). Supabase 무료 티어는 7일 비활성 시 정지, Neon은 컴퓨트 시간
 제한이 있어 10초 스케줄러가 상시 도는 이 서비스와는 궁합이 애매하다.
 
 ## 폐기한 안

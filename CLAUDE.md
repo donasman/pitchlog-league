@@ -15,22 +15,24 @@
 pitchlog-league/                 ← 모노레포 루트
 ├── backend/                     ← NestJS + TypeScript + Prisma
 │   ├── src/
-│   │   ├── competition/ team/ player/ match/ standing/ statistics/
-│   │   ├── ingestion/           ← API-Football·schedule·jobs
-│   │   ├── realtime/            ← NestJS Gateway + Socket.io
-│   │   ├── ai/                  ← 결정적 조회 도구·LLM 오케스트레이터
-│   │   └── common/
-│   └── prisma/                  ← schema·migration
+│   │   ├── competition/ team/   ← 조회 API (player·match·standing·statistics 는 Phase 2)
+│   │   ├── ingestion/           ← api-football · l0 · l1 · logos · screen-scope.ts
+│   │   ├── cli/                 ← ingest CLI (l0 · l1 · logos · status)
+│   │   └── common/ config/ prisma/ health/
+│   ├── prisma/                  ← schema·migration·partial-indexes.sql
+│   ├── scripts/                 ← backup.mjs · restore-check.mjs (DB 백업·복원 리허설)
+│   └── test/                    ← e2e 6파일
 ├── frontend/                    ← React + Vite + JavaScript, Node 22 고정
 │   └── src/
 │       ├── pages/               ← teams, players, matches, standings, stats
 │       ├── routes/              ← React Router 라우트 정의
 │       ├── components/          ← ui, player, team, standings, matches
-│       ├── services/            ← 백엔드 API 연결 계층
+│       ├── services/            ← api(전환 스위치) · mock · live · normalize · http
 │       ├── mocks/               ← 화면 검증용 Mock Data
-│       └── utils/
+│       └── utils/ hooks/ contexts/ i18n/ locales/
+│   └── public/logos/            ← 자체 저장 로고 (teams · competitions)
 ├── design/                      ← Web Foundation 토큰·다크 테마
-├── infra/                       ← docker-compose.yml, 배포 설정
+├── infra/                       ← 배포 설정 (docker-compose.yml 은 예정)
 ├── docs/
 │   ├── BACKEND_GUIDE.md         ← 백엔드 개발 기준 (ADR-001 기반, 현재 기준)
 │   ├── FRONTEND_GUIDE.md        ← 프론트엔드 개발 기준 (현재 기준)
@@ -60,7 +62,9 @@ feature/<이름>  ──PR──▶  dev  ──(검증 통과 후 PR)──▶ 
 ```
 
 - 모든 기능 개발은 `feature/`(또는 `fix/`, `chore/` 등) 브랜치에서 시작해 **`dev`로 PR**
-- `dev`에서 통합 후 테스트(CI 3잡 + 필요 시 수동 검증)
+- `dev`에서 통합 후 테스트(CI 2잡 `frontend-verify`·`backend-verify` + 필요 시 수동 검증)
+- **`pull_request` 에는 `paths` 필터를 두지 않는다** — 필터에 걸려 워크플로가 안 돌면
+  required check 가 "보고 대기" 로 영원히 멈춘다 (09-07 실제로 막혔다)
 - 테스트 완료된 `dev`를 **`main`으로 PR** → 머지 시 배포 트리거
 - `main`·`dev` 모두 직접 커밋 금지. `main`은 PR + CI 통과 필수 Ruleset으로 보호
 - GitHub 저장소의 기본 브랜치(default branch)는 `dev`로 설정한다 (Phase 0 PR #3)
@@ -204,6 +208,16 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
 - `frontend/.env.local`
 - `frontend/.env*.local`
 
+신규 변수는 각 `.env.example` 이 기준이다. 09-07 기준 추가된 것:
+
+| 변수 | 위치 | 뜻 |
+|---|---|---|
+| `CORS_ORIGIN` | backend | 프론트 출처 허용 목록(쉼표). **비우면 CORS 를 켜지 않는다** |
+| `LOGO_OUTPUT_DIR` | backend | `ingest -- logos` 저장 위치 (기본 `../frontend/public/logos`) |
+| `BACKUP_DIR` · `BACKUP_PG_IMAGE` · `BACKUP_SCHEMA` | backend | 백업 저장 위치·Docker 이미지·대상 스키마 |
+| `VITE_USE_MOCK` | frontend | `false` 면 실 API. 기본은 Mock |
+| `VITE_API_BASE_URL` · `VITE_LOGO_BASE_URL` | frontend | 백엔드 주소 · 로고 정적 파일 접두사 |
+
 API-Football API 키는 환경변수로만 주입한다.
 **어드민 비밀번호는 환경변수 필수화** — 미설정 시 부팅 실패 (v1의 기본값
 `admin/admin1234!` 방치 문제 재발 방지, V2_DESIGN.md 9장).
@@ -221,9 +235,9 @@ API-Football API 키는 환경변수로만 주입한다.
 | Phase | 내용 | 검증 기준 | 상태 |
 |---|---|---|---|
 | **0** | 안전장치 + 배포 PoC (프로덕션 코드 없음) | 8-2 DoD 4항목 | 🚧 CI·Ruleset·pre-commit·Supabase·스켈레톤 완료 / 배포 PoC 만 남음 |
-| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 스키마 29테이블 · L0 실 적재 · 조회 API 4개(`/api/competitions`·`/api/teams`) 완료 / 프론트 연결·백업·L1 남음 |
+| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — 스키마 29테이블 · L0 · 조회 API 4개 · 백업·복원 리허설 · **L1 스쿼드**(155팀·선수 4,863, 테스트 21건) / L1 #9~#11 남음 |
 | **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 | 실제 라운드 1회 무중단 관측 | 🔲 대기 |
-| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 (Mock 기반 화면·i18n 완료 / 실 API 연결·배포 미착수) |
+| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 (화면·i18n 완료 · **실 API 첫 연결**(대회·팀) / 나머지 화면 전환·배포 미착수) |
 | **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🔲 대기 |
 
 > ⚠️ **범위가 바뀌었다 (2026-09-04~06).** 원래 Phase 1은 EPL 단독이었고 Phase 4가 다중화였으나,
@@ -234,8 +248,10 @@ API-Football API 키는 환경변수로만 주입한다.
 
 Phase 0 DoD, PR 단위 분해(#1~#6), Phase 1의 구체적 작업 순서는 `V2_DESIGN.md` 8-1·8-3 참조.
 
-Phase 3은 백엔드보다 먼저 Mock Data 기반으로 진행했다. 화면·라우팅·i18n은 구현돼 있고
-`services/api.js`가 Mock을 반환하는 상태이므로, 실 API 연결과 배포가 남은 작업이다.
+Phase 3은 백엔드보다 먼저 Mock Data 기반으로 진행했다. `services/api.js` 는 이제
+**`VITE_USE_MOCK` 으로 `mock.js`·`live.js` 중 하나를 고르는 전환 스위치**다 (09-07).
+대회·팀은 실 API 를 타고, 경기·순위·선수는 백엔드에 아직 없어 `NotImplementedError` 로 드러난다.
+남은 것은 나머지 화면의 실 API 전환과 배포다.
 현재 진행 상황과 다음 순서는 `docs/NEXT_STEPS.md`가 기준이다.
 
 ---
@@ -262,3 +278,29 @@ git fetch --prune
 # dev 기준 최신화
 git checkout dev && git pull origin dev
 ```
+
+### 백엔드 운영 (backend/ 에서)
+
+```bash
+npm run verify                  # prisma validate · typecheck · lint · 단위 테스트
+npm run test:e2e                # e2e — l0·l1 은 로컬 DB·CI 에서만 (원격 DB 가드)
+
+npm run ingest -- status        # API 쿼터 스냅샷
+npm run ingest -- l0            # 대회·시즌·팀·경기장
+npm run ingest -- l1            # 스쿼드 스냅샷 + diff (155콜)
+npm run ingest -- logos         # 로고를 받아 frontend/public/logos 에 저장
+
+npm run backup -- --check       # 백업 환경 점검 (pg_dump/docker · 마지막 성공)
+npm run backup                  # pg_dump — 홈/PitchLogBackups
+npm run backup:verify           # 일회용 컨테이너에 복원해 행 수 대조
+```
+
+### 프론트엔드 (frontend/ 에서)
+
+```bash
+npm run verify                  # validate:data · check:i18n · lint · build
+npm run dev                     # VITE_USE_MOCK=false 면 실 API (VITE_API_BASE_URL 필요)
+```
+
+**연결된 폴더의 셸은 네트워크가 없다.** push·pull·npm·prisma·pg_dump 는
+Windows 터미널에서 직접 실행한다.

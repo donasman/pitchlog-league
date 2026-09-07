@@ -24,7 +24,8 @@
 | [FEATURE_PLAN.md](./FEATURE_PLAN.md) | 기능 현황과 확장 계획 | 참고 문서 |
 | [RETROSPECTIVE.md](./RETROSPECTIVE.md) | v1 개발 이력 분석 및 재발 방지책 | 참고 문서 |
 
-발표 자료는 프로젝트 루트의 `output`에 현재본만 두며, 이전본은 `archive/presentations`에 보관함.
+발표 자료(`output/`·`.pptx`)는 **저장소에 포함하지 않음** — 로컬과 GitHub Release 로 관리함 (2026-09-07).
+이전 발표본 안내는 `archive/README.md` 참조.
 
 `API_INVENTORY.md` · `API_FIELDS_FULL.md` · `CUPS_INVENTORY.md` 와 `api-*.json` 은
 `scripts/probe-*.mjs` 가 덮어쓰는 **생성 문서**다. 손으로 고치지 않는다.
