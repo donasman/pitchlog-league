@@ -483,15 +483,18 @@
     "competitionRequired": "대회를 지정해야 합니다",
     "competitionNotFound": "대회를 찾을 수 없습니다: {{ref}}",
     "feature": {
-      "competition_hub": "대회 상세 — 경기·순위·득점",
-      "matches": "경기",
       "team_detail": "팀 상세 — 경기·선수·순위",
-      "standings": "순위표",
       "players": "선수",
       "stats": "통계",
       "knockout": "녹아웃 대진",
       "home": "홈 화면",
-      "notifications": "알림"
+      "notifications": "알림",
+      "lineups": "라인업",
+      "match_stats": "경기 통계",
+      "h2h": "상대 전적",
+      "events": "경기 이벤트",
+      "top_scorers": "득점 순위",
+      "top_assisters": "도움 순위"
     }
   }
 }

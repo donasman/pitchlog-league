@@ -21,26 +21,21 @@ import StandingsTable from '@/components/ui/StandingsTable'
 import LiveHeroCard from '@/components/home/LiveHeroCard'
 import { isLive } from '@/utils/matchStatus'
 import { getLocalizedCompetitionName } from '@/utils/localization'
+import { kstDateKey } from '@/utils/dateFormat'
+import { todayKstKey, tomorrowKstKey } from '@/services/clock'
 
 /* ── 상수 ── */
-const MOCK_TODAY = '2026-11-23'   // Mock 기준일 (Live 경기 날짜)
-
 const STATUS_GROUPS = {
   live:      ['live', 'halftime'],
   scheduled: ['scheduled'],
   finished:  ['confirmed', 'final', 'recheck', 'postponed', 'cancelled'],
 }
 
-/* ── 날짜 유틸 ── */
-function getKSTDateKey(isoString) {
-  return new Date(isoString).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
-}
-
 /* ── 경기 날짜별 그룹화 ── */
 function groupByDate(matches) {
   const map = {}
   for (const m of matches) {
-    const key = getKSTDateKey(m.date)
+    const key = kstDateKey(m.date)
     if (!map[key]) map[key] = { key, firstIso: m.date, matches: [] }
     map[key].matches.push(m)
   }
@@ -246,9 +241,10 @@ function DayGroup({ group, t, locale }) {
     { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' }
   )
 
+  /* "오늘"·"내일" 은 services/clock 이 정한다 — Mock 은 고정 기준일, 실 API 는 실제 오늘 (KST) */
   let dayTag = null
-  if (group.key === MOCK_TODAY) dayTag = t('matches.today')
-  else if (group.key === '2026-11-24') dayTag = t('matches.tomorrow')
+  if (group.key === todayKstKey()) dayTag = t('matches.today')
+  else if (group.key === tomorrowKstKey()) dayTag = t('matches.tomorrow')
 
   const liveCount = group.matches.filter(m => isLive(m.displayState)).length
 
@@ -289,7 +285,7 @@ function DayGroup({ group, t, locale }) {
 ───────────────────────────────────────────────────────────── */
 function MiniStandingsPanel({ competitions, activeCompSlug, t, locale }) {
   const displaySlug = activeCompSlug === 'all' ? 'premier-league' : activeCompSlug
-  const { data: standingsData, loading } = useData(
+  const { data: standingsData, loading, error } = useData(
     () => fetchStandings(displaySlug),
     [displaySlug]
   )
@@ -326,6 +322,8 @@ function MiniStandingsPanel({ competitions, activeCompSlug, t, locale }) {
           <div style={{ padding: 12 }}>
             <LoadingSkeleton rows={6} />
           </div>
+        ) : error ? (
+          <ErrorState description={error} />
         ) : entries.length > 0 ? (
           <div style={{ padding: '4px 0' }}>
             <StandingsTable entries={entries} maxRows={8} compact competitionSlug={displaySlug} />

@@ -79,6 +79,13 @@ enum TieStatus {
   DECIDED
 }
 
+/// 통계 확정 상태 — 프론트 recheck/confirmed 배지의 유일한 소스 (SCHEMA_DESIGN 3-3)
+enum StatsState {
+  NONE
+  RECHECK
+  CONFIRMED
+}
+
 /// 대진표 슬롯 3상태 (INGESTION_STRATEGY 2-3)
 enum SlotState {
   CONFIRMED
@@ -462,6 +469,9 @@ model Match {
   hasTeamStats        Boolean?  @map("has_team_stats")
   hasPlayerStats      Boolean?  @map("has_player_stats")
   detailCheckedAt     DateTime? @map("detail_checked_at") @db.Timestamptz(6)
+  /// 통계 확정 상태. L2 는 기본값 NONE 만 쓰고 L5 가 RECHECK → CONFIRMED 로 올린다 (SCHEMA_DESIGN 3-3)
+  statsState          StatsState @default(NONE) @map("stats_state")
+  confirmedAt         DateTime? @map("confirmed_at") @db.Timestamptz(6)
 
   /// 실시간 이벤트 순서 보장. WHERE data_version < ? 로 역행 갱신을 막는다
   dataVersion         Int       @default(0) @map("data_version")

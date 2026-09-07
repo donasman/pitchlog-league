@@ -41,18 +41,19 @@ export default function AppHeader() {
   ]
 
   const currentCompSlug = searchParams.get('competition') ?? 'premier-league'
-  const currentSeasonId = searchParams.get('season')      ?? '2026-27'
 
   // 헤더는 목록을 못 받아도 페이지를 막지 않는다 — 선택기만 비워두고 나머지는 그대로 뜬다
   const { data: competitionsData } = useData(fetchCompetitions, [])
   const { data: seasonsData }      = useData(fetchSeasons, [])
   const competitions = competitionsData ?? []
   const seasons      = seasonsData ?? []
+  // URL 에 시즌이 없으면 목록의 첫 항목(최신). 목록도 없으면 표기를 비운다 — 리터럴로 채우지 않는다
+  const currentSeasonId = searchParams.get('season') ?? seasons[0]?.id ?? null
 
   const selectedComp =
     competitions.find(c => c.slug === currentCompSlug) ?? competitions[0] ?? null
   const selectedSeason =
-    seasons.find(s => s.id === currentSeasonId) ?? seasons[0] ?? { id: currentSeasonId, label: currentSeasonId }
+    seasons.find(s => s.id === currentSeasonId) ?? seasons[0] ?? { id: null, label: '' }
 
   function setParam(key, value) {
     setSearchParams(prev => {

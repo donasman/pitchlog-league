@@ -34,7 +34,9 @@ export default function TeamsPage() {
 
         <div style={{ marginBottom: 24 }}>
           <h1 className="t-page" style={{ margin: 0, fontSize: 26 }}>{t('nav.teams')}</h1>
-          <span className="t-sub">2026-27</span>
+          {(groups ?? []).find(g => g.comp?.currentSeason)?.comp.currentSeason && (
+            <span className="t-sub">{(groups ?? []).find(g => g.comp?.currentSeason).comp.currentSeason}</span>
+          )}
         </div>
 
         <div style={{ display: 'grid', gap: 32 }}>
