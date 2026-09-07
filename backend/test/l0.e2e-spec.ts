@@ -85,6 +85,13 @@ describe('L0 적재 (e2e, 가짜 API)', () => {
   const queries: string[] = [];
 
   beforeAll(async () => {
+    // 이 테스트는 도메인 테이블(competitions · teams · venues · competition_entries)에 가짜 행을 쓴다.
+    // 2026-09-07 에 Supabase dev 에 대고 돌려서 가짜 팀 50개가 실 데이터에 섞였다 — 로컬 DB 나 CI 에서만 돈다.
+    const host = new URL(process.env.DATABASE_URL ?? 'postgresql://x/').hostname;
+    const local = ['localhost', '127.0.0.1', '::1'].includes(host);
+    if (!local && !process.env.CI && process.env.E2E_ALLOW_REMOTE_DB !== '1') {
+      throw new Error(`l0 e2e 는 가짜 데이터를 쓰므로 원격 DB(${host})에서는 돌리지 않는다 — 로컬 Postgres 를 쓰거나 E2E_ALLOW_REMOTE_DB=1`);
+    }
     // PrismaService 는 development 에서만 query 이벤트를 켠다 — B-2(ON CONFLICT) 검증에 원문 SQL 이 필요.
     // vitest 는 NODE_ENV=test 를 넣으므로 ConfigModule 이 읽기 전에 바꾸고 나서 AppModule 을 불러온다 (import 호이스팅 회피)
     process.env.NODE_ENV = 'development';

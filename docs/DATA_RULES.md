@@ -190,6 +190,13 @@ L1 diff 가 매일 `/leagues` 를 다시 보므로 시즌이 생기면 그때 �
 Copa del Rey·Coupe de France는 2026 시즌이 아직 없다.
 `competition_seasons.status`(UPCOMING / IN_PROGRESS / FINISHED)가 이래서 필요하다.
 
+### 6-1. `/status` 의 호출 카운터도 신뢰하지 않는다 (2026-09-07 실측 2회)
+
+L0 가 99콜을 보낸 직후 `/status` 의 `requests.current` 는 22 만큼(1회차), 11 만큼(2회차) 늘어 있었다.
+지연 반영으로 보이며 얼마나 늦는지는 모른다.
+쿼터 판단(경고선 6,000콜/일)은 **클라이언트가 직접 센 콜 수**(`ApiFootballClient.callCount` → `ingestion_runs.calls_used`)로 한다.
+`/status` 값은 `api_quota_snapshots` 에 참고로만 저장한다.
+
 ---
 
 ## 7. 화면 설계에 주는 영향
