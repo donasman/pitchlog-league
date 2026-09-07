@@ -40,6 +40,11 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsUrl({ require_tld: false })
   REDIS_URL?: string;
+
+  /** 프론트 출처 허용 목록. 쉼표 구분. 비면 CORS 를 켜지 않는다 (app.setup.ts) */
+  @IsOptional()
+  @IsString()
+  CORS_ORIGIN?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

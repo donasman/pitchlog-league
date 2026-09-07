@@ -8,7 +8,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, NavLink, useSearchParams, useMatch } from 'react-router-dom'
 import { Home, Trophy, Calendar, Users, List, BarChart2, Search, Menu, X, ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { COMPETITIONS, SEASONS } from '@/mocks/competitions'
+import { useData } from '@/hooks/useData'
+import { fetchCompetitions, fetchSeasons } from '@/services/api'
 import ThemeToggle from './ThemeToggle'
 import LanguageToggle from './LanguageToggle'
 import SearchPanel from './SearchPanel'
@@ -42,8 +43,16 @@ export default function AppHeader() {
   const currentCompSlug = searchParams.get('competition') ?? 'premier-league'
   const currentSeasonId = searchParams.get('season')      ?? '2026-27'
 
-  const selectedComp   = COMPETITIONS.find(c => c.slug === currentCompSlug) ?? COMPETITIONS[0]
-  const selectedSeason = SEASONS.find(s => s.id === currentSeasonId)        ?? SEASONS[0]
+  // 헤더는 목록을 못 받아도 페이지를 막지 않는다 — 선택기만 비워두고 나머지는 그대로 뜬다
+  const { data: competitionsData } = useData(fetchCompetitions, [])
+  const { data: seasonsData }      = useData(fetchSeasons, [])
+  const competitions = competitionsData ?? []
+  const seasons      = seasonsData ?? []
+
+  const selectedComp =
+    competitions.find(c => c.slug === currentCompSlug) ?? competitions[0] ?? null
+  const selectedSeason =
+    seasons.find(s => s.id === currentSeasonId) ?? seasons[0] ?? { id: currentSeasonId, label: currentSeasonId }
 
   function setParam(key, value) {
     setSearchParams(prev => {
@@ -121,7 +130,7 @@ export default function AppHeader() {
               aria-haspopup="listbox"
               className={dropdownBtn}
             >
-              <span className="font-medium">{selectedComp.shortName}</span>
+              <span className="font-medium">{selectedComp?.shortName ?? '—'}</span>
               <ChevronDown size={12} aria-hidden="true" />
             </button>
             {compOpen && (
@@ -130,7 +139,7 @@ export default function AppHeader() {
                 role="listbox"
                 aria-label={t('header.competitionSelect')}
               >
-                {COMPETITIONS.map(c => (
+                {competitions.map(c => (
                   <button
                     key={c.slug}
                     role="option"
@@ -163,7 +172,7 @@ export default function AppHeader() {
                 role="listbox"
                 aria-label={t('header.seasonSelect')}
               >
-                {SEASONS.map(s => (
+                {seasons.map(s => (
                   <button
                     key={s.id}
                     role="option"
@@ -261,7 +270,7 @@ export default function AppHeader() {
           <span>{getLocalizedCompetitionName(selectedComp, locale)}</span>
           <span>·</span>
           <span>{selectedSeason.label} {t('header.season')}</span>
-          {selectedComp.format === 'groups_knockout' && (
+          {selectedComp?.format === 'groups_knockout' && (
             <><span>·</span><span className="text-blue-600 dark:text-blue-400">{t('header.leaguePhaseOngoing')}</span></>
           )}
         </div>
@@ -300,7 +309,7 @@ export default function AppHeader() {
 
             <div className="border-t border-border pt-4 space-y-2">
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-3">{t('header.competitionsSection')}</p>
-              {COMPETITIONS.map(c => (
+              {competitions.map(c => (
                 <button
                   key={c.slug}
                   onClick={() => { setParam('competition', c.slug); setMobileOpen(false) }}
