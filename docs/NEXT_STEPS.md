@@ -1,11 +1,11 @@
 # PitchLog 다음 작업 순서
 
-> 갱신: 2026-09-06 · 이전 판(09-03)을 대체한다.
+> 갱신: 2026-09-07 · 이전 판(09-06)을 대체한다.
 > 근거 문서: `INGESTION_STRATEGY.md` · `SCHEMA_DESIGN.md` · `DATA_RULES.md` ·
 > `API_INVENTORY.md` · `PRD.md` · `BACKEND_FEATURES.md`
 
-**설계는 충분하다. 백엔드 코드가 0줄이므로 여기서 문서를 더 쓰면 계속 0줄이다.**
-아래는 코드로 넘어가는 순서다.
+**설계는 충분하다. 코드가 돌기 시작했다 — 문서는 코드가 바꾼 사실만 갱신한다.**
+아래는 코드로 넘어가는 순서다. 세션을 새로 열면 **1장부터** 본다.
 
 ---
 
@@ -19,8 +19,9 @@
 | 수집 전략 | ✅ 확정 — 12대회 × 5시즌, 컵 컷오프, 백필 계획 |
 | 스키마 설계 | ✅ 확정 — 테이블 30개, 외래키 미사용 |
 | 프론트엔드 | 🚧 Mock 기반. 1~8단계 화면 구현 완료, 1단계 감사 12건 수정 완료(`c6c43b4`). 실 API 연결·컵 화면 남음 |
-| **백엔드** | ❌ **코드 0줄** |
-| CI · 배포 · DB | ❌ 미구성. Supabase 프로젝트도 아직 없다 |
+| **백엔드** | 🚧 Nest 12 스켈레톤 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0 실 적재 완료** (09-07, 17대회 · 82대회시즌 · 팀 1,888) |
+| CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 포함) · Supabase dev(ap-southeast-1) · 기본 브랜치 `dev` · `main` Ruleset |
+| 배포 | ❌ 배포 PoC 미착수 |
 | 백업 | ❌ 없음 — **백필 전 필수** |
 
 ### 확정된 범위
@@ -36,16 +37,22 @@
 
 ---
 
-## 1. 지금 당장 — 푸시
+## 1. 지금 당장 — 09-07 밤 작업이 남긴 것
 
-커밋이 로컬에만 있다. 이번 조사 산출물(문서 8개, 스크립트 3개)이 한 대의 PC에만 있는 상태다.
+전부 작다. 다음 세션 첫 30분 안에 끝난다.
 
-```bash
-cd /c/Dev/pitchlog-league
-git push -u origin docs/api-data-inventory
-```
+- [ ] **Supabase 리전** — dev 프로젝트가 `ap-southeast-1`(싱가포르). L0 실측에서 대회 하나(12쿼리)에 ~8초,
+      즉 **쿼리당 왕복 500ms+**. 백필 8~12일 계산에 그대로 곱해지므로 `ap-northeast-2`(서울)로
+      재생성할지 지금 정한다. 데이터는 L0 뿐이라(100콜) 옮기는 비용이 없다. 옮기면 `.env` 갱신 → `migrate deploy` →
+      `partial-indexes.sql` → `ingest -- l0`
+- [ ] **L0 재실행** `npm run ingest -- l0` (~100콜) — 대회 이름을 카탈로그 표기로 덮어쓴다 (09-07 fix 이전 적재분은
+      슈퍼컵 3개가 전부 "Super Cup"). 끝나면 `select name from competitions` 17개 유일 확인
+- [ ] **`protect-dev` Ruleset** — PR 필수 + `backend-verify`·`frontend-verify` 통과. dev 에 체크 조건이 없어서
+      PR #8 이 CI 빨강인 채 머지됐다 (#9 에서 수정)
+- [ ] **`output/` 정리** — 추적 .md 3개 삭제가 작업 폴더에 미커밋 상태. 커밋(폴더 제거 + `.gitignore`)할지
+      `git checkout -- output/` 으로 되돌릴지. pptx 6개는 git 에 없어 복구 불가
 
-연결된 폴더의 셸은 리눅스 VM이라 Windows 자격 증명 관리자를 못 쓴다. **Windows 터미널에서 직접 실행한다.**
+연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma 는 Windows 터미널에서 직접 실행한다.**
 
 ---
 
@@ -58,7 +65,7 @@ git push -u origin docs/api-data-inventory
       기존 위반 1건을 잡아 같이 고쳤다
 - [x] ~~pre-commit 훅~~ ✅ `.githooks/pre-commit` — null byte · 깨진 UTF-8 · `.env` ·
       하드코딩된 API 키. **각 개발 환경에서 `git config core.hooksPath .githooks` 1회 필요**
-- [ ] **GitHub 설정** — 기본 브랜치 `dev`, `main`에 PR 필수 + CI 통과 Ruleset (웹에서만 가능)
+- [x] ~~GitHub 설정~~ ✅ 기본 브랜치 `dev`, `protect-main`(PR 필수 + `frontend-verify`·`backend-verify`). **`protect-dev` 는 1장**
 - [x] ~~Supabase 프로젝트 생성~~ ✅ `pitchlog-league-dev` (ap-southeast-1). prod 는 필요 시. Session pooler 5432 사용
 - [x] ~~NestJS 스켈레톤~~ ✅ Nest 12 · `/health` · Swagger `/docs` · 환경변수 검증 · PrismaService(adapter-pg)
 - [ ] 배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결
@@ -76,8 +83,9 @@ git push -u origin docs/api-data-inventory
 - [x] ~~Windows 에서 검증~~ ✅ validate · generate · typecheck · lint 통과
 - [x] ~~Supabase dev URL 로 `migrate dev`~~ ✅ `20260906144654_init` — 테이블 29 · 인덱스 90 · FK 0.
       partial index 4개 SQL 끝에 수동 추가. `/health` db:true, e2e 3건 통과(고아 행 검사 포함)
-- [ ] **Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 쿼리 로그로 확인**
-      아니면 `$executeRaw`로 바꾸고 **동시 호출 테스트를 같은 PR에** (설계검토 B-2)
+- [x] ~~Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지~~ ✅ 확인 대신 **강제** — `prisma/batch-upsert.ts` 가
+      raw `INSERT … ON CONFLICT` 를 만든다. `test/l0.e2e-spec.ts` 가 쿼리 로그로 문장 수까지 검사 (B-2 종결).
+      동시 호출 테스트는 `players` 를 만드는 PR 에서
 - [x] ~~백엔드 CI~~ ✅ `backend.yml` — Postgres 16 컨테이너, partial index 존재 확인까지. **첫 실행은 PR 에서**
 
 관계 컬럼 `@@index` 누락은 리뷰 체크 항목이다 (`BACKEND_GUIDE.md`).
@@ -104,7 +112,9 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 - [x] `/status` 적재 → `api_quota_snapshots`. **경고선 6,000콜/일 판단의 근거** — `npm run ingest -- status`
 - [x] 배치 upsert 헬퍼 `prisma/batch-upsert.ts` — 행 단위 upsert 가 Supabase 왕복에 막혀(5초 트랜잭션 한도) 추가.
       테이블당 1문장, ON CONFLICT 보장(설계검토 B-2 종결). 이후 모든 수집 계층이 이걸 쓴다
-- [ ] L0 기준 데이터 — 17대회(12 + 슈퍼컵 5) × 5시즌, 약 100콜 — `npm run ingest -- l0`. 코드·테스트 완료, 실 데이터 적재 대기
+- [x] ~~L0 기준 데이터~~ ✅ 09-07 첫 실 적재 — 17대회 · 82대회시즌(2026 미제공 컵 3개) · 고유 팀 1,888 · 3분 20초 · 건너뜀 0.
+      `test/l0.e2e-spec.ts` 가 가짜 API 로 같은 흐름을 CI 마다 돈다. 이름 반영 재실행은 1장
+- [x] `API_FOOTBALL_KEY` 없이도 앱이 뜬다 — 키는 첫 호출에서만 요구 (CI·조회 서버용, PR #9)
 - [ ] 로고는 내려받아 자체 저장 (media URL 직접 링크는 rate limit)
 
 ---
