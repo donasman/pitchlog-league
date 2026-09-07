@@ -22,7 +22,7 @@
 | **백엔드** | 🚧 Nest 12 · Prisma 29테이블 · API 클라이언트 · 배치 upsert · **L0 실 적재 완료**(17대회 · 82대회시즌 · 고유 팀 1,888) · **조회 API 4개**(`/api/competitions`(+:ref) · `/api/teams`(+:ref), Swagger `/docs`) |
 | CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, e2e 5파일 28건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` |
 | 배포 | ❌ 배포 PoC 미착수 |
-| 백업 | ❌ 없음 — **백필 전 필수** |
+| 백업 | ✅ 백업·복원 리허설 통과(244KB · public 만 · 로컬 · 수동). 자동화와 사본 이중화는 백필 전에 |
 
 ### 확정된 범위
 
@@ -40,8 +40,8 @@
 ## 1. 지금 당장 — 다음 세션 첫 작업
 
 09-07 에 끝낸 것: 서울 리전 이전 · L0 재실행 · 조회 API 4개(PR #12) · `output/` 정리 ·
-`protect-dev` Ruleset · 원격 브랜치 4개 삭제 · 프론트 첫 연결 · **브라우저 실측** ·
-**로고 자체 저장 CLI**(5장을 앞으로 당김).
+`protect-dev` Ruleset · 원격 브랜치 정리 · **프론트 첫 실 API 연결**(PR #14·#15) ·
+**브라우저 실측** · **로고 자체 저장**(5장을 앞으로 당김) · **백업 + 복원 리허설 통과**(4장 관문).
 
 ### 실측에서 나온 것 (09-07, 브라우저)
 
@@ -55,20 +55,21 @@
 **폴백이 작동하지 않는다는 게 더 큰 문제였다.** 실패가 아니라 "영원히 로딩 중" 이라
 `<img onError>` 가 불리지 않아 이니셜로 넘어가지 못하고 회색 사각형만 남는다.
 그래서 5장 "로고 자체 저장" 을 8단계 백필보다 앞으로 당겼다.
+받아서 96×96 webp 로 줄이니 161개 1.1MB(평균 4.3KB) — 원본 그대로면 14.5MB 였다.
 
-### 남은 일
+### 다음 세션
 
-- [ ] **Windows 에서 로고 받기** — `cd backend && npm install && npm run ingest -- logos`
-      (`sharp` 신규 의존성. 로고는 공개 media 라 API 키가 필요 없다)
-      → `frontend/public/logos/{teams,competitions}/<apiId>.webp` 96×96, 6대회 참가팀 155개.
-      받은 뒤 저장소에 커밋한다
-- [ ] **재실측** — 팀 목록에서 로고가 뜨는지, 파일 없는 팀이 이니셜로 폴백하는지
-- [ ] `npm run verify`(프론트 build 포함) · 백엔드 `lint`·`typecheck` — 리눅스 VM 에서는
-      네이티브 바인딩(rollup·oxlint·sharp)이 Windows 용이라 못 돈다
+09-07 에 계획한 것은 다 끝났다. 다음은 **9단계 L1 스쿼드** — Phase 1 의 관문이다.
 
-그 뒤는 **4단계 백업**이다. 8단계 백필 전에 반드시 끝내야 한다.
+- [ ] **L1 스쿼드 diff** (9장) — 완료 기준은 "500선수가 DB 에 있다" 가 아니라
+      **"스쿼드 diff 테스트가 이적 시나리오를 통과한다"** 이다
+- [ ] (병렬 가능) **배포 PoC** (2장) — Phase 0 에서 유일하게 남은 항목.
+      정적 빌드 시간 · Deploy Hook 지연 · Socket.io 연결
 
-연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma 는 Windows 터미널에서 직접 실행한다.**
+백업의 나머지(자동화 · 사본 이중화 · 리허설 재실행)는 **백필 착수 시점**에 묶여 있다.
+지금 하지 않아도 되지만, 백필 전에는 반드시 한다 (4장).
+
+연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma·pg_dump 는 Windows 터미널에서 직접 실행한다.**
 
 ---
 
@@ -98,7 +99,9 @@
       기존 위반 1건을 잡아 같이 고쳤다
 - [x] ~~pre-commit 훅~~ ✅ `.githooks/pre-commit` — null byte · 깨진 UTF-8 · `.env` ·
       하드코딩된 API 키. **각 개발 환경에서 `git config core.hooksPath .githooks` 1회 필요**
-- [x] ~~GitHub 설정~~ ✅ 기본 브랜치 `dev`, `protect-main` · `protect-dev` 둘 다 (PR 필수 + `frontend-verify`·`backend-verify`, 09-07)
+- [x] ~~GitHub 설정~~ ✅ 기본 브랜치 `dev`, `protect-main` · `protect-dev` 둘 다 (PR 필수 + `frontend-verify`·`backend-verify`, 09-07).
+      **`pull_request` 에서는 `paths` 필터를 쓰지 않는다** — 필터에 걸려 워크플로가 안 돌면
+      required check 가 "보고 대기" 로 영원히 멈춘다. backend 만 바꾼 PR 이 그렇게 막혔다(09-07)
 - [x] ~~Supabase 프로젝트 생성~~ ✅ `pitchlog-league-dev` (ap-southeast-1). prod 는 필요 시. Session pooler 5432 사용
 - [x] ~~NestJS 스켈레톤~~ ✅ Nest 12 · `/health` · Swagger `/docs` · 환경변수 검증 · PrismaService(adapter-pg)
 - [ ] 배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결
@@ -125,15 +128,102 @@
 
 ---
 
-## 4. 백업 — 반나절 · 백필 전 필수 ★
+## 4. 백업 — 백필 전 필수 ★
 
 Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 날아가면 다시 8~12일이다.
 
-- [ ] `pg_dump` 주 1회 잡
-- [ ] 저장 위치 결정 — R2 / GitHub Release / 로컬
-- [ ] 복원 1회 리허설 — 받아본 적 없는 백업은 백업이 아니다
+- [x] ~~`pg_dump` 잡~~ ✅ 09-07 — `npm run backup` (`backend/scripts/backup.mjs`)
+- [x] ~~저장 위치 결정~~ ✅ **로컬**. 홈 디렉터리 아래 `PitchLogBackups`, `BACKUP_DIR` 로 변경 가능
+- [x] ~~첫 백업~~ ✅ 09-07 — 목차를 보니 Supabase 내부 스키마까지 딸려 와 있었다
+      → `--schema=public` 로 좁히니 448KB → **244KB · 4.2초**. L0 만 든 상태
+- [x] ~~복원 리허설 절차~~ ✅ `npm run backup:verify` — 일회용 컨테이너에 복원 후 행 수 대조
+- [x] ~~리허설 1회 실행~~ ✅ 09-07 **통과** — 테이블 31개 · 행 10,062개, 운영 DB 와 전부 일치
+      (31개 중 `_prisma_migrations` 와 수동 테스트 테이블 `equipments` 가 섞여 있었다. 후자는 삭제)
+- [ ] 자동 실행 — 지금은 **수동**. 백필 전에 다시 정한다 (아래)
 
-**이것 없이 백필을 시작하지 않는다.**
+**백필 관문은 열렸다.** 남은 것은 자동화와, 백필 직전의 사본 위치 하나 더다.
+
+백필은 데이터가 100배로 불어나므로 **백필 직전에 리허설을 한 번 더 돌린다** —
+지금 통과한 것은 L0(1만 행) 기준이다.
+
+### 왜 로컬인가
+
+저장소가 **Public** 이라 GitHub Release 에 올리면 덤프가 전 세계에 공개된다.
+API-Football 에서 받은 데이터를 통째로 재배포하는 셈이라 약관 확인 없이는 못 쓴다.
+R2 는 계정·키 설정이 앞서야 한다. 로컬은 지금 바로 되고 되돌리기도 쉽다.
+대신 **PC 디스크가 죽으면 백업도 같이 죽는다** — 백필 직전에 사본 위치를 하나 더 정한다.
+
+### 스크립트
+
+```bash
+cd backend
+npm run backup -- --check   # 실행 방식·데몬·DATABASE_URL·저장 위치·마지막 성공
+npm run backup              # 받는다
+```
+
+**실행 방식은 자동으로 고른다** — PATH 에 `pg_dump` 가 있으면 그것을, 없고 `docker` 가
+있으면 `postgres` 이미지 안에서 돌린다. 이 PC 에는 Docker 만 있어서 컨테이너로 돈다.
+
+Docker 쪽이 버전 사고를 막는다. `pg_dump` 가 서버보다 낮으면 덤프를 거부하는데,
+이미지 태그로 고정하면 그 문제가 없다 (`BACKUP_PG_IMAGE`, 기본 `postgres:17`).
+볼륨 마운트는 하지 않는다 — Windows 경로 변환에서 깨지기 쉬워서 덤프를 stdout 으로
+받아 Node 가 파일에 쓴다. `docker -e` 는 이름만 넘겨 비밀번호가 명령줄에 남지 않게 한다.
+
+- **`--schema=public` 만 받는다.** 안 주면 Supabase 내부 스키마(`auth`·`storage`·`realtime`·
+  `vault`·`graphql`·`pgbouncer`·`extensions`)까지 통째로 딸려 온다. 그건 우리 것이 아니고,
+  평범한 `postgres` 컨테이너에는 `supabase_admin` 롤도 `supabase_vault` 확장도 없어
+  **복원이 그 자리에서 깨진다.** `vault` 는 시크릿 저장소라 로컬 덤프에 남길 이유도 없다.
+  우리 객체는 전부 `public` 에 있다 — Prisma 가 멀티스키마를 안 쓰고 확장 함수 의존도 없다
+- 형식 `custom`(-Fc) — 자체 압축, `pg_restore` 부분 복원 가능
+- `--no-owner --no-privileges` — 다른 서버(로컬·Docker)에 그대로 복원된다
+- 앱을 띄우지 않는다. 백업이 애플리케이션 부팅에 의존하면 **앱이 못 뜰 때 백업도 못 받는다**
+- 실패하면 반쯤 쓰인 덤프를 지운다. 남기면 다음에 정상 백업으로 오인한다
+- 보관: 최근 8개 + 그 앞은 달마다 1개씩 12개월
+- `backup.log` 에 **성공과 실패를 모두** 남기고, 마지막 성공이 8일을 넘으면 경고한다
+
+### 자동 실행을 미룬 이유
+
+백업이 Docker 로 도는데, 작업 스케줄러가 새벽에 돌 때 **Docker Desktop 이 꺼져 있으면
+조용히 실패한다.** 그래서 지금은 수동으로 두고, 실패를 로그로 잡을 수 있게만 해뒀다.
+
+백필(8~12일 무인 실행) 전에는 반드시 자동화해야 한다. 그때 둘 중 하나를 고른다:
+
+1. **PostgreSQL 클라이언트 도구 설치** — `pg_dump` 가 PATH 에 있으면 스크립트가 자동으로
+   그쪽을 쓴다. Docker 와 무관하게 돌아 가장 확실하다
+2. Docker Desktop 자동 시작 + 스케줄러
+
+```cmd
+schtasks /Create /TN "PitchLog DB Backup" ^
+  /TR "C:\Dev\pitchlog-league\backend\scripts\backup.cmd" ^
+  /SC WEEKLY /D SUN /ST 03:00
+```
+
+### 복원 리허설
+
+```bash
+npm run backup:verify              # 가장 최근 덤프
+npm run backup:verify -- <경로>    # 특정 덤프
+npm run backup:verify -- --keep    # 끝나고 컨테이너를 남긴다
+```
+
+일회용 `postgres` 컨테이너에 `pitchlog_verify` DB 를 만들어 복원하고, 컨테이너째 지운다.
+운영 DB 는 건드리지 않는다.
+
+`--schema=public` 으로 뜬 덤프는 `CREATE SCHEMA public` 을 들고 있는데 새 DB 에는 이미
+`public` 이 있다. 그대로 넣으면 `already exists` 로 멈추므로 복원 전에 비운다.
+
+**검증 기준은 "복원됐다" 가 아니라 "원본과 행 수가 같다" 이다.** 복원은 성공했는데
+테이블이 비어 있는 경우를 잡아야 한다. 테이블마다 `count(*)` 를 운영 DB 와 맞춰 보고
+하나라도 다르면 실패로 끝낸다. `pg_restore --exit-on-error` 라서 조용히 넘어가는
+오류도 없다.
+
+수집이 도는 중이면 행 수가 달라질 수 있다 — 그때는 수집을 멈추고 다시 돌린다.
+
+목차만 보는 것은 이걸로 된다 — 09-07 에 이걸로 스키마 범위 문제를 잡았다:
+
+```bash
+docker run --rm -i postgres:17 pg_restore --list < <덤프 경로>
+```
 
 ---
 
