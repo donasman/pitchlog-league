@@ -21,7 +21,7 @@ pitchlog-league/                 ← 모노레포 루트
 │   │   └── common/ config/ prisma/ health/
 │   ├── prisma/                  ← schema·migration·partial-indexes.sql
 │   ├── scripts/                 ← backup.mjs · restore-check.mjs (DB 백업·복원 리허설)
-│   └── test/                    ← e2e 6파일
+│   └── test/                    ← e2e 7파일
 ├── frontend/                    ← React + Vite + JavaScript, Node 22 고정
 │   └── src/
 │       ├── pages/               ← teams, players, matches, standings, stats
@@ -283,11 +283,12 @@ git checkout dev && git pull origin dev
 
 ```bash
 npm run verify                  # prisma validate · typecheck · lint · 단위 테스트
-npm run test:e2e                # e2e — l0·l1 은 로컬 DB·CI 에서만 (원격 DB 가드)
+npm run test:e2e                # e2e — l0·l1·l2 는 로컬 DB·CI 에서만 (원격 DB 가드)
 
 npm run ingest -- status        # API 쿼터 스냅샷
 npm run ingest -- l0            # 대회·시즌·팀·경기장
 npm run ingest -- l1            # 스쿼드 스냅샷 + diff (155콜)
+npm run ingest -- l2            # 라운드·경기·순위 — 화면 6대회 현재 시즌 (18콜)
 npm run ingest -- logos         # 로고를 받아 frontend/public/logos 에 저장
 
 npm run backup -- --check       # 백업 환경 점검 (pg_dump/docker · 마지막 성공)
