@@ -12,6 +12,7 @@ import StandingsTable from '@/components/ui/StandingsTable'
 import StatsRanking from '@/components/ui/StatsRanking'
 import TeamBadge from '@/components/ui/TeamBadge'
 import EmptyState from '@/components/ui/EmptyState'
+import NotImplementedState from '@/components/ui/NotImplementedState'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import { useData } from '@/hooks/useData'
@@ -64,7 +65,7 @@ export default function CompetitionPage() {
           <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
             <h1 className="t-page" style={{ margin: 0, fontSize: 24 }}>{getLocalizedCompetitionName(comp, locale)}</h1>
             <span className="t-sub">
-              2026-27 · {comp.country}
+              {standings?.seasonId ?? comp.currentSeason} · {comp.country}
               {standings?.stage && (
                 <span style={{ marginLeft: 8 }}>
                   · {standings.stage.label}
@@ -169,11 +170,16 @@ export default function CompetitionPage() {
         {activeTab === 'stats' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }} className="comp-stats-grid">
             <style>{`@media(min-width:640px){.comp-stats-grid{grid-template-columns:1fr 1fr!important}}`}</style>
+            {/* 실 API 는 득점·도움 순위가 아직 없어 null 을 준다 — 0명(빈 배열) 과 구분해 "아직 없음" 으로 그린다 */}
             <div className="pl-card" style={{ padding: 16 }}>
-              <StatsRanking title={t('competition.topScorers')} unit={t('stats.goals')} entries={topScorers} />
+              {topScorers == null
+                ? <NotImplementedState featureKey="errors.feature.top_scorers" />
+                : <StatsRanking title={t('competition.topScorers')} unit={t('stats.goals')} entries={topScorers} />}
             </div>
             <div className="pl-card" style={{ padding: 16 }}>
-              <StatsRanking title={t('competition.topAssisters')} unit={t('stats.assists')} entries={topAssisters} />
+              {topAssisters == null
+                ? <NotImplementedState featureKey="errors.feature.top_assisters" />
+                : <StatsRanking title={t('competition.topAssisters')} unit={t('stats.assists')} entries={topAssisters} />}
             </div>
           </div>
         )}

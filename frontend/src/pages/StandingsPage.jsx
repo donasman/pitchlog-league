@@ -38,6 +38,8 @@ export default function StandingsPage() {
   const loading = loadingComps || loadingStand
   const comp    = (competitions ?? []).find(c => c.slug === competitionSlug) ?? null
   const isUCL   = comp?.format === 'groups_knockout'
+  /** 시즌 라벨은 응답에서 — 순위표의 seasonId, 없으면 대회의 currentSeason */
+  const season  = standings?.seasonId ?? comp?.currentSeason ?? null
 
   function setComp(slug) {
     setSearchParams(prev => {
@@ -62,7 +64,7 @@ export default function StandingsPage() {
           <h1 className="t-page" style={{ margin: 0, fontSize: 26 }}>
             {t('standings.title')}
           </h1>
-          <span className="t-sub">2026-27 · 6{t('common.country')}</span>
+          <span className="t-sub">{season ? `${season} · ` : ''}6{t('common.country')}</span>
         </div>
 
         {/* ── 대회 필터 칩 ── */}

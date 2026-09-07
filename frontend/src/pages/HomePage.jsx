@@ -18,6 +18,7 @@ import TeamBadge from '@/components/ui/TeamBadge'
 import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
+import NotImplementedState from '@/components/ui/NotImplementedState'
 import AskBar from '@/components/home/AskBar'
 import { toKSTTime } from '@/utils/dateFormat'
 
@@ -439,14 +440,21 @@ function ShortcutsSection({ eplTop3, topScorers, competitions, t }) {
           zoneFirst
           t={t}
         />
-        <ShortcutCard
-          title={t('home.statsLabel')}
-          sub={t('home.allScorerLabel')}
-          head={t('home.allScorerLabel')}
-          rows={scorerRows}
-          to="/stats"
-          t={t}
-        />
+        {/* 득점 순위는 실 API 에 아직 없다(null). 빈 배열(0명) 과 구분해 "아직 없음" 카드로 그린다 */}
+        {topScorers === null ? (
+          <div className="pl-card">
+            <NotImplementedState featureKey="errors.feature.top_scorers" />
+          </div>
+        ) : (
+          <ShortcutCard
+            title={t('home.statsLabel')}
+            sub={t('home.allScorerLabel')}
+            head={t('home.allScorerLabel')}
+            rows={scorerRows}
+            to="/stats"
+            t={t}
+          />
+        )}
         <ShortcutCard
           title={t('home.teamsLabel')}
           sub={t('home.topTeamsLabel')}
@@ -558,7 +566,7 @@ function DiffsSection({ t }) {
 /* ─────────────────────────────────────────────────────────────
    FooterSection
 ───────────────────────────────────────────────────────────── */
-function FooterSection({ dataAsOf, t, locale }) {
+function FooterSection({ season, dataAsOf, t, locale }) {
   return (
     <footer
       style={{
@@ -572,7 +580,7 @@ function FooterSection({ dataAsOf, t, locale }) {
     >
       <span className="t-card">PitchLog</span>
       <span className="t-sub">{t('home.dataSource')}</span>
-      <span className="t-sub">2026-27</span>
+      {season && <span className="t-sub">{season}</span>}
       {dataAsOf && (
         <span className="t-cap num" style={{ marginLeft: 'auto' }}>
           {toKSTTime(dataAsOf, locale)} KST
@@ -608,6 +616,8 @@ export default function HomePage() {
   }
 
   const { competitions, livePulse, nextKickoff, dataAsOf, topScorers, eplTop3 } = overview ?? {}
+  /** 시즌 라벨은 응답에서 — 실 API 대회 객체의 currentSeason. Mock 오버뷰에는 없어 표기가 빠진다 */
+  const season = (competitions ?? []).find(c => c.currentSeason)?.currentSeason ?? null
 
   return (
     <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
@@ -644,7 +654,7 @@ export default function HomePage() {
         <DiffsSection t={t} />
 
         {/* ⑤ 푸터 */}
-        <FooterSection dataAsOf={dataAsOf} t={t} locale={locale} />
+        <FooterSection season={season} dataAsOf={dataAsOf} t={t} locale={locale} />
       </div>
     </div>
   )

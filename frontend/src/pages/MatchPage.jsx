@@ -20,6 +20,7 @@ import TeamBadge from '@/components/ui/TeamBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
+import NotImplementedState from '@/components/ui/NotImplementedState'
 import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
 import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
 import { isLive } from '@/utils/matchStatus'
@@ -914,6 +915,9 @@ export default function MatchPage() {
   }
 
   const { match, stats, lineup, topRated } = data
+  // 실 API 는 아직 라인업·통계·H2H·이벤트가 없다 — `unavailable` 에 i18n 키가 실린다.
+  // "없음"(EmptyState) 으로 위장하지 않고 "아직 없음" 으로 그린다. Mock 은 이 키가 없어 기존 분기 그대로다.
+  const unavailable = data.unavailable ?? {}
   const showStatus = ['final', 'recheck', 'confirmed'].includes(match.displayState)
 
   const homeShort = getLocalizedShortName(match.homeTeam, locale) || match.homeTeam?.shortName
@@ -944,7 +948,10 @@ export default function MatchPage() {
           <TabBar active={tab} onSelect={setTab} t={t} />
 
           {/* 탭 콘텐츠 */}
-          {tab === 'lineup' && (
+          {tab === 'lineup' && unavailable.lineup && (
+            <div className="pl-card"><NotImplementedState featureKey={unavailable.lineup} /></div>
+          )}
+          {tab === 'lineup' && !unavailable.lineup && (
             <LineupTab
               match={match}
               lineup={lineup}
@@ -960,17 +967,27 @@ export default function MatchPage() {
               className="stats-grid"
             >
               <style>{`@media(min-width:768px){.stats-grid{grid-template-columns:1fr 300px!important}}`}</style>
-              <StatsPanel stats={stats} t={t} />
-              <TimelinePanel
-                events={match.events}
-                homeTeamName={homeShort}
-                awayTeamName={awayShort}
-                t={t}
-              />
+              {unavailable.stats
+                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.stats} /></div>
+                : <StatsPanel stats={stats} t={t} />}
+              {unavailable.timeline
+                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.timeline} /></div>
+                : (
+                  <TimelinePanel
+                    events={match.events}
+                    homeTeamName={homeShort}
+                    awayTeamName={awayShort}
+                    t={t}
+                  />
+                )}
             </div>
           )}
 
-          {tab === 'h2h' && <H2HTab match={match} t={t} locale={locale} />}
+          {tab === 'h2h' && (
+            unavailable.h2h
+              ? <div className="pl-card"><NotImplementedState featureKey={unavailable.h2h} /></div>
+              : <H2HTab match={match} t={t} locale={locale} />
+          )}
 
           {tab === 'timeline' && (
             <div
@@ -978,13 +995,19 @@ export default function MatchPage() {
               className="timeline-grid"
             >
               <style>{`@media(min-width:768px){.timeline-grid{grid-template-columns:1fr 300px!important}}`}</style>
-              <TimelinePanel
-                events={match.events}
-                homeTeamName={homeShort}
-                awayTeamName={awayShort}
-                t={t}
-              />
-              <StatsPanel stats={stats} t={t} />
+              {unavailable.timeline
+                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.timeline} /></div>
+                : (
+                  <TimelinePanel
+                    events={match.events}
+                    homeTeamName={homeShort}
+                    awayTeamName={awayShort}
+                    t={t}
+                  />
+                )}
+              {unavailable.stats
+                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.stats} /></div>
+                : <StatsPanel stats={stats} t={t} />}
             </div>
           )}
         </div>

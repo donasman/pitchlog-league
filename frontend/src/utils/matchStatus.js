@@ -6,27 +6,39 @@
  */
 
 /**
- * @typedef {'NS'|'1H'|'HT'|'2H'|'ET'|'BT'|'P'|'FT'|'AET'|'PEN'|'SUSP'|'INT'|'PST'|'CANC'|'ABD'} MatchStatusCode
+ * @typedef {'NS'|'TBD'|'1H'|'HT'|'2H'|'ET'|'BT'|'P'|'LIVE'|'FT'|'AET'|'PEN'|'AWD'|'WO'|'SUSP'|'INT'|'PST'|'CANC'|'ABD'} MatchStatusCode
  * @typedef {'scheduled'|'live'|'halftime'|'final'|'recheck'|'confirmed'|'postponed'|'cancelled'} DisplayState
+ * @typedef {'NONE'|'RECHECK'|'CONFIRMED'} StatsState  백엔드 `matches.stats_state` (DATA_RULES 3장 넷째 상태)
  */
 
 /** @type {Record<MatchStatusCode, DisplayState>} */
 const STATUS_CODE_MAP = {
   NS: 'scheduled',
+  TBD: 'scheduled',
   '1H': 'live',
   HT: 'halftime',
   '2H': 'live',
   ET: 'live',
   BT: 'live',
   P: 'live',
+  LIVE: 'live',
   FT: 'final',
   AET: 'final',
   PEN: 'final',
+  AWD: 'final',
+  WO: 'final',
   SUSP: 'cancelled',
   INT: 'cancelled',
   PST: 'postponed',
   CANC: 'cancelled',
   ABD: 'cancelled',
+}
+
+/** 종료 코드에서만 statsState 가 표시 상태를 가른다 — final → recheck → confirmed (PRD 4-2) */
+const STATS_STATE_MAP = {
+  NONE:      'final',
+  RECHECK:   'recheck',
+  CONFIRMED: 'confirmed',
 }
 
 /** 상태 → 번역 키 맵 (MatchStatusBadge 에서 t()로 해석) */
@@ -54,12 +66,25 @@ export const STATUS_DESC_KEYS = {
 }
 
 /**
- * API 상태 코드를 화면 표시 상태로 변환
- * @param {MatchStatusCode} code
+ * API 상태 코드 + 통계 확정 상태 → 화면 표시 상태
+ *
+ * | statusShort                | NONE      | RECHECK   | CONFIRMED |
+ * |----------------------------|-----------|-----------|-----------|
+ * | NS · TBD · 모르는 값        | scheduled | scheduled | scheduled |
+ * | 1H · 2H · ET · BT · P · LIVE | live    | live      | live      |
+ * | HT                         | halftime  | halftime  | halftime  |
+ * | FT · AET · PEN · AWD · WO  | final     | recheck   | confirmed |
+ * | PST                        | postponed | postponed | postponed |
+ * | CANC · ABD · SUSP · INT    | cancelled | cancelled | cancelled |
+ *
+ * @param {MatchStatusCode|string} code
+ * @param {StatsState} [statsState='NONE']  종료 코드가 아니면 읽지 않는다
  * @returns {DisplayState}
  */
-export function getDisplayState(code) {
-  return STATUS_CODE_MAP[code] ?? 'scheduled'
+export function getDisplayState(code, statsState = 'NONE') {
+  const base = STATUS_CODE_MAP[code] ?? 'scheduled'
+  if (base !== 'final') return base
+  return STATS_STATE_MAP[statsState] ?? 'final'
 }
 
 /**

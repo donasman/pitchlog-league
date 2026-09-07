@@ -483,15 +483,18 @@
     "competitionRequired": "A competition must be specified",
     "competitionNotFound": "Competition not found: {{ref}}",
     "feature": {
-      "competition_hub": "competition detail — matches, standings, scorers",
-      "matches": "matches",
       "team_detail": "team detail — matches, players, standings",
-      "standings": "standings",
       "players": "players",
       "stats": "stats",
       "knockout": "knockout bracket",
       "home": "home screen",
-      "notifications": "notifications"
+      "notifications": "notifications",
+      "lineups": "lineups",
+      "match_stats": "match stats",
+      "h2h": "head-to-head",
+      "events": "match events",
+      "top_scorers": "top scorers",
+      "top_assisters": "top assisters"
     }
   }
 }
