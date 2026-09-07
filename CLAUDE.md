@@ -168,6 +168,12 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
 
 ---
 
+## 에이전트 작업 방식
+
+`docs/AGENT_WORKFLOW.md` — 역할 분리(탐색·설계·구현 A/B·검증·main) · 환각 규칙 넷
+(읽지 않은 것은 없는 것 · 쓴 에이전트가 검증하지 않는다 · 근거는 문서 절 번호 · 테스트가 진실) ·
+sub 지시문 여섯 칸. 2026-09-07 부터 적용.
+
 ## 코드 작성 규칙
 
 ### Backend (TypeScript)
