@@ -45,6 +45,11 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   CORS_ORIGIN?: string;
+
+  /** `ingest -- logos` 가 로고를 쓸 위치. backend/ 기준 상대 경로 허용 */
+  @IsOptional()
+  @IsString()
+  LOGO_OUTPUT_DIR?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

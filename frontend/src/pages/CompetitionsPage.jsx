@@ -76,9 +76,9 @@ export default function CompetitionsPage() {
                         <span className="pl-dot pl-dot-pulse" aria-hidden="true" />
                         LIVE {liveCount}
                       </span>
-                    ) : (
+                    ) : upcomingCount > 0 ? (
                       <span className="pl-badge b-sched">{upcomingCount}</span>
-                    )}
+                    ) : null}
                   </span>
                 </div>
 

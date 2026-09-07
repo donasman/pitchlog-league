@@ -11,8 +11,30 @@
  * 컴포넌트가 "없음" 상태로 렌더링하게 둔다. 빈 문자열로 위장하지 않는다.
  */
 
-/** 화면에 노출하는 대회 — 백엔드는 17개(컵·슈퍼컵 포함)를 주지만 화면은 아직 6개 전제다 */
+/**
+ * 화면에 노출하는 대회 — 백엔드는 17개(컵·슈퍼컵 포함)를 주지만 화면은 아직 6개 전제다.
+ * 백엔드 `LogoService.SCREEN_DISPLAY_ORDER_MAX` 와 같은 범위다 — 한쪽만 바뀌면 로고가 빈다.
+ */
 export const VISIBLE_COMPETITION_API_IDS = [39, 140, 78, 135, 61, 2]
+
+/**
+ * 로고는 우리가 받아서 줄여 둔 정적 파일을 쓴다 (NEXT_STEPS 5장).
+ * API-Football media URL 직링크는 09-07 실측에서 한 화면 96개가 11초 뒤에도
+ * 전부 로딩 미완료였다 — 원본 90KB + 동시 연결 제한. 실패가 아니라 "영원히 로딩" 이라
+ * `<img onError>` 폴백조차 걸리지 않았다. 우리 파일은 없으면 404 가 즉시 나서 폴백이 산다.
+ *
+ * 나중에 R2 로 옮기면 이 접두사만 바꾼다.
+ */
+const LOGO_BASE = (import.meta.env.VITE_LOGO_BASE_URL ?? '/logos').replace(/\/+$/, '')
+
+/**
+ * @param {'teams'|'competitions'} kind
+ * @param {number} apiId
+ * @param {string|null} sourceUrl  원본이 아예 없으면 우리 파일도 없다
+ */
+function localLogo(kind, apiId, sourceUrl) {
+  return sourceUrl ? `${LOGO_BASE}/${kind}/${apiId}.webp` : null
+}
 
 /**
  * i18n(`entityNames.js`)·라우팅이 쓰는 기존 식별자.
@@ -79,7 +101,7 @@ export function normalizeCompetition(dto) {
     countryCode: dto.countryCode,
     type:      dto.type,
     format:    FORMAT[dto.format] ?? 'league',
-    logoUrl:   dto.logoUrl,
+    logoUrl:   localLogo('competitions', dto.apiId, dto.logoUrl),
     displayOrder: dto.displayOrder,
 
     currentSeason:     seasonLabel(dto.currentSeason),
@@ -107,7 +129,7 @@ export function normalizeTeam(dto) {
     shortName: dto.shortDisplayName,
     /** 로고가 못 뜰 때만 쓰인다 — code(MUN) 가 없으면 이름에서 만든다 */
     initials:  dto.code ?? deriveInitials(dto.shortDisplayName),
-    logoUrl:   dto.logoUrl,
+    logoUrl:   localLogo('teams', dto.apiId, dto.logoUrl),
 
     country:     dto.country,
     foundedYear: dto.founded,

@@ -14,7 +14,13 @@ import { TEAM_NAMES, PLAYER_NAMES, COMPETITION_NAMES } from '@/i18n/entityNames'
 
 function dedup(arr) { return [...new Set(arr.filter(Boolean))] }
 
-/** Mock 모드에서만 선수를 넣는다. 정적 import 를 피해 실 API 번들에서 빠지게 한다 */
+/**
+ * Mock 모드에서만 선수를 넣는다.
+ * 번들에서 빠지지는 않는다 — `services/mock.js` 가 같은 모듈을 정적으로 import 하고,
+ * `api.js` 가 mock·live 를 둘 다 정적으로 들고 있어서 Mock 전체가 항상 번들에 남는다.
+ * 실 API 모드에서 Mock 을 들어내려면 `api.js` 의 구현 선택을 동적 import 로 바꿔야 한다.
+ * 지금은 검색 결과에서 선수를 빼는 것이 목적이라 여기까지만 한다.
+ */
 async function playerEntries() {
   if (!USE_MOCK) return []
   const { PLAYERS } = await import('@/mocks/players')
