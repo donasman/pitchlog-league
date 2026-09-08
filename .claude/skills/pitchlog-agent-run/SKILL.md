@@ -78,11 +78,19 @@ description: PitchLog 에서 기능 하나를 역할 분리 파이프라인(탐�
 `backend-verifier` 와 `frontend-verifier` 에 각 스택의 `git diff` + 확정 계약을 넘긴다. **문제만** 받는다.
 "막아야 함" 이 있으면 해당 implementer 에 되돌린다. verifier 가 고치지 않는다.
 
+**프론트가 바뀐 판은 브라우저 실측을 07 전에 넣는다.** verifier 는 diff · verify · build 만 본다 —
+콘솔 경고 · 렌더 결과 · 실 API 왕복은 못 본다. 11장(홈)과 09-08 선수·통계, 두 판 연속 브라우저가
+잡았고 둘 다 백엔드·verifier 는 깨끗했다. `VITE_USE_MOCK=false` 로 화면을 실제로 열어 콘솔
+경고 0 과 각 렌더 자리를 사용자가 확인한다. 남은 것 있으면 다시 05.
+
 ## 07. 마무리
 
-1. `pitchlog-pr-flow` 로 커밋 · push · PR (대상 `dev`)
-2. `docs/AGENT_RUNS.md` 에 이번 판을 한 줄 적는다 — 넷 중 무엇이 깨졌나
+1. `docs/AGENT_RUNS.md` 에 이번 판을 한 줄 적는다 — 넷 중 무엇이 깨졌나
+2. `pitchlog-pr-flow` 로 커밋 · push · PR (대상 `dev`). **AGENT_RUNS 도 이 커밋에 함께 태운다**
 3. 문서 갱신이 필요하면 **이제** `pitchlog-docs-sync`
+
+AGENT_RUNS 를 커밋 뒤에 쓰면 dev 로 넘어가 있을 확률이 높고 `guard-git` 훅이 막는다
+(2026-09-08 첫 판에서 실제로 걸렸다). 브랜치 안에서 쓴다.
 
 ## 보고에 못 쓰는 말
 
