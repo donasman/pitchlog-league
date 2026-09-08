@@ -9,10 +9,10 @@
 
 | 역할 | 에이전트 | 하는 일 | 하지 않는 일 |
 |---|---|---|---|
-| 탐색 | Explore (읽기 전용) | 기존 패턴을 모아 **계약표**로 돌려준다 — 컨트롤러·DTO·`as-of`·`ref` 규약, `live.js`/`normalize.js` 형태, Mock shape | 수정 |
-| 설계 | Plan | 계약표 + 문서 절 번호로 설계안. 대안이 있으면 둘 다 | 코드 |
-| 구현 A / B | general-purpose | **겹치지 않는 파일 집합**을 각각 맡는다 (보통 백엔드 / 프론트) | 상대 집합의 파일 |
-| 검증 | 별도 에이전트 | diff 만 받아 계약표·문서 규칙과 대조, typecheck·lint·테스트 실행. **문제만** 보고 | 수정 |
+| 탐색 | `backend-explorer` · `frontend-explorer` | 각 스택의 기존 패턴을 **계약표**로 돌려준다 — 백엔드는 Prisma 모델·DTO·`as-of`/`ref` 규약·계층 소유 컬럼, 프론트는 `live.js`/`normalize.js` 형태·화면이 읽는 shape·i18n 키 | 수정 · 상대 스택 |
+| 설계 | `planner` | 계약표 + 문서 절 번호로 설계안. 대안이 있으면 둘 다 | 코드 |
+| 구현 A / B | `backend-implementer` · `frontend-implementer` | **겹치지 않는 파일 집합**을 각각 맡는다. 각자 자기 스택의 고정 원칙을 직무기술서로 들고 있다 | 상대 집합의 파일 |
+| 검증 | `backend-verifier` · `frontend-verifier` | diff 만 받아 계약표·가이드와 대조, 검증 명령 실행. **문제만** 보고 | 수정 |
 | main | — | 설계안을 문서와 대조해 판단 · 지시 · 검증 결과로 되돌림 · 커밋 | 직접 구현 |
 
 병렬의 조건은 하나 — **A 와 B 가 건드리는 파일이 겹치지 않는다.** 같은 폴더를 쓰므로 지시문에 파일 목록을 박는다.
@@ -58,10 +58,20 @@ sub 에게 보내는 지시문은 이 여섯 칸을 전부 채운다. 빈 칸이
 ## 5. 파일 위치 — Cowork 와 CLI 가 같은 것을 본다
 
 ```
-.claude/agents/   explorer.md · planner.md · implementer.md · verifier.md   ← 1장의 역할. tools 로 권한을 제한
+.claude/agents/   backend-explorer · frontend-explorer            ← 탐색 (읽기 전용)
+                  planner                                          ← 설계 (읽기 전용)
+                  backend-implementer · frontend-implementer       ← 구현 (Edit/Write 있음)
+                  backend-verifier · frontend-verifier             ← 검증 (읽기 전용)
+                  explorer · implementer · verifier                ← 스택 구분이 없는 작업용 범용 셋
 .claude/skills/   pitchlog-pr-flow · pitchlog-e2e-fixture · pitchlog-docs-sync  ← 반복 절차
 CLAUDE.md         항상 읽히는 규칙. 이 문서로의 포인터
 ```
+
+스택별로 나눈 이유는 규칙이 서로 다르기 때문이다 — 백엔드는 TypeScript strict·외래키 없음·서비스 내 외부 호출 금지,
+프론트는 `.js`/`.jsx` 만·무음 `catch {}` 금지·오류를 빈 데이터로 바꾸지 않음. 하나의 `implementer` 가 둘을 오가면
+지시문의 "금지" 칸을 매번 다시 채워야 한다. 직무기술서로 내리면 지시문이 짧아진다.
+
+`ingest`·CI·문서처럼 스택 구분이 없는 작업은 범용 셋(`explorer`·`implementer`·`verifier`)을 쓴다.
 
 `verifier` 와 `explorer` 는 `tools` 에 Edit/Write 가 없다 — "쓴 에이전트가 검증하지 않는다" 를 파일 수준에서 강제한다.
 Claude Code CLI 에서는 `/agents` 로 보이고, 스킬은 `/pitchlog-pr-flow` 처럼 강제 호출할 수 있다. 부르지 않아도
@@ -71,3 +81,26 @@ Claude Code CLI 에서는 `/agents` 로 보이고, 스킬은 `/pitchlog-pr-flow`
 
 PR 절차 · e2e 픽스처 규칙 · 문서 동기화 — 이 셋은 세션마다 반복돼서 스킬로 저장한다.
 스킬이 있으면 지시문의 "읽을 것" 에 스킬 이름을 적는 것으로 끝난다.
+
+## 7. 훅 — 지시문이 아니라 도구 호출에서 막는다
+
+`tools:` 는 verifier 가 고치는 것만 막는다. implementer 는 Write 와 Bash 가 있어 경로만 다르면 어디든 쓸 수 있고,
+읽기 전용 에이전트도 Bash 의 `sed -i` 로 쓸 수 있다. 지시문은 부탁이지 자물쇠가 아니다.
+
+그래서 `.claude/settings.json` 의 `PreToolUse` 훅이 도구 호출 직전에 검사한다. 에이전트가 누구든 같다.
+
+| 훅 | 걸리는 도구 | 막는 것 |
+|---|---|---|
+| `hooks/guard-paths.mjs` | Write · Edit · MultiEdit | `frontend/src/mocks/**` · `.env` `.env.local` · `frontend/**/*.ts(x)` · `schema.prisma` 의 `@relation` |
+| `hooks/guard-git.mjs` | Bash | `dev`/`main` 에서 `git commit` · `dev`/`main` 으로 `git push` · Bash 로 `src/mocks`·`.env` 쓰기(휴리스틱) |
+
+차단은 종료 코드 2 + stderr. 에이전트는 그 이유를 받고, **우회하지 않는다.** 막힌 이유가 곧 규칙이다.
+훅은 Node 22 로 쓴다 — Windows Git Bash 와 Cowork VM 어느 쪽에서도 같은 코드가 돈다.
+
+훅이 **못** 막는 것: "건드릴 파일" 목록 밖 수정(목록이 작업마다 달라 정적 규칙이 없다) · 검증 명령을 안 돌리고 통과했다고 쓰는 것.
+이 둘은 verifier(2층) 와 CI(3층) 가 잡는다. 실측에서 반복되면 그때 훅을 더 건다.
+
+## 8. 실측 기록
+
+`docs/AGENT_RUNS.md`. 한 판마다 한 줄 — 넷 중 무엇이 깨졌나. 구조를 고치는 근거는 여기서만 나온다.
+안 깨졌으면 안 고친다. 09-07 에 실측이 계획을 네 번 뒤집은 것과 같은 원칙이다.
