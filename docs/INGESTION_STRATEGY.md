@@ -205,7 +205,7 @@ Italy Super Cup(547) · Trophée des Champions(526). 합쳐 시즌당 약 11경�
 
 | 규칙 | 효과 |
 |---|---|
-| 랭킹은 전용 엔드포인트 | `/players` 23페이지 전수(~400콜) → 대회당 3콜. **95% 절감** |
+| 랭킹은 전용 엔드포인트 | `/players` 전수(대회시즌당 33~102페이지) → 대회시즌당 **4콜**(득점·도움·경고·퇴장). 2026-09-08 실측 |
 | `live=all` 대신 리그 지정 | 콜 수는 같고 페이로드가 준다. 전 세계 리그를 파싱하지 않는다 |
 | `/fixtures/rounds` 사용 | 라운드 문자열 파싱 제거 |
 | `/fixtures/headtohead` 사용 | H2H 자체 계산 불필요 |
@@ -258,7 +258,7 @@ checked_at: 마지막 확인 시각
 → 재시작 지점을 기억해야 한다. **다만 그것을 BullMQ 가 아니라 `backfill_jobs` 가 한다 (2026-09-07 확정).**
 "Worker" 는 실행 방식이 아니라 성격이다 — 트리거는 운영 잡과 같은 `@nestjs/schedule` 이어도 된다.
 다른 점은 하나, **자기 진행 위치를 DB 에 남기고 거기서 이어간다**는 것이다.
-아래 5-2 의 `cursor_fixture_id` 가 DB 체크포인트이고, 워커는 한 Nest 프로세스 안에서
+아래 5-2 의 `cursor_match_id` 가 DB 체크포인트이고, 워커는 한 Nest 프로세스 안에서
 `@nestjs/schedule` 로 도는 단일 루프다. 1인이 한 번 돌리는 순차 작업에 Redis 인스턴스를
 붙이면 장애 지점과 비용만 는다. `V2_DESIGN` 5-3 의 판별("재시작 지점이 필요하면 승격")은
 **"체크포인트가 DB 에 있으면 승격이 필요 없다"** 로 읽는다. 다중 인스턴스가 필요해지면 그때 pg-boss → BullMQ 순으로 본다.
@@ -268,18 +268,36 @@ checked_at: 마지막 확인 시각
 
 ### 5-2. 작업 단위와 재시작 지점
 
-작업 단위는 **(대회, 시즌, 경기)** 하나다. 시즌 단위나 대회 단위로 잡으면
-중간 실패 시 되돌아가는 양이 너무 크다.
+행 하나는 **대회시즌 하나**다(`competition_season_id UNIQUE`). 그 안에서 진행 지점을
+가리키는 것이 `cursor_match_id` 다 — 실질 작업 단위는 **(대회시즌, 경기)** 가 된다.
+대회 단위로 잡으면 중간 실패 시 되돌아가는 양이 너무 크다.
 
 ```
 backfill_jobs(
-  competition_id, season_id,
-  phase,            -- L0 | FIXTURES | DETAILS | RANKINGS | DONE
-  cursor_fixture_id,
+  competition_season_id UNIQUE,
+  phase,            -- PENDING | L0 | FIXTURES | DETAILS | RANKINGS | DONE | FAILED
+  cursor_match_id,
   total, done, failed,
+  last_error,
   started_at, updated_at
 )
 ```
+
+**2026-09-08 — 쓰는 쪽이 생겼다.** 그전까지 이 테이블은 읽기만 있었고(L1 락 · `dataStateOf`)
+phase 는 영원히 `PENDING` 이었다. `backfill/backfill-job.service.ts` 가
+`begin` · `advance` · `complete` · `fail` 네 메서드로 쓴다. 지금 쓰는 것은 **L6 뿐**이고,
+`cursor_match_id` · `total` · `done` · `failed` 는 백필-2 몫으로 비워 둔다.
+
+세 가지를 여기 못박는다.
+
+- **`RANKINGS` 는 이름이 내용보다 좁다.** L6 가 담는 것은 시즌 집계 3종(선수 통계 · 랭킹 ·
+  팀 통계)이다. 그래도 enum 을 바꾸지 않는다 — 고치면 마이그레이션과 `l1.service.ts` 의
+  `BACKFILL_IN_PROGRESS` 수정이 따라오는데 얻는 것은 이름뿐이다.
+- **백필-1 이 끝나면 `DONE` 을 세운다.** `dataStateOf` 가 `DONE → COMPLETE` 이고 시즌 선택기가
+  그 값을 본다(5-4). 백필-2 는 이 값을 `DETAILS` 로 **되돌리지 않는다** — 되돌리면 6일 동안
+  과거 시즌이 화면에서 사라져 백필-1 을 먼저 한 이유가 없어진다.
+- **부분 실패는 `last_error` 로만 남긴다.** 갈래 하나가 통째로 실패해도 나머지가 들어왔으면
+  phase 는 `DONE` 이다. 로그는 사라지고 이 행은 남으므로, "무엇이 비었나" 의 유일한 단서다.
 
 멱등성은 `UNIQUE(match_id, player_id)` 등 기존 제약으로 보장된다.
 **같은 경기를 두 번 처리해도 값이 두 배가 되지 않는다** (`V2_DESIGN` 5-7).

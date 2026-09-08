@@ -27,7 +27,11 @@ export const COMPETITIONS: readonly CatalogEntry[] = [
   { apiId: 78,  name: 'Bundesliga',            shortName: 'BL',                type: CompetitionType.LEAGUE, format: CompetitionFormat.ROUND_ROBIN, displayOrder: 30 },
   { apiId: 135, name: 'Serie A',               shortName: 'SA',                type: CompetitionType.LEAGUE, format: CompetitionFormat.ROUND_ROBIN, displayOrder: 40 },
   { apiId: 61,  name: 'Ligue 1',               shortName: 'L1',                type: CompetitionType.LEAGUE, format: CompetitionFormat.ROUND_ROBIN, displayOrder: 50 },
-  // 2024-25 부터 리그 페이즈. 그 이전 시즌은 조별리그였으나 순위표 구조는 같다
+  // 2024-25 부터 리그 페이즈(단일 36팀). 그 이전 2022·2023 은 조별리그 8조 × 4팀이다.
+  // ⚠ 2026-09-08 실측 — "순위표 구조는 같다" 고 적혀 있었는데 틀렸다. standings 의 unique 가
+  // (대회시즌, 팀, 그룹) 이라 DB 는 양쪽을 맞게 담는다. 다만 group_name 이 8종 vs 1종이고
+  // rank 가 조 안의 1~4 vs 전체 1~36 이므로, 순위표를 그룹으로 쪼개지 않는 화면은 깨진다
+  // (NEXT_STEPS 11장). format enum 은 현재 시즌 기준이라 그대로 둔다
   { apiId: 2,   name: 'UEFA Champions League', shortName: 'UCL',               type: CompetitionType.CUP,    format: CompetitionFormat.LEAGUE_PHASE_KNOCKOUT, displayOrder: 60 },
 
   // ── 국내 컵 6 — 컷오프 대상 ──
