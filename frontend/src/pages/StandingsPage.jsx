@@ -24,6 +24,11 @@ export default function StandingsPage() {
   const locale = i18n.language
 
   const competitionSlug = searchParams.get('competition') ?? 'premier-league'
+  // 백엔드 `?season=` 은 연도(int)만 받는다. 헤더가 URL 을 연도로 정규화하기 전 한 렌더 동안
+  // 예전 라벨('2025-26')이 남아 있을 수 있어, 연도가 아니면 아예 넘기지 않는다 —
+  // 그러면 백엔드가 isCurrent 로 폴백해서 지금과 같은 화면이 나온다.
+  const seasonParam = searchParams.get('season')
+  const seasonYear  = /^\d{4}$/.test(seasonParam ?? '') ? Number(seasonParam) : undefined
 
   const { data: competitions, loading: loadingComps } = useData(fetchCompetitions, [])
   // ⚠ 오류를 null 로 삼키는 catch 를 넣지 않는다 — EmptyState 로 위장된다 (1단계 감사 §C, CI 검사 대상).
@@ -31,8 +36,8 @@ export default function StandingsPage() {
   //   컵 대회는 순위표 자체가 없는 것이 정상이므로, 실 API 연결 시
   //   "없음"(EmptyState)과 "실패"(ErrorState)를 서비스 계층에서 구분한다.
   const { data: standings, loading: loadingStand, error } = useData(
-    () => fetchStandings(competitionSlug),
-    [competitionSlug]
+    () => fetchStandings(competitionSlug, seasonYear),
+    [competitionSlug, seasonYear]
   )
 
   const loading = loadingComps || loadingStand

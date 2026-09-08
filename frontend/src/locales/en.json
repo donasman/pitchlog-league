@@ -118,6 +118,8 @@
     "allStatuses": "All",
     "noMatches": "No matches",
     "noMatchesDesc": "No matches for the selected filters.",
+    "pickCompetition": "Select a competition",
+    "pickCompetitionDesc": "Past seasons hold too many matches to list at once — pick one competition to see its fixtures.",
     "today": "Today",
     "tomorrow": "Tomorrow",
     "standingsPanel": "Standings",
@@ -151,6 +153,7 @@
     "uclLeagueNote": "36-team single table · not group stage",
     "legend": {
       "ucl": "UCL direct",
+      "uclQualPlayoff": "UCL qualifying PO",
       "uel": "Europa League",
       "uecl": "Conference League",
       "relegation": "Relegation",

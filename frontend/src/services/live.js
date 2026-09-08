@@ -17,6 +17,7 @@ import {
   VISIBLE_COMPETITION_API_IDS,
   competitionRefFromSlug,
   deriveStage,
+  groupCountOf,
   normalizeCompetition,
   normalizeMatch,
   normalizeSeason,
@@ -25,6 +26,7 @@ import {
   normalizeTeam,
 } from './normalize'
 import { now, todayKstKey } from './clock'
+import { isPastSeason } from '../utils/seasons'
 import { kstDateKey } from '../utils/dateFormat'
 import { isLive } from '../utils/matchStatus'
 
@@ -133,6 +135,41 @@ function matchWindow() {
   }
 }
 
+/**
+ * 시즌을 고려한 경기 조회 창.
+ *
+ * 공통 창은 "오늘(KST) 기준 −14~+21일" 이다. 과거 시즌에 그 창을 걸면 백엔드가
+ * `season AND kickoff in window` 로 걸러 경기가 항상 0건이 된다.
+ * 과거 시즌이면 창을 통째로 뺀다 — 그 시즌 경기는 그 시즌 안에만 있으므로
+ * `?season=` 만으로 이미 범위가 한정되고, 시즌 시작·종료일을 from/to 로 거는 것과 결과가 같다.
+ * (시작·종료일을 쓰려면 대회 상세를 한 번 더 받아야 하는데 결과가 같아 그렇게 하지 않았다.)
+ *
+ * 현재 시즌 여부는 `loadCompetitions()` 캐시의 `currentSeasonYear` 로 가린다 — 추가 요청이 없다.
+ *
+ * @param {number|string|null|undefined} season  연도. 없으면 기존 동작(공통 창) 그대로다
+ * @param {string} [ref]  대회 ref. 없으면(전체 경기·홈) 화면 대회 중 어느 현재 시즌도 아닐 때만 과거로 본다
+ * @returns {Promise<{from?: string, to?: string}>}
+ */
+async function matchWindowFor(season, ref) {
+  return (await isPastSeasonYear(season, ref)) ? {} : matchWindow()
+}
+
+/**
+ * 고른 시즌이 과거 시즌인가. `loadCompetitions()` 캐시의 `currentSeasonYear` 로 가리므로 추가 요청이 없다.
+ * 시즌을 안 골랐거나 현재 시즌 연도를 모르면 false — 근거 없이 "과거" 로 단정하면
+ * 호출자가 조회 창을 걷어내거나 요청을 막아 버린다.
+ */
+async function isPastSeasonYear(season, ref) {
+  if (season === undefined || season === null || season === '') return false
+  const comps = await loadCompetitions()
+  const scoped = ref ? comps.find(c => c.ref === ref) : null
+  const currentYears = (scoped ? [scoped] : comps)
+    .map(c => c.currentSeasonYear)
+    .filter(y => y !== null && y !== undefined)
+  if (currentYears.length === 0) return false
+  return !currentYears.includes(Number(season))
+}
+
 /** `/api/matches` 한 번 — 정규화된 경기 배열과 목록 asOf 를 같이 준다 */
 async function loadMatches(params = {}) {
   const res = await apiGet('/api/matches', params)
@@ -140,21 +177,37 @@ async function loadMatches(params = {}) {
 }
 
 /**
- * 전체 경기 (공통 창). Mock 과 같은 옵션 필터를 받는다.
- * @param {{ competitionSlug?: string, displayState?: string }} [params]
+ * 전체 경기. Mock 과 같은 옵션 필터를 받는다.
+ *
+ * 현재 시즌: 지금까지처럼 공통 창으로 6대회를 한 번에 받아 대회·상태는 여기서 거른다.
+ * 과거 시즌: 창이 없어 6대회 × 한 시즌이면 ≈1,900경기가 통째로 온다. 그래서
+ *   · 대회를 안 골랐으면 요청을 보내지 않고 `unavailableReason` 을 실어 돌려준다
+ *     (순위표의 KNOCKOUT·EMPTY 와 같은 관용구 — 빈 배열로 위장하지 않는다).
+ *   · 대회를 골랐으면 `competition` 을 서버 파라미터로 내려 한 대회(≈380경기)만 받는다.
+ *
+ * @param {{ competitionSlug?: string, displayState?: string, season?: number }} [params]
+ * @returns {Promise<{ items: Array<object>, unavailableReason: string|null }>}
  */
-export async function fetchAllMatches({ competitionSlug, displayState } = {}) {
-  const { items } = await loadMatches(matchWindow())
+export async function fetchAllMatches({ competitionSlug, displayState, season } = {}) {
+  const past = await isPastSeasonYear(season)
+  if (past && !competitionSlug) return { items: [], unavailableReason: 'COMPETITION_REQUIRED' }
+
+  const competition = past ? await toCompetitionRef(competitionSlug) : undefined
+  const { items } = await loadMatches({ competition, season, ...(past ? {} : matchWindow()) })
   let result = items
   if (competitionSlug) result = result.filter(m => m.competitionSlug === competitionSlug)
   if (displayState)    result = result.filter(m => m.displayState === displayState)
-  return result
+  return { items: result, unavailableReason: null }
 }
 
-/** 대회별 경기 (공통 창) */
-export async function fetchMatchesByCompetition(slugOrRef) {
+/**
+ * 대회별 경기 (공통 창 — 과거 시즌이면 창 없음)
+ * @param {string} slugOrRef
+ * @param {number} [season]  연도. 없으면 백엔드가 현재 시즌으로 폴백한다
+ */
+export async function fetchMatchesByCompetition(slugOrRef, season) {
   const ref = await toCompetitionRef(slugOrRef)
-  const { items } = await loadMatches({ competition: ref, ...matchWindow() })
+  const { items } = await loadMatches({ competition: ref, season, ...(await matchWindowFor(season, ref)) })
   return items
 }
 
@@ -186,8 +239,8 @@ export async function fetchMatch(id) {
 // ─── 순위 ──────────────────────────────────────────────────────
 
 /** `/api/standings?competition=` 은 표 1장을 items 에 담아 준다. 없으면 실패다 */
-async function loadStandingsTable(ref, slugOrRef) {
-  const res = await apiGet('/api/standings', { competition: ref })
+async function loadStandingsTable(ref, slugOrRef, season) {
+  const res = await apiGet('/api/standings', { competition: ref, season })
   const table = res.items?.[0]
   if (!table) throw new Error(i18n.t('errors.competitionNotFound', { ref: slugOrRef }))
   return table
@@ -195,13 +248,17 @@ async function loadStandingsTable(ref, slugOrRef) {
 
 /**
  * 순위표. 컵(KNOCKOUT)·시작 전(EMPTY) 은 entries 가 비고 unavailableReason 이 실린다 — 실패가 아니다.
- * 스테이지(현재 라운드) 는 같은 대회 경기(공통 창)로 계산한다.
+ * 스테이지(현재 라운드) 는 같은 대회 경기(공통 창)로 계산한다 — 순위표 자체엔 창이 필요 없지만
+ * 그 경기 조회에는 필요하고, 과거 시즌이면 창이 0건을 만들므로 `matchWindowFor` 로 걷어낸다.
+ * @param {string} slugOrRef
+ * @param {number} [season]  연도. 없으면 백엔드가 isCurrent → 최신 순으로 폴백한다
  */
-export async function fetchStandings(slugOrRef) {
+export async function fetchStandings(slugOrRef, season) {
   const ref = await toCompetitionRef(slugOrRef)
+  const range = await matchWindowFor(season, ref)
   const [table, { items: matches }] = await Promise.all([
-    loadStandingsTable(ref, slugOrRef),
-    loadMatches({ competition: ref, ...matchWindow() }),
+    loadStandingsTable(ref, slugOrRef, season),
+    loadMatches({ competition: ref, season, ...range }),
   ])
   return normalizeStandings(table, matches)
 }
@@ -211,13 +268,17 @@ export async function fetchStandings(slugOrRef) {
 /**
  * 대회 허브 — 경기(공통 창)·순위·참가팀. 득점·도움 순위는 아직 백엔드에 없어 null 이다
  * (빈 배열이 아니다 — 화면이 "아직 없음" 과 "0명" 을 구분한다).
+ * @param {string} slugOrRef
+ * @param {number} [season]  연도. 없으면 백엔드가 현재 시즌으로 폴백한다
  */
-export async function fetchCompetitionHub(slugOrRef) {
+export async function fetchCompetitionHub(slugOrRef, season) {
   const comp = await fetchCompetition(slugOrRef)
+  // 대회 상세가 시즌 목록을 같이 주므로 isCurrent 로 직접 가린다 — 과거 시즌엔 공통 창이 0건을 만든다
+  const range = isPastSeason(season, comp.seasons) ? {} : matchWindow()
   const [{ items: matches }, table, teamsRes] = await Promise.all([
-    loadMatches({ competition: comp.ref, ...matchWindow() }),
-    loadStandingsTable(comp.ref, slugOrRef),
-    apiGet('/api/teams', { competition: comp.ref }),
+    loadMatches({ competition: comp.ref, season, ...range }),
+    loadStandingsTable(comp.ref, slugOrRef, season),
+    apiGet('/api/teams', { competition: comp.ref, season }),
   ])
   return {
     comp,
@@ -286,15 +347,31 @@ export async function fetchOverview() {
   const rowsFor  = comp => {
     const tb = tableFor(comp)
     return tb && !tb.unavailableReason
-      ? (tb.rows ?? []).map(row => normalizeStanding(row, { format: comp.format }))
+      // groupCount 를 같이 넘긴다 — 안 넘기면 기본값 1 이라 조별리그 시즌의 조 4위(description null)가
+      // rank 폴백에 걸려 'ucl_direct'(16강 직행)로 칠해진다. 지금은 zone 을 화면에 안 쓰지만 대칭을 지킨다
+      ? (tb.rows ?? []).map(row =>
+          normalizeStanding(row, { format: comp.format, groupCount: groupCountOf(tb.rows) }))
       : []
   }
   const upcoming = m => m.displayState === 'scheduled' && m.date && new Date(m.date).getTime() >= nowMs
 
+  /**
+   * 대회 "선두" — 순위표가 한 장일 때만 성립한다.
+   * 조별리그 시즌(UCL 2022·2023 은 8조 × 4팀)은 조마다 rank 1 이 있고 백엔드가
+   * `groupName asc, rank asc` 로 주므로, 그냥 첫 rank 1 을 쓰면 A조 1위가 대회 선두로 찍힌다.
+   * groupName 이 둘 이상이면 선두를 비운다 — 틀린 팀을 보여주는 것보다 안 보여주는 게 맞다.
+   * 판정은 원본 DTO 행에서 한다 — 정규화 결과를 거치지 않고 백엔드가 준 groupName 을 그대로 센다.
+   */
+  const singleTableLeader = (table, rows) => {
+    const groups = new Set((table?.rows ?? []).map(r => r.groupName ?? null))
+    if (groups.size > 1) return null
+    return rows.find(r => r.rank === 1) ?? null
+  }
+
   const competitions = comps.map(comp => {
     const matches = allMatches.filter(m => m.competitionSlug === comp.slug)
     const rows    = rowsFor(comp)
-    const first   = rows.find(r => r.rank === 1) ?? null
+    const first   = singleTableLeader(tableFor(comp), rows)
     const next    = matches.filter(upcoming).sort(byKickoff)[0] ?? null
     return {
       ...comp,
