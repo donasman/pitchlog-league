@@ -16,6 +16,8 @@ import { CompetitionModule } from './competition/competition.module.js';
 import { TeamModule } from './team/team.module.js';
 import { MatchModule } from './match/match.module.js';
 import { StandingModule } from './standing/standing.module.js';
+import { PlayerModule } from './player/player.module.js';
+import { StatisticsModule } from './statistics/statistics.module.js';
 
 /**
  * 모듈 경계 (BACKEND_GUIDE):
@@ -47,6 +49,8 @@ import { StandingModule } from './standing/standing.module.js';
     TeamModule,
     MatchModule,
     StandingModule,
+    PlayerModule,
+    StatisticsModule,
   ],
 })
 export class AppModule {}
