@@ -203,7 +203,9 @@ export async function fetchPlayerStats(slug, competitionId) {
 }
 
 /**
- * 선수 상세 페이지 묶음 데이터
+ * 선수 상세 페이지 묶음 데이터.
+ * `totals` 는 미리 계산해서 값(오브젝트)으로 넘긴다 — Live 분기(normalizePlayerDetail)와
+ * 반환 shape 을 하나로 맞추기 위해서다. 함수를 그대로 실으면 두 분기의 계약이 갈린다.
  * @param {string} slug
  */
 export async function fetchPlayerDetail(slug) {
@@ -211,7 +213,7 @@ export async function fetchPlayerDetail(slug) {
   if (!player) throw new Error(`Player not found: ${slug}`)
   const allStats = getPlayerStats(slug)
   const team     = getTeamBySlug(player.teamSlug) ?? null
-  return { player, allStats, team, calcTotalStats }
+  return { player, allStats, team, totals: calcTotalStats(allStats) }
 }
 
 // ─── 통계 순위 ─────────────────────────────────────────────────
