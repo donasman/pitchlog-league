@@ -200,12 +200,32 @@ function hex2(v) {
 }
 
 /**
+ * 문자열을 결정론적 양의 정수로 접는다 (djb2). `teamColor` 입력 가드 전용 — export 하지 않는다.
+ * Mock `player.teamId` 처럼 apiId 슬롯에 문자열('mancity')이 흘러들면 `Number()` 가 NaN → 0 으로
+ * 폴백해 팀 배지 색이 한 종류로 몰린다. 문자열이면 해시로 떨어뜨려 색이 분산되게 둔다.
+ * @param {string} s
+ */
+function hashString(s) {
+  let h = 5381
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+/**
  * 팀 apiId → `#rrggbb` (소문자 6자리 — `TeamBadge.getTextColor` 가 `hex.slice(1,3)` 로 읽는다).
  * 황금각(137.508°) 회전이라 이웃한 id 끼리도 색이 갈리고, 같은 id 는 항상 같은 색이다.
- * @param {number} apiTeamId
+ *
+ * 입력 가드: 유한한 숫자면 그대로. 비어 있지 않은 문자열이면 djb2 해시로 정수화(Mock `player.teamId`
+ * 문자열 유입에서 NaN → 0 폴백을 막는다). 그 외는 0. 숫자 입력의 색은 가드 이전과 동일하다.
+ * @param {number|string} apiTeamId
  */
 export function teamColor(apiTeamId) {
-  const hue = ((Number(apiTeamId) || 0) * 137.508) % 360
+  const n = typeof apiTeamId === 'number' && Number.isFinite(apiTeamId)
+    ? apiTeamId
+    : typeof apiTeamId === 'string' && apiTeamId.length > 0
+      ? hashString(apiTeamId)
+      : 0
+  const hue = (n * 137.508) % 360
   const s = 0.55
   const l = 0.40
   // HSL → RGB
