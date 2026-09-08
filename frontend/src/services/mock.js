@@ -211,7 +211,7 @@ export async function fetchPlayerStats(slug, competitionId) {
 export async function fetchPlayerDetail(slug) {
   const player = getPlayerBySlug(slug)
   if (!player) throw new Error(`Player not found: ${slug}`)
-  const allStats = getPlayerStats(slug)
+  const allStats = getPlayerStats(slug).map(s => ({ ...s, seasonLabel: '2026-27' }))
   const team     = getTeamBySlug(player.teamSlug) ?? null
   return { player, allStats, team, totals: calcTotalStats(allStats) }
 }
