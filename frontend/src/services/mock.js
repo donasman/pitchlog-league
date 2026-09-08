@@ -33,8 +33,12 @@ export async function fetchCompetitions() {
   return COMPETITIONS
 }
 
-/** 시즌 목록 */
-export async function fetchSeasons() {
+/**
+ * 시즌 목록. 실 API 와 시그니처를 맞춘다 — 호출부(AppHeader)가 대회를 넘긴다.
+ * Mock 은 대회별 시즌 데이터가 없어 어느 대회든 같은 목록을 준다.
+ * @param {string} [_slugOrRef]
+ */
+export async function fetchSeasons(_slugOrRef) {
   return SEASONS
 }
 
@@ -58,7 +62,7 @@ export async function fetchCompetition(slug) {
  * 대회 허브 — 한 번의 호출로 화면에 필요한 데이터를 묶어 반환
  * @param {string} slug
  */
-export async function fetchCompetitionHub(slug) {
+export async function fetchCompetitionHub(slug, _season) {
   const comp = getCompetitionBySlug(slug)
   if (!comp) throw new Error(`Competition not found: ${slug}`)
   return {
@@ -73,16 +77,19 @@ export async function fetchCompetitionHub(slug) {
 
 // ─── 경기 ──────────────────────────────────────────────────────
 
-/** 전체 경기 목록 (옵션 필터) */
-export async function fetchAllMatches({ competitionSlug, displayState } = {}) {
+/**
+ * 전체 경기 목록 (옵션 필터). Mock 은 시즌별 데이터가 없어 season 은 무시한다.
+ * 반환 모양은 실 API 와 같아야 한다 — `unavailableReason` 은 Mock 에서 항상 null 이다.
+ */
+export async function fetchAllMatches({ competitionSlug, displayState, season: _season } = {}) {
   let result = [...MATCHES]
   if (competitionSlug) result = result.filter(m => m.competitionSlug === competitionSlug)
   if (displayState)    result = result.filter(m => m.displayState === displayState)
-  return result
+  return { items: result, unavailableReason: null }
 }
 
 /** 대회별 경기 */
-export async function fetchMatchesByCompetition(slug) {
+export async function fetchMatchesByCompetition(slug, _season) {
   return getMatchesByCompetition(slug)
 }
 
@@ -175,7 +182,7 @@ export async function fetchTeamFixtures(slug) {
 // ─── 순위 ──────────────────────────────────────────────────────
 
 /** 순위 */
-export async function fetchStandings(competitionSlug) {
+export async function fetchStandings(competitionSlug, _season) {
   const s = getStandings(competitionSlug)
   if (!s) throw new Error(`Standings not found: ${competitionSlug}`)
   return s
