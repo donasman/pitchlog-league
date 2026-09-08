@@ -1,9 +1,13 @@
 /**
  * L2 — 라운드 · 경기 · 순위 (BACKEND_FEATURES #13·#15, INGESTION_STRATEGY 2-2)
  *
- * 지금은 **화면 6대회의 현재 시즌만** 받는다. 대회당 3콜(rounds · fixtures · standings).
- * 5개년 백필은 이 코드를 전체 대회시즌으로 돌리는 것이고(NEXT_STEPS 8-b, isCurrent 조건만 푼다),
- * 녹아웃 tie·대진표 슬롯은 L2-b 다 (8-d, 2027-02 실 데이터 뒤).
+ * 기본은 **화면 6대회의 현재 시즌**이다. 대회당 3콜(rounds · fixtures · standings).
+ * `--all-seasons` 는 같은 코드를 `SEASON_YEARS` 5시즌으로 돌린다 (백필-1, NEXT_STEPS 8-b) —
+ * 최신 시즌부터 역순(INGESTION_STRATEGY 5-3). 녹아웃 tie·대진표 슬롯은 L2-b 다 (8-d).
+ *
+ * ⚠ 과거 시즌을 돌릴 때 **1부 팀 집합은 그 시즌의 것**이어야 한다. `is_current` 로 뽑으면
+ * 2022 컵을 2026 리그 참가팀으로 컷 판정해 그 시즌이 통째로 0건이 되고 로그에는
+ * "1부 팀이 한 라운드에도 없다" 만 남는다 — 조용한 실패다 (`topFlightApiTeamIds`).
  *
  * ## 왜 라운드를 먼저 받나
  * 라운드 이름으로 자르지 않기 때문이다. `/fixtures/rounds` 가 주는 **순서**가 ordinal 이고,
@@ -24,6 +28,8 @@ import { ApiFootballClient } from '../api-football/api-football.client.js';
 import { IngestionRunService } from '../ingestion-run.service.js';
 import { batchUpsert } from '../../prisma/batch-upsert.js';
 import { screenCompetitionWhere } from '../screen-scope.js';
+import { SEASON_YEARS } from '../l0/competitions.catalog.js';
+import { ApiQuotaExhaustedError } from '../api-football/api-football.errors.js';
 import { CompetitionFormat, IngestionLayer } from '../../generated/prisma/client.js';
 import type { ApiFixture, ApiStandings } from '../api-football/api-football.types.js';
 import { resolveRoundScope, type FixtureRef } from './round-scope.js';
@@ -39,6 +45,8 @@ export interface L2CompetitionResult {
   droppedRounds: number;
   unknownRounds: string[];
   missingTeams: number[];
+  /** 이 대회시즌이 온전히 들어가지 않았다 — 시즌 단위 ingestion_runs 가 PARTIAL 로 남는다 */
+  partial?: boolean;
 }
 
 export interface L2Summary {
@@ -46,6 +54,13 @@ export interface L2Summary {
   totals: { rounds: number; matches: number; standings: number };
   skipped: string[];
   partial?: boolean;
+}
+
+export interface L2RunOptions {
+  /** `SEASON_YEARS` 5시즌 전부 — 백필-1 (NEXT_STEPS 8-b) */
+  allSeasons?: boolean;
+  /** 이 시즌 하나만. `allSeasons` 보다 우선한다 */
+  seasonYear?: number;
 }
 
 @Injectable()
@@ -58,7 +73,18 @@ export class L2Service {
     private readonly runs: IngestionRunService,
   ) {}
 
-  async run(): Promise<L2Summary> {
+  /**
+   * 기본은 현재 시즌. `allSeasons`·`seasonYear` 로 과거 시즌까지 넓힌다.
+   *
+   * `season.year in SEASON_YEARS` 를 반드시 건다 — L0 가 `/leagues?id=` 를 시즌 없이 불러
+   * 1992년까지의 대회시즌이 `competition_seasons` 에 들어와 있을 수 있다.
+   *
+   * ⚠ `ingestion_runs.calls_used` 를 합산할 때는 **`competition_season_id IS NULL` 행만 센다.**
+   * 이 실행은 행을 두 겹으로 남긴다 — 바깥 1행(CLI 1회 전체) + 대회시즌마다 1행. 안쪽 행은
+   * 시즌별 내역이라 바깥 행과 같은 콜을 다시 적은 것이고, 다 더하면 정확히 2배가 된다.
+   * 경고선 판단(DATA_RULES 의 calls_used)이 이 컬럼을 쓰므로 여기서 못박아 둔다.
+   */
+  async run(opts: L2RunOptions = {}): Promise<L2Summary> {
     return this.runs.wrap(IngestionLayer.L2, null, async () => {
       const summary: L2Summary = {
         competitions: [],
@@ -66,31 +92,57 @@ export class L2Service {
         skipped: [],
       };
 
+      const scoped = opts.seasonYear !== undefined || opts.allSeasons === true;
+      const where =
+        opts.seasonYear !== undefined
+          ? { competition: screenCompetitionWhere, season: { year: opts.seasonYear } }
+          : opts.allSeasons === true
+            ? { competition: screenCompetitionWhere, season: { year: { in: [...SEASON_YEARS] } } }
+            : { isCurrent: true, competition: screenCompetitionWhere };
+
       const seasons = await this.prisma.competitionSeason.findMany({
-        where: { isCurrent: true, competition: screenCompetitionWhere },
+        where,
         include: { competition: true, season: true },
-        orderBy: { competition: { displayOrder: 'asc' } },
+        // 최신 시즌부터 역순 (INGESTION_STRATEGY 5-3) — 오래된 것부터 채우면 그동안 아무것도 못 보여준다
+        orderBy: scoped
+          ? [{ season: { year: 'desc' as const } }, { competition: { displayOrder: 'asc' as const } }]
+          : { competition: { displayOrder: 'asc' as const } },
       });
-      if (seasons.length === 0) throw new Error('현재 시즌인 화면 대회가 없다 — L0 를 먼저 돌린다');
+      if (seasons.length === 0) {
+        throw new Error(
+          opts.seasonYear !== undefined
+            ? `${opts.seasonYear} 시즌인 화면 대회가 없다 — L0 를 먼저 돌린다`
+            : opts.allSeasons === true
+              ? '화면 대회의 대회시즌이 하나도 없다 — L0 를 먼저 돌린다'
+              : '현재 시즌인 화면 대회가 없다 — L0 를 먼저 돌린다',
+        );
+      }
+      const mode = opts.seasonYear !== undefined ? `${opts.seasonYear} 시즌` : opts.allSeasons === true ? '전 시즌' : '현재 시즌';
+      this.logger.log(`L2 시작 — ${mode} · 대회시즌 ${seasons.length}개`);
 
       const teamIdByApi = await this.teamIdMap();
 
       for (const cs of seasons) {
         const label = `${cs.competition.name} ${cs.season.year}`;
         try {
-          const r = await this.collectOne(cs, teamIdByApi);
+          // 시즌마다 ingestion_runs 행을 남긴다 — competition_season_id 가 이걸 위해 있다.
+          // 시즌별 콜 수가 백필-2 예산의 입력이다. 바깥 wrap(null) 은 CLI 1회 = 1행으로 남는다
+          const r = await this.runs.wrap(IngestionLayer.L2, cs.id, () => this.collectOne(cs, teamIdByApi));
           summary.competitions.push(r);
           summary.totals.rounds += r.rounds;
           summary.totals.matches += r.matches;
           summary.totals.standings += r.standings;
-          if (r.cutRound === null || r.unknownRounds.length > 0 || r.missingTeams.length > 0) {
-            summary.partial = true;
-          }
+          if (r.partial === true) summary.partial = true;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           this.logger.warn(`${label} 실패 — ${msg}`);
           summary.skipped.push(`${label}: ${msg}`);
           summary.partial = true;
+          // 일일 한도는 재시도해도 같은 결과다 — 남은 대회시즌을 다 실패로 쌓지 않는다
+          if (err instanceof ApiQuotaExhaustedError) {
+            this.logger.error('API-Football 일일 한도 소진 — 남은 대회시즌을 중단한다');
+            break;
+          }
         }
       }
 
@@ -108,23 +160,32 @@ export class L2Service {
   }
 
   /**
-   * 이 대회의 1부 팀 (API team id).
+   * 이 대회시즌의 1부 팀 (API team id).
    *   리그  → 자기 참가팀 (모든 라운드가 1부다)
-   *   컵    → top_flight_competition 의 현재 시즌 참가팀
-   *   UCL   → top_flight 가 없다. 추적하는 리그(ROUND_ROBIN) 참가팀 합집합을 쓴다
+   *   컵    → top_flight_competition 의 **같은 시즌** 참가팀
+   *   UCL   → top_flight 가 없다. 추적하는 리그(ROUND_ROBIN)의 **같은 시즌** 참가팀 합집합
+   *
+   * 시즌을 `seasonId` 로 묶는다. `is_current` 로 뽑으면 과거 시즌이 현재 시즌 참가팀으로
+   * 판정돼 컷이 안 잡히고 그 시즌이 통째로 0건이 된다 (파일 머리말).
    */
-  private async topFlightApiTeamIds(competitionSeasonId: number, competitionId: number, format: CompetitionFormat, topFlightCompetitionId: number | null): Promise<Set<number>> {
-    if (format === CompetitionFormat.ROUND_ROBIN) {
-      return this.entryApiTeamIds({ competitionSeasonId });
+  private async topFlightApiTeamIds(cs: {
+    id: number;
+    seasonId: number;
+    competitionId: number;
+    competition: { format: CompetitionFormat; topFlightCompetitionId: number | null };
+  }): Promise<Set<number>> {
+    if (cs.competition.format === CompetitionFormat.ROUND_ROBIN) {
+      return this.entryApiTeamIds({ competitionSeasonId: cs.id });
     }
-    if (topFlightCompetitionId !== null) {
-      return this.entryApiTeamIds({ competitionSeason: { isCurrent: true, competitionId: topFlightCompetitionId } });
+    if (cs.competition.topFlightCompetitionId !== null) {
+      return this.entryApiTeamIds({
+        competitionSeason: { seasonId: cs.seasonId, competitionId: cs.competition.topFlightCompetitionId },
+      });
     }
-    // UCL — 5대 리그 합집합
-    void competitionId;
+    // UCL — 같은 시즌 5대 리그 합집합
     return this.entryApiTeamIds({
       competitionSeason: {
-        isCurrent: true,
+        seasonId: cs.seasonId,
         competition: { ...screenCompetitionWhere, format: CompetitionFormat.ROUND_ROBIN },
       },
     });
@@ -139,7 +200,7 @@ export class L2Service {
   }
 
   private async collectOne(
-    cs: { id: number; competitionId: number; competition: { name: string; apiCompetitionId: number; format: CompetitionFormat; topFlightCompetitionId: number | null }; season: { year: number } },
+    cs: { id: number; seasonId: number; competitionId: number; competition: { name: string; apiCompetitionId: number; format: CompetitionFormat; topFlightCompetitionId: number | null }; season: { year: number } },
     teamIdByApi: Map<number, number>,
   ): Promise<L2CompetitionResult> {
     const league = cs.competition.apiCompetitionId;
@@ -168,10 +229,11 @@ export class L2Service {
     if (roundNames.length === 0 || fixtures.length === 0) {
       // 시즌 등록 전이거나 일정 미발표. 실패가 아니라 "아직 없음" (DATA_RULES 5-4)
       this.logger.warn(`${label}: 라운드 ${roundNames.length} · 경기 ${fixtures.length} — 건너뜀`);
+      result.partial = true;
       return result;
     }
 
-    const topFlight = await this.topFlightApiTeamIds(cs.id, cs.competitionId, cs.competition.format, cs.competition.topFlightCompetitionId);
+    const topFlight = await this.topFlightApiTeamIds(cs);
     const refs: FixtureRef[] = fixtures.map((f) => ({
       round: f.league.round,
       homeApiTeamId: f.teams.home.id,
@@ -184,6 +246,7 @@ export class L2Service {
     result.droppedRounds = scope.rounds.filter((r) => !r.included).length;
     if (scope.cutOrdinal === null) {
       this.logger.warn(`${label}: 1부 팀이 한 라운드에도 없다 — 아무것도 저장하지 않는다`);
+      result.partial = true;
       return result;
     }
     result.cutRound = scope.rounds[scope.cutOrdinal].name;
@@ -298,6 +361,8 @@ export class L2Service {
     if (cs.competition.format !== CompetitionFormat.KNOCKOUT) {
       result.standings = await this.collectStandings(cs.id, league, season, label, teamIdByApi);
     }
+
+    result.partial = result.cutRound === null || result.unknownRounds.length > 0 || result.missingTeams.length > 0;
 
     this.logger.log(
       `${label}: 라운드 ${result.rounds}(제외 ${result.droppedRounds}) · 경기 ${result.matches} · 순위 ${result.standings}` +
