@@ -33,3 +33,29 @@ description: PitchLog 백엔드에 새 수집 계층(L3 이후)이나 조회 API
 ## 실행
 
 Cowork VM 에서는 못 돈다(vitest 네이티브 바인딩·원격 DB 가드). `npx tsc --noEmit` 만 VM 에서. 실제 실행은 CI 또는 로컬 Postgres. 사용자에게 "e2e N건은 CI 에서 처음 확인된다" 고 말한다.
+
+## 반례 픽스처 규약 (2026-09-08 추가)
+
+픽스처를 짜기 전에 실 DB 에서 까다로운 모양을 SQL 로 확인하고 최소 하나씩 넣는다.
+쉬운 모양만 넣으면 e2e 와 단위 테스트가 반례를 못 잡는다 — 09-08 에 프론트 버그 7건이
+전부 픽스처에 없던 모양에서 나왔다.
+
+**지금까지 실측으로 확인된 반례**:
+
+- **이적** — 같은 대회시즌에 팀 두 개 (unique `[playerId, teamId, csId]` 가 허용).
+  예: A. Gordon 2022-23 EPL Everton+Newcastle. `l6.e2e-spec.ts:298-301` P_MOVED ·
+  `player-stats.e2e-spec.ts` P1·csA2026·team1+team4 (09-08 추가).
+- **null 섞인 행** — 한 필드가 null 이고 다른 필드는 값. 예: `assists=null · appearances=16`.
+  `assists`·`yellowredCards`·`passesKey` 셋이 스키마상 null 가능 (`schema.prisma:785·788·794`).
+- **조별리그** — group_name 여럿 (UCL 8그룹). `l2.e2e-spec.ts:475-486` 이 group_name 비지
+  않음만 확인 · 여러 그룹 케이스는 아직 없음.
+- **같은 rank 여러 행** — `TopRanking` 이 `(csId, category, rank)` 유니크를 스키마에
+  두는지 확인 후, 두지 않으면 반례를 하나 심는다 (`schema.prisma:856-869`).
+
+**규약**: 백엔드 e2e 와 프론트 `normalize.test.js` 에 **같은 모양**을 넣는다.
+두 구현이 갈라지는 순간 둘 다에서 잡힌다.
+
+**정렬 tiebreaker 확인**: 이적 반례가 들어가면 `orderBy` 에 팀 tiebreaker 가 없는 서비스는
+같은 (대회, 시즌) 행 두 개의 상대 순서가 결정적이지 않다. 인덱스 assert 를 쓰면 flaky
+(`player.service.ts:46-49` — year desc → displayOrder asc 만 잡힘). `find` · 카운트 · slice
+로 검증한다.
