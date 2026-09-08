@@ -8,6 +8,8 @@ import { ApiFootballModule } from './ingestion/api-football/api-football.module.
 import { L0Module } from './ingestion/l0/l0.module.js';
 import { L1Module } from './ingestion/l1/l1.module.js';
 import { L2Module } from './ingestion/l2/l2.module.js';
+import { L6Module } from './ingestion/l6/l6.module.js';
+import { BackfillModule } from './ingestion/backfill/backfill.module.js';
 import { LogoModule } from './ingestion/logos/logo.module.js';
 import { ProbeModule } from './ingestion/probe/probe.module.js';
 import { CompetitionModule } from './competition/competition.module.js';
@@ -37,6 +39,8 @@ import { StandingModule } from './standing/standing.module.js';
     L0Module,
     L1Module,
     L2Module,
+    L6Module,
+    BackfillModule,
     LogoModule,
     ProbeModule,
     CompetitionModule,

@@ -39,6 +39,14 @@ export interface BatchUpsertSpec<Row extends Record<string, unknown>> {
    * 빈 배열이면 DO NOTHING — 단, RETURNING 이 기존 행을 돌려주지 않으므로 returning 과 같이 쓰지 말 것.
    */
   update?: readonly (keyof Row & string)[];
+  /**
+   * 새 값이 null 이면 기존 값을 지키는 컬럼 — `col = COALESCE(EXCLUDED.col, t.col)`.
+   * `update` 대상 안에 있어야 한다.
+   *
+   * 왜 필요한가: L6 는 시즌을 역순으로 돈다. 2026 패스가 선수 프로필(birth.date 등)을 채우는데,
+   * 뒤이은 2022 패스에서 같은 선수의 그 필드가 null 로 오면 `col = EXCLUDED.col` 이 채운 값을 지운다.
+   */
+  coalesceUpdate?: readonly (keyof Row & string)[];
   /** `updated_at` 처럼 INSERT·UPDATE 양쪽에서 now() 로 채울 컬럼 */
   updatedAtColumn?: string;
   /** RETURNING 컬럼. 보통 ['id', ...conflict] 로 외부키 → 내부 id 매핑을 받는다 */
@@ -99,6 +107,10 @@ export async function batchUpsert<Row extends Record<string, unknown>, Ret = Rec
 
   const updateCols: readonly (keyof Row & string)[] = spec.update ?? cols.filter((c) => !spec.conflict.includes(c));
   for (const k of updateCols) if (!cols.includes(k)) throw new Error(`${spec.table}: update 컬럼 ${k} 가 columns 에 없다`);
+  const coalesceCols = new Set<string>(spec.coalesceUpdate ?? []);
+  for (const k of coalesceCols) {
+    if (!updateCols.includes(k as keyof Row & string)) throw new Error(`${spec.table}: coalesceUpdate 컬럼 ${k} 가 update 대상이 아니다`);
+  }
   if (updateCols.length === 0 && !spec.updatedAtColumn && spec.returning?.length) {
     throw new Error(`${spec.table}: DO NOTHING 은 기존 행을 RETURNING 하지 않는다 — update 를 지정하거나 returning 을 빼라`);
   }
@@ -111,7 +123,12 @@ export async function batchUpsert<Row extends Record<string, unknown>, Ret = Rec
 
   const colList = Prisma.join(cols.map(ident));
   const conflictList = Prisma.join(spec.conflict.map(ident));
-  const setParts = updateCols.map((c) => Prisma.sql`${ident(c)} = EXCLUDED.${ident(c)}`);
+  const tableIdent = ident(spec.table);
+  const setParts = updateCols.map((c) =>
+    coalesceCols.has(c)
+      ? Prisma.sql`${ident(c)} = COALESCE(EXCLUDED.${ident(c)}, ${tableIdent}.${ident(c)})`
+      : Prisma.sql`${ident(c)} = EXCLUDED.${ident(c)}`,
+  );
   if (spec.updatedAtColumn) setParts.push(Prisma.sql`${ident(spec.updatedAtColumn)} = now()`);
   const insertCols = spec.updatedAtColumn ? Prisma.sql`${colList}, ${ident(spec.updatedAtColumn)}` : colList;
   const onConflict =
