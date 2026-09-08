@@ -25,6 +25,7 @@ import {
   getCompetitionScorers,
   getCompetitionAssisters,
 } from '@/mocks/players'
+import { apiIdFromAlias, normalizePlayerDetail } from './normalize'
 
 // ─── 대회 ──────────────────────────────────────────────────────
 
@@ -204,16 +205,81 @@ export async function fetchPlayerStats(slug, competitionId) {
 
 /**
  * 선수 상세 페이지 묶음 데이터.
- * `totals` 는 미리 계산해서 값(오브젝트)으로 넘긴다 — Live 분기(normalizePlayerDetail)와
- * 반환 shape 을 하나로 맞추기 위해서다. 함수를 그대로 실으면 두 분기의 계약이 갈린다.
+ *
+ * Mock 도 실 API 와 같은 shape 을 만들어 `normalizePlayerDetail` 을 통과시킨다 —
+ * 정규화 이전 형태를 페이지가 소비하면 두 분기의 계약이 갈리고, 컴포넌트가 필드 존재
+ * 여부로 분기 판정을 하게 된다 (dataStatus 판단이 컴포넌트로 흩어졌던 c9d9b54 회귀 배경).
  * @param {string} slug
  */
 export async function fetchPlayerDetail(slug) {
   const player = getPlayerBySlug(slug)
   if (!player) throw new Error(`Player not found: ${slug}`)
-  const allStats = getPlayerStats(slug).map(s => ({ ...s, seasonLabel: '2026-27' }))
-  const team     = getTeamBySlug(player.teamSlug) ?? null
-  return { player, allStats, team, totals: calcTotalStats(allStats) }
+  const rawStats = getPlayerStats(slug)
+  // Mock 원본은 `dataStatus`·오브젝트 없는 평면 shape 이다.
+  // 백엔드 `PlayerSeasonStatDto` shape (competition·season·team 오브젝트)으로 조립한다.
+  const seasonStats = rawStats.map(s => ({
+    competition: {
+      // alias.id('epl') → apiId(39) 역매핑. 미매핑이면 undefined 로 두어 normalize 가 ref 폴백.
+      apiId:       apiIdFromAlias(s.competitionId) ?? undefined,
+      ref:         s.competitionId,
+      displayName: s.competitionName,
+    },
+    season: { year: 2026, label: '2026-27' },
+    team: {
+      apiId:            player.teamId,   // mock 은 문자열 slug — teamColor 가 0 으로 fallback (색 하나만 나옴)
+      displayName:      player.teamName,
+      shortDisplayName: player.teamName,
+    },
+    appearances:    s.appearances,
+    starts:         s.starts,
+    minutes:        s.minutesPlayed,     // mock 필드명은 minutesPlayed → 백엔드 필드명은 minutes
+    goals:          s.goals,
+    assists:        s.assists,
+    yellowCards:    s.yellowCards,
+    yellowredCards: null,                // mock 은 이 필드 없음
+    redCards:       s.redCards,
+    asOf:           new Date().toISOString(),
+  }))
+  // dto.totals 는 백엔드가 계산해 준 값의 자리다. Mock 은 원본 rawStats 로 같은 규약(assists 하나라도
+  // null 이면 null)을 재현하려 했지만, mock PLAYER_STATS 는 assists 가 전부 정수라 갈림 없음.
+  const totals = calcTotalStats(rawStats)
+  const dto = {
+    apiId:            player.id,
+    ref:              `${player.id}-${slug}`,
+    displayName:      player.name,
+    shortDisplayName: player.shortName ?? player.name,
+    originalName:     player.name,
+    firstname:    null,
+    lastname:     null,
+    birthDate:    player.dateOfBirth,
+    birthPlace:   null,
+    birthCountry: null,
+    nationality:  player.nationality,
+    heightCm:     null,
+    weightKg:     null,
+    photoUrl:     null,
+    primaryTeam: player.teamId ? {
+      apiId:            player.teamId,
+      ref:              `${player.teamId}-${player.teamSlug}`,
+      displayName:      player.teamName,
+      shortDisplayName: player.teamName,
+      code:             undefined,
+      logoUrl:          undefined,
+    } : null,
+    jerseyNumber: player.number,
+    position:     player.position,
+    seasonStats,
+    totals: {
+      appearances: totals.appearances,
+      minutes:     seasonStats.reduce((a, s) => a + s.minutes, 0),
+      goals:       totals.goals,
+      assists:     totals.assists,
+      yellowCards: totals.yellowCards,
+      redCards:    totals.redCards,
+    },
+    asOf: new Date().toISOString(),
+  }
+  return normalizePlayerDetail(dto)
 }
 
 // ─── 통계 순위 ─────────────────────────────────────────────────
