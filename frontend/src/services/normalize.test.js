@@ -190,6 +190,25 @@ describe('teamColor', () => {
     expect(teamColor(33)).not.toBe(teamColor(34))
     expect(teamColor(50)).not.toBe(teamColor(42))
   })
+
+  // Mock `player.teamId` 는 문자열('mancity')이라 `Number()` 를 태우면 NaN → 0 으로 몰려
+  // 배지 색이 한 종류로 폴백됐다. 입력 가드가 문자열을 해시로 떨어뜨려 색이 분산되는지 잠근다.
+  it('hashes a string apiTeamId deterministically instead of the NaN → 0 fallback', () => {
+    const a = teamColor('mancity')
+    const b = teamColor('liverpool')
+    const c = teamColor('mancity')
+    expect(a).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(b).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(a).toBe(c)                 // same input → same color (deterministic)
+    expect(a).not.toBe(b)             // different strings → different colors
+    expect(a).not.toBe(teamColor(0))  // must not collide with the NaN fallback color (=0)
+  })
+
+  // 숫자 회귀 — 가드 삽입으로 기존 숫자 규약이 흔들리면 안 된다 (형식만 잠근다)
+  it('keeps the existing shape for numeric apiTeamId (format only)', () => {
+    expect(teamColor(39)).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(teamColor(9100024)).toMatch(/^#[0-9a-f]{6}$/i)
+  })
 })
 
 // ─── competitionRefFromSlug ────────────────────────────────────
