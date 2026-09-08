@@ -1,6 +1,9 @@
 /**
  * 선수 상세 (/players/:slug)
  * 데이터: services/api.js → fetchPlayerDetail
+ *
+ * 표시 판단은 정규화 계층(`services/normalize.js`)의 순수 함수 셋에 있다.
+ * 이 페이지에는 표시 판단이 없다 — `formatStat` 로 셀을 그리고, 부분 합계는 `playerTotals` 로 만든다.
  */
 
 import { useParams, useSearchParams, Link } from 'react-router-dom'
@@ -14,22 +17,20 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import { useData } from '@/hooks/useData'
 import { fetchPlayerDetail } from '@/services/api'
+import { formatStat, playerTotals } from '@/services/normalize'
 import { calcAge } from '@/utils/dateFormat'
 import { getLocalizedName } from '@/utils/localization'
 
-function StatCell({ label, value, dataStatus }) {
-  const { t } = useTranslation()
-  const display = dataStatus === 'unavailable'
-    ? <span className="text-muted-foreground text-xs">{t('player.statusUnavailable')}</span>
-    : dataStatus === 'pending'
-    ? <span className="text-amber-600 dark:text-amber-400 text-xs">{t('player.statusPending')}</span>
-    : <span className="text-2xl font-bold text-foreground">{value}</span>
-
+/**
+ * 얇은 표시 셀. 값의 종류를 판단하지 않는다 — `formatStat` 결과가 '-' 이면
+ * 흐리게 그리는 것만 한다. "값이 왜 '-' 인가" 는 정규화 계층의 책임이다.
+ */
+function Stat({ label, value }) {
+  const isDash = value === '-'
   return (
     <div className="bg-card border border-border rounded-xl p-4 text-center">
-      {display}
+      <div className={`text-2xl font-bold ${isDash ? 'text-muted-foreground' : 'text-foreground'}`}>{value}</div>
       <div className="text-xs text-muted-foreground mt-1">{label}</div>
-      {dataStatus === 'pending' && <div className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">{t('player.statusRecheck')}</div>}
     </div>
   )
 }
@@ -69,12 +70,21 @@ export default function PlayerPage() {
   const { player, allStats, team, totals } = data
   const age = calcAge(player.dateOfBirth)
 
-  const filtered = filterComp === 'all' ? allStats : allStats.filter(s => s.competitionId === filterComp)
+  // row.key 로 필터·목록 key 를 통일한다 — 조합 문자열을 컴포넌트에서 만들지 않는다
+  const filtered = filterComp === 'all'
+    ? allStats
+    : allStats.filter(s => s.key === filterComp)
 
   const compOptions = [
     { value: 'all', label: t('player.filterAll') },
-    ...allStats.map(s => ({ value: s.competitionId, label: s.competitionName })),
+    ...allStats.map(s => ({
+      value: s.key,
+      label: `${s.seasonLabel} ${s.competitionName}${s.teamName ? ` · ${s.teamName}` : ''}`,
+    })),
   ]
+
+  // 전체 = 백엔드 dto.totals 신뢰. 부분 = playerTotals(filtered).
+  const displayTotals = filterComp === 'all' ? totals : playerTotals(filtered)
 
   const teamName = getLocalizedName({ id: team?.id, name: team?.name }, locale) || team?.name
 
@@ -124,29 +134,21 @@ export default function PlayerPage() {
         <FilterBar options={compOptions} value={filterComp} onChange={handleFilter} label={t('team.filterLabel')} />
       </div>
 
-      {/* 통계 그리드 */}
-      {filterComp === 'all' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <StatCell label={t('player.appearances')} value={totals.appearances} dataStatus="confirmed" />
-          <StatCell label={t('player.goals')} value={totals.goals} dataStatus="confirmed" />
-          <StatCell label={t('player.assists')} value={totals.assists} dataStatus="confirmed" />
-          <StatCell label={t('player.yellowCards')} value={totals.yellowCards} dataStatus="confirmed" />
-          <StatCell label={t('player.redCards')} value={totals.redCards} dataStatus="confirmed" />
-        </div>
-      ) : (
-        filtered.map(s => (
-          <div key={s.competitionId}>
-            <p className="text-xs text-muted-foreground mb-3">{s.competitionName}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-              <StatCell label={t('player.appearances')} value={s.appearances} dataStatus={s.dataStatus} />
-              <StatCell label={t('player.goals')} value={s.goals} dataStatus={s.dataStatus} />
-              <StatCell label={t('player.assists')} value={s.assists} dataStatus={s.dataStatus} />
-              <StatCell label={t('player.yellowCards')} value={s.yellowCards} dataStatus={s.dataStatus} />
-              <StatCell label={t('player.redCards')} value={s.redCards} dataStatus={s.dataStatus} />
-            </div>
-          </div>
-        ))
+      {/* 필터 요약 (선택 시 어느 조각을 보고 있는지) */}
+      {filterComp !== 'all' && (
+        <p className="text-xs text-muted-foreground">
+          {compOptions.find(o => o.value === filterComp)?.label}
+        </p>
       )}
+
+      {/* 통계 그리드 — 전체(dto.totals) 또는 필터(playerTotals(filtered)) */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <Stat label={t('player.appearances')} value={formatStat(displayTotals.appearances)} />
+        <Stat label={t('player.goals')}       value={formatStat(displayTotals.goals)} />
+        <Stat label={t('player.assists')}     value={formatStat(displayTotals.assists)} />
+        <Stat label={t('player.yellowCards')} value={formatStat(displayTotals.yellowCards)} />
+        <Stat label={t('player.redCards')}    value={formatStat(displayTotals.redCards)} />
+      </div>
 
       {allStats.length === 0 && (
         <EmptyState description={t('player.noStats2627')} />
@@ -158,29 +160,25 @@ export default function PlayerPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground text-xs border-b border-border">
-                <th className="text-left px-4 py-3">{t('competition.tabs.schedule')}</th>
+                <th className="text-left px-4 py-3">{t('header.season')}</th>
+                <th className="text-left px-4 py-3">{t('matches.filterComp')}</th>
                 <th className="text-center px-3 py-3">{t('player.appearances')}</th>
                 <th className="text-center px-3 py-3">{t('player.starts')}</th>
                 <th className="text-center px-3 py-3">{t('player.goals')}</th>
                 <th className="text-center px-3 py-3">{t('player.assists')}</th>
                 <th className="text-center px-3 py-3">{t('player.yellowCards')}</th>
-                <th className="text-center px-3 py-3">{t('standings.zone')}</th>
               </tr>
             </thead>
             <tbody>
-              {allStats.map(s => (
-                <tr key={s.competitionId} className="border-b border-border/50 hover:bg-accent/50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground">{s.competitionName}</td>
-                  <td className="text-center px-3 py-3 text-muted-foreground">{s.appearances}</td>
-                  <td className="text-center px-3 py-3 text-muted-foreground">{s.starts}</td>
-                  <td className="text-center px-3 py-3 text-muted-foreground">{s.goals}</td>
-                  <td className="text-center px-3 py-3 text-muted-foreground">{s.assists}</td>
-                  <td className="text-center px-3 py-3 text-muted-foreground">{s.yellowCards}</td>
-                  <td className="text-center px-3 py-3">
-                    {s.dataStatus === 'confirmed'   && <span className="text-xs text-primary">{t('player.statusConfirmed')}</span>}
-                    {s.dataStatus === 'pending'     && <span className="text-xs text-amber-600 dark:text-amber-400">{t('player.statusPending')}</span>}
-                    {s.dataStatus === 'unavailable' && <span className="text-xs text-muted-foreground">{t('player.statusUnavailable')}</span>}
-                  </td>
+              {filtered.map(s => (
+                <tr key={s.key} className="border-b border-border/50 hover:bg-accent/50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-foreground">{s.seasonLabel}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{s.competitionName}{s.teamName ? ` · ${s.teamName}` : ''}</td>
+                  <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.appearances)}</td>
+                  <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.starts)}</td>
+                  <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.goals)}</td>
+                  <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.assists)}</td>
+                  <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.yellowCards)}</td>
                 </tr>
               ))}
             </tbody>

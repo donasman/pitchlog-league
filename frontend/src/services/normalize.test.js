@@ -7,6 +7,9 @@ import {
   normalizeStandings,
   deriveStage,
   competitionRefFromSlug,
+  normalizePlayerDetail,
+  playerTotals,
+  formatStat,
 } from './normalize.js'
 import { MATCHES } from '../mocks/matches.js'
 
@@ -394,5 +397,120 @@ describe('deriveStage', () => {
   it('returns null when nothing has started', () => {
     expect(deriveStage([scheduled(1, '2026-11-28T15:00:00Z', 14)], NOW)).toBeNull()
     expect(deriveStage([], NOW)).toBeNull()
+  })
+})
+
+// ─── normalizePlayerSeasonStat / playerTotals / formatStat ─────
+//
+// 컨텍스트: 09-08 세 라운드 버그 7건. 표시 판단이 컴포넌트 곳곳에 흩어져 있었다.
+// 이 판이 판단을 순수 함수 3개(key·playerTotals·formatStat)로 옮긴다.
+// 아래 대조 assert 가 규약 등식 `playerTotals(allStats) === dto.totals` 를 잠근다 —
+// 백엔드 `player.service.ts:102-112` 와 같은 규약을 프론트에도 재현한다.
+
+describe('normalizePlayerSeasonStat / playerTotals / formatStat', () => {
+  // ★ `??` 를 assists 에 쓰지 않는다 — `null ?? 2 = 2` 가 되어 "assists=null" 시나리오를
+  //   테스트할 수 없다. assists 만 명시 존재 여부로 판단한다.
+  const csDto = (opts) => ({
+    competition: { apiId: 39, ref: '39-premier-league', displayName: 'Premier League' },
+    season: { year: 2023, label: '2022-23' },
+    team: { apiId: opts.teamId, displayName: opts.teamName, shortDisplayName: opts.teamName },
+    appearances: opts.appearances ?? 10,
+    starts:      opts.starts ?? 8,
+    minutes:     opts.minutes ?? 800,
+    goals:       opts.goals ?? 3,
+    assists:     'assists' in opts ? opts.assists : 2,
+    yellowCards: opts.yellowCards ?? 1,
+    yellowredCards: null,
+    redCards:    opts.redCards ?? 0,
+  })
+
+  it('builds a composite key (competition-season-team) on each season stat row', () => {
+    const dto = {
+      apiId: 1, ref: '1-x', displayName: 'X', shortDisplayName: 'X', originalName: 'X',
+      seasonStats: [csDto({ teamId: 100, teamName: 'Everton' })],
+      totals: { appearances: 10, minutes: 800, goals: 3, assists: 2, yellowCards: 1, redCards: 0 },
+      asOf: '2026-09-08T00:00:00Z',
+      primaryTeam: null, jerseyNumber: null, position: null,
+    }
+    const n = normalizePlayerDetail(dto)
+    expect(n.allStats[0].key).toBe('epl-2022-23-Everton')
+  })
+
+  it('gives a unique key to two mid-season transfer rows in the same competition', () => {
+    const dto = {
+      apiId: 1, ref: '1-x', displayName: 'X', shortDisplayName: 'X', originalName: 'X',
+      seasonStats: [
+        csDto({ teamId: 100, teamName: 'Everton',   appearances: 16, goals: 3, assists: null }),
+        csDto({ teamId: 101, teamName: 'Newcastle', appearances: 16, goals: 1, assists: 2 }),
+      ],
+      totals: { appearances: 32, minutes: 1600, goals: 4, assists: null, yellowCards: 2, redCards: 0 },
+      asOf: '2026-09-08T00:00:00Z',
+      primaryTeam: null, jerseyNumber: null, position: null,
+    }
+    const n = normalizePlayerDetail(dto)
+    const keys = n.allStats.map(r => r.key)
+    expect(new Set(keys).size).toBe(2)
+    expect(keys).toContain('epl-2022-23-Everton')
+    expect(keys).toContain('epl-2022-23-Newcastle')
+  })
+
+  it('playerTotals — returns null assists if any row is null, sums the rest as usual', () => {
+    const rows = [
+      { appearances: 16, minutesPlayed: 1440, goals: 3, assists: null, yellowCards: 2, redCards: 0 },
+      { appearances: 16, minutesPlayed:  360, goals: 1, assists: 2,    yellowCards: 1, redCards: 0 },
+    ]
+    const t = playerTotals(rows)
+    expect(t.appearances).toBe(32)
+    expect(t.minutes).toBe(1800)
+    expect(t.goals).toBe(4)
+    expect(t.assists).toBeNull()
+    expect(t.yellowCards).toBe(3)
+    expect(t.redCards).toBe(0)
+  })
+
+  it('playerTotals — sums assists when every row has a number', () => {
+    const rows = [
+      { appearances: 10, minutesPlayed:  900, goals: 5, assists: 3, yellowCards: 1, redCards: 0 },
+      { appearances: 12, minutesPlayed: 1080, goals: 2, assists: 1, yellowCards: 2, redCards: 1 },
+    ]
+    expect(playerTotals(rows).assists).toBe(4)
+  })
+
+  // ★ 대조 assert — 규약 등식 `playerTotals(allStats) === dto.totals`.
+  // 이적 + null 섞임 시나리오를 백엔드가 계산했을 때 나올 totals 를 dto 로 두고,
+  // 프론트 정규화 + playerTotals 결과가 정확히 같은지 잠근다.
+  it('locks the invariant playerTotals(allStats) equals dto.totals (same rule as the backend)', () => {
+    const dto = {
+      apiId: 1, ref: '1-x', displayName: 'X', shortDisplayName: 'X', originalName: 'X',
+      seasonStats: [
+        csDto({ teamId: 100, teamName: 'Everton',   appearances: 16, starts: 12, minutes: 1440, goals: 3, assists: null, yellowCards: 2 }),
+        csDto({ teamId: 101, teamName: 'Newcastle', appearances: 16, starts:  4, minutes:  360, goals: 1, assists: 2,    yellowCards: 1 }),
+        csDto({ teamId: 101, teamName: 'Newcastle', appearances: 34, starts: 31, minutes: 3000, goals: 6, assists: 5,    yellowCards: 3 }),
+      ],
+      // 백엔드 `player.service.ts:102-112` 가 계산했다면 나올 값
+      totals: {
+        appearances: 66,
+        minutes:     4800,
+        goals:       10,
+        assists:     null,   // 하나라도 null → null
+        yellowCards: 6,
+        redCards:    0,
+      },
+      asOf: '2026-09-08T00:00:00Z',
+      primaryTeam: null, jerseyNumber: null, position: null,
+    }
+    const n = normalizePlayerDetail(dto)
+    expect(playerTotals(n.allStats)).toEqual(dto.totals)
+  })
+
+  it('formatStat — null → "-", undefined → "-"', () => {
+    expect(formatStat(null)).toBe('-')
+    expect(formatStat(undefined)).toBe('-')
+  })
+
+  it('formatStat — passes numbers through as is (0 stays 0, not -)', () => {
+    expect(formatStat(0)).toBe(0)
+    expect(formatStat(5)).toBe(5)
+    expect(formatStat(149)).toBe(149)
   })
 })
