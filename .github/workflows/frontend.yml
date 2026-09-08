@@ -63,3 +63,9 @@ jobs:
             exit 1
           fi
           echo "통과"
+
+      # 문서 참조 정합성 — NEXT_STEPS 1장 순서표 재번호가 다른 파일 참조까지 어긋나게 하는 것을 막는다
+      # 09-09 PR #37 에서 자가체크 PASS 로 통과한 20곳을 사람이 잡은 실패를 기계로 옮긴 검사
+      - name: 문서 참조 정합성
+        working-directory: .
+        run: node scripts/check-doc-refs.mjs
