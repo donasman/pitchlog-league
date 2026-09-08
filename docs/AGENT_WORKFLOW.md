@@ -73,7 +73,9 @@ CLAUDE.md         항상 읽히는 규칙. 이 문서로의 포인터
 
 `ingest`·CI·문서처럼 스택 구분이 없는 작업은 범용 셋(`explorer`·`implementer`·`verifier`)을 쓴다.
 
-`verifier` 와 `explorer` 는 `tools` 에 Edit/Write 가 없다 — "쓴 에이전트가 검증하지 않는다" 를 파일 수준에서 강제한다.
+`verifier` 와 `explorer` 는 `tools` 에 Edit/Write 가 없다 — "쓴 에이전트가 검증하지 않는다" 의 절반이다.
+**나머지 절반은 훅이 맡는다.** `tools:` 만으로는 못 막는다 — 읽기 전용 에이전트도 Bash 를 갖고 있고,
+`python -c` · `node -e` · heredoc 으로 파일을 쓸 수 있다(2026-09-08 실측). 7장의 `guard-git` 4번 규칙이 그 구멍이다.
 Claude Code CLI 에서는 `/agents` 로 보이고, 스킬은 `/pitchlog-pr-flow` 처럼 강제 호출할 수 있다. 부르지 않아도
 설명(description)이 작업과 맞으면 자동으로 읽힌다.
 
@@ -91,13 +93,27 @@ PR 절차 · e2e 픽스처 규칙 · 문서 동기화 — 이 셋은 세션마�
 
 | 훅 | 걸리는 도구 | 막는 것 |
 |---|---|---|
-| `hooks/guard-paths.mjs` | Write · Edit · MultiEdit | `frontend/src/mocks/**` · `.env` `.env.local` · `frontend/**/*.ts(x)` · `schema.prisma` 의 `@relation` |
-| `hooks/guard-git.mjs` | Bash | `dev`/`main` 에서 `git commit` · `dev`/`main` 으로 `git push` · Bash 로 `src/mocks`·`.env` 쓰기(휴리스틱) |
+| `hooks/guard-paths.mjs` | Write · Edit · MultiEdit | `frontend/src/mocks/**` · `.env` 계열(`.env.example` 제외) · `frontend/**/*.ts(x)` · `schema.prisma` 의 `relationMode ≠ "prisma"` · 마이그레이션 SQL 의 `FOREIGN KEY`/`REFERENCES` |
+| `hooks/guard-git.mjs` | Bash | `dev`/`main` 에서 `git commit` · `dev`/`main` 으로 `git push` · 보호 경로로 리다이렉션·`sed -i`·`tee`·`cp`·`mv`·`rm` · **인라인 인터프리터(`python -c`·`node -e`·heredoc)로 파일 쓰기** |
+
+경로는 **레포 루트 기준**으로 본다. cwd 기준으로 보면 서브에이전트가 `backend/`·`frontend/` 에서 돌 때
+규칙이 통째로 빗나간다.
+
+**`@relation` 은 막지 않는다.** 이 레포는 `relationMode = "prisma"` 라 `@relation` 이 DDL 을 만들지 않는다 —
+스키마에 53개가 정상적으로 들어 있다. 외래키를 실제로 켜는 것은 `relationMode` 값과 마이그레이션 SQL 이다.
+(2026-09-08: 처음엔 `@relation` 을 막고 `relationMode = "foreignKeys"` 를 통과시켰다. 정확히 거꾸로였다.)
+
+**브랜치 이름은 토큰 단위로 본다.** `\bdev\b` 로 보면 `fix/dev-tools` push 가 막힌다.
+`git checkout dev && git commit` 처럼 한 줄에 붙인 것도 세그먼트로 쪼개 따라간다.
+
+**읽기는 막지 않는다.** 리다이렉션은 **대상**만 본다 — `head mocks/x.js > /tmp/a` 는 통과한다.
 
 차단은 종료 코드 2 + stderr. 에이전트는 그 이유를 받고, **우회하지 않는다.** 막힌 이유가 곧 규칙이다.
 훅은 Node 22 로 쓴다 — Windows Git Bash 와 Cowork VM 어느 쪽에서도 같은 코드가 돈다.
 
-훅이 **못** 막는 것: "건드릴 파일" 목록 밖 수정(목록이 작업마다 달라 정적 규칙이 없다) · 검증 명령을 안 돌리고 통과했다고 쓰는 것.
+훅이 **못** 막는 것: "건드릴 파일" 목록 밖 수정(목록이 작업마다 달라 정적 규칙이 없다) · 검증 명령을 안 돌리고 통과했다고 쓰는 것 ·
+명령 문자열을 알아볼 수 없게 만드는 우회(base64 · 스크립트 파일로 빼서 실행). 마지막 것은 휴리스틱의 한계이지 규칙의 구멍이 아니다 —
+막힌 이유를 읽고 우회하지 않는 것이 전제다.
 이 둘은 verifier(2층) 와 CI(3층) 가 잡는다. 실측에서 반복되면 그때 훅을 더 건다.
 
 ## 8. 실측 기록
