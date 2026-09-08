@@ -20,9 +20,11 @@ import {
   groupCountOf,
   normalizeCompetition,
   normalizeMatch,
+  normalizePlayerDetail,
   normalizeSeason,
   normalizeStanding,
   normalizeStandings,
+  normalizeStatsRow,
   normalizeTeam,
 } from './normalize'
 import { now, todayKstKey } from './clock'
@@ -421,12 +423,54 @@ export async function fetchOverview() {
 export const fetchTeamDetail      = () => notImplemented('errors.feature.team_detail')
 export const fetchPlayer           = () => notImplemented('errors.feature.players')
 export const fetchPlayerStats      = () => notImplemented('errors.feature.players')
-export const fetchPlayerDetail     = () => notImplemented('errors.feature.players')
+
+/**
+ * 선수 상세 — `/api/players/:ref`. 화면이 넘기는 slug 는 백엔드 ref(`<apiId>-<slug>`) 와 같은 값이다
+ * (normalizePlayerDetail 이 player.slug 에 dto.ref 를 그대로 넣는다).
+ * @param {string} slug
+ */
+export async function fetchPlayerDetail(slug) {
+  const dto = await apiGet(`/api/players/${encodeURIComponent(slug)}`)
+  return normalizePlayerDetail(dto)
+}
+
 export const fetchTopScorers       = () => notImplemented('errors.feature.stats')
 export const fetchTopAssisters     = () => notImplemented('errors.feature.stats')
 export const fetchTopScorersAll    = () => notImplemented('errors.feature.stats')
-export const fetchAllStats         = () => notImplemented('errors.feature.stats')
-export const fetchCompetitionStats = () => notImplemented('errors.feature.stats')
+
+/**
+ * 전체 합산 통계 — 대회 파라미터 없이 부르면 백엔드가 대회별 breakdown 을 붙여 준다
+ * (모드 B). StatsPage 의 `AllStatsPanel` 이 이 breakdown 을 소비한다.
+ */
+export async function fetchAllStats() {
+  const [scorers, assisters] = await Promise.all([
+    apiGet('/api/stats/scorers'),
+    apiGet('/api/stats/assisters'),
+  ])
+  return {
+    topScorers:   (scorers.items   ?? []).map(normalizeStatsRow),
+    topAssisters: (assisters.items ?? []).map(normalizeStatsRow),
+  }
+}
+
+/**
+ * 대회별 통계 — 대회 참조를 파라미터로 실어 부른다(모드 A). breakdown 은 오지 않는다.
+ * @param {string} slug  화면 slug (`premier-league` · `champions-league` 등)
+ */
+export async function fetchCompetitionStats(slug) {
+  const ref = await toCompetitionRef(slug)
+  const [comp, scorers, assisters] = await Promise.all([
+    fetchCompetition(slug),
+    apiGet('/api/stats/scorers',   { competition: ref }),
+    apiGet('/api/stats/assisters', { competition: ref }),
+  ])
+  return {
+    comp,
+    topScorers:   (scorers.items   ?? []).map(normalizeStatsRow),
+    topAssisters: (assisters.items ?? []).map(normalizeStatsRow),
+  }
+}
+
 export const fetchUCLKnockout      = () => notImplemented('errors.feature.knockout')
 export const fetchHomeData         = () => notImplemented('errors.feature.home')
 export const fetchNotifications    = () => notImplemented('errors.feature.notifications')

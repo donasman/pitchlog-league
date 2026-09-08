@@ -66,11 +66,10 @@ export default function PlayerPage() {
 
   if (!data) return null
 
-  const { player, allStats, team, calcTotalStats: calcTotal } = data
+  const { player, allStats, team, totals } = data
   const age = calcAge(player.dateOfBirth)
 
   const filtered = filterComp === 'all' ? allStats : allStats.filter(s => s.competitionId === filterComp)
-  const totals   = calcTotal(allStats)
 
   const compOptions = [
     { value: 'all', label: t('player.filterAll') },
