@@ -14,6 +14,7 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
 import { useData } from '@/hooks/useData'
+import { groupStandings } from '@/utils/standings'
 import { fetchCompetitions, fetchStandings } from '@/services/api'
 import { getLocalizedCompetitionName } from '@/utils/localization'
 import { toKSTDateTime } from '@/utils/dateFormat'
@@ -42,7 +43,10 @@ export default function StandingsPage() {
 
   const loading = loadingComps || loadingStand
   const comp    = (competitions ?? []).find(c => c.slug === competitionSlug) ?? null
+  // format 은 **현재 시즌** 기준이다 (competitions.catalog.ts). UCL 은 2024-25 에 조별리그 →
+  // 리그페이즈로 바뀌었으므로, 이 표가 어느 쪽인지는 format 이 아니라 데이터로 판단한다.
   const isUCL   = comp?.format === 'groups_knockout'
+  const isGroupStage = groupStandings(standings?.entries ?? []).length > 1
   /** 시즌 라벨은 응답에서 — 순위표의 seasonId, 없으면 대회의 currentSeason */
   const season  = standings?.seasonId ?? comp?.currentSeason ?? null
 
@@ -95,11 +99,6 @@ export default function StandingsPage() {
               {getLocalizedCompetitionName(c, locale) || c.shortName}
             </button>
           ))}
-          {competitions && (
-            <span className="t-sub" style={{ marginLeft: 'auto' }}>
-              {t('standings.leaguePhaseTitle').slice(0,1).toUpperCase() + t('standings.leaguePhaseTitle').slice(1)}
-            </span>
-          )}
         </div>
 
         {/* ── 스테이지 정보 + 데이터 기준 시각 ── */}
@@ -122,7 +121,9 @@ export default function StandingsPage() {
               )}
             </span>
             {isUCL && (
-              <span className="t-sub">{t('standings.uclLeagueNote')}</span>
+              <span className="t-sub">
+                {t(isGroupStage ? 'standings.uclGroupNote' : 'standings.uclLeagueNote')}
+              </span>
             )}
             <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="t-cap num" style={{ color: 'var(--pl-sub)' }}>
@@ -169,16 +170,23 @@ export default function StandingsPage() {
               aria-hidden="true"
             />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p className="t-body" style={{ margin: 0, fontWeight: 600 }}>{t('standings.leaguePhaseTitle')}</p>
-              <p className="t-sub" style={{ margin: 0 }}>{t('standings.leaguePhaseDesc')}</p>
+              <p className="t-body" style={{ margin: 0, fontWeight: 600 }}>
+                {t(isGroupStage ? 'standings.groupPhaseTitle' : 'standings.leaguePhaseLabel')}
+              </p>
+              <p className="t-sub" style={{ margin: 0 }}>
+                {t(isGroupStage ? 'standings.groupPhaseDesc' : 'standings.leaguePhaseDesc')}
+              </p>
             </div>
-            <Link
-              to="/competitions/champions-league/knockout"
-              className="pl-btn pl-btn-sm pl-btn-ghost"
-              style={{ flexShrink: 0 }}
-            >
-              {t('standings.leaguePhaseLink')}
-            </Link>
+            {/* 녹아웃 대진 화면은 현재 시즌만 그린다 — 과거 시즌에서 열면 다른 시즌 대진이 나온다 */}
+            {!seasonYear && (
+              <Link
+                to="/competitions/champions-league/knockout"
+                className="pl-btn pl-btn-sm pl-btn-ghost"
+                style={{ flexShrink: 0 }}
+              >
+                {t('standings.leaguePhaseLink')}
+              </Link>
+            )}
           </div>
         )}
 

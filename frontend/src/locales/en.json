@@ -151,6 +151,7 @@
     "mobileHint": "Rank & team fixed · swipe left to see more columns",
     "zoneNote": "Zone — distinguished by colour and pattern on the left indicator",
     "uclLeagueNote": "36-team single table · not group stage",
+    "uclGroupNote": "Eight groups of four",
     "legend": {
       "ucl": "UCL direct",
       "uclQualPlayoff": "UCL qualifying PO",
@@ -166,6 +167,8 @@
     "noDataDesc": "Standings for this competition have not been calculated yet.",
     "leaguePhaseTitle": "League Phase ongoing",
     "leaguePhaseDesc": "Top 8: R16 direct · 9–24: Playoff · 25+: Eliminated",
+    "groupPhaseTitle": "Group stage",
+    "groupPhaseDesc": "Top two of each group reach the round of 16 · third drops to the Europa League · fourth is out",
     "leaguePhaseLink": "Knockout bracket",
     "errorTitle": "Could not load standings",
     "season": "2026-27 season",
