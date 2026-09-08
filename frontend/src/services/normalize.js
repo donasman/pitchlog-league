@@ -64,6 +64,17 @@ export function competitionRefFromSlug(slug) {
   return hit ? `${hit[0]}-${hit[1].slug}` : null
 }
 
+/**
+ * 역표: 화면 대회 id(`epl`) → 백엔드 apiId(39). 모르는 id 면 null.
+ * Mock 이 DTO shape 을 조립할 때 alias.id 뿐이라 apiId 를 되찾는 데 쓴다.
+ * @param {string} id
+ * @returns {number|null}
+ */
+export function apiIdFromAlias(id) {
+  const hit = Object.entries(COMPETITION_ALIAS).find(([, v]) => v.id === id)
+  return hit ? Number(hit[0]) : null
+}
+
 /** 백엔드 CompetitionFormat → 화면이 쓰던 format 값 */
 const FORMAT = {
   ROUND_ROBIN: 'league',
@@ -393,17 +404,24 @@ export function normalizeStanding(row, { format, groupCount = 1 } = {}) {
 /**
  * 선수 시즌 통계 한 행 → 화면(PlayerPage) 이 쓰는 형태.
  * `assists` 는 백엔드가 null 을 줄 수 있다 — 0 으로 채우지 않고 null 을 그대로 넘겨
- * StatCell 이 `dataStatus === 'unavailable'` 로 "—" 을 그리게 한다 (DATA_RULES §3).
+ * `formatStat` 이 "-" 를 그리게 한다 (DATA_RULES §3).
+ *
+ * `key` 는 React 목록 key + 필터 옵션 값 겸용이다. 컴포넌트가 4자리(대회·시즌·팀) 를
+ * 조합해서 만들지 않도록 여기서 한 번에 만들어 둔다 — 조합 규칙이 두 자리로 갈리는 것을 막는다.
  * private — 파일 밖으로 노출하지 않는다.
  * @param {object} s  PlayerSeasonStatDto
  */
 function normalizePlayerSeasonStat(s) {
   const alias = COMPETITION_ALIAS[s.competition?.apiId] ?? null
+  const competitionId = alias?.id ?? s.competition?.ref ?? null
+  const seasonLabel   = s.season?.label ?? null
+  const teamName      = s.team?.displayName ?? null
   return {
-    competitionId:   alias?.id ?? s.competition?.ref ?? null,
+    key: `${competitionId}-${seasonLabel}-${teamName}`,
+    competitionId,
     competitionName: s.competition?.displayName ?? null,
-    seasonLabel:     s.season?.label ?? null,
-    teamName:        s.team?.displayName ?? null,
+    seasonLabel,
+    teamName,
     appearances:     s.appearances,
     starts:          s.starts,
     minutesPlayed:   s.minutes,
@@ -413,8 +431,42 @@ function normalizePlayerSeasonStat(s) {
     yellowCards:     s.yellowCards,
     yellowredCards:  s.yellowredCards,
     redCards:        s.redCards,
-    dataStatus:      s.assists === null ? 'unavailable' : 'confirmed',
   }
+}
+
+/**
+ * 선수 시즌 통계 rows 의 합계 · 필드마다 독립.
+ * 백엔드 `player.service.ts:102-112` 와 같은 규약을 프론트에도 잠근다:
+ *   assists 만 특별 처리 — 하나라도 null 이면 합계 null · 아니면 SUM. 나머지는 그대로 SUM.
+ *
+ * 규약 등식 (`normalize.test.js` 가 잠금): `playerTotals(allStats) === dto.totals`.
+ * 화면 상단 그리드가 필터 부분집합에 대해 부분 합계를 그릴 때만 이 함수를 쓴다 —
+ * 전체 합계는 백엔드 dto.totals 를 그대로 신뢰한다.
+ *
+ * @param {Array<{appearances:number,minutesPlayed:number,goals:number,assists:number|null,yellowCards:number,redCards:number}>} rows
+ */
+export function playerTotals(rows) {
+  const assistsHasNull = rows.some(r => r.assists === null)
+  return {
+    appearances: rows.reduce((a, r) => a + r.appearances, 0),
+    minutes:     rows.reduce((a, r) => a + r.minutesPlayed, 0),
+    goals:       rows.reduce((a, r) => a + r.goals, 0),
+    assists:     assistsHasNull ? null : rows.reduce((a, r) => a + (r.assists ?? 0), 0),
+    yellowCards: rows.reduce((a, r) => a + r.yellowCards, 0),
+    redCards:    rows.reduce((a, r) => a + r.redCards, 0),
+  }
+}
+
+/**
+ * 통계 셀 표시 · null·undefined 는 '-' · 숫자·문자열은 그대로.
+ * 컴포넌트가 판단 로직을 갖지 않도록 표시 결정을 여기 하나로 모은다 —
+ * "값이 null 이면 어떻게 그릴 것인가" 는 정규화 계층의 책임이지 컴포넌트의 판단이 아니다.
+ *
+ * @param {number|null|undefined} value
+ * @returns {string|number}
+ */
+export function formatStat(value) {
+  return value === null || value === undefined ? '-' : value
 }
 
 /**
