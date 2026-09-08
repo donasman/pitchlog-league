@@ -3,6 +3,7 @@
  *   npm run ingest -- l0
  *   npm run ingest -- l1
  *   npm run ingest -- l2 [--all-seasons] [--season=<year>]
+ *   npm run ingest -- l6 [--all-seasons] [--season=<year>] [--only=players|rankings|teams]
  *   npm run ingest -- probe-players [--all-seasons]
  *   npm run ingest -- status
  *   npm run ingest -- logos [--force]
@@ -15,6 +16,7 @@ import { AppModule } from '../app.module.js';
 import { L0Service } from '../ingestion/l0/l0.service.js';
 import { L1Service } from '../ingestion/l1/l1.service.js';
 import { L2Service } from '../ingestion/l2/l2.service.js';
+import { L6Service, L6_BRANCHES, type L6Branch } from '../ingestion/l6/l6.service.js';
 import { LogoService } from '../ingestion/logos/logo.service.js';
 import { ProbeService } from '../ingestion/probe/probe.service.js';
 import { QuotaService } from '../ingestion/api-football/quota.service.js';
@@ -23,7 +25,18 @@ import { SEASON_YEARS } from '../ingestion/l0/competitions.catalog.js';
 
 const logger = new Logger('ingest');
 
-const USAGE = 'l0 | l1 | l2 [--all-seasons] [--season=<year>] | probe-players [--all-seasons] | status | logos [--force]';
+const USAGE =
+  'l0 | l1 | l2 [--all-seasons] [--season=<year>] | l6 [--all-seasons] [--season=<year>] [--only=players|rankings|teams] | ' +
+  'probe-players [--all-seasons] | status | logos [--force]';
+
+/** `--season=` 검증 — 잘못된 연도로 수백 콜을 태우지 않는다. 부르기 전에 막는다 */
+const parseSeasonFlag = (): { ok: true; year: number | undefined } | { ok: false; raw: string } => {
+  const raw = flagValue('season');
+  if (raw === null) return { ok: true, year: undefined };
+  const n = Number(raw);
+  if (!Number.isInteger(n) || !(SEASON_YEARS as readonly number[]).includes(n)) return { ok: false, raw };
+  return { ok: true, year: n };
+};
 
 const hasFlag = (n: string): boolean => process.argv.includes(`--${n}`);
 const flagValue = (n: string): string | null => {
@@ -65,20 +78,39 @@ async function main(): Promise<void> {
         break;
       }
       case 'l2': {
-        const raw = flagValue('season');
-        let seasonYear: number | undefined;
-        if (raw !== null) {
-          // 잘못된 연도로 90콜을 태우지 않는다 — 부르기 전에 막는다
-          const n = Number(raw);
-          if (!Number.isInteger(n) || !(SEASON_YEARS as readonly number[]).includes(n)) {
-            logger.error(`--season=${raw} 은 수집 대상이 아니다 — ${SEASON_YEARS.join(' | ')} 중 하나`);
-            process.exitCode = 1;
-            break;
-          }
-          seasonYear = n;
+        const season = parseSeasonFlag();
+        if (!season.ok) {
+          logger.error(`--season=${season.raw} 은 수집 대상이 아니다 — ${SEASON_YEARS.join(' | ')} 중 하나`);
+          process.exitCode = 1;
+          break;
         }
         await app.get(QuotaService).snapshot();
-        const s = await app.get(L2Service).run({ allSeasons: hasFlag('all-seasons'), seasonYear });
+        const s = await app.get(L2Service).run({ allSeasons: hasFlag('all-seasons'), seasonYear: season.year });
+        logger.log(JSON.stringify(s, null, 2));
+        await app.get(QuotaService).snapshot();
+        if (s.partial) process.exitCode = 1;
+        break;
+      }
+      case 'l6': {
+        const season = parseSeasonFlag();
+        if (!season.ok) {
+          logger.error(`--season=${season.raw} 은 수집 대상이 아니다 — ${SEASON_YEARS.join(' | ')} 중 하나`);
+          process.exitCode = 1;
+          break;
+        }
+        // 오타로 갈래 하나를 조용히 다 도는 일이 없게 — 값이 틀리면 부르기 전에 멈춘다
+        const onlyRaw = flagValue('only');
+        if (onlyRaw !== null && !(L6_BRANCHES as readonly string[]).includes(onlyRaw)) {
+          logger.error(`--only=${onlyRaw} 은 없다 — ${L6_BRANCHES.join(' | ')} 중 하나`);
+          process.exitCode = 1;
+          break;
+        }
+        await app.get(QuotaService).snapshot();
+        const s = await app.get(L6Service).run({
+          allSeasons: hasFlag('all-seasons'),
+          seasonYear: season.year,
+          only: (onlyRaw as L6Branch | null) ?? undefined,
+        });
         logger.log(JSON.stringify(s, null, 2));
         await app.get(QuotaService).snapshot();
         if (s.partial) process.exitCode = 1;
