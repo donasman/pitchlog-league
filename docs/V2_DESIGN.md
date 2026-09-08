@@ -478,7 +478,7 @@ BullMQ를 설치하지 않는다.
 
 즉 **재시작 지점을 기억해야 하면 BullMQ Job으로 승격하고, 아니면 Scheduler로 충분하다.**
 
-> 2026-09-07 보정: 재시작 지점이 **DB 에 있으면**(`backfill_jobs.cursor_fixture_id`) 승격이 필요 없다.
+> 2026-09-07 보정: 재시작 지점이 **DB 에 있으면**(`backfill_jobs.cursor_match_id`) 승격이 필요 없다.
 > 5개년 백필은 그래서 BullMQ 없이 단일 루프로 돈다 (`INGESTION_STRATEGY.md` 5-1). 승격 조건은
 > "다중 인스턴스 · 동시 처리 · 재시도 정책" 이 실제로 필요해질 때로 좁힌다.
 

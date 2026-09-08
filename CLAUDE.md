@@ -16,12 +16,12 @@ pitchlog-league/                 ← 모노레포 루트
 ├── backend/                     ← NestJS + TypeScript + Prisma
 │   ├── src/
 │   │   ├── competition/ team/   ← 조회 API (player·match·standing·statistics 는 Phase 2)
-│   │   ├── ingestion/           ← api-football · l0 · l1 · logos · screen-scope.ts
-│   │   ├── cli/                 ← ingest CLI (l0 · l1 · logos · status)
+│   │   ├── ingestion/           ← api-football · l0 · l1 · l2 · l6 · backfill · probe · logos · screen-scope.ts
+│   │   ├── cli/                 ← ingest CLI (status · l0 · l1 · l2 · l6 · probe-players · logos)
 │   │   └── common/ config/ prisma/ health/
 │   ├── prisma/                  ← schema·migration·partial-indexes.sql
 │   ├── scripts/                 ← backup.mjs · restore-check.mjs (DB 백업·복원 리허설)
-│   └── test/                    ← e2e 8파일
+│   └── test/                    ← e2e 9파일 74건 (단위는 src 안 *.spec.ts 53건)
 ├── frontend/                    ← React + Vite + JavaScript, Node 22 고정
 │   └── src/
 │       ├── pages/               ← teams, players, matches, standings, stats
@@ -241,10 +241,10 @@ API-Football API 키는 환경변수로만 주입한다.
 | Phase | 내용 | 검증 기준 | 상태 |
 |---|---|---|---|
 | **0** | 안전장치 + 배포 (PoC 는 재정의 — Railway + Pages + CORS) | 8-2 DoD 4항목 | 🚧 CI·Ruleset·pre-commit·Supabase·스켈레톤 완료 / 배포는 `NEXT_STEPS` 1장 4번 |
-| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — 스키마 29테이블 · L0 · 조회 API 4개 · 백업·복원 리허설 · **L1 스쿼드**(155팀·선수 4,863, 테스트 21건) / L1 #9~#11 남음 |
-| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | 🚧 **L2-a 현재 시즌 적재(09-07)** / 백필-1 → 상세 → L4 순 (`NEXT_STEPS` 1장) |
+| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — 스키마 29모델 · L0 · 조회 API 7개 · 백업·복원 리허설 2회 · **L1 스쿼드**(155팀·선수 4,863) / L1 #9~#11 남음 |
+| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | 🚧 **백필-1 완료(09-08)** — L2 5시즌 · L6 시즌 집계(선수 30,925 · 랭킹 2,335 · 팀 489) · `backfill_jobs` 30 DONE / 다음은 L3·L5 경기 상세 (`NEXT_STEPS` 1장 3번) |
 | **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 (화면·i18n 완료 · **실 API 첫 연결**(대회·팀) / 나머지 화면 전환·배포 미착수) |
-| **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🔲 대기 |
+| **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🚧 L6 수집 코드는 09-08 에 들어갔다(백필-1). 주기 보정은 스케줄러 뒤 |
 
 > ⚠️ **범위가 바뀌었다 (2026-09-04~06).** 원래 Phase 1은 EPL 단독이었고 Phase 4가 다중화였으나,
 > 실측 이후 **12대회(5대 리그 + UCL + 국내 컵 6개) × 최근 5시즌**이 Phase 1부터 범위에 들어왔다.
@@ -290,12 +290,15 @@ git checkout dev && git pull origin dev
 
 ```bash
 npm run verify                  # prisma validate · typecheck · lint · 단위 테스트
-npm run test:e2e                # e2e — l0·l1·l2 는 로컬 DB·CI 에서만 (원격 DB 가드)
+npm run test:e2e                # e2e 9파일 74건 — l0·l1·l2·l6 는 로컬 DB·CI 에서만 (원격 DB 가드)
 
 npm run ingest -- status        # API 쿼터 스냅샷
 npm run ingest -- l0            # 대회·시즌·팀·경기장
 npm run ingest -- l1            # 스쿼드 스냅샷 + diff (155콜)
 npm run ingest -- l2            # 라운드·경기·순위 — 화면 6대회 현재 시즌 (18콜)
+npm run ingest -- l2 --all-seasons   # 5시즌 전부 (한 시즌은 --season=2024, 등호 형태다)
+npm run ingest -- l6 --all-seasons   # 시즌 집계 — 선수 통계·랭킹·팀 통계 (--only=players|rankings|teams)
+npm run ingest -- probe-players --all-seasons   # /players 페이지 수 실측 (쓰기 없음)
 npm run ingest -- logos         # 로고를 받아 frontend/public/logos 에 저장
 
 npm run backup -- --check       # 백업 환경 점검 (pg_dump/docker · 마지막 성공)
