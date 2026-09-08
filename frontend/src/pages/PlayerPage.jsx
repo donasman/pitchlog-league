@@ -69,11 +69,16 @@ export default function PlayerPage() {
   const { player, allStats, team, totals } = data
   const age = calcAge(player.dateOfBirth)
 
-  const filtered = filterComp === 'all' ? allStats : allStats.filter(s => s.competitionId === filterComp)
+  const filtered = filterComp === 'all'
+    ? allStats
+    : allStats.filter(s => `${s.competitionId}-${s.seasonLabel}` === filterComp)
 
   const compOptions = [
     { value: 'all', label: t('player.filterAll') },
-    ...allStats.map(s => ({ value: s.competitionId, label: s.competitionName })),
+    ...allStats.map(s => ({
+      value: `${s.competitionId}-${s.seasonLabel}`,
+      label: `${s.seasonLabel} ${s.competitionName}`,
+    })),
   ]
 
   const teamName = getLocalizedName({ id: team?.id, name: team?.name }, locale) || team?.name
@@ -129,14 +134,18 @@ export default function PlayerPage() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <StatCell label={t('player.appearances')} value={totals.appearances} dataStatus="confirmed" />
           <StatCell label={t('player.goals')} value={totals.goals} dataStatus="confirmed" />
-          <StatCell label={t('player.assists')} value={totals.assists} dataStatus="confirmed" />
+          <StatCell
+            label={t('player.assists')}
+            value={totals.assists}
+            dataStatus={totals.assists === null ? 'unavailable' : 'confirmed'}
+          />
           <StatCell label={t('player.yellowCards')} value={totals.yellowCards} dataStatus="confirmed" />
           <StatCell label={t('player.redCards')} value={totals.redCards} dataStatus="confirmed" />
         </div>
       ) : (
         filtered.map(s => (
-          <div key={s.competitionId}>
-            <p className="text-xs text-muted-foreground mb-3">{s.competitionName}</p>
+          <div key={`${s.competitionId}-${s.seasonLabel}`}>
+            <p className="text-xs text-muted-foreground mb-3">{s.seasonLabel} {s.competitionName}</p>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <StatCell label={t('player.appearances')} value={s.appearances} dataStatus={s.dataStatus} />
               <StatCell label={t('player.goals')} value={s.goals} dataStatus={s.dataStatus} />
@@ -158,7 +167,8 @@ export default function PlayerPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground text-xs border-b border-border">
-                <th className="text-left px-4 py-3">{t('competition.tabs.schedule')}</th>
+                <th className="text-left px-4 py-3">{t('header.season')}</th>
+                <th className="text-left px-4 py-3">{t('matches.filterComp')}</th>
                 <th className="text-center px-3 py-3">{t('player.appearances')}</th>
                 <th className="text-center px-3 py-3">{t('player.starts')}</th>
                 <th className="text-center px-3 py-3">{t('player.goals')}</th>
@@ -169,12 +179,13 @@ export default function PlayerPage() {
             </thead>
             <tbody>
               {allStats.map(s => (
-                <tr key={s.competitionId} className="border-b border-border/50 hover:bg-accent/50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground">{s.competitionName}</td>
+                <tr key={`${s.competitionId}-${s.seasonLabel}`} className="border-b border-border/50 hover:bg-accent/50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-foreground">{s.seasonLabel}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{s.competitionName}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{s.appearances}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{s.starts}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{s.goals}</td>
-                  <td className="text-center px-3 py-3 text-muted-foreground">{s.assists}</td>
+                  <td className="text-center px-3 py-3 text-muted-foreground">{s.assists ?? '-'}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{s.yellowCards}</td>
                   <td className="text-center px-3 py-3">
                     {s.dataStatus === 'confirmed'   && <span className="text-xs text-primary">{t('player.statusConfirmed')}</span>}
