@@ -170,9 +170,27 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
 
 ## 에이전트 작업 방식
 
-`docs/AGENT_WORKFLOW.md` — 역할 분리(탐색·설계·구현 A/B·검증·main) · 환각 규칙 넷
-(읽지 않은 것은 없는 것 · 쓴 에이전트가 검증하지 않는다 · 근거는 문서 절 번호 · 테스트가 진실) ·
-sub 지시문 여섯 칸. 2026-09-07 부터 적용.
+기능 하나를 구현할 때 main 은 **직접 구현하지 않고** 아래 순서로 서브에이전트를 부린다.
+전체 절차와 각 단계 지시문은 `pitchlog-agent-run` 스킬, 근거는 `docs/AGENT_WORKFLOW.md`.
+
+```
+01 탐색 A·B   02 결정   03 설계   04 확정·멈춤 │ 05 구현 A·B   06 검증   07 PR·기록
+ 병렬          main     planner   사용자 확인   │  병렬          별도      pr-flow
+ ←──── 계약이 아직 움직인다. 뒤집혀도 한 턴 ────→ │ ←── 계약 동결. 문서 수정 금지 ──→
+```
+
+- 병렬은 01 과 05 에서만. 02·03 은 직렬.
+- **04 에서 반드시 멈춘다** — 결정 목록·설계안·A/B 파일 집합을 보여주고 확인받기 전에 05 로 가지 않는다.
+- 05 지시문에는 확정 계약을 문서 참조가 아니라 **값으로** 박는다. 05 도중 계약이 바뀌면 진행 중인 구현을 버린다.
+- 직군: `backend-explorer` · `frontend-explorer` · `planner` · `backend-implementer` · `frontend-implementer` · `backend-verifier` · `frontend-verifier`.
+  스택 구분이 없는 작업(`ingest` · CI · 문서)은 범용 `explorer` · `implementer` · `verifier`.
+- 환각 규칙 넷 — 읽지 않은 것은 없는 것 · 쓴 에이전트가 검증하지 않는다 · 근거는 문서 절 번호 · 테스트가 진실.
+  보고에 "통과할 것" · "아마 있을 것" 은 못 쓴다. 통과한 **출력**만 쓴다.
+- 한 판 끝나면 `docs/AGENT_RUNS.md` 에 한 줄. 구조는 이 기록에 근거해서만 고친다.
+
+훅(`.claude/settings.json` → `.claude/hooks/`)이 기계적으로 막는 것: `src/mocks` 수정 · `.env` 수정 ·
+프론트 `.ts/.tsx` 생성 · `schema.prisma` 에 `@relation` 추가 · `dev`/`main` 직접 커밋·push.
+훅이 막으면 우회하지 않는다 — 막힌 이유가 곧 규칙이다.
 
 ## 코드 작성 규칙
 
