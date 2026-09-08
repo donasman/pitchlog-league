@@ -4,7 +4,7 @@
  * 탭: 일정 · 순위 · 통계
  */
 
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import MatchCard from '@/components/ui/MatchCard'
@@ -27,11 +27,18 @@ const TABS = [
 
 export default function CompetitionPage() {
   const { slug } = useParams()
+  const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState('schedule')
   const { t, i18n } = useTranslation()
   const locale = i18n.language
 
-  const { data, loading, error } = useData(() => fetchCompetitionHub(slug), [slug])
+  // 백엔드 `?season=` 은 연도(int)만 받는다. 헤더가 URL 을 연도로 정규화하기 전 한 렌더 동안
+  // 예전 라벨('2025-26')이 남아 있을 수 있어, 연도가 아니면 넘기지 않는다(백엔드가 현재 시즌으로 폴백).
+  const seasonParam = searchParams.get('season')
+  const seasonYear  = /^\d{4}$/.test(seasonParam ?? '') ? Number(seasonParam) : undefined
+
+  // deps 에 seasonYear 가 있어야 시즌을 바꿨을 때 다시 받는다
+  const { data, loading, error } = useData(() => fetchCompetitionHub(slug, seasonYear), [slug, seasonYear])
 
   if (loading) return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>

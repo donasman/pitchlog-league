@@ -7,7 +7,7 @@
  * @typedef {{ id:string, slug:string, name:string, shortName:string, country:string,
  *   format:CompetitionFormat, currentSeason:string, initials:string,
  *   currentStageLabel:string }} Competition
- * @typedef {{ id:string, label:string, current:boolean }} Season
+ * @typedef {{ id:string, label:string, year:number, current:boolean, dataState:'NONE'|'PARTIAL'|'COMPLETE' }} Season
  */
 
 /** @type {Competition[]} */
@@ -20,11 +20,16 @@ export const COMPETITIONS = [
   { id:'ucl',        slug:'champions-league',name:'UEFA Champions League', shortName:'UCL',    country:'Europe',  format:'groups_knockout', currentSeason:'2026-27', initials:'UCL', currentStageLabel:'Matchday 4'    },
 ]
 
-/** @type {Season[]} */
+/**
+ * @type {Season[]}
+ * 실 API 의 `normalizeSeason`(services/normalize.js) 과 같은 모양이어야 한다 —
+ * 선택기가 `dataState === 'COMPLETE'` 로 거르고 URL 에 `year` 를 쓰기 때문에,
+ * 이 둘이 없으면 Mock 모드에서 시즌 선택기가 통째로 빈다.
+ */
 export const SEASONS = [
-  { id:'2026-27', label:'2026-27', current:true  },
-  { id:'2025-26', label:'2025-26', current:false },
-  { id:'2024-25', label:'2024-25', current:false },
+  { id:'2026-27', label:'2026-27', year:2026, current:true,  dataState:'COMPLETE' },
+  { id:'2025-26', label:'2025-26', year:2025, current:false, dataState:'COMPLETE' },
+  { id:'2024-25', label:'2024-25', year:2024, current:false, dataState:'COMPLETE' },
 ]
 
 /**

@@ -4,6 +4,7 @@ import {
   teamColor,
   normalizeMatch,
   normalizeStanding,
+  normalizeStandings,
   deriveStage,
   competitionRefFromSlug,
 } from './normalize.js'
@@ -117,6 +118,56 @@ describe('zoneOf', () => {
     expect(zoneOf(null, 'groups_knockout', 9)).toBe('ucl_playoff')
     expect(zoneOf(null, 'groups_knockout', 25)).toBe('ucl_eliminated')
   })
+
+  // 2022·2023 UCL 조별리그 실측 description — 1·2위는 예선 PO 가 아니라 16강 직행이다
+  it('reads the 1/8-finals promotion of a group winner as a direct knockout berth', () => {
+    const d = 'Promotion - Champions League (Play Offs: 1/8-finals)'
+    expect(zoneOf(d, 'groups_knockout', 1, { groupCount: 8 })).toBe('ucl_direct')
+    expect(zoneOf(d, 'groups_knockout', 2, { groupCount: 8 })).toBe('ucl_direct')
+  })
+
+  // ★ 회귀 — 2024·2025 리그페이즈 실측. 9~24위는 `1/16-finals` 로 오고 녹아웃 PO 를 치러야 한다.
+  // `1/8-finals` 와 한 규칙으로 묶으면 16팀이 "직행" 으로 칠해진다.
+  it('reads the 1/16-finals promotion of the league phase as a knockout playoff berth', () => {
+    const d = 'Promotion - Champions League (Play Offs: 1/16-finals)'
+    expect(zoneOf(d, 'groups_knockout', 9,  { groupCount: 1 })).toBe('ucl_playoff')
+    expect(zoneOf(d, 'groups_knockout', 24, { groupCount: 1 })).toBe('ucl_playoff')
+  })
+
+  it('reads the 1/8-finals promotion of the league phase as a direct knockout berth', () => {
+    const d = 'Promotion - Champions League (Play Offs: 1/8-finals)'
+    expect(zoneOf(d, 'groups_knockout', 1, { groupCount: 1 })).toBe('ucl_direct')
+    expect(zoneOf(d, 'groups_knockout', 8, { groupCount: 1 })).toBe('ucl_direct')
+  })
+
+  // 2026 은 description 이 'Play Offs' 뿐이라 champions league 규칙에 안 걸리고 순위 폴백으로 간다
+  it('falls back to the rank when the league phase only says Play Offs', () => {
+    expect(zoneOf('Play Offs', 'groups_knockout', 9,  { groupCount: 1 })).toBe('ucl_playoff')
+    expect(zoneOf(null,        'groups_knockout', 1,  { groupCount: 1 })).toBe('ucl_direct')
+    expect(zoneOf(null,        'groups_knockout', 30, { groupCount: 1 })).toBe('ucl_eliminated')
+  })
+
+  it('still reads a domestic Champions League qualification as a playoff berth', () => {
+    expect(zoneOf('Promotion - Champions League (Qualification)', 'league', 4))
+      .toBe('champions_league_playoff')
+  })
+
+  it('keeps the third placed group side in the Europa League', () => {
+    expect(zoneOf('Promotion - Europa League (Play Offs: 1/16-finals)', 'groups_knockout', 3, { groupCount: 8 }))
+      .toBe('europa_league')
+  })
+
+  // 4팀 조의 4위는 description 이 null 이다 — 순위 폴백(8/24/36)은 36팀 단일 표 전용이므로
+  // 여기서 쓰면 4위가 16강 직행으로 칠해진다. 조가 여럿이면 칠하지 않는다.
+  it('paints no zone for a group side the API said nothing about', () => {
+    expect(zoneOf(null, 'groups_knockout', 4, { groupCount: 8 })).toBe('none')
+    expect(zoneOf(null, 'groups_knockout', 1, { groupCount: 8 })).toBe('none')
+  })
+
+  it('keeps the rank fallback for a single table league phase', () => {
+    expect(zoneOf(null, 'groups_knockout', 4, { groupCount: 1 })).toBe('ucl_direct')
+    expect(zoneOf(null, 'groups_knockout', 30, { groupCount: 1 })).toBe('ucl_eliminated')
+  })
 })
 
 // ─── teamColor ─────────────────────────────────────────────────
@@ -223,6 +274,13 @@ describe('normalizeStanding', () => {
     expect(normalizeStanding(standingRowDto({ form: null }), { format: 'league' }).form).toEqual([])
   })
 
+  it('passes the group name through to the screen', () => {
+    expect(normalizeStanding(standingRowDto({ groupName: 'Group A' }), { format: 'groups_knockout' }).groupName)
+      .toBe('Group A')
+    expect(normalizeStanding(standingRowDto({ groupName: null }), { format: 'league' }).groupName)
+      .toBeNull()
+  })
+
   it('maps the row to the mock entries shape', () => {
     const row = normalizeStanding(standingRowDto(), { format: 'league' })
     expect(row).toMatchObject({
@@ -232,6 +290,68 @@ describe('normalizeStanding', () => {
       zone: 'champions_league',
     })
     expect(row.teamSlug).toBe(row.teamId)
+  })
+})
+
+// ─── normalizeStandings ────────────────────────────────────────
+
+function tableDto(rows) {
+  return {
+    competition: { ...COMPETITION_REF, ref: '2-champions-league', apiId: 2, format: 'LEAGUE_PHASE_KNOCKOUT' },
+    season: { year: 2022, label: '2022-23' },
+    rows,
+    asOf: '2026-11-23T12:00:00.000Z',
+    unavailableReason: null,
+  }
+}
+
+/** 2022·2023 UCL 조별리그 실측 형태 — 8조 × 4팀, 1·2위 16강, 3위 유로파, 4위 description null */
+function groupRows(groupName, apiIdBase) {
+  const DESCRIPTIONS = [
+    'Promotion - Champions League (Play Offs: 1/8-finals)',
+    'Promotion - Champions League (Play Offs: 1/8-finals)',
+    'Promotion - Europa League (Play Offs: 1/16-finals)',
+    null,
+  ]
+  return DESCRIPTIONS.map((description, i) => standingRowDto({
+    team: teamDto(apiIdBase + i, `${groupName} Team ${i + 1}`),
+    groupName,
+    rank: i + 1,
+    description,
+  }))
+}
+
+describe('normalizeStandings', () => {
+  it('zones a group stage table from its descriptions and paints nothing where the API was silent', () => {
+    const table = tableDto([...groupRows('Group A', 100), ...groupRows('Group B', 200)])
+    const { entries } = normalizeStandings(table, [])
+    expect(entries.map(e => e.zone)).toEqual([
+      'ucl_direct', 'ucl_direct', 'europa_league', 'none',
+      'ucl_direct', 'ucl_direct', 'europa_league', 'none',
+    ])
+    expect(entries.map(e => e.groupName)).toEqual([
+      'Group A', 'Group A', 'Group A', 'Group A',
+      'Group B', 'Group B', 'Group B', 'Group B',
+    ])
+  })
+
+  // 36팀 리그 페이즈는 조가 하나라 순위 폴백이 그대로 살아 있어야 한다
+  it('keeps the rank fallback on the single table league phase', () => {
+    const rows = [1, 9, 25].map((rank, i) => standingRowDto({
+      team: teamDto(300 + i, `Team ${rank}`),
+      groupName: 'UEFA Champions League',
+      rank,
+      description: null,
+    }))
+    const { entries } = normalizeStandings(tableDto(rows), [])
+    expect(entries.map(e => e.zone)).toEqual(['ucl_direct', 'ucl_playoff', 'ucl_eliminated'])
+  })
+
+  it('reports the reason and no rows when the table is unavailable', () => {
+    const table = { ...tableDto(groupRows('Group A', 100)), unavailableReason: 'KNOCKOUT' }
+    const out = normalizeStandings(table, [])
+    expect(out.entries).toEqual([])
+    expect(out.unavailableReason).toBe('KNOCKOUT')
   })
 })
 

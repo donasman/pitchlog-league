@@ -118,6 +118,8 @@
     "allStatuses": "전체",
     "noMatches": "경기 없음",
     "noMatchesDesc": "선택한 필터에 해당하는 경기가 없습니다.",
+    "pickCompetition": "대회를 선택해 주세요",
+    "pickCompetitionDesc": "지난 시즌은 경기 수가 많아 대회를 하나 고른 뒤에 일정을 보여드립니다.",
     "today": "오늘",
     "tomorrow": "내일",
     "standingsPanel": "순위",
@@ -151,6 +153,7 @@
     "uclLeagueNote": "36개 팀 단일 순위표 · 조별리그 아님",
     "legend": {
       "ucl": "UCL 직행",
+      "uclQualPlayoff": "UCL 예선 PO",
       "uel": "유로파리그",
       "uecl": "컨퍼런스리그",
       "relegation": "강등",

@@ -215,19 +215,43 @@ export function teamColor(apiTeamId) {
 // ─── 순위 구역 ──────────────────────────────────────────────────
 
 /**
+ * UCL description 이 가리키는 **결선 라운드**. API-Football 은 "그 라운드로 올라간다" 는
+ * 뜻으로 이 표기를 쓴다 — 예선이 아니다. 어느 라운드인지가 곧 구역이다 (2026-09-08 실측).
+ *
+ *   `Play Offs: 1/8-finals`   → 16강 직행   — 2022·2023 조 1·2위, 2024·2025 리그페이즈 1~8위
+ *   `Play Offs: 1/16-finals`  → 녹아웃 PO   — 2024·2025 리그페이즈 9~24위
+ *
+ * **둘을 같이 묶으면 안 된다.** 하나로 묶어 "직행" 으로 보내면 2024·2025 의 16개 팀이
+ * 플레이오프를 치러야 하는데 직행으로 칠해진다.
+ *
+ * `-finals` 를 요구한다. 숫자만 보면 날짜(`1/2/2026`)·분수 표기에도 걸린다.
+ */
+const KNOCKOUT_ROUND_ZONE = [
+  [/1\/8-finals/, 'ucl_direct'],
+  [/1\/16-finals/, 'ucl_playoff'],
+]
+
+/**
  * API-Football 순위 행의 description → 화면 구역 (`utils/standingsZone.js` 의 StandingZone).
  * 대소문자 무시 부분 문자열, 위에서 아래로 첫 일치.
- * description 으로 못 정했고 UCL 리그 페이즈면 순위로 정한다 (1~8 직행 · 9~24 PO · 25~ 탈락).
+ * description 으로 못 정했고 단일 조 UCL 리그 페이즈면 순위로 정한다 (1~8 직행 · 9~24 PO · 25~ 탈락).
  *
  * @param {string|null|undefined} description
  * @param {string} format  normalizeCompetition 이 만드는 값 ('league'|'cup'|'groups_knockout')
  * @param {number} rank
+ * @param {{ groupCount?: number }} [options]  같은 표에 든 조 수. 2 이상이면 순위 폴백을 쓰지 않는다
  * @returns {import('../utils/standingsZone.js').StandingZone}
  */
-export function zoneOf(description, format, rank) {
+export function zoneOf(description, format, rank, options = {}) {
+  const { groupCount = 1 } = options
   const d = String(description ?? '').toLowerCase()
   if (d) {
     const has = word => d.includes(word)
+    // UCL 은 결선 라운드 표기가 곧 구역이다. 아래 `play` 규칙에 걸리면 "예선 플레이오프" 로
+    // 오해되므로 먼저 걸러낸다 — 실제로는 예선이 아니라 본선 진출 경로다.
+    if (has('champions league')) {
+      for (const [re, zone] of KNOCKOUT_ROUND_ZONE) if (re.test(d)) return zone
+    }
     if (has('champions league') && (has('qualif') || has('play'))) return 'champions_league_playoff'
     if (has('champions league')) return 'champions_league'
     if (has('conference')) return 'europa_conference'
@@ -235,7 +259,10 @@ export function zoneOf(description, format, rank) {
     if (has('relegation') && has('play')) return 'relegation_playoff'
     if (has('relegation')) return 'relegation'
   }
-  if (format === 'groups_knockout' && Number.isFinite(rank)) {
+  // 8/24/36 경계는 36팀 단일 리그 페이즈 전용이다. 여러 조로 쪼갠 표에 쓰면
+  // 4팀 조의 4위(description 이 null)가 rank 4 ≤ 8 이라 16강 직행으로 칠해진다.
+  // 조 크기로 탈락을 추론하지 않는다 — API 가 말하지 않았으면 칠하지 않는다.
+  if (format === 'groups_knockout' && groupCount <= 1 && Number.isFinite(rank)) {
     if (rank <= 8) return 'ucl_direct'
     if (rank <= 24) return 'ucl_playoff'
     return 'ucl_eliminated'
@@ -334,11 +361,15 @@ export function deriveStage(matches, nowDate) {
 /**
  * 순위 행 → Mock `mocks/standings.js` 의 entries 행
  * @param {object} row  StandingRowDto
- * @param {{ format: string }} ctx  normalizeCompetition 의 format 값
+ * @param {{ format?: string, groupCount?: number }} ctx  format 은 normalizeCompetition 값,
+ *   groupCount 는 같은 표의 조 수(zoneOf 의 순위 폴백 가드)
  */
-export function normalizeStanding(row, { format } = {}) {
+export function normalizeStanding(row, { format, groupCount = 1 } = {}) {
   return {
     rank:   row.rank,
+    // 조별리그 표를 조 단위로 나눠 그리려면 화면까지 조 이름이 살아 있어야 한다.
+    // 단일 표 대회는 여기에 대회 이름이 들어온다 — 값의 가짓수로만 조별리그를 판정한다.
+    groupName: row.groupName ?? null,
     teamId: row.team.ref,
     teamSlug: row.team.ref,
     teamName: row.team.displayName,
@@ -353,8 +384,24 @@ export function normalizeStanding(row, { format } = {}) {
     goalDifference: row.goalDiff,
     points: row.points,
     form: String(row.form ?? '').split('').filter(c => 'WDL'.includes(c)).slice(-5),
-    zone: zoneOf(row.description, format, row.rank),
+    zone: zoneOf(row.description, format, row.rank, { groupCount }),
   }
+}
+
+/**
+ * 표에 실제로 든 조 수. 단일 표 대회는 수집 때 `group_name` 에 대회 이름이 채워지므로
+ * (`backend l2.service.ts` 의 `r.group || label`) "값이 있으면 조별리그" 가 성립하지 않는다.
+ * 서로 다른 값이 둘 이상일 때만 조별리그다.
+ * @param {Array<{groupName?: string|null}>} rows
+ * @returns {number}
+ */
+export function groupCountOf(rows) {
+  const names = new Set()
+  for (const r of rows ?? []) {
+    const n = r?.groupName ?? null
+    if (n) names.add(n)
+  }
+  return Math.max(1, names.size)
 }
 
 /**
@@ -366,12 +413,13 @@ export function normalizeStanding(row, { format } = {}) {
 export function normalizeStandings(table, matches = []) {
   const format = FORMAT[table.competition?.format] ?? 'league'
   const unavailableReason = table.unavailableReason ?? null
+  const groupCount = groupCountOf(table.rows)
   return {
     competitionId: competitionIds(table.competition).competitionId,
     seasonId:  table.season?.label ?? null,
     stage:     deriveStage(matches, now()),
     updatedAt: table.asOf ?? null,
-    entries:   unavailableReason ? [] : (table.rows ?? []).map(row => normalizeStanding(row, { format })),
+    entries:   unavailableReason ? [] : (table.rows ?? []).map(row => normalizeStanding(row, { format, groupCount })),
     unavailableReason,
   }
 }

@@ -283,11 +283,11 @@ function DayGroup({ group, t, locale }) {
 /* ─────────────────────────────────────────────────────────────
    MiniStandingsPanel — 우측 순위표 패널 (lg 이상)
 ───────────────────────────────────────────────────────────── */
-function MiniStandingsPanel({ competitions, activeCompSlug, t, locale }) {
+function MiniStandingsPanel({ competitions, activeCompSlug, seasonYear, t, locale }) {
   const displaySlug = activeCompSlug === 'all' ? 'premier-league' : activeCompSlug
   const { data: standingsData, loading, error } = useData(
-    () => fetchStandings(displaySlug),
-    [displaySlug]
+    () => fetchStandings(displaySlug, seasonYear),
+    [displaySlug, seasonYear]
   )
 
   const comp = (competitions ?? []).find(c => c.slug === displaySlug)
@@ -344,6 +344,10 @@ export default function MatchesPage() {
 
   const activeComp   = searchParams.get('competition') ?? 'all'
   const activeStatus = searchParams.get('status') ?? 'all'
+  // 백엔드 `?season=` 은 연도(int)만 받는다. 헤더가 URL 을 연도로 정규화하기 전 한 렌더 동안
+  // 예전 라벨('2025-26')이 남아 있을 수 있어, 연도가 아니면 넘기지 않는다(백엔드가 현재 시즌으로 폴백).
+  const seasonParam  = searchParams.get('season')
+  const seasonYear   = /^\d{4}$/.test(seasonParam ?? '') ? Number(seasonParam) : undefined
 
   /* URL 파라미터 업데이트 헬퍼 */
   function setParam(key, value) {
@@ -356,9 +360,21 @@ export default function MatchesPage() {
   }
 
   /* 데이터 조회 */
-  const { data: allMatches, loading: loadingMatches, error: matchError } = useData(fetchAllMatches, [])
+  // 시즌을 안 골랐으면(기본) 지금까지처럼 6대회를 한 번에 받아 대회 칩은 클라이언트에서 거른다.
+  // 그래서 activeComp 를 deps 에 넣지 않는다 — 넣으면 칩을 누를 때마다 재요청이 돌아 목록이 로딩으로 깜빡인다.
+  // 시즌을 고르면 대회를 서버로 내린다: 과거 시즌은 조회 창이 없어 6대회를 다 받으면 ≈1,900경기가 온다.
+  const scopedCompSlug = seasonYear && activeComp !== 'all' ? activeComp : undefined
+  // deps 에 seasonYear 가 있어야 시즌을 바꿨을 때 다시 받는다
+  const { data: matchesResult, loading: loadingMatches, error: matchError } = useData(
+    () => fetchAllMatches({ season: seasonYear, competitionSlug: scopedCompSlug }),
+    [seasonYear, scopedCompSlug ?? null]
+  )
   const { data: competitions, loading: loadingComps } = useData(fetchCompetitions, [])
   const loading = loadingMatches || loadingComps
+
+  const allMatches = matchesResult?.items ?? null
+  /** 과거 시즌인데 대회를 안 골랐다 — 빈 결과가 아니라 "고르면 보인다" 다. 둘을 같은 화면으로 그리지 않는다 */
+  const needsCompetition = matchesResult?.unavailableReason === 'COMPETITION_REQUIRED'
 
   /* 필터 적용 */
   const filtered = useMemo(() => {
@@ -462,8 +478,13 @@ export default function MatchesPage() {
               <ErrorState description={matchError} />
             )}
 
+            {/* 과거 시즌 — 대회를 골라야 목록이 뜬다. "경기가 없음" 과 다른 상태라 문구를 나눈다 */}
+            {!loading && !matchError && needsCompetition && (
+              <EmptyState title={t('matches.pickCompetition')} description={t('matches.pickCompetitionDesc')} />
+            )}
+
             {/* 빈 결과 */}
-            {!loading && !matchError && filtered.length === 0 && (
+            {!loading && !matchError && !needsCompetition && filtered.length === 0 && (
               <EmptyState
                 title={t('matches.noMatches')}
                 description={t('matches.noMatchesDesc')}
@@ -471,7 +492,7 @@ export default function MatchesPage() {
             )}
 
             {/* 경기 목록 */}
-            {!loading && !matchError && filtered.length > 0 && (
+            {!loading && !matchError && !needsCompetition && filtered.length > 0 && (
               <>
                 {/* LIVE 히어로 */}
                 {(activeStatus === 'all' || activeStatus === 'live') && liveMatches.length > 0 && (
@@ -491,6 +512,7 @@ export default function MatchesPage() {
             <MiniStandingsPanel
               competitions={competitions}
               activeCompSlug={activeComp}
+              seasonYear={seasonYear}
               t={t}
               locale={locale}
             />

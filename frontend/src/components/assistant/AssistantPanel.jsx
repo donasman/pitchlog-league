@@ -91,7 +91,8 @@ function StandingsDataCard({ rows, t }) {
         const pat = ZONE_PAT[r.zone];
         return (
           <div
-            key={r.rank}
+            /* 조별리그 순위가 흘러들면 rank 1 이 조마다 하나씩 나온다 — 팀 식별자로 잡는다 */
+            key={r.teamId ?? r.teamSlug ?? r.rank}
             className="zrow num"
             data-zone={zc ? r.zone : undefined}
             data-pat={pat && pat !== "solid" ? pat : undefined}

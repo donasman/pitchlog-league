@@ -2,7 +2,8 @@
  * 순위 구역 유틸리티
  * 국내 리그와 UCL 리그 페이즈에서 순위 구역을 시각적으로 구분.
  *
- * border-l-{color} 를 사용해 왼쪽 표시선에만 색상 적용.
+ * 색은 ZONE_COLOR_VAR 의 CSS 변수로만 주입한다 (StandingsTable 이 --zc 로 받아
+ * 좌측 2px 표시선 + 4% 배경 틴트에 쓴다). Tailwind 클래스 표는 참조가 끊겨 제거했다.
  * ZONE_STICKY_BG 는 행 배경(틴트)과 카드 배경을 미리 합성한 불투명 hex.
  * — light: white(#fff) + tint-500/0.04
  * — dark : card(rgb 15,23,41) + tint-400/0.08
@@ -13,34 +14,6 @@
  *   'europa_conference'|'relegation_playoff'|'relegation'|'none'|
  *   'ucl_direct'|'ucl_playoff'|'ucl_eliminated'} StandingZone
  */
-
-/** 구역별 왼쪽 표시선만 착색 (하단선 border-border/50 불변) */
-export const ZONE_BORDER_CLASS = {
-  champions_league:          'border-l-2 border-l-blue-500',
-  champions_league_playoff:  'border-l-2 border-l-blue-300',
-  europa_league:             'border-l-2 border-l-orange-500',
-  europa_conference:         'border-l-2 border-l-green-600',
-  relegation_playoff:        'border-l-2 border-l-red-400',
-  relegation:                'border-l-2 border-l-red-600',
-  none:                      'border-l-2 border-l-transparent',
-  ucl_direct:                'border-l-2 border-l-blue-500',
-  ucl_playoff:               'border-l-2 border-l-yellow-500',
-  ucl_eliminated:            'border-l-2 border-l-gray-500',
-}
-
-/** 구역별 행 배경색 (4–8% 투명도) */
-export const ZONE_BG_CLASS = {
-  champions_league:          'bg-blue-500/[0.04] dark:bg-blue-400/[0.08]',
-  champions_league_playoff:  'bg-blue-300/[0.04] dark:bg-blue-300/[0.08]',
-  europa_league:             'bg-orange-500/[0.04] dark:bg-orange-400/[0.08]',
-  europa_conference:         'bg-green-600/[0.04] dark:bg-green-500/[0.08]',
-  relegation_playoff:        'bg-red-400/[0.04] dark:bg-red-400/[0.08]',
-  relegation:                'bg-red-600/[0.04] dark:bg-red-500/[0.08]',
-  none:                      '',
-  ucl_direct:                'bg-blue-500/[0.04] dark:bg-blue-400/[0.08]',
-  ucl_playoff:               'bg-yellow-500/[0.04] dark:bg-yellow-400/[0.08]',
-  ucl_eliminated:            'bg-gray-500/[0.04] dark:bg-gray-400/[0.08]',
-}
 
 /**
  * sticky 열(순위·팀) 전용 배경 — 가로 스크롤 시 뒤쪽 콘텐츠를 가리는 불투명 배경.
@@ -59,19 +32,6 @@ export const ZONE_STICKY_BG = {
   ucl_direct:                'bg-[#f7faff] dark:bg-[#111b32]',
   ucl_playoff:               'bg-[#fefcf5] dark:bg-[#181d29]',
   ucl_eliminated:            'bg-card',
-}
-
-/** 범례용 색상 배경 (범례 도트) — ZoneLegend 에서 직접 사용 */
-export const ZONE_LEGEND_COLOR = {
-  champions_league:         'bg-blue-500',
-  champions_league_playoff: 'bg-blue-300',  // ZONE_BORDER_CLASS 와 동일 색
-  europa_league:            'bg-orange-500',
-  europa_conference:        'bg-green-600',
-  relegation:               'bg-red-600',
-  relegation_playoff:       'bg-red-400',
-  ucl_direct:               'bg-blue-500',
-  ucl_playoff:              'bg-yellow-500',
-  ucl_eliminated:           'bg-gray-500',
 }
 
 /**
