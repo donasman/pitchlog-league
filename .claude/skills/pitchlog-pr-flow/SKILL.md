@@ -38,6 +38,8 @@ description: PitchLog 저장소에서 브랜치 → 검증 → 커밋 → push/P
    BASE=$(git merge-base <브랜치> origin/dev)
    git merge-tree "$BASE" <브랜치> origin/dev | grep -c "<<<<<<<"
    ```
+
+   **자동 머지 경계.** 변경이 `backend/**` · `frontend/src/services/**` · `frontend/src/utils/**` · 테스트 파일에만 있으면 `gh pr merge --auto --merge` 를 걸어도 된다 — CI 가 진실 전부인 클래스다. `frontend/src/pages/**` · `components/**` · `docs/**` 중 하나라도 있으면 PR 만 열고 멈춘다. 렌더링과 문서 정합성은 CI 가 못 본다 (09-08~09 실측: 자가체크 PASS 가 세 번 틀렸다 — #34 렌더 5건 · #36 totals · #37 참조 20곳). 경계는 기계 검사가 늘 때마다 넓힌다 — `check-doc-refs` 가 CI 에 들어간 09-09 이후 `docs/**` 는 후보가 된다.
 5. **머지 후 정리 — 건너뛰지 않는다.** 로컬과 원격 브랜치를 **둘 다** 지운다. 이걸 미루면 다음 커밋이 그 브랜치에 얹혀 4번의 out-of-date 로 돌아온다 (09-08 에 세 번: #28 · #29 · #32).
    ```
    git checkout dev
