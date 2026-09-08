@@ -24,12 +24,14 @@ import {
   ZONE_COLOR_VAR,
   ZONE_PAT,
 } from '@/utils/standingsZone'
+import { groupStandings, limitStandingGroups } from '@/utils/standings'
 import { getLocalizedName } from '@/utils/localization'
 
 /* ── i18n 키 맵 ── */
 const ZONE_LABEL_KEY = {
   champions_league:         'standings.legend.ucl',
-  champions_league_playoff: '',
+  // 라벨이 비어 있으면 ZoneLegend 가 걸러내 색만 칠하고 설명이 없는 행이 된다
+  champions_league_playoff: 'standings.legend.uclQualPlayoff',
   europa_league:            'standings.legend.uel',
   europa_conference:        'standings.legend.uecl',
   relegation:               'standings.legend.relegation',
@@ -56,16 +58,33 @@ function patternBg(zc, pat) {
   return undefined
 }
 
-/* ── 구역 범위 계산 ── */
-function computeZoneRanges(entries) {
+/* ── 구역 범위 계산 ──
+   순위는 조 안에서만 뜻이 있다. 8개 조를 한 덩어리로 계산하면 범위가 무의미해지므로
+   조마다 따로 구하고, 모든 조가 같은 범위일 때만 하나로 합쳐 보여준다.
+   조마다 다르면 범위를 감춘다 — 틀린 범위를 적는 것보다 안 적는 게 낫다. */
+function computeZoneRanges(groups) {
+  const perZone = {}
+  groups.forEach(g => {
+    const inGroup = {}
+    ;(g.entries ?? []).forEach(e => {
+      if (!e.zone || e.zone === 'none') return
+      if (!Number.isFinite(e.rank)) return
+      if (!inGroup[e.zone]) inGroup[e.zone] = { min: e.rank, max: e.rank }
+      else {
+        inGroup[e.zone].min = Math.min(inGroup[e.zone].min, e.rank)
+        inGroup[e.zone].max = Math.max(inGroup[e.zone].max, e.rank)
+      }
+    })
+    Object.entries(inGroup).forEach(([zone, r]) => {
+      if (!perZone[zone]) perZone[zone] = []
+      perZone[zone].push(r)
+    })
+  })
+
   const ranges = {}
-  entries.forEach(e => {
-    if (!e.zone || e.zone === 'none') return
-    if (!ranges[e.zone]) ranges[e.zone] = { min: e.rank, max: e.rank }
-    else {
-      ranges[e.zone].min = Math.min(ranges[e.zone].min, e.rank)
-      ranges[e.zone].max = Math.max(ranges[e.zone].max, e.rank)
-    }
+  Object.entries(perZone).forEach(([zone, list]) => {
+    const first = list[0]
+    if (list.every(r => r.min === first.min && r.max === first.max)) ranges[zone] = first
   })
   return ranges
 }
@@ -73,10 +92,12 @@ function computeZoneRanges(entries) {
 /* ─────────────────────────────────────────────────────────────
    ZoneLegend — 하단 범례
 ───────────────────────────────────────────────────────────── */
-function ZoneLegend({ entries, small }) {
+/** @param {{ groups: Array<{groupName: string|null, entries: Array}>, small?: boolean }} props */
+function ZoneLegend({ groups, small }) {
   const { t } = useTranslation()
-  const zonesInData = new Set(entries.map(e => e.zone ?? 'none'))
-  const ranges      = computeZoneRanges(entries)
+  const rows        = (groups ?? []).flatMap(g => g.entries ?? [])
+  const zonesInData = new Set(rows.map(e => e.zone ?? 'none'))
+  const ranges      = computeZoneRanges(groups ?? [])
   const items       = ZONE_DISPLAY_ORDER.filter(z => zonesInData.has(z) && ZONE_LABEL_KEY[z])
   if (!items.length) return null
 
@@ -448,6 +469,46 @@ function CompactTable({ rows, competitionSlug, t, locale }) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   Group sections — 조 머리글 + 표 반복
+───────────────────────────────────────────────────────────── */
+
+/** 조 머리글. 조가 하나뿐인 표(단일 표 대회)에서는 그리지 않는다 — 대회 이름이 머리글로 찍힌다 */
+function GroupHeading({ name, first }) {
+  return (
+    <div
+      className="t-cap"
+      style={{
+        padding: first ? '10px 14px 6px' : '14px 14px 6px',
+        fontWeight: 700,
+        color: 'var(--pl-text)',
+        borderTop: first ? undefined : '1px solid var(--pl-line)',
+      }}
+    >
+      {name}
+    </div>
+  )
+}
+
+/**
+ * 조 하나뿐이고 이름이 없으면 표를 그대로 돌려준다 — 단일 표 대회의 DOM 이 예전과 같아야 한다.
+ * @param {{ groups: Array<{groupName: string|null, entries: Array}>,
+ *           children: (rows: Array) => import('react').ReactNode }} props
+ */
+function GroupSections({ groups, children }) {
+  if (groups.length === 1 && groups[0].groupName == null) return children(groups[0].entries)
+  return (
+    <>
+      {groups.map((g, i) => (
+        <div key={g.groupName ?? `g${i}`}>
+          {g.groupName && <GroupHeading name={g.groupName} first={i === 0} />}
+          {children(g.entries)}
+        </div>
+      ))}
+    </>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    StandingsTable — 공개 컴포넌트
 ───────────────────────────────────────────────────────────── */
 export default function StandingsTable({
@@ -458,29 +519,39 @@ export default function StandingsTable({
 }) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
-  const rows   = maxRows ? entries.slice(0, maxRows) : entries
+  // 조별리그면 조 단위로 나눈다. 단일 표 대회는 `groupName: null` 인 한 덩어리라 예전과 같다.
+  const groups  = limitStandingGroups(groupStandings(entries), maxRows)
+  const hasRows = groups.some(g => (g.entries ?? []).length > 0)
 
   if (compact) {
-    return <CompactTable rows={rows} competitionSlug={competitionSlug} t={t} locale={locale} />
+    return (
+      <GroupSections groups={groups}>
+        {rows => <CompactTable rows={rows} competitionSlug={competitionSlug} t={t} locale={locale} />}
+      </GroupSections>
+    )
   }
 
   return (
     <div>
       {/* 데스크톱 */}
       <div className="hidden md:block">
-        <DesktopTable rows={rows} competitionSlug={competitionSlug} t={t} locale={locale} />
+        <GroupSections groups={groups}>
+          {rows => <DesktopTable rows={rows} competitionSlug={competitionSlug} t={t} locale={locale} />}
+        </GroupSections>
       </div>
 
       {/* 모바일 */}
       <div className="md:hidden">
-        <MobileTable rows={rows} t={t} locale={locale} />
+        <GroupSections groups={groups}>
+          {rows => <MobileTable rows={rows} t={t} locale={locale} />}
+        </GroupSections>
       </div>
 
       {/* 범례 */}
-      {rows.length > 0 && (
+      {hasRows && (
         <div style={{ padding: '12px 14px 10px', borderTop: '1px solid var(--pl-line)' }}>
           <p className="t-cap" style={{ margin: '0 0 8px' }}>{t('standings.zoneNote')}</p>
-          <ZoneLegend entries={rows} />
+          <ZoneLegend groups={groups} />
         </div>
       )}
     </div>

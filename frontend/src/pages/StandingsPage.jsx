@@ -14,6 +14,7 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
 import { useData } from '@/hooks/useData'
+import { groupStandings } from '@/utils/standings'
 import { fetchCompetitions, fetchStandings } from '@/services/api'
 import { getLocalizedCompetitionName } from '@/utils/localization'
 import { toKSTDateTime } from '@/utils/dateFormat'
@@ -24,6 +25,11 @@ export default function StandingsPage() {
   const locale = i18n.language
 
   const competitionSlug = searchParams.get('competition') ?? 'premier-league'
+  // 백엔드 `?season=` 은 연도(int)만 받는다. 헤더가 URL 을 연도로 정규화하기 전 한 렌더 동안
+  // 예전 라벨('2025-26')이 남아 있을 수 있어, 연도가 아니면 아예 넘기지 않는다 —
+  // 그러면 백엔드가 isCurrent 로 폴백해서 지금과 같은 화면이 나온다.
+  const seasonParam = searchParams.get('season')
+  const seasonYear  = /^\d{4}$/.test(seasonParam ?? '') ? Number(seasonParam) : undefined
 
   const { data: competitions, loading: loadingComps } = useData(fetchCompetitions, [])
   // ⚠ 오류를 null 로 삼키는 catch 를 넣지 않는다 — EmptyState 로 위장된다 (1단계 감사 §C, CI 검사 대상).
@@ -31,13 +37,16 @@ export default function StandingsPage() {
   //   컵 대회는 순위표 자체가 없는 것이 정상이므로, 실 API 연결 시
   //   "없음"(EmptyState)과 "실패"(ErrorState)를 서비스 계층에서 구분한다.
   const { data: standings, loading: loadingStand, error } = useData(
-    () => fetchStandings(competitionSlug),
-    [competitionSlug]
+    () => fetchStandings(competitionSlug, seasonYear),
+    [competitionSlug, seasonYear]
   )
 
   const loading = loadingComps || loadingStand
   const comp    = (competitions ?? []).find(c => c.slug === competitionSlug) ?? null
+  // format 은 **현재 시즌** 기준이다 (competitions.catalog.ts). UCL 은 2024-25 에 조별리그 →
+  // 리그페이즈로 바뀌었으므로, 이 표가 어느 쪽인지는 format 이 아니라 데이터로 판단한다.
   const isUCL   = comp?.format === 'groups_knockout'
+  const isGroupStage = groupStandings(standings?.entries ?? []).length > 1
   /** 시즌 라벨은 응답에서 — 순위표의 seasonId, 없으면 대회의 currentSeason */
   const season  = standings?.seasonId ?? comp?.currentSeason ?? null
 
@@ -90,11 +99,6 @@ export default function StandingsPage() {
               {getLocalizedCompetitionName(c, locale) || c.shortName}
             </button>
           ))}
-          {competitions && (
-            <span className="t-sub" style={{ marginLeft: 'auto' }}>
-              {t('standings.leaguePhaseTitle').slice(0,1).toUpperCase() + t('standings.leaguePhaseTitle').slice(1)}
-            </span>
-          )}
         </div>
 
         {/* ── 스테이지 정보 + 데이터 기준 시각 ── */}
@@ -117,7 +121,9 @@ export default function StandingsPage() {
               )}
             </span>
             {isUCL && (
-              <span className="t-sub">{t('standings.uclLeagueNote')}</span>
+              <span className="t-sub">
+                {t(isGroupStage ? 'standings.uclGroupNote' : 'standings.uclLeagueNote')}
+              </span>
             )}
             <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="t-cap num" style={{ color: 'var(--pl-sub)' }}>
@@ -164,16 +170,23 @@ export default function StandingsPage() {
               aria-hidden="true"
             />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p className="t-body" style={{ margin: 0, fontWeight: 600 }}>{t('standings.leaguePhaseTitle')}</p>
-              <p className="t-sub" style={{ margin: 0 }}>{t('standings.leaguePhaseDesc')}</p>
+              <p className="t-body" style={{ margin: 0, fontWeight: 600 }}>
+                {t(isGroupStage ? 'standings.groupPhaseTitle' : 'standings.leaguePhaseLabel')}
+              </p>
+              <p className="t-sub" style={{ margin: 0 }}>
+                {t(isGroupStage ? 'standings.groupPhaseDesc' : 'standings.leaguePhaseDesc')}
+              </p>
             </div>
-            <Link
-              to="/competitions/champions-league/knockout"
-              className="pl-btn pl-btn-sm pl-btn-ghost"
-              style={{ flexShrink: 0 }}
-            >
-              {t('standings.leaguePhaseLink')}
-            </Link>
+            {/* 녹아웃 대진 화면은 현재 시즌만 그린다 — 과거 시즌에서 열면 다른 시즌 대진이 나온다 */}
+            {!seasonYear && (
+              <Link
+                to="/competitions/champions-league/knockout"
+                className="pl-btn pl-btn-sm pl-btn-ghost"
+                style={{ flexShrink: 0 }}
+              >
+                {t('standings.leaguePhaseLink')}
+              </Link>
+            )}
           </div>
         )}
 

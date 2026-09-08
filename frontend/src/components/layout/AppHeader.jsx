@@ -4,7 +4,7 @@
  * 대회·시즌 선택 상태는 URL 검색 파라미터로 보존.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, NavLink, useSearchParams, useMatch } from 'react-router-dom'
 import { Home, Trophy, Calendar, Users, List, BarChart2, Search, Menu, X, ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -16,6 +16,7 @@ import SearchPanel from './SearchPanel'
 import NotificationPanel from '@/components/notifications/NotificationPanel'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { getLocalizedCompetitionName } from '@/utils/localization'
+import { selectableSeasons, seasonYearFromParam, isPastSeason } from '@/utils/seasons'
 
 export default function AppHeader() {
   const { t, i18n } = useTranslation()
@@ -44,16 +45,45 @@ export default function AppHeader() {
 
   // 헤더는 목록을 못 받아도 페이지를 막지 않는다 — 선택기만 비워두고 나머지는 그대로 뜬다
   const { data: competitionsData } = useData(fetchCompetitions, [])
-  const { data: seasonsData }      = useData(fetchSeasons, [])
   const competitions = competitionsData ?? []
-  const seasons      = seasonsData ?? []
-  // URL 에 시즌이 없으면 목록의 첫 항목(최신). 목록도 없으면 표기를 비운다 — 리터럴로 채우지 않는다
-  const currentSeasonId = searchParams.get('season') ?? seasons[0]?.id ?? null
+  // `?competition=` 은 페이지마다 뜻이 다르다 — PlayerPage 는 'all'·'epl' 같은 자체 id 를 쓴다.
+  // 그 값을 그대로 넘기면 fetchSeasons 가 competitionNotFound 로 던지고 선택기가 조용히 빈다.
+  // 목록에 있는 slug 일 때만 넘기고, 아니면 기본 대회(EPL)로 둔다.
+  const seasonCompSlug =
+    competitions.some(c => c.slug === currentCompSlug) ? currentCompSlug : undefined
+  // 시즌 목록은 대회마다 다르다 — 대회를 안 넘기면 어느 대회를 골라도 EPL 시즌이 나온다(live.js fetchSeasons 기본값)
+  const { data: seasonsData }      = useData(() => fetchSeasons(seasonCompSlug), [seasonCompSlug])
+  // 적재가 끝난 시즌만 고를 수 있다 (INGESTION_STRATEGY 5-4). useMemo 로 참조를 고정해 아래 정리 effect 가 매 렌더 돌지 않게 한다
+  const seasons      = useMemo(() => selectableSeasons(seasonsData), [seasonsData])
+  const seasonParam  = searchParams.get('season')
+  // URL 에 시즌이 없거나 이 대회에 없는 시즌이면 목록의 첫 항목(최신). 목록도 없으면 표기를 비운다 — 리터럴로 채우지 않는다
+  const currentSeasonYear = seasonYearFromParam(seasonParam, seasons) ?? seasons[0]?.year ?? null
 
   const selectedComp =
     competitions.find(c => c.slug === currentCompSlug) ?? competitions[0] ?? null
   const selectedSeason =
-    seasons.find(s => s.id === currentSeasonId) ?? seasons[0] ?? { id: null, label: '' }
+    seasons.find(s => s.year === currentSeasonYear) ?? seasons[0] ?? { year: null, label: '' }
+
+  // URL 의 시즌 값을 연도로 정규화한다.
+  //   · 대회를 바꾸면 이전 시즌이 새 대회에 없을 수 있다 → 파라미터를 떨어뜨려 백엔드 폴백(isCurrent)에 맡긴다
+  //   · 예전 헤더가 라벨('2025-26')을 URL 에 썼다 → 이미 공유된 링크가 400 을 맞지 않게 연도로 바꾼다
+  // 페이지들은 이 값을 그대로 `?season=` 에 실어 보내므로 여기서 한 번만 맞춰 두면 된다.
+  useEffect(() => {
+    if (seasonParam === null) return
+    if (seasons.length === 0) return  // 아직 목록을 못 받았다 — 판단 근거가 없으므로 건드리지 않는다
+    const resolved = seasonYearFromParam(seasonParam, seasons)
+    // 현재 시즌은 URL 에 남기지 않는다. 남기면 `?season=` 의 뜻이 "현재가 아닌 시즌" 에서
+    // "시즌을 한 번 눌렀음" 으로 흐려지고, 경기 화면이 그걸 보고 대회를 서버로 내리기
+    // 시작해 칩을 누를 때마다 재요청이 돈다. 없으면 백엔드가 isCurrent 로 폴백한다.
+    const drop = resolved === null || !isPastSeason(resolved, seasons)
+    if (!drop && String(resolved) === seasonParam) return
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (drop) next.delete('season')
+      else next.set('season', String(resolved))
+      return next
+    }, { replace: true })
+  }, [seasonParam, seasons, setSearchParams])
 
   function setParam(key, value) {
     setSearchParams(prev => {
@@ -175,11 +205,12 @@ export default function AppHeader() {
               >
                 {seasons.map(s => (
                   <button
-                    key={s.id}
+                    key={s.year}
                     role="option"
-                    aria-selected={s.id === currentSeasonId}
-                    onClick={() => setParam('season', s.id)}
-                    className={dropdownItem(s.id === currentSeasonId)}
+                    aria-selected={s.year === currentSeasonYear}
+                    /* 백엔드 `?season=` 은 연도(int)를 받는다 — 라벨을 URL 에 넣으면 400 이다 */
+                    onClick={() => setParam('season', s.year)}
+                    className={dropdownItem(s.year === currentSeasonYear)}
                   >
                     {s.label}
                     {s.current && <span className="ml-1 text-xs text-muted-foreground">{t('header.currentSeason')}</span>}
