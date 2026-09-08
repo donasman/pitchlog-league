@@ -275,7 +275,7 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 - **대회시즌마다 `dataState`** — `NONE`(아직 안 받음) · `PARTIAL`(백필 중) · `COMPLETE`. `backfill_jobs.phase` 에서 계산.
   프론트 시즌 선택기는 `COMPLETE` 만 노출한다. `status`(UPCOMING/IN_PROGRESS/FINISHED)는 시즌 진행 상태라 별개다.
 - `ref` 형식 오류 400 · 없는 것 404 · 모르는 쿼리 파라미터 400 (`forbidNonWhitelisted`). 오류를 빈 배열로 바꾸지 않는다.
-- 구현됨: `GET /api/competitions` · `/api/competitions/:ref` · `/api/teams?competition=&season=` · `/api/teams/:ref` · **`/api/matches` · `/api/matches/:ref` · `/api/standings` (09-07)**. 나머지는 데이터가 들어오는 계층과 같이.
+- 구현됨: `GET /api/competitions` · `/api/competitions/:ref` · `/api/teams?competition=&season=` · `/api/teams/:ref` · **`/api/matches` · `/api/matches/:ref` · `/api/standings` (09-07)** · **`/api/players/:ref` · `/api/stats/scorers` · `/api/stats/assisters` (09-09 PR #34·#36)**. 나머지는 데이터가 들어오는 계층과 같이.
 - 상태는 백엔드가 만들지 않는다 — `statusShort` 원문 + `statsState` 를 주고 프론트 `normalize.js` 의 진리표가 `displayState` 를 만든다(PRD 4-2). 백엔드가 `displayState` 를 주면 두 곳에서 규칙이 갈린다.
 
 ---

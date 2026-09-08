@@ -146,6 +146,13 @@ nullable 로 바꿨다 (`20260908090000_player_season_stats_nullable`).
 **2026-09-07 생겼다.** 실 API 첫 연결(대회·팀)과 같이 들어왔다.
 `ref`→slug, format enum, 시즌 객체→라벨을 옮기고 목록/상세의 `null` 형태를 맞춘다.
 
+**표시 판단은 `normalize.js` 의 `formatStat` · `playerTotals` 가 한다** (09-09, 3라운드 만에 정한 것).
+컴포넌트는 문자열을 직접 고르지 않는다 — `null` 은 `formatStat` 이 `-` 로, 필드별 독립합은
+`playerTotals(rows)` 가 계산(백엔드 `player.service.ts:102-112` 와 동일 규약). `dataStatus`
+같은 행 단위 라벨은 폐기됐다 — `assists=null` 하나가 시즌 전체를 가리던 회귀의 원인이었다.
+`normalize.test.js` 의 대조 assert `playerTotals(allStats) === dto.totals` 가 두 구현 갈라지는
+순간을 잠근다.
+
 아직 지나가지 않은 것: `matchStats.js`·`lineups.js` 의 `null` 이다.
 그 화면들은 백엔드에 API 가 없어 Mock 전용이고, 실 API 로 바뀔 때 이 계층을 지난다.
 
