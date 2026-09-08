@@ -18,9 +18,9 @@ NestJS 기반 핵심 서비스. 외부 축구 API 수집, REST API, 실시간 Ga
 |---|---|
 | 스키마 | Prisma 모델 29 · enum 17 · 인덱스 90 · 외래키 0. partial unique 4개는 `prisma/sql/partial-indexes.sql` |
 | 수집 | **L0**(대회 17 · 대회시즌 83 · 팀 1,888) · **L1 스쿼드**(155팀) · **L2 5시즌**(라운드 1,070 · 경기 9,787 · 순위 654) · **L6 시즌 집계**(선수 통계 30,925 · 랭킹 2,335 · 팀 통계 489 · 선수 13,591) · 로고 자체 저장 |
-| 조회 API | `/api/competitions`(+`/:ref`) · `/api/teams`(+`/:ref`) · **`/api/matches`(+`/:ref`) · `/api/standings`** (09-07). Swagger `/docs` 가 계약 |
+| 조회 API | `/api/competitions`(+`/:ref`) · `/api/teams`(+`/:ref`) · **`/api/matches`(+`/:ref`) · `/api/standings`** (09-07) · **`/api/players/:ref` · `/api/stats/{scorers,assisters}`** (09-09 PR #34·#36). Swagger `/docs` 가 계약 |
 | 백업 | `pg_dump` 주기 백업 + 복원 리허설 (로컬 보관 · 수동 실행) |
-| 테스트 | 단위 53 · e2e 9파일 74건 (`l0`·`l1`·`l2`·`l6` 는 로컬 DB·CI 에서만) |
+| 테스트 | 단위 53 · e2e 10파일 85건 (`l0`·`l1`·`l2`·`l6` 는 로컬 DB·CI 에서만) |
 | 남은 것 | L3·L5 경기 상세(1장 3번) → 서버화·배포 → L4 실시간 (`docs/NEXT_STEPS.md` 1장) |
 
 ## 실행
@@ -35,7 +35,7 @@ npm run start:dev         # http://localhost:3000 · Swagger /docs · /health
 
 ```bash
 npm run verify            # prisma validate · typecheck · lint · 단위 53건
-npm run test:e2e          # e2e 9파일 74건
+npm run test:e2e          # e2e 10파일 85건
 ```
 
 `l0`·`l1`·`l2`·`l6` e2e 는 도메인 테이블에 가짜 행을 쓴다. **원격 DB 에서는 스스로 거부한다** —
@@ -83,7 +83,7 @@ npm run backup:verify     # 일회용 postgres 컨테이너에 복원해 운영 
 
 ```
 src/
-├── competition/ team/     조회 API (player·match·standing·statistics 는 Phase 2)
+├── competition/ team/ match/ standing/ player/ statistics/  조회 API
 ├── ingestion/
 │   ├── api-football/      HTTP client · 쿼터 스냅샷
 │   ├── l0/                대회·시즌·팀·경기장 + 카탈로그
