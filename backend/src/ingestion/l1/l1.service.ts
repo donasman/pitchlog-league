@@ -30,6 +30,15 @@ import { diffSquads, type OpenEntry, type TeamSnapshot } from './squad-diff.js';
 /** 직전 명단 대비 이 비율 밑으로 줄면 API 이상으로 보고 건너뛴다 */
 const MIN_SQUAD_RATIO = 0.5;
 
+/**
+ * 락이 이보다 오래되면 죽은 프로세스가 남긴 것으로 본다 (2026-09-08).
+ *
+ * L6 가 프로세스 강제 종료로 죽으면 `phase` 가 RANKINGS 로 남아 L1 이 그 대회시즌의 팀을
+ * **영원히** 건너뛴다. L6 catch 의 `fail()` 이 1차 방어이고 이것이 2차다.
+ * 6시간은 백필-1 전체보다 길고 백필-2 한 사이클보다 길다 — 정상 백필을 끊지 않는다.
+ */
+const STALE_LOCK_MS = 6 * 60 * 60 * 1000;
+
 /** 백필이 이 단계에 있으면 그 대회시즌의 팀은 건드리지 않는다 */
 const BACKFILL_IN_PROGRESS: BackfillPhase[] = [
   BackfillPhase.L0,
@@ -215,7 +224,11 @@ export class L1Service {
 
   private async lockedCompetitionSeasonIds(): Promise<Set<number>> {
     const jobs = await this.prisma.backfillJob.findMany({
-      where: { phase: { in: BACKFILL_IN_PROGRESS } },
+      // updated_at 이 오래된 행은 죽은 프로세스가 남긴 락이다 — 무시한다 (STALE_LOCK_MS)
+      where: {
+        phase: { in: BACKFILL_IN_PROGRESS },
+        updatedAt: { gte: new Date(Date.now() - STALE_LOCK_MS) },
+      },
       select: { competitionSeasonId: true },
     });
     return new Set(jobs.map((j) => j.competitionSeasonId));
