@@ -151,6 +151,7 @@
     "mobileHint": "순위·팀 고정 · 나머지 열은 가로로 밀어 보세요",
     "zoneNote": "구역 — 좌측 표시선의 색과 무늬로 구분합니다",
     "uclLeagueNote": "36개 팀 단일 순위표 · 조별리그 아님",
+    "uclGroupNote": "8개 조 × 4팀 · 조별리그",
     "legend": {
       "ucl": "UCL 직행",
       "uclQualPlayoff": "UCL 예선 PO",
@@ -166,6 +167,8 @@
     "noDataDesc": "선택한 대회의 순위 데이터가 아직 집계되지 않았습니다.",
     "leaguePhaseTitle": "리그 페이즈 진행 중",
     "leaguePhaseDesc": "상위 8팀 16강 직행 · 9~24위 플레이오프 · 25위 이하 탈락",
+    "groupPhaseTitle": "조별리그",
+    "groupPhaseDesc": "각 조 1·2위 16강 직행 · 3위 유로파리그 · 4위 탈락",
     "leaguePhaseLink": "녹아웃 대진 보기",
     "errorTitle": "순위 데이터를 불러오지 못했습니다",
     "season": "2026-27 시즌",
