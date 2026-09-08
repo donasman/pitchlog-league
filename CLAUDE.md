@@ -188,9 +188,13 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
   보고에 "통과할 것" · "아마 있을 것" 은 못 쓴다. 통과한 **출력**만 쓴다.
 - 한 판 끝나면 `docs/AGENT_RUNS.md` 에 한 줄. 구조는 이 기록에 근거해서만 고친다.
 
-훅(`.claude/settings.json` → `.claude/hooks/`)이 기계적으로 막는 것: `src/mocks` 수정 · `.env` 수정 ·
-프론트 `.ts/.tsx` 생성 · `schema.prisma` 에 `@relation` 추가 · `dev`/`main` 직접 커밋·push.
-훅이 막으면 우회하지 않는다 — 막힌 이유가 곧 규칙이다.
+훅(`.claude/settings.json` → `.claude/hooks/`)이 기계적으로 막는 것: `src/mocks` 수정 · `.env` 계열 수정 ·
+프론트 `.ts/.tsx` 생성 · `schema.prisma` 의 `relationMode` 를 `"prisma"` 밖으로 바꾸기 ·
+마이그레이션 SQL 의 `FOREIGN KEY` · `dev`/`main` 직접 커밋·push ·
+Bash 안 인라인 스크립트(`python -c` · `node -e` · heredoc)로 파일 쓰기.
+
+**`@relation` 은 막지 않는다** — `relationMode = "prisma"` 라 외래키가 안 생긴다.
+훅이 막으면 우회하지 않는다 — 막힌 이유가 곧 규칙이다. 자세한 것은 `docs/AGENT_WORKFLOW.md` 7장.
 
 ## 코드 작성 규칙
 
