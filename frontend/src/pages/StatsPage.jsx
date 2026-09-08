@@ -76,7 +76,6 @@ function AllStatsPanel({ data, t, locale }) {
       <div className="pl-card" style={{ overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--pl-line)' }}>
           <span className="t-card" style={{ flex: 1 }}>{t('stats.topScorers')}</span>
-          <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>{t('stats.allDesc')}</span>
         </div>
         {scorers.length === 0
           ? <EmptyState />
@@ -108,6 +107,7 @@ function AllStatsPanel({ data, t, locale }) {
               player={p}
               value={p.value}
               unit={t('stats.assists')}
+              breakdown={p.breakdown?.reduce((acc, b) => ({ ...acc, [b.competition]: b.goals }), {})}
               locale={locale}
             />
           ))

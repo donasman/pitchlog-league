@@ -35,6 +35,7 @@ const P3 = API + 13; // 현재 소속 · position null
 const T1 = API + 21;
 const T2 = API + 22;
 const T3 = API + 23;
+const T4 = API + 24; // P1 이 csA2026 에서 이적한 두 번째 팀 (unique [playerId, teamId, csId] 반례)
 
 describe('player · stats API (e2e)', () => {
   let app: INestApplication;
@@ -51,6 +52,7 @@ describe('player · stats API (e2e)', () => {
     team1: 0,
     team2: 0,
     team3: 0,
+    team4: 0,
     player1: 0,
     player2: 0,
     player3: 0,
@@ -114,6 +116,7 @@ describe('player · stats API (e2e)', () => {
     const team1 = await prisma.team.create({ data: { apiTeamId: T1, name: 'Alpha PS', country: 'Testland' } });
     const team2 = await prisma.team.create({ data: { apiTeamId: T2, name: 'Bravo PS', country: 'Testland' } });
     const team3 = await prisma.team.create({ data: { apiTeamId: T3, name: 'Charlie PS', country: 'Testland' } });
+    const team4 = await prisma.team.create({ data: { apiTeamId: T4, name: 'Delta PS', country: 'Testland' } });
 
     // 선수 3명
     const player1 = await prisma.player.create({
@@ -191,6 +194,15 @@ describe('player · stats API (e2e)', () => {
           yellowCards: 2, yellowredCards: null, redCards: 0,
           source: StatsSource.API, asOf,
         },
+        // 이적 반례 — P1 이 csA2026 안에서 team4 로도 뛴다.
+        // unique [playerId, teamId, csId] 가 (P1, T4, csA2026) 을 허용한다는 걸 잠근다.
+        // assists non-null 이지만 앞 team1 행이 assists=null 이라 totals.assists 는 null 유지.
+        {
+          playerId: player1.id, teamId: team4.id, competitionSeasonId: csA2026.id,
+          appearances: 5, lineupsCount: 4, minutes: 320, goals: 2, assists: 1,
+          yellowCards: 0, yellowredCards: 0, redCards: 0,
+          source: StatsSource.API, asOf,
+        },
         {
           playerId: player2.id, teamId: team2.id, competitionSeasonId: csA2026.id,
           appearances: 12, lineupsCount: 12, minutes: 1080, goals: 5, assists: 4,
@@ -258,7 +270,7 @@ describe('player · stats API (e2e)', () => {
       compA: compA.id, compB: compB.id,
       csA2026: csA2026.id, csA2025: csA2025.id,
       csB2026: csB2026.id, csB2025: csB2025.id,
-      team1: team1.id, team2: team2.id, team3: team3.id,
+      team1: team1.id, team2: team2.id, team3: team3.id, team4: team4.id,
       player1: player1.id, player2: player2.id, player3: player3.id,
     });
   }, 60_000);
@@ -296,7 +308,7 @@ describe('player · stats API (e2e)', () => {
     await prisma.competition.deleteMany({ where: { id: { in: compIds } } });
     await prisma.squadEntry.deleteMany({ where: { player: { apiPlayerId: { in: [P1, P2, P3] } } } });
     await prisma.player.deleteMany({ where: { apiPlayerId: { in: [P1, P2, P3] } } });
-    await prisma.team.deleteMany({ where: { apiTeamId: { in: [T1, T2, T3] } } });
+    await prisma.team.deleteMany({ where: { apiTeamId: { in: [T1, T2, T3, T4] } } });
   }
 
   const get = (path: string) => request(app.getHttpServer()).get(path);
@@ -325,24 +337,31 @@ describe('player · stats API (e2e)', () => {
       });
       expect(body.primaryTeam).toMatchObject({ ref: `${T1}-alpha-ps`, apiId: T1 });
 
-      // seasonStats 정렬: 2026(A→B) → 2025(A) = A2026, B2026, A2025
-      const rows: Array<{ competition: { apiId: number }; season: { year: number }; assists: number | null }> = body.seasonStats;
-      expect(rows.map((r) => [r.competition.apiId, r.season.year])).toEqual([
+      // seasonStats 정렬: 2026(A→B) → 2025(A). csA2026 은 이적 반례로 팀 두 개(T1·T4) → 4행.
+      // year desc → competition.displayOrder asc 만 잡히고 팀 tiebreaker 는 없으니
+      // 같은 (COMP_A, 2026) 두 행의 상대 순서는 검증하지 않는다.
+      const rows: Array<{ competition: { apiId: number }; season: { year: number }; team: { apiId: number }; assists: number | null; appearances: number; goals: number; minutes: number }> = body.seasonStats;
+      expect(rows).toHaveLength(4);
+      expect(rows.slice(0, 2).map((r) => [r.competition.apiId, r.season.year])).toEqual([
         [COMP_A, 2026],
-        [COMP_B, 2026],
-        [COMP_A, 2025],
+        [COMP_A, 2026],
       ]);
-      // assists null 유지
-      expect(rows[0].assists).toBeNull();
+      expect([rows[2].competition.apiId, rows[2].season.year]).toEqual([COMP_B, 2026]);
+      expect([rows[3].competition.apiId, rows[3].season.year]).toEqual([COMP_A, 2025]);
+      // csA2026 두 팀이 T1·T4
+      expect(rows.slice(0, 2).map((r) => r.team.apiId).sort((a, b) => a - b)).toEqual([T1, T4]);
+      // assists null 유지 — T1 행에서
+      const csA2026Team1 = rows.find((r) => r.competition.apiId === COMP_A && r.season.year === 2026 && r.team.apiId === T1);
+      expect(csA2026Team1?.assists).toBeNull();
 
-      // totals: assists 는 하나라도 null 이면 null
+      // totals: assists 는 하나라도 null 이면 null (T1 행이 null)
       expect(body.totals.assists).toBeNull();
-      // 나머지 SUM: goals = 8 + 6 + 12 = 26
-      expect(body.totals.goals).toBe(26);
-      // minutes = 800 + 450 + 1600 = 2850
-      expect(body.totals.minutes).toBe(2850);
-      // appearances = 10 + 5 + 20 = 35
-      expect(body.totals.appearances).toBe(35);
+      // 나머지 SUM: goals = 8(T1·A2026) + 2(T4·A2026) + 6(B2026) + 12(A2025) = 28
+      expect(body.totals.goals).toBe(28);
+      // minutes = 800 + 320 + 450 + 1600 = 3170
+      expect(body.totals.minutes).toBe(3170);
+      // appearances = 10 + 5 + 5 + 20 = 40
+      expect(body.totals.appearances).toBe(40);
 
       expect(new Date(body.asOf).toString()).not.toBe('Invalid Date');
     });
@@ -436,6 +455,43 @@ describe('player · stats API (e2e)', () => {
 
       expect(byPlayer.size).toBeGreaterThan(0);
       expect(new Date(body.asOf).toString()).not.toBe('Invalid Date');
+    });
+  });
+
+  describe('선수 이적 — 같은 대회시즌 두 팀 (unique 반례)', () => {
+    it('seasonStats 에 P1 csA2026 의 두 행이 모두 온다 (T1·T4)', async () => {
+      const res = await get(`/api/players/${P1}-player-one`).expect(200);
+      const cs2026Rows = res.body.seasonStats.filter(
+        (r: { season: { year: number }; competition: { apiId: number } }) =>
+          r.season.year === 2026 && r.competition.apiId === COMP_A,
+      );
+      expect(cs2026Rows).toHaveLength(2);
+      const teamIds = cs2026Rows.map((r: { team: { apiId: number } }) => r.team.apiId).sort((a: number, b: number) => a - b);
+      expect(teamIds).toEqual([T1, T4]);
+    });
+
+    it('totals — appearances·goals 는 두 행 포함 SUM, assists 는 null (T1 행 null)', async () => {
+      const res = await get(`/api/players/${P1}-player-one`).expect(200);
+      const rows: Array<{ appearances: number; goals: number }> = res.body.seasonStats;
+      // 4행 전부의 필드 합이 totals 와 같다 (assists 제외)
+      const totalAppearances = rows.reduce((a, r) => a + r.appearances, 0);
+      const totalGoals = rows.reduce((a, r) => a + r.goals, 0);
+      expect(res.body.totals.appearances).toBe(totalAppearances);
+      expect(res.body.totals.goals).toBe(totalGoals);
+      // P1 csA2026 T1 행이 assists=null → totals null (R2/R3: 하나라도 null 이면 합계도 null)
+      expect(res.body.totals.assists).toBeNull();
+    });
+
+    it('assists=null 인 행에서 appearances·goals·yellowCards 는 응답에 살아 있다 (필드 단위 null)', async () => {
+      const res = await get(`/api/players/${P1}-player-one`).expect(200);
+      const nullAssistRow = res.body.seasonStats.find(
+        (r: { assists: number | null }) => r.assists === null,
+      );
+      expect(nullAssistRow).toBeDefined();
+      // R2/R3: assists null 은 필드 단위 · 시즌 전체 값을 가리지 않는다
+      expect(nullAssistRow.appearances).toBeGreaterThan(0);
+      expect(nullAssistRow.goals).toBeGreaterThanOrEqual(0);
+      expect(nullAssistRow.yellowCards).toBeGreaterThanOrEqual(0);
     });
   });
 });
