@@ -388,6 +388,102 @@ export function normalizeStanding(row, { format, groupCount = 1 } = {}) {
   }
 }
 
+// ─── 선수 · 통계 순위 ─────────────────────────────────────────
+
+/**
+ * 선수 시즌 통계 한 행 → 화면(PlayerPage) 이 쓰는 형태.
+ * `assists` 는 백엔드가 null 을 줄 수 있다 — 0 으로 채우지 않고 null 을 그대로 넘겨
+ * StatCell 이 `dataStatus === 'unavailable'` 로 "—" 을 그리게 한다 (DATA_RULES §3).
+ * private — 파일 밖으로 노출하지 않는다.
+ * @param {object} s  PlayerSeasonStatDto
+ */
+function normalizePlayerSeasonStat(s) {
+  const alias = COMPETITION_ALIAS[s.competition?.apiId] ?? null
+  return {
+    competitionId:   alias?.id ?? s.competition?.ref ?? null,
+    competitionName: s.competition?.displayName ?? null,
+    seasonLabel:     s.season?.label ?? null,
+    teamName:        s.team?.displayName ?? null,
+    appearances:     s.appearances,
+    starts:          s.starts,
+    minutesPlayed:   s.minutes,
+    goals:           s.goals,
+    // ★ assists 는 null 유지 — 측정되지 않은 값을 0 으로 위장하지 않는다
+    assists:         s.assists,
+    yellowCards:     s.yellowCards,
+    yellowredCards:  s.yellowredCards,
+    redCards:        s.redCards,
+    dataStatus:      s.assists === null ? 'unavailable' : 'confirmed',
+  }
+}
+
+/**
+ * 선수 상세 (PlayerDetailDto) → PlayerPage 가 소비하는 { player, allStats, team, totals } 묶음.
+ * player.slug 는 백엔드 ref 를 그대로 쓴다 — 라우팅과 상세 조회 경로가 같은 식별자를 공유한다.
+ * @param {object} dto  PlayerDetailDto
+ */
+export function normalizePlayerDetail(dto) {
+  const team = dto.primaryTeam ? normalizeTeam(dto.primaryTeam) : null
+  return {
+    player: {
+      id:          String(dto.apiId),
+      slug:        dto.ref,
+      name:        dto.displayName,
+      shortName:   dto.shortDisplayName,
+      nationality: dto.nationality,
+      dateOfBirth: dto.birthDate,
+      position:    dto.position,
+      number:      dto.jerseyNumber,
+      teamId:      team?.id ?? null,
+      teamSlug:    team?.slug ?? null,
+      teamName:    team?.name ?? null,
+      photoUrl:    dto.photoUrl,
+    },
+    allStats: (dto.seasonStats ?? []).map(normalizePlayerSeasonStat),
+    team,
+    totals: {
+      appearances: dto.totals?.appearances ?? 0,
+      minutes:     dto.totals?.minutes ?? 0,
+      goals:       dto.totals?.goals ?? 0,
+      // ★ 하나라도 assists=null 이면 총합도 null 이어야 한다 — 백엔드가 판정해 준 값을 그대로 신뢰
+      assists:     dto.totals?.assists ?? null,
+      yellowCards: dto.totals?.yellowCards ?? 0,
+      redCards:    dto.totals?.redCards ?? 0,
+    },
+    asOf: dto.asOf,
+  }
+}
+
+/**
+ * 통계 순위 한 행(RankingItemDto) → StatsPage 가 소비하는 RankRow.
+ * `breakdown` 은 전체 합산 모드(competition/season 이 null 일 때)에만 딸려 온다 —
+ * 대회별 모드에서는 undefined → null 로 넘긴다(StatsPage 는 falsy 판정으로 안 그린다).
+ * breakdown 항목의 필드명은 `goals` 로 통일한다 — StatsPage:90 이 `b.goals` 로 접근한다.
+ * @param {object} dto  RankingItemDto
+ */
+export function normalizeStatsRow(dto) {
+  const t = dto.team
+  return {
+    rank:         dto.rank,
+    playerId:     String(dto.player?.apiId ?? ''),
+    playerSlug:   dto.player?.ref ?? null,
+    playerName:   dto.player?.displayName ?? '',
+    teamName:     t?.shortDisplayName || t?.displayName || '',
+    teamInitials: t?.code || deriveInitials(t?.shortDisplayName || t?.displayName || ''),
+    teamColor:    teamColor(t?.apiId),
+    value:        dto.value,
+    breakdown:    Array.isArray(dto.breakdown)
+      ? dto.breakdown.map(b => ({
+          competition: COMPETITION_ALIAS[b.competition?.apiId]?.initials
+                        ?? b.competition?.shortDisplayName
+                        ?? '?',
+          // ★ 필드명 'goals' — 도움 순위도 같은 형태다(StatsPage 는 breakdown 을 득점에서만 그린다)
+          goals:       b.value,
+        }))
+      : null,
+  }
+}
+
 /**
  * 표에 실제로 든 조 수. 단일 표 대회는 수집 때 `group_name` 에 대회 이름이 채워지므로
  * (`backend l2.service.ts` 의 `r.group || label`) "값이 있으면 조별리그" 가 성립하지 않는다.

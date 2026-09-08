@@ -16,4 +16,4 @@
 
 | 날짜 | 작업 | 브랜치 | ① 멈춤 | ② 검증 출력 | ③ 범위 | ④ 지시문 | 메모 |
 |---|---|---|---|---|---|---|---|
-| | | | | | | | |
+| 2026-09-08 | 선수 상세 + 통계 랭킹 실 API 전환 (Player·Statistics 모듈 · live.js 3함수) | `feature/player-stats-live-api` (#34) | ✅ 04 에서 멈춤 | ✅ verify·tsc·e2e raw 출력 붙임 | ✅ 지정 파일만 (백 10 · 프 4) | ✅ 견딤 | R1 훅 판정 오류(mock.js↔mocks/) — 사용자가 잡아 재정의 · e2e afterAll hookTimeout 누락으로 06-A BLOCK → implementer 되돌려 해소 · backend-verifier 가 프론트 diff 를 자기 계약 밖으로 오판(병렬 파이프라인 스코프 오해) · 원안 6함수 → 프론트 grep 으로 3함수만 살아있음 발견 |
