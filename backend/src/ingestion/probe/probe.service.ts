@@ -107,23 +107,29 @@ export class ProbeService {
     return { rows, totalCalls, stoppedByQuota };
   }
 
-  /** 대회 · 시즌 · pages · 5시즌 추정 콜(pages × SEASON_YEARS 개수, 참고값) */
+  /**
+   * 대회 · 시즌 · pages · 합계.
+   *
+   * ⚠ 예전엔 각 줄에 `pages × SEASON_YEARS.length` 를 찍고 그걸 다 더했다 (2026-09-08 수정).
+   * `--all-seasons` 는 **이미 5시즌을 각각 잰다** — 한 줄이 한 시즌이다. 거기에 또 ×5 를 하면
+   * 5배 부풀어 4,713 → 23,565 가 나왔다. 실제 수집 콜 수는 pages 의 단순 합이다.
+   */
   private logTable(rows: readonly ProbeRow[], totalCalls: number, stoppedByQuota: boolean): void {
     const nameWidth = Math.max(10, ...rows.map((r) => r.competition.length));
-    this.logger.log(`${'대회'.padEnd(nameWidth)}  시즌   pages  5시즌추정콜`);
+    this.logger.log(`${'대회'.padEnd(nameWidth)}  시즌   pages`);
     let estimate = 0;
     for (const r of rows) {
-      const est = r.pages === null ? null : r.pages * SEASON_YEARS.length;
-      if (est !== null) estimate += est;
+      if (r.pages !== null) estimate += r.pages;
       this.logger.log(
-        `${r.competition.padEnd(nameWidth)}  ${r.seasonYear}  ${String(r.pages ?? '-').padStart(5)}  ${String(est ?? '-').padStart(10)}` +
+        `${r.competition.padEnd(nameWidth)}  ${r.seasonYear}  ${String(r.pages ?? '-').padStart(5)}` +
           (r.error === null ? '' : `  ERR ${r.error}`),
       );
     }
     const failed = rows.filter((r) => r.error !== null).length;
+    const seasons = new Set(rows.map((r) => r.seasonYear)).size;
     this.logger.log(
-      `probe-players ${stoppedByQuota ? '중단(쿼터 소진)' : '완료'} — ${rows.length}행 · ${totalCalls}콜 · 5시즌 추정 합계 ${estimate}콜` +
-        (failed > 0 ? ` · 실패 ${failed}` : ''),
+      `probe-players ${stoppedByQuota ? '중단(쿼터 소진)' : '완료'} — ${rows.length}행(${seasons}시즌) · ${totalCalls}콜 · ` +
+        `수집 예상 합계 ${estimate}콜` + (failed > 0 ? ` · 실패 ${failed}` : ''),
     );
   }
 }
