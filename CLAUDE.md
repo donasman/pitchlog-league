@@ -15,13 +15,13 @@
 pitchlog-league/                 ← 모노레포 루트
 ├── backend/                     ← NestJS + TypeScript + Prisma
 │   ├── src/
-│   │   ├── competition/ team/   ← 조회 API (player·match·standing·statistics 는 Phase 2)
+│   │   ├── competition/ team/ match/ standing/ player/ statistics/   ← 조회 API
 │   │   ├── ingestion/           ← api-football · l0 · l1 · l2 · l6 · backfill · probe · logos · screen-scope.ts
 │   │   ├── cli/                 ← ingest CLI (status · l0 · l1 · l2 · l6 · probe-players · logos)
 │   │   └── common/ config/ prisma/ health/
 │   ├── prisma/                  ← schema·migration·partial-indexes.sql
 │   ├── scripts/                 ← backup.mjs · restore-check.mjs (DB 백업·복원 리허설)
-│   └── test/                    ← e2e 9파일 74건 (단위는 src 안 *.spec.ts 53건)
+│   └── test/                    ← e2e 10파일 82건 (단위는 src 안 *.spec.ts 53건)
 ├── frontend/                    ← React + Vite + JavaScript, Node 22 고정
 │   └── src/
 │       ├── pages/               ← teams, players, matches, standings, stats
@@ -263,9 +263,9 @@ API-Football API 키는 환경변수로만 주입한다.
 | Phase | 내용 | 검증 기준 | 상태 |
 |---|---|---|---|
 | **0** | 안전장치 + 배포 (PoC 는 재정의 — Railway + Pages + CORS) | 8-2 DoD 4항목 | 🚧 CI·Ruleset·pre-commit·Supabase·스켈레톤 완료 / 배포는 `NEXT_STEPS` 1장 4번 |
-| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — 스키마 29모델 · L0 · 조회 API 7개 · 백업·복원 리허설 2회 · **L1 스쿼드**(155팀·선수 4,863) / L1 #9~#11 남음 |
+| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — 스키마 29모델 · L0 · 조회 API 10개 · 백업·복원 리허설 2회 · **L1 스쿼드**(155팀·선수 4,863) / L1 #9~#11 남음 |
 | **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | 🚧 **백필-1 완료(09-08)** — L2 5시즌 · L6 시즌 집계(선수 30,925 · 랭킹 2,335 · 팀 489) · `backfill_jobs` 30 DONE / 다음은 L3·L5 경기 상세 (`NEXT_STEPS` 1장 3번) |
-| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 (화면·i18n 완료 · **실 API 첫 연결**(대회·팀) / 나머지 화면 전환·배포 미착수) |
+| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 (화면·i18n 완료 · **실 API 연결**(대회·팀·경기·순위·홈·팀 일정·**선수·통계 09-08 PR #34** · UCL 조별) / 컵·알림·AI 화면 · CompetitionHub 랭킹 · 배포 미착수) |
 | **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🚧 L6 수집 코드는 09-08 에 들어갔다(백필-1). 주기 보정은 스케줄러 뒤 |
 
 > ⚠️ **범위가 바뀌었다 (2026-09-04~06).** 원래 Phase 1은 EPL 단독이었고 Phase 4가 다중화였으나,
@@ -278,7 +278,7 @@ Phase 0 DoD, PR 단위 분해(#1~#6), Phase 1의 구체적 작업 순서는 `V2_
 
 Phase 3은 백엔드보다 먼저 Mock Data 기반으로 진행했다. `services/api.js` 는 이제
 **`VITE_USE_MOCK` 으로 `mock.js`·`live.js` 중 하나를 고르는 전환 스위치**다 (09-07).
-대회·팀은 실 API 를 타고, 경기·순위·선수는 백엔드에 아직 없어 `NotImplementedError` 로 드러난다.
+대회·팀·경기·순위·**선수·통계**는 실 API 를 타고, **컵·알림·AI · CompetitionHub 랭킹**은 백엔드에 아직 없어 `NotImplementedError` 로 드러난다.
 남은 것은 나머지 화면의 실 API 전환과 배포다.
 **09-07 중간 점검(`docs/PLAN_REVIEW.md`)** 이 순서를 확정했다 — 기록 백필 먼저, 실시간은 그 뒤.
 현재 진행 상황과 다음 순서는 `docs/NEXT_STEPS.md` 1장이 기준이다.
@@ -312,7 +312,7 @@ git checkout dev && git pull origin dev
 
 ```bash
 npm run verify                  # prisma validate · typecheck · lint · 단위 테스트
-npm run test:e2e                # e2e 9파일 74건 — l0·l1·l2·l6 는 로컬 DB·CI 에서만 (원격 DB 가드)
+npm run test:e2e                # e2e 10파일 82건 — l0·l1·l2·l6 는 로컬 DB·CI 에서만 (원격 DB 가드)
 
 npm run ingest -- status        # API 쿼터 스냅샷
 npm run ingest -- l0            # 대회·시즌·팀·경기장
