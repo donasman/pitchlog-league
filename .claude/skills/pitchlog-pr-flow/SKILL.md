@@ -26,19 +26,34 @@ description: PitchLog 저장소에서 브랜치 → 검증 → 커밋 → push/P
    ```
    git push origin <브랜치>
    ```
-   PR base 는 `dev`. CI 2잡(`frontend-verify`·`backend-verify`)이 **항상** 돈다 — `pull_request` 에 paths 필터를 두면 required check 가 영원히 대기하므로 다시 넣지 않는다. 같은 브랜치로 PR 을 두 번 만들지 않는다 — 머지한 브랜치는 지운다.
-5. **머지 후 정리** — 사용자에게:
+   **push 만으로는 PR 이 안 생긴다.** 브랜치만 올라간 채 "머지 버튼이 안 보인다" 가 09-08 에 두 번 있었다.
+   `gh pr create --base dev` 를 주거나, 안 되면 compare 링크를 준다:
+   `https://github.com/donasman/pitchlog-league/compare/dev...<브랜치>`
+
+   PR base 는 `dev`. CI 2잡(`frontend-verify`·`backend-verify`)이 **항상** 돈다 — `pull_request` 에 paths 필터를 두면 required check 가 영원히 대기하므로 다시 넣지 않는다.
+
+   **"This branch is out-of-date" 가 뜨면 CI 를 기다리지 말고 Update branch 를 먼저 누른다.** 커밋이 하나 더 생겨 CI 가 처음부터 다시 돌기 때문에, 기다렸다 누르면 두 번 돈다. 누르기 전에 충돌만 확인한다:
+   ```
+   git fetch origin --prune
+   BASE=$(git merge-base <브랜치> origin/dev)
+   git merge-tree "$BASE" <브랜치> origin/dev | grep -c "<<<<<<<"
+   ```
+5. **머지 후 정리 — 건너뛰지 않는다.** 로컬과 원격 브랜치를 **둘 다** 지운다. 이걸 미루면 다음 커밋이 그 브랜치에 얹혀 4번의 out-of-date 로 돌아온다 (09-08 에 세 번: #28 · #29 · #32).
    ```
    git checkout dev
    git fetch origin --prune
-   git pull origin dev
+   git pull --ff-only origin dev
    git branch -d <브랜치>
+   git push origin --delete <브랜치>
    ```
    `git fetch origin/dev` 는 틀린 문법이다. `-d` 가 거부하면 아직 머지 안 된 것이다 — `-D` 로 밀지 않는다.
+   `--ff-only` 는 로컬 dev 에 뭔가 섞여 있을 때 조용히 머지 커밋을 만드는 대신 멈추게 한다.
+
+   **머지된 브랜치에 새 커밋을 얹지 않는다.** 후속 작업은 최신 `dev` 에서 브랜치를 새로 판다 — 같은 브랜치에 얹으면 PR 을 다시 열어야 하고 매번 out-of-date 가 뜬다.
 6. **실 적재가 필요하면** — 머지 뒤 Windows 에서 `npm run ingest -- <l0|l1|l2|logos|status>`. 결과 JSON 을 받아 문서 수치를 갱신한다(`pitchlog-docs-sync`).
 
 ## 자주 걸린 것
 
-- "This branch is out-of-date" 배너: 머지된 브랜치에 다시 커밋한 경우. Update branch 로 해결되지만 애초에 새 브랜치를 판다.
+- "This branch is out-of-date" 배너: 머지된 브랜치에 다시 커밋한 경우다. 5번을 지켰으면 안 생긴다.
 - e2e 파일끼리 데이터가 섞여 l0 의 전역 카운트가 깨짐: 새 e2e 는 `afterAll` 에서 자기 픽스처를 전부 지운다(`pitchlog-e2e-fixture`).
 - 실측이 예측을 뒤집으면(09-07 에 네 번) 문서에 "예측이 틀렸고 코드가 맞았다" 를 남긴다 — 숨기지 않는다.
