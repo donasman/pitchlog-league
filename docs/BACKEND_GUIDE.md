@@ -103,6 +103,13 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 - 실 키 smoke: `npm run smoke:assistant` — golden.json 에서 5건(답 가능 3 + tool:null 2)을 실행해 환각 검사(answer 의 숫자가 data 에 실제 존재하는지)까지 확인. 키 없으면 SKIP 하고 exit 0.
 - SDK: `@google/genai@2.21.0` (function calling). 모델은 `GEMINI_MODEL` (기본 `gemini-3.5-flash`).
 
+## 응답 캐시 · 페이지 상한
+
+- **`/api/*` 전역 인터셉터** — `common/cache-headers.interceptor.ts` 가 응답 본문 sha256 로 `ETag` (weak) 을 만들고 `Cache-Control: public, max-age=60` 을 붙인다. `If-None-Match` 가 일치하면 304 로 짧게 끝낸다. `/health` 는 `/api` prefix 밖이라 자연 제외.
+- **`/api/matches` 페이지 상한** — `limit` (기본 100 · 최대 500) 을 받고 응답에 `total`·`hasMore` 를 함께 넣는다. 이 계약이 없으면 시즌 전체(수백건 · 490KB 실측)를 통째로 내려보낸다.
+- assistant 도구 `list_matches` 는 자체 컷을 유지한다 (기본 50 · 최대 200 · wrapper 의 `truncated`·`total`).
+- 서버 in-memory 캐시·Redis 는 아직 넣지 않는다 — 서버 한 대 · 수집 시점에만 데이터가 바뀐다. 서버화 이후 다시 본다.
+
 ## 환경변수
 
 `.env`, `.env.local`, 비밀 키 파일은 커밋하지 않는다. 애플리케이션 시작 시 환경변수 schema를
