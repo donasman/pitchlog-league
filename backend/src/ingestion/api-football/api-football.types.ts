@@ -182,6 +182,143 @@ export interface ApiPlayerSeason {
   statistics: ApiPlayerSeasonStat[];
 }
 
+/**
+ * `/fixtures/lineups?fixture=` — 팀당 한 항목, 총 2개.
+ * `coach.id` 는 null 일 수 있다 (실측). substitutes 의 `grid` 는 항상 null (벤치).
+ */
+export interface ApiFixtureLineupItem {
+  team: {
+    id: number;
+    name: string;
+    logo: string;
+    /** UI 색상 팔레트 — 사용하지 않는다. 실측 그대로 남겨둔다 */
+    colors?: unknown;
+  };
+  coach: {
+    id: number | null;
+    name: string;
+    photo: string | null;
+  };
+  /** "4-2-3-1" 등 */
+  formation: string;
+  startXI: Array<{
+    player: {
+      id: number;
+      name: string;
+      number: number;
+      pos: string | null;
+      grid: string | null;
+    };
+  }>;
+  substitutes: Array<{
+    player: {
+      id: number;
+      name: string;
+      number: number;
+      pos: string | null;
+      /** 벤치는 항상 null */
+      grid: string | null;
+    };
+  }>;
+}
+
+/**
+ * `/fixtures/events?fixture=` — 이벤트 배열.
+ * 응답이 시간순이 **아니다** (실측 fixture 1557387: 90+5 카드가 90분 교체 앞에 옴).
+ * 정렬은 (time.elapsed asc, time.extra asc, 원 index asc) 로 매핑 계층에서 잡는다.
+ * `player.id` 가 lineups 응답에 없을 수도 있다 (D9 실측).
+ */
+export interface ApiFixtureEventItem {
+  time: {
+    elapsed: number | null;
+    /** 정규시간 외 추가 시간. 정렬용으로만 쓴다 — 저장 컬럼(minute_extra)은 NULL 유지 (D8) */
+    extra: number | null;
+  };
+  team: {
+    id: number | null;
+    name: string;
+    logo: string;
+  };
+  player: {
+    id: number | null;
+    name: string | null;
+  };
+  assist: {
+    id: number | null;
+    name: string | null;
+  };
+  /** 'Goal' | 'Card' | 'subst' | 'Var' 등. enum 으로 묶지 않는다 */
+  type: string;
+  /** 'Normal Goal' | 'Yellow Card' | 'Substitution 1' 등 */
+  detail: string;
+  comments: string | null;
+}
+
+/**
+ * `/fixtures/statistics?fixture=` — 팀당 한 항목, 총 2개.
+ * value 는 `number | string | null` (퍼센트 "58%" 등이 문자열로 온다).
+ */
+export interface ApiFixtureStatisticsItem {
+  team: {
+    id: number;
+    name: string;
+    logo: string;
+  };
+  statistics: Array<{
+    type: string;
+    value: number | string | null;
+  }>;
+}
+
+/**
+ * `/fixtures/players?fixture=` — 팀당 한 항목, 총 2개.
+ * `players[].statistics` 는 실측상 길이 1 배열이지만 배열이다.
+ * API 오타(`commited`)는 파일 규칙대로 그대로 둔다.
+ */
+export interface ApiFixturePlayersItem {
+  team: {
+    id: number;
+    name: string;
+    logo: string;
+    update: string;
+  };
+  players: Array<{
+    player: {
+      id: number;
+      name: string;
+      photo: string;
+    };
+    statistics: Array<{
+      games?: {
+        minutes: number | null;
+        number: number | null;
+        position: string | null;
+        /** 문자열이다 — "7.062500" */
+        rating: string | null;
+        captain: boolean;
+        substitute: boolean;
+      };
+      offsides?: number | null;
+      shots?: { total: number | null; on: number | null };
+      goals?: { total: number | null; conceded: number | null; assists: number | null; saves: number | null };
+      passes?: { total: number | null; key: number | null; accuracy: string | number | null };
+      tackles?: { total: number | null; blocks: number | null; interceptions: number | null };
+      duels?: { total: number | null; won: number | null };
+      dribbles?: { attempts: number | null; success: number | null; past: number | null };
+      fouls?: { drawn: number | null; committed: number | null };
+      cards?: { yellow: number; red: number };
+      penalty?: {
+        won: number | null;
+        /** API 오타 — 그대로 둔다 (매핑 계층에서 penalty_committed 로 옮긴다) */
+        commited: number | null;
+        scored: number | null;
+        missed: number | null;
+        saved: number | null;
+      };
+    }>;
+  }>;
+}
+
 /** `/teams/statistics?league=&season=&team=` — 팀 하나의 시즌 집계 */
 export interface ApiTeamStatistics {
   league: { id: number; name: string | null; country: string | null; logo: string | null; flag: string | null; season: number };
