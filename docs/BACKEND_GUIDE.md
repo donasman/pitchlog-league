@@ -87,11 +87,15 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 - 최초 연결과 재연결은 REST 풀 싱크 후 room을 구독한다.
 - 단일 인스턴스에서는 Redis를 사용하지 않는다. 다중 Gateway 확장 시 Redis adapter를 추가한다.
 
-## AI
+## AI · Assistant (MCP)
 
 - LLM은 DB·외부 API에 직접 접근하지 않는다.
-- 집계·비교·순위·진출 판정은 결정적 application 계층이 수행한다.
-- 도구 인자와 결과, 데이터 기준 시각을 기록하고 UI에 근거로 제공한다.
+- 집계·비교·순위·진출 판정은 결정적 application 계층이 수행한다. LLM 은 그 계층을 **MCP 도구**로만 부른다.
+- 도구 계층은 `backend/src/assistant/` — 6도메인 서비스를 얇게 감싼 어댑터 10개다. Prisma 직접 접근·SQL 생성 금지.
+- MCP stdio 서버는 `backend/src/cli/mcp.ts` (`npm run mcp`). Claude Desktop 등이 tools/list · tools/call 로 접근.
+- 도구 반환은 `{ tool, args, asOf, data }` wrapper. `data` 는 조회 API DTO 그대로 — 프론트/AI 가 같은 계약을 본다. `list_matches` 는 필요 시 `truncated`/`total` 도 함께.
+- 도구 인자 · 반환 · `asOf` 를 응답에 남긴다. UI 는 "근거 카드" 로 이 값을 그대로 보여준다.
+- 도구 description 최상단에 3상태 문구(0=실측 0 · null=측정 안 됨 · 미제공 플래그) 를 박는다 — LLM 이 null 을 0 으로 접지 않도록.
 
 ## 환경변수
 
