@@ -90,6 +90,7 @@
 | 7 | L6 보정 · 한국어 팀명 110 · L1 #9~#11 · 알림 · AI · L2-b 녹아웃 tie (2027-02) | 8-d·9·11 | | |
 | ~~8~~ | ~~**챗봇 도구 층 (MCP)**~~ ✅ 09-08 PR #38 — `backend/src/assistant/` 도구 10개(list_competitions·get_competition·list_teams·get_team·list_matches·get_match·get_standings·get_top_scorers·get_top_assisters·get_player) · `cli/mcp.ts` stdio 서버 · golden.json 15건 · e2e 25/25. LLM 호출·채팅 UI 없음 | 6·9 | 0 | ✅ LLM 이 결정적 계층을 부를 배관 |
 | ~~9~~ | ~~**즐겨찾기 (팀)**~~ ✅ 09-09 PR #39 — 팀만 로컬 저장(`localStorage: pitchlog-favorites`, 상한 5). `FavoritesContext`·`FavoriteToggle`·홈 `MyTeamsSection`(다음 경기·최근 결과·리그 순위). 선수·대회 북마크는 후속 판 | — | 0 | ✅ 즐겨찾기 목록 화면 |
+| ~~10~~ | ~~**챗봇 LLM 연결 + 로고 적용**~~ ✅ 09-09 PR #<TBD> — `POST /api/assistant` (Gemini · @google/genai@2.21.0 · 상한 5호출/30초 · 메모리 rate limit) · `AssistantPanel` 실 API 연결 · 저장돼 있는데 안 쓰이던 팀·대회 로고 161개를 순위표·통계·홈 대회 카드에 적용(`normalizeStanding`·`normalizeStatsRow`·leader shape 에 `teamLogoUrl` 추가). 배포·서버화는 후속 판 | 6·9 | 0 | ✅ 자연어 질문 · 화면에 로고 |
 
 4번의 6일은 손이 아니라 쿼터가 쓰는 시간이다. 그동안 남은 프론트 화면(경기 상세 탭 · CompetitionHub 랭킹) ·
 한국어 팀명 CSV 를 만든다.
