@@ -73,14 +73,22 @@ export class MatchService {
       where.OR = [{ homeTeamId: team.id }, { awayTeamId: team.id }];
     }
 
-    const rows = await this.prisma.match.findMany({
-      where,
-      include: MATCH_INCLUDE,
-      orderBy: [{ kickoffAt: 'asc' }, { apiFixtureId: 'asc' }],
-    });
+    // 페이지 상한 — 기본 100 · 최대 500 (DTO 에서 검증됨). total 은 limit 적용 전 카운트라 count/findMany 를 한 트랜잭션으로.
+    const limit = q.limit ?? 100;
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.match.count({ where }),
+      this.prisma.match.findMany({
+        where,
+        include: MATCH_INCLUDE,
+        orderBy: [{ kickoffAt: 'asc' }, { apiFixtureId: 'asc' }],
+        take: limit,
+      }),
+    ]);
     const items = rows.map((m) => this.toDto(m));
     return {
       items,
+      total,
+      hasMore: total > items.length,
       season,
       asOf: latestOf(...rows.flatMap((m) => [m.asOf, m.updatedAt])),
     };

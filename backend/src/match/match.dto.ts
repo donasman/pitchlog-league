@@ -4,6 +4,7 @@
  * CompetitionRefDto · SeasonRefDto · ScoreDto · RoundDto · MatchVenueDto 는 standing 도 같이 쓴다.
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { CompetitionFormat, CompetitionType, MatchLeg, StatsState, type Competition } from '../generated/prisma/client.js';
 import { NamesDto, names } from '../common/names.dto.js';
@@ -39,6 +40,14 @@ export class MatchListQueryDto {
   @IsOptional()
   @IsString()
   team?: string;
+
+  @ApiPropertyOptional({ description: '한 응답의 최대 경기 수. 기본 100, 최대 500', minimum: 1, maximum: 500, default: 100, example: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  limit?: number;
 }
 
 export class CompetitionRefDto extends NamesDto {
@@ -192,8 +201,14 @@ export class MatchDto {
 }
 
 export class MatchListDto {
-  @ApiProperty({ type: [MatchDto], description: '킥오프 오름차순. 페이지 없음' })
+  @ApiProperty({ type: [MatchDto], description: '킥오프 오름차순. limit 만큼 앞에서 자른다' })
   items!: MatchDto[];
+
+  @ApiProperty({ description: '필터 조건을 만족하는 전체 경기 수 (limit 적용 전)', example: 342 })
+  total!: number;
+
+  @ApiProperty({ description: 'items.length < total — 잘렸는지 여부. 프론트가 limit 을 늘려 다시 부르는 판단에 쓴다' })
+  hasMore!: boolean;
 
   @ApiPropertyOptional({ type: SeasonSummaryDto, nullable: true, description: 'competition 지정 시 실제로 적용된 시즌. 생략 시 null' })
   season!: SeasonSummaryDto | null;

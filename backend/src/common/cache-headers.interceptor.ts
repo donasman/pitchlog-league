@@ -31,7 +31,10 @@ export class CacheHeaderInterceptor implements NestInterceptor {
         res.setHeader('Cache-Control', 'public, max-age=60');
         const ifNone = req.header('if-none-match');
         if (ifNone && ifNone === etag) {
-          res.status(304).end();
+          // 304 는 body 를 보내지 않는다. Express send() 가 statusCode 304 면
+          // Content-Type · Content-Length 를 자동으로 제거하고 body 를 무시한다 —
+          // 직접 res.end() 를 호출하면 그 다음 Nest reply(res.send) 가 헤더 제거를 시도해 ERR_HTTP_HEADERS_SENT.
+          res.status(304);
           return undefined;
         }
         return body;
