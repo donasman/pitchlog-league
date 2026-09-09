@@ -30,6 +30,10 @@ import { AssistantToolRegistry } from './assistant-tool.registry.js';
 import type { AssistantTool, ToolResult } from './assistant.types.js';
 
 export const MAX_TOOL_CALLS = 5;
+/** step 상한과 별도로, 실제로 registry.call 을 도는 총 실행 수 상한.
+ *  step 상한(5)은 왕복 상한이지만, 한 step 안에서 모델이 다수 functionCall 을 반환할 수 있어
+ *  실행 수가 폭주하는 걸 못 막는다. MAX_TOOL_EXECUTIONS 는 이 실행 수 자체를 캡한다. */
+export const MAX_TOOL_EXECUTIONS = 8;
 export const REQUEST_TIMEOUT_MS = 30_000;
 
 export const SYSTEM_PROMPT =
@@ -59,6 +63,7 @@ export interface AskResult {
 export interface AskOpts {
   timeoutMs?: number;
   maxToolCalls?: number;
+  maxToolExecutions?: number;
 }
 
 /**
@@ -140,10 +145,12 @@ export class GeminiService {
     }
 
     const maxToolCalls = opts.maxToolCalls ?? MAX_TOOL_CALLS;
+    const maxExecutions = opts.maxToolExecutions ?? MAX_TOOL_EXECUTIONS;
     const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
     const evidence: AskEvidence[] = [];
     const data: unknown[] = [];
+    let executions = 0;
     let truncated = false;
 
     // 도구 10개를 FunctionDeclaration 으로 변환 — 매 호출마다 같은 배열
@@ -216,7 +223,16 @@ export class GeminiService {
         );
 
         const responseParts: Array<{ functionResponse: { name: string; response: Record<string, unknown> } }> = [];
+        let outerBreak = false;
         for (const c of calls) {
+          // 실행 수 상한(MAX_TOOL_EXECUTIONS): step 상한과 별개로, 한 step 안에서 다수 functionCall 이 몰릴 때도
+          // 서비스 호출이 폭주하지 않도록 실행 카운트 자체를 캡한다. 발동 시 이 도구부터는 실행하지 않고 outer 도 break.
+          if (executions >= maxExecutions) {
+            truncated = true;
+            outerBreak = true;
+            break;
+          }
+          executions++;
           const name = c.name ?? '';
           const args = c.args ?? {};
           let result: ToolResult;
@@ -241,6 +257,7 @@ export class GeminiService {
           });
         }
         contents.push({ role: 'user', parts: responseParts });
+        if (outerBreak) break;
       }
 
       // 이론상 여기 도달 안 함 (루프 안에서 return) — 안전망
