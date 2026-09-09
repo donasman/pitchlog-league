@@ -270,6 +270,7 @@ TypeScript 타입, `interface`, `type` 선언, `as const` 등 JavaScript에서 �
 - 이미지 너비와 높이를 지정하여 레이아웃 이동을 줄임
 - 화면 밖 이미지는 `loading="lazy"`로 불러옴
 - 로고 로딩 실패 시 팀 이니셜 배지를 표시함
+- 팀·대회 로고는 `services/normalize.js` 의 `localLogo(kind, apiId, sourceUrl)` 가 로컬 경로(`/logos/{kind}/{apiId}.webp`)로 바꾼다. 순위표(`normalizeStanding` 의 `teamLogoUrl`)·통계 랭킹(`normalizeStatsRow`)·대회 선두 팀(`live.js:fetchOverview` leader)·홈 대회 카드도 이 값을 쓴다. `TeamBadge` 는 로드 실패 시 이니셜로 폴백한다.
 - WebP 또는 SVG를 우선 사용함
 - 선수·경기 목록은 페이지네이션 또는 구간 로딩을 사용함
 - 차트·포메이션처럼 큰 컴포넌트는 지연 로딩함

@@ -389,6 +389,9 @@
     "evidenceAsOf": "As of",
     "evidenceSource": "Source",
     "asOfSuffix": "as of",
+    "dataLabel": "Data",
+    "showData": "Show source data",
+    "hideData": "Hide source data",
     "dataNote": "Numbers in answers are retrieved data. Source and timestamp shown below.",
     "thinking": "Looking up",
     "thinkingTools": "Tools",
@@ -403,7 +406,14 @@
     "comparison": "Comparison",
     "liveNote": "Live match — numbers change as the game progresses.",
     "recoverTip": "Get a notification when stats are confirmed?",
-    "clearChat": "Clear"
+    "clearChat": "Clear",
+    "error": {
+      "not_configured": "Assistant is not configured yet. Please contact the administrator.",
+      "rate_limited": "Please try again in a moment.",
+      "model_error": "Failed to generate an answer. Please try again.",
+      "timeout": "Response is taking too long. Please try again.",
+      "generic": "An error occurred."
+    }
   },
   "notif": {
     "bell": "Notifications",

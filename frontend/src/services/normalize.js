@@ -403,9 +403,12 @@ export function normalizeStanding(row, { format, groupCount = 1 } = {}) {
     groupName: row.groupName ?? null,
     teamId: row.team.ref,
     teamSlug: row.team.ref,
+    teamApiId: row.team.apiId,
     teamName: row.team.displayName,
     teamInitials: teamInitials(row.team),
     teamColor: teamColor(row.team.apiId),
+    // 로고는 파생 필드 — 화면·홈 카드가 손으로 localLogo 를 만들지 않도록 여기서 한 번에 만든다
+    teamLogoUrl: localLogo('teams', row.team.apiId, row.team.logoUrl),
     played: row.played,
     won:    row.win,
     drawn:  row.draw,
@@ -543,6 +546,8 @@ export function normalizeStatsRow(dto) {
     teamName:     t?.shortDisplayName || t?.displayName || '',
     teamInitials: t?.code || deriveInitials(t?.shortDisplayName || t?.displayName || ''),
     teamColor:    teamColor(t?.apiId),
+    // 로고 파생 — 순위 카드가 손으로 localLogo 를 만들지 않도록 (StandingsTable · StatsRanking 대칭)
+    teamLogoUrl:  localLogo('teams', t?.apiId, t?.logoUrl),
     value:        dto.value,
     breakdown:    Array.isArray(dto.breakdown)
       ? dto.breakdown.map(b => ({
