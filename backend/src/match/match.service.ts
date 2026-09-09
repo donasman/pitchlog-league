@@ -73,9 +73,11 @@ export class MatchService {
       where.OR = [{ homeTeamId: team.id }, { awayTeamId: team.id }];
     }
 
-    // 페이지 상한 — 기본 100 · 최대 500 (DTO 에서 검증됨). total 은 limit 적용 전 카운트라 count/findMany 를 한 트랜잭션으로.
+    // 페이지 상한 — 기본 100 · 최대 500 (DTO 에서 검증됨). total 은 limit 적용 전 카운트.
+    // $transaction 은 Supabase pgbouncer 세션 모드에서 커넥션을 오래 잡아 (EMAXCONNSESSION) 상한을 밟는다 —
+    // 조회 API 라 count 와 findMany 사이의 짧은 갭은 허용된다 (asOf 는 rows 기준).
     const limit = q.limit ?? 100;
-    const [total, rows] = await this.prisma.$transaction([
+    const [total, rows] = await Promise.all([
       this.prisma.match.count({ where }),
       this.prisma.match.findMany({
         where,
