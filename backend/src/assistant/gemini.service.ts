@@ -58,6 +58,9 @@ export interface AskResult {
   data: unknown[];
   truncated: boolean;
   model: string;
+  /** evidence 중 가장 오래된 asOf. evidence 가 비면 null.
+   *  ISO 8601 문자열은 사전순 = 시간순 정렬이라 min 은 lexicographic min 이다. */
+  asOf: string | null;
 }
 
 export interface AskOpts {
@@ -90,6 +93,14 @@ export interface GeminiClientLike {
       candidates?: Array<{ content?: Content }>;
     }>;
   };
+}
+
+/** evidence 중 가장 오래된 asOf 를 뽑는다. 없으면 null.
+ *  프론트 카드 헤더에 "언제 기준" 을 한 줄로 표시하려면 여러 도구 asOf 중 최솟값이 안전하다. */
+export function pickAsOf(evidence: AskEvidence[]): string | null {
+  if (evidence.length === 0) return null;
+  // ISO 8601 문자열은 사전순 = 시간순. `map` 이 이미 새 배열을 만들어 sort 가 원본을 건드리지 않는다.
+  return evidence.map((e) => e.asOf).sort()[0] ?? null;
 }
 
 /** registry 의 AssistantTool 을 Gemini FunctionDeclaration 으로 변환한다 (raw JSON Schema 경로) */
@@ -196,6 +207,7 @@ export class GeminiService {
             data,
             truncated,
             model: this.modelName,
+            asOf: pickAsOf(evidence),
           };
         }
 
@@ -208,6 +220,7 @@ export class GeminiService {
             data,
             truncated,
             model: this.modelName,
+            asOf: pickAsOf(evidence),
           };
         }
 
@@ -260,8 +273,9 @@ export class GeminiService {
         if (outerBreak) break;
       }
 
-      // 이론상 여기 도달 안 함 (루프 안에서 return) — 안전망
-      return { answer: lastAnswer, evidence, data, truncated: true, model: this.modelName };
+      // 이론상 여기 도달 안 함 (루프 안에서 return) — 안전망.
+      // MAX_TOOL_EXECUTIONS 발동으로 outer break 를 타면 여기로 온다 — truncated 는 이미 true 로 세팅됨.
+      return { answer: lastAnswer, evidence, data, truncated: true, model: this.modelName, asOf: pickAsOf(evidence) };
     } finally {
       clearTimeout(timeoutHandle);
     }
