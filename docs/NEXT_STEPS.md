@@ -89,7 +89,7 @@
 | 6 | **L4 실시간** — 폴링 윈도우 · 15초 강등 · `data_version` · FT → L5 | 10 | 경기일 ~4,700 | 홈 LIVE 히어로 · 요약 스트립 |
 | 7 | L6 보정 · 한국어 팀명 110 · L1 #9~#11 · 알림 · AI · L2-b 녹아웃 tie (2027-02) | 8-d·9·11 | | |
 | ~~8~~ | ~~**챗봇 도구 층 (MCP)**~~ ✅ 09-08 PR #38 — `backend/src/assistant/` 도구 10개(list_competitions·get_competition·list_teams·get_team·list_matches·get_match·get_standings·get_top_scorers·get_top_assisters·get_player) · `cli/mcp.ts` stdio 서버 · golden.json 15건 · e2e 25/25. LLM 호출·채팅 UI 없음 | 6·9 | 0 | ✅ LLM 이 결정적 계층을 부를 배관 |
-| 9 | **즐겨찾기 (팀)** — 팀만 로컬 저장(`localStorage: pitchlog-favorites`, 상한 5). `FavoritesContext`·`FavoriteToggle`·홈 `MyTeamsSection`(다음 경기·최근 결과·리그 순위). 선수·대회 북마크는 후속 판 | — | 0 | 즐겨찾기 목록 화면 |
+| ~~9~~ | ~~**즐겨찾기 (팀)**~~ ✅ 09-09 PR #39 — 팀만 로컬 저장(`localStorage: pitchlog-favorites`, 상한 5). `FavoritesContext`·`FavoriteToggle`·홈 `MyTeamsSection`(다음 경기·최근 결과·리그 순위). 선수·대회 북마크는 후속 판 | — | 0 | ✅ 즐겨찾기 목록 화면 |
 
 4번의 6일은 손이 아니라 쿼터가 쓰는 시간이다. 그동안 남은 프론트 화면(경기 상세 탭 · CompetitionHub 랭킹) ·
 한국어 팀명 CSV 를 만든다.
