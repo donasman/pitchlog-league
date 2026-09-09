@@ -20,6 +20,7 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import NotImplementedState from '@/components/ui/NotImplementedState'
 import AskBar from '@/components/home/AskBar'
+import MyTeamsSection from '@/components/home/MyTeamsSection'
 import { toKSTTime } from '@/utils/dateFormat'
 
 /* ── 구역 색 (tokens.css --z-* 와 동일) ── */
@@ -641,6 +642,9 @@ export default function HomePage() {
 
         {/* ② 6개 대회 현황 */}
         <CompetitionSection competitions={competitions} t={t} locale={locale} />
+
+        {/* ② + ½ 내 팀 (즐겨찾기) */}
+        <MyTeamsSection />
 
         {/* ③ 바로 가기 */}
         <ShortcutsSection

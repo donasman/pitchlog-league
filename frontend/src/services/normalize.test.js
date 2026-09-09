@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest'
 import {
   zoneOf,
   teamColor,
+  myTeamCard,
   normalizeMatch,
   normalizeStanding,
   normalizeStandings,
+  normalizeTeam,
   deriveStage,
   competitionRefFromSlug,
   normalizePlayerDetail,
@@ -531,5 +533,102 @@ describe('normalizePlayerSeasonStat / playerTotals / formatStat', () => {
     expect(formatStat(0)).toBe(0)
     expect(formatStat(5)).toBe(5)
     expect(formatStat(149)).toBe(149)
+  })
+})
+
+// ─── myTeamCard ────────────────────────────────────────────────
+
+describe('myTeamCard', () => {
+  const OWN = normalizeTeam(teamDto(50, 'Manchester City', 'MCI'))
+  const RIVAL_ARS = teamDto(42, 'Arsenal', 'ARS')
+  const RIVAL_LIV = teamDto(40, 'Liverpool', 'LIV')
+
+  function homeMatch({ id, date, statusShort, goals = { home: null, away: null }, statsState = 'NONE', competition = COMPETITION_REF }) {
+    return normalizeMatch(matchDto({
+      id, kickoffAt: date, statusShort, statsState, goals,
+      home: teamDto(50, 'Manchester City', 'MCI'),
+      away: RIVAL_ARS,
+      competition,
+    }))
+  }
+
+  function awayMatch({ id, date, statusShort, goals = { home: null, away: null }, statsState = 'NONE', competition = COMPETITION_REF }) {
+    return normalizeMatch(matchDto({
+      id, kickoffAt: date, statusShort, statsState, goals,
+      home: RIVAL_LIV,
+      away: teamDto(50, 'Manchester City', 'MCI'),
+      competition,
+    }))
+  }
+
+  const eplStandings = {
+    competitionSlug: 'premier-league',
+    competitionName: 'Premier League',
+    rows: [
+      normalizeStanding(standingRowDto({
+        team: teamDto(50, 'Manchester City', 'MCI'),
+        rank: 3, played: 30, points: 62,
+      }), { format: 'league' }),
+      normalizeStanding(standingRowDto({
+        team: teamDto(42, 'Arsenal', 'ARS'),
+        rank: 1, played: 30, points: 71,
+      }), { format: 'league' }),
+    ],
+  }
+
+  // C1 — season over, no upcoming match, last result and ranking present
+  it('C1: season over — no next match, latest settled as last result, ranking present', () => {
+    const matches = [
+      homeMatch({ id: 1, date: '2026-05-01T14:00:00Z', statusShort: 'FT', goals: { home: 2, away: 1 } }),
+      awayMatch({ id: 2, date: '2026-05-08T14:00:00Z', statusShort: 'FT', goals: { home: 0, away: 3 } }),
+      homeMatch({ id: 3, date: '2026-05-15T14:00:00Z', statusShort: 'FT', statsState: 'CONFIRMED', goals: { home: 1, away: 1 } }),
+    ]
+    const card = myTeamCard(OWN, { matches, competitions: [] }, eplStandings)
+    expect(card.nextMatch).toBeNull()
+    expect(card.lastResult).not.toBeNull()
+    expect(card.lastResult.id).toBe('3')
+    expect(card.lastResult.displayState).toBe('confirmed')
+    expect(card.lastResult.isHome).toBe(true)
+    expect(card.lastResult.opponent.name).toBe('Arsenal')
+    expect(card.ranking).toEqual({
+      competitionSlug: 'premier-league',
+      competitionName: 'Premier League',
+      rank: 3, played: 30, points: 62,
+    })
+  })
+
+  // C2 — cup only, no standings, next match present, no last result
+  it('C2: cup only — next match present, no last result, no ranking when standings are null', () => {
+    const matches = [
+      awayMatch({ id: 10, date: '2027-08-01T18:00:00Z', statusShort: 'NS',
+        competition: { ...COMPETITION_REF, apiId: 45, ref: '45-fa-cup', format: 'KNOCKOUT', displayName: 'FA Cup' } }),
+    ]
+    const card = myTeamCard(OWN, { matches, competitions: [] }, null)
+    expect(card.nextMatch).not.toBeNull()
+    expect(card.nextMatch.id).toBe('10')
+    expect(card.nextMatch.isHome).toBe(false)
+    expect(card.nextMatch.opponent.name).toBe('Liverpool')
+    expect(card.nextMatch.displayState).toBe('scheduled')
+    expect(card.lastResult).toBeNull()
+    expect(card.ranking).toBeNull()
+  })
+
+  // C3 — EPL + UCL: closer UCL upcoming becomes nextMatch, past EPL becomes lastResult,
+  // ranking only from EPL rows (UCL is groups_knockout — passed as null shape).
+  it('C3: two competitions — closest UCL upcoming as nextMatch, EPL past as lastResult, ranking from EPL rows only', () => {
+    const uclComp = { ...COMPETITION_REF, apiId: 2, ref: '2-champions-league', format: 'LEAGUE_PHASE_KNOCKOUT', displayName: 'UEFA Champions League' }
+    const eplPast = homeMatch({ id: 100, date: '2026-11-20T15:00:00Z', statusShort: 'FT', goals: { home: 2, away: 0 } })
+    const eplFuture = awayMatch({ id: 101, date: '2026-12-05T15:00:00Z', statusShort: 'NS' })
+    const uclFuture = homeMatch({ id: 200, date: '2026-11-28T20:00:00Z', statusShort: 'NS', competition: uclComp })
+    const card = myTeamCard(OWN, { matches: [eplPast, eplFuture, uclFuture], competitions: [] }, eplStandings)
+    expect(card.nextMatch).not.toBeNull()
+    expect(card.nextMatch.id).toBe('200')
+    expect(card.nextMatch.competitionSlug).toBe('champions-league')
+    expect(card.lastResult).not.toBeNull()
+    expect(card.lastResult.id).toBe('100')
+    expect(card.lastResult.competitionSlug).toBe('premier-league')
+    // ranking comes from the EPL rows even though the team also plays UCL
+    expect(card.ranking?.competitionSlug).toBe('premier-league')
+    expect(card.ranking?.rank).toBe(3)
   })
 })
