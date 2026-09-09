@@ -407,6 +407,13 @@
     "liveNote": "진행 중인 경기입니다. 숫자는 계속 바뀝니다.",
     "recoverTip": "확정 시 알림을 받으시겠어요?",
     "clearChat": "초기화",
+    "viewAllStandings": "전체 순위 보기",
+    "viewAllMatches": "경기 전체 보기 ({{total}}개)",
+    "topScorers": "득점 순위",
+    "topAssisters": "도움 순위",
+    "unitGoals": "골",
+    "unitAssists": "도움",
+    "asOfLabel": "이 답변 기준",
     "error": {
       "not_configured": "어시스턴트가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요.",
       "rate_limited": "잠시 후 다시 시도해 주세요.",

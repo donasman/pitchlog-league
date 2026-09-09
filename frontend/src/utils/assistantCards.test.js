@@ -1,10 +1,10 @@
 /**
- * assistantCards 순수 함수 단위 테스트
+ * assistantCards pure function unit tests.
  *
- * 백엔드 응답 shape (backend/src/assistant/gemini.service.ts:238-241) 을 기준으로 만든다:
- *   data[i] = ToolResult.data (도구 원 데이터. wrapper 가 아니다)
- *   evidence[i].tool 이 그 데이터의 도구 이름
- * 컨텍스트가 짝지어 만드는 wrapper 를 여기서는 손으로 조립한다.
+ * Backend response shape (backend/src/assistant/gemini.service.ts:238-241):
+ *   data[i] = ToolResult.data (raw tool payload, not a wrapper)
+ *   evidence[i].tool identifies the tool for data[i]
+ * The context pairs them into a wrapper — here we assemble by hand for tests.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -16,17 +16,17 @@ import {
 } from './assistantCards.js'
 
 describe('pickAsOf', () => {
-  it('T1: 빈 배열이면 null', () => {
+  it('T1: empty array returns null', () => {
     expect(pickAsOf([])).toBeNull()
     expect(pickAsOf(null)).toBeNull()
     expect(pickAsOf(undefined)).toBeNull()
   })
 
-  it('T2: 원소 하나면 그 asOf 그대로', () => {
+  it('T2: single entry returns its asOf', () => {
     expect(pickAsOf([{ asOf: '2026-09-08T00:00:00.000Z' }])).toBe('2026-09-08T00:00:00.000Z')
   })
 
-  it('T3: 여러 원소면 사전순 최소 (ISO 는 시간순과 같다)', () => {
+  it('T3: multiple entries return lexicographic minimum (ISO = chronological)', () => {
     const input = [
       { asOf: '2026-09-08T00:00:00.000Z' },
       { asOf: '2026-09-07T00:00:00.000Z' },
@@ -37,7 +37,7 @@ describe('pickAsOf', () => {
 })
 
 describe('cardKindForTool', () => {
-  it('T4: 10 도구 각각 정확한 kind', () => {
+  it('T4: 10 tools map to expected kinds', () => {
     expect(cardKindForTool('list_competitions')).toBe('json')
     expect(cardKindForTool('get_competition')).toBe('json')
     expect(cardKindForTool('list_teams')).toBe('json')
@@ -50,7 +50,7 @@ describe('cardKindForTool', () => {
     expect(cardKindForTool('get_player')).toBe('json')
   })
 
-  it('T5: 알 수 없는 도구는 json 폴백', () => {
+  it('T5: unknown tool falls back to json', () => {
     expect(cardKindForTool('unknown_tool')).toBe('json')
     expect(cardKindForTool('')).toBe('json')
     expect(cardKindForTool(undefined)).toBe('json')
@@ -58,8 +58,8 @@ describe('cardKindForTool', () => {
 })
 
 /**
- * StandingsTableDto 최소 fixture — EPL 표 한 장의 2행.
- * normalizeStanding 은 team.ref/team.apiId/team.displayName 등을 읽는다.
+ * Minimal StandingsTableDto fixture — EPL table with 2 rows.
+ * normalizeStanding reads team.ref/team.apiId/team.displayName etc.
  */
 function makeStandingsTable() {
   return {
@@ -90,7 +90,7 @@ function makeStandingsTable() {
   }
 }
 
-/** MatchDto 최소 fixture — normalizeMatch 가 읽는 필드만 채운다 */
+/** Minimal MatchDto fixture — only fields normalizeMatch reads */
 function makeMatch(id, homeName) {
   return {
     id,
@@ -123,7 +123,7 @@ function makeMatch(id, homeName) {
 }
 
 describe('normalizeCardPayload', () => {
-  it('T6: standings — wrapper.data.items[0] 을 표 정규화', () => {
+  it('T6: standings — normalizes wrapper.data.items[0]', () => {
     const wrapperData = { items: [makeStandingsTable()] }
     const out = normalizeCardPayload('standings', wrapperData)
     expect(Array.isArray(out.entries)).toBe(true)
@@ -134,7 +134,7 @@ describe('normalizeCardPayload', () => {
     expect(out.unavailableReason).toBeNull()
   })
 
-  it('T7: matches — items[] 각각 정규화', () => {
+  it('T7: matches — normalizes each item in items[]', () => {
     const wrapperData = { items: [makeMatch('m1', 'Manchester United'), makeMatch('m2', 'Arsenal')] }
     const out = normalizeCardPayload('matches', wrapperData)
     expect(Array.isArray(out)).toBe(true)
@@ -145,24 +145,24 @@ describe('normalizeCardPayload', () => {
     expect(out[1].id).toBe('m2')
   })
 
-  it('T8: json — wrapper.data 그대로', () => {
+  it('T8: json — returns wrapper.data as-is', () => {
     const raw = { foo: 'bar', nested: { n: 1 } }
     expect(normalizeCardPayload('json', raw)).toBe(raw)
   })
 })
 
 describe('competitionSlugFromWrapper', () => {
-  it('standings wrapper — items[0].competition.ref 에서 slug 추출', () => {
+  it('standings wrapper — extracts slug from items[0].competition.ref', () => {
     const wrapper = { tool: 'get_standings', data: { items: [makeStandingsTable()] } }
     expect(competitionSlugFromWrapper(wrapper)).toBe('premier-league')
   })
 
-  it('matches wrapper — items[0].competition.ref', () => {
+  it('matches wrapper — extracts slug from items[0].competition.ref', () => {
     const wrapper = { tool: 'list_matches', data: { items: [makeMatch('m1', 'MU')] } }
     expect(competitionSlugFromWrapper(wrapper)).toBe('premier-league')
   })
 
-  it('빈 데이터면 null', () => {
+  it('empty data returns null', () => {
     expect(competitionSlugFromWrapper({ tool: 'list_matches', data: { items: [] } })).toBeNull()
     expect(competitionSlugFromWrapper({ tool: 'get_standings', data: null })).toBeNull()
   })
