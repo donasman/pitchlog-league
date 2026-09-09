@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
 import { fetchTeamsByLeague } from '@/services/api'
 import TeamBadge from '@/components/ui/TeamBadge'
+import FavoriteToggle from '@/components/ui/FavoriteToggle'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import { getLocalizedName, getLocalizedCompetitionName } from '@/utils/localization'
@@ -63,6 +64,7 @@ export default function TeamsPage() {
                       to={`/teams/${team.slug}`}
                       className="pl-card"
                       style={{
+                        position: 'relative',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 10,
@@ -73,7 +75,7 @@ export default function TeamsPage() {
                       }}
                     >
                       <TeamBadge initials={team.initials} color={team.color} logoUrl={team.logoUrl} size="sm" name={team.name} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ minWidth: 0, flex: 1, paddingRight: 32 }}>
                         <span
                           className="tname t-body"
                           style={{ fontWeight: 600, display: 'block' }}
@@ -87,6 +89,9 @@ export default function TeamsPage() {
                           </span>
                         )}
                       </div>
+                      <span style={{ position: 'absolute', top: 8, right: 8 }}>
+                        <FavoriteToggle slug={team.slug} label={name} size="sm" />
+                      </span>
                     </Link>
                   )
                 })}
