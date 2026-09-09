@@ -14,11 +14,22 @@
  * 예외는 하나 — **일일 한도 소진이면 그 자리에서 멈춘다.** 재시도해도 같은 에러라
  * 계속하면 `--all-seasons` 85회를 끝까지 요청하고 같은 줄 85개를 돌려줄 뿐이다 (L2 와 같은 규칙).
  */
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiFootballClient } from '../api-football/api-football.client.js';
 import { ApiQuotaExhaustedError } from '../api-football/api-football.errors.js';
 import { SEASON_YEARS } from '../l0/competitions.catalog.js';
+
+/** probe-details 가 받는 4엔드포인트 — 이 판은 파일 저장 전용이라 매핑도 파싱도 없다 */
+const DETAIL_ENDPOINTS = ['lineups', 'events', 'statistics', 'players'] as const;
+
+export interface ProbeDetailsResult {
+  /** 저장된 파일명 (경로 아님) */
+  files: string[];
+  errors: { fixtureId: number; endpoint: string; msg: string }[];
+}
 
 export interface ProbeRow {
   competition: string;
@@ -131,5 +142,42 @@ export class ProbeService {
       `probe-players ${stoppedByQuota ? '중단(쿼터 소진)' : '완료'} — ${rows.length}행(${seasons}시즌) · ${totalCalls}콜 · ` +
         `수집 예상 합계 ${estimate}콜` + (failed > 0 ? ` · 실패 ${failed}` : ''),
     );
+  }
+
+  /**
+   * probe-details — 경기 상세 4엔드포인트 응답 body 를 **가공 없이** 파일로 저장 (L3·L5 픽스처 확보용).
+   *
+   * DB write 없음. `test/fixtures/api-football/{endpoint}_{fixture-id}.json` 로 12개 (3fixture × 4엔드포인트).
+   * body 그대로 저장이 규칙이다 — 필드 뽑기·이름 바꾸기·null 채우기 금지. 매핑은 L3·L5 몫이다.
+   *
+   * 한 엔드포인트가 실패해도 다음으로 넘어간다. 예외는 하나 — 쿼터 소진이면 그 자리에서 멈춘다.
+   */
+  async probeDetails(fixtureIds: number[]): Promise<ProbeDetailsResult> {
+    const outDir = resolve(process.cwd(), 'test/fixtures/api-football');
+    await mkdir(outDir, { recursive: true });
+
+    const files: string[] = [];
+    const errors: { fixtureId: number; endpoint: string; msg: string }[] = [];
+
+    for (const fixtureId of fixtureIds) {
+      for (const ep of DETAIL_ENDPOINTS) {
+        try {
+          const body = await this.api.get<unknown>(`/fixtures/${ep}`, { fixture: fixtureId });
+          const filename = `${ep}_${fixtureId}.json`;
+          await writeFile(join(outDir, filename), JSON.stringify(body, null, 2));
+          files.push(filename);
+          this.logger.log(`saved ${filename}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          errors.push({ fixtureId, endpoint: ep, msg });
+          this.logger.warn(`${ep} ${fixtureId} 실패 — ${msg}`);
+          if (err instanceof ApiQuotaExhaustedError) {
+            this.logger.error('쿼터 소진 — 남은 fixture 중단');
+            return { files, errors };
+          }
+        }
+      }
+    }
+    return { files, errors };
   }
 }

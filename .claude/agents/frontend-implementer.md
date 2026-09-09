@@ -22,6 +22,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 - **한국어를 하드코딩하지 않는다.** 문구는 `locales/` 에 키로 넣는다
 - UI 는 v1 을 이관하지 않는다. 가져오는 건 로직·데이터 형태까지만
 - `services/api.js` 는 `VITE_USE_MOCK` 전환 스위치다. 실 API 는 `live.js`, 형태 맞춤은 `normalize.js` — **파생 필드는 `normalize.js` 에서 만든다.** 화면이나 Mock 에 손으로 박지 않는다
+- **계약 원본은 백엔드 DTO + `normalize.js` 반례 테스트.** `services/mock.js` 는 따라오는 쪽이다 — live PR 에서 `mock.js` 를 함께 고치는 건 의무가 아니다. 깨지면 그때 고친다. **`mock.js` 에 없는 shape 을 새로 박아 그것에 백엔드를 맞추라고 요구하지 않는다** (mocks/lineups.js 9,438줄이 실 계약을 밀어내는 것을 막기 위함)
 - 백엔드에 아직 없는 것은 `NotImplementedError` 로 드러낸다. 빈 값으로 가리지 않는다
 
 ## 이 환경의 제약

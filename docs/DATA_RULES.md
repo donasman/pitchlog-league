@@ -141,6 +141,9 @@ nullable 로 바꿨다 (`20260908090000_player_season_stats_nullable`).
 사라지는 필드는 3-1 이 아니라 3-2 다. `passes_key` 는 2026 에도 729행이 null 이라
 어느 쪽 규칙에도 안 들어가 있었다 — 같이 nullable 로 둔다.
 
+- **`passes_accuracy` 는 정확 패스 횟수 (실측 21/34)** — 퍼센트가 아니다. API 원문은 문자열 ("15"). 프론트가 백분율로 표시하려면 `passes_total` 로 나눠 계산한다. 저장은 정수 그대로.
+- **subst 이벤트의 assist 는 투입 선수** — API 원문 `player` = 나간 선수, `assist` = 들어온 선수. `match_events.player_id`·`assist_player_id` 에 그대로 저장하고 화면이 라벨로 구분한다.
+
 ### 3-3. 정규화 계층 — `services/normalize.js`
 
 **2026-09-07 생겼다.** 실 API 첫 연결(대회·팀)과 같이 들어왔다.

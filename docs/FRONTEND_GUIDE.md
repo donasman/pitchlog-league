@@ -140,10 +140,15 @@ frontend/
 | 파일 | 역할 |
 |---|---|
 | `api.js` | `VITE_USE_MOCK` 으로 `mock.js`·`live.js` 중 하나를 고르는 전환 스위치 |
-| `mock.js` | 화면 검증용 Mock (`src/mocks` 를 읽음) |
+| `mock.js` | 화면 검증용 Mock (`src/mocks` 를 읽음) — **따라오는 쪽**. 계약 원본이 아님 |
 | `live.js` | 실 API. 백엔드에 없는 것은 `NotImplementedError` 로 드러냄 |
-| `normalize.js` | 정규화 계층 — `ref`→slug, enum, 시즌 객체→라벨, `null` 형태 통일 |
+| `normalize.js` | 정규화 계층 — `ref`→slug, enum, 시즌 객체→라벨, `null` 형태 통일. **계약은 여기 반례 테스트에 박음** |
 | `http.js` | fetch 래퍼. 오류를 throw 하고 메시지는 i18n 을 거침 |
+
+**계약은 백엔드 DTO + `normalize.js` 반례 테스트가 원본임.** `services/mock.js` 는 화면
+개발 편의를 위해 그 형태를 따라오는 쪽임 — live PR 에서 `mock.js` 를 함께 고치는 건 의무가
+아니고 깨지면 그때 고침. 새 shape 을 `mock.js` 에 먼저 박고 그것에 백엔드를 맞추지 않음
+(mocks/lineups.js 9,438줄 같은 대형 Mock 이 실 계약을 밀어내는 것을 막기 위함).
 
 **한 화면에서 Mock 과 실 데이터를 섞지 않음.** 섞이면 어디까지 진짜인지 화면만 봐서는 알 수 없음.
 미구현 화면을 빈 목록으로 위장하면 "없음" 과 "아직 없음" 을 구분할 수 없음.

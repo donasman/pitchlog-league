@@ -73,6 +73,15 @@ description: PitchLog 에서 기능 하나를 역할 분리 파이프라인(탐�
 
 한 에이전트의 작업량은 **파일 3~5개, 커밋 하나 분량**으로 자른다. 크면 쪼개서 순차로.
 
+**계약을 값으로 박는다는 것 — 예시.** 백엔드 판 지시문에 "DTO 는 backend/src/match/dto/... 를 따른다"
+라고 절 번호만 적지 않는다. 필드명·타입·null 여부·API 경로를 **직접** 적는다.
+
+**mock.js 는 계약 원본이 아니다.** 백엔드 판 지시문에서 "frontend/src/services/mock.js 와 shape 맞춤"
+같은 요구는 넣지 않는다. 계약은 백엔드 DTO + `normalize.js` 반례 테스트에서 나온다.
+프론트 판 지시문에서도 "live PR 이니 mock.js 도 같이 고쳐라" 는 의무로 요구하지 않는다 —
+깨지면 그때 별도 판으로 고친다. mocks/lineups.js 9,438줄 같은 대형 Mock 이 실 계약을 밀어내는
+것을 막기 위함이다.
+
 ## 06. 검증 — 별도
 
 `backend-verifier` 와 `frontend-verifier` 에 각 스택의 `git diff` + 확정 계약을 넘긴다. **문제만** 받는다.
