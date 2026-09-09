@@ -499,6 +499,8 @@ DB 는 이미 맞게 저장돼 있다 — `standings` 의 unique 가 `(대회시
 - `has_*` 가 `false` 인 경기는 다시 안 부른다. FT 후 24시간은 `NULL` 로 되돌려 재시도 (4-2 ①)
 - 상세 4개가 다 들어오면 `matches.stats_state = CONFIRMED` (10장)
 
+- [x] 오케스트레이터(`MatchDetailsBackfillService`) + CLI (`npm run ingest -- backfill`) 골격 (2026-09-10) — 실 적재 결과는 이 판의 08 절
+
 ### 8-d. L2-b — 녹아웃 tie · 대진표 · 슈퍼컵 · 1장 7번
 
 - [ ] `knockout_ties` · `bracket_slots` — 1·2차전 묶기, 대진표 슬롯 (`INGESTION_STRATEGY` 2-3).

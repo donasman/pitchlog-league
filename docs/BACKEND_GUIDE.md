@@ -103,6 +103,23 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 - matches 갱신은 has_lineups/has_events/has_team_stats/has_player_stats/detail_checked_at/stats_state/confirmed_at 7개 컬럼만. updateMany + detailEligible:true · count===1 확인 (D20).
 - 오케스트레이터(backfill worker)는 다음 판. 이 판은 서비스 4개만.
 
+### 오케스트레이터 (backfill)
+
+- `MatchDetailsBackfillService` (`backend/src/ingestion/backfill/match-details-backfill.service.ts`) — 대회시즌별로 L3·L5 4개 서비스를 순차 호출한다. 각 서비스가 자기 has_* 를 세팅하고 승격은 헬퍼가 자동으로 한다 (경기 상세 절 참조).
+- **대상 SELECT**: `detail_eligible=true AND detail_checked_at IS NULL AND status_short IN ('FT','AET','PEN') AND kickoff_at < now() - interval '24 hours' AND id > cursor_match_id`. 정렬 `id asc`. 종료 직후 24시간은 기록이 아직 변한다 (경기 통계 재검증).
+- **커서**: `backfill_jobs.cursor_match_id` — 대회시즌 단위로 관리. 경기 하나 처리 후 그 id 로 advance. 재실행이 커서 이후만 집는다.
+- **일일 상한**: 5,700콜 = 1,425경기 (경기당 4콜). `--limit` 이 있으면 `min(--limit, floor((5700 - used) / 4))`. 매 경기 앞에 재확인.
+- **중단 사유 6종**: `quota_exhausted`(429 잡힘) · `daily_cap`(5,700 도달) · `limit_reached`(--limit) · `no_targets`(대상 소진) · `done`(정상 완료) · `error`(예외).
+- `ApiQuotaExhaustedError` 는 즉시 상위로 던져 그 자리에서 중단 (커서 보존). 다른 오류는 그 엔드포인트만 실패로 세고 다음 엔드포인트 진행.
+- `BackfillJob` phase 는 `DETAILS`. begin(cs, DETAILS) → 처리 → complete(cs, null) 또는 fail(cs, message). 이미 `DONE` 인 대회시즌은 skip (되돌리지 않음).
+- 경기 단위 트랜잭션 없음. 엔드포인트 단위 트랜잭션은 각 서비스 안에 있다 (4콜 사이 실패는 부분 저장돼야).
+
+실행:
+- `npm run ingest -- backfill [--season=YYYY] [--limit=N] [--dry-run]`
+- `--season` 없으면 화면 6대회 현재 시즌만 (`isCurrent:true + screenCompetitionWhere`).
+- `--dry-run` 은 대상 경기 수·예정 콜 수·남은 상한·실제 처리 예정 경기 수만 출력하고 **API 를 한 번도 부르지 않는다**.
+- 진행 로그는 50경기마다 한 줄 (처리/실패/남은 상한). 요약: 대회시즌별 processed·failed·stoppedReason.
+
 ## AI · Assistant (MCP)
 
 - LLM은 DB·외부 API에 직접 접근하지 않는다.
