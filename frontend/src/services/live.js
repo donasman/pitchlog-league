@@ -382,7 +382,9 @@ export async function fetchOverview() {
       stage:         deriveStage(matches, nowDate),
       leader: first
         ? { teamId: first.teamId, teamSlug: first.teamSlug, teamName: first.teamName,
-            teamInitials: first.teamInitials, teamColor: first.teamColor, points: first.points }
+            teamInitials: first.teamInitials, teamColor: first.teamColor,
+            teamLogoUrl: first.teamLogoUrl, teamApiId: first.teamApiId,
+            points: first.points }
         : null,
       nextKickoff: next?.date ?? null,
       updatedAt:   tableFor(comp)?.asOf ?? null,
