@@ -27,6 +27,7 @@
     "verify": "npm run prisma:validate && npm run typecheck && npm run lint && npm run test",
     "ingest": "nest build && node dist/cli/ingest.js",
     "mcp": "nest build && node dist/cli/mcp.js",
+    "check:details": "nest build && node dist/cli/check-details.js",
     "backup": "node scripts/backup.mjs",
     "backup:verify": "node scripts/restore-check.mjs",
     "smoke:assistant": "node scripts/assistant-smoke.mjs"
