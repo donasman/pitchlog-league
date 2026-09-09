@@ -347,7 +347,15 @@
     "aggregateScore": "{{home}} – {{away}} agg.",
     "sideStandingsTitle": "Standings",
     "sideScoringTitle": "Top Scorers",
-    "eplTopScorerLabel": "EPL Top Scorer"
+    "eplTopScorerLabel": "EPL Top Scorer",
+    "myTeams": {
+      "title": "My Teams",
+      "empty_hint": "Tap the star on any team to add it to your favorites. Their next match and latest result will appear here.",
+      "browser_only_notice": "Saved on this browser only. Won't appear in other devices or private windows.",
+      "no_next_match": "No upcoming match",
+      "no_last_result": "No recent result",
+      "no_ranking": "No league ranking"
+    }
   },
   "stats": {
     "pageTitle": "Stats",
@@ -477,6 +485,11 @@
     "phase5": "Phase 5",
     "season": "2026-27 season",
     "country": "Country"
+  },
+  "favorites": {
+    "add": "Add {{name}} to favorites",
+    "remove": "Remove {{name}} from favorites",
+    "limit_reached": "You can save up to {{limit}} favorites."
   },
   "errors": {
     "notImplemented": "Not available from the backend yet ({{what}})",

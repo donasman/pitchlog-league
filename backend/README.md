@@ -77,19 +77,20 @@ npm run ingest -- logos   # 로고를 받아 ../frontend/public/logos 에 저장
 npm run mcp   # nest build && node dist/cli/mcp.js — stdout 은 JSON-RPC 전용, 로그는 stderr
 ```
 
-Claude Desktop 설정 예 (Windows `%APPDATA%\Claude\claude_desktop_config.json` · macOS `~/Library/Application Support/Claude/claude_desktop_config.json`):
+Claude Code CLI 는 프로젝트마다 `mcp.cmd` 를 wrapper 로 두고 `claude mcp add` 로 등록한다:
 
-```json
-{
-  "mcpServers": {
-    "pitchlog": {
-      "command": "node",
-      "args": ["C:/Dev/pitchlog-league/backend/dist/cli/mcp.js"],
-      "env": { "DATABASE_URL": "postgres://…" }
-    }
-  }
-}
+```bash
+claude mcp add pitchlog --scope user -- cmd /c C:\Dev\pitchlog-league\backend\mcp.cmd
 ```
+
+`mcp.cmd` (3줄) 는 자기 폴더로 cd 후 `node dist\cli\mcp.js` 를 부른다.
+cwd 가 `backend/` 이므로 서버 프로세스가 `.env` 를 직접 읽는다 —
+`claude mcp add --env DATABASE_URL=...` 로 값을 넘기지 않는다.
+실측 사고(2026-09-09): 셸 파싱이 `postgresql://postgres.xxx:pw@host` 형식의
+사용자명을 `postgres` 로 잘라 인증 실패. wrapper 방식으로 우회한다.
+
+등록 후 `claude mcp list` 로 확인. Claude 세션에서 `list_competitions` 등
+도구 10개가 노출된다 (2026-09-09 실 연결 · 질의 성공).
 
 도구 목록·인자 스키마·description(3상태 문구 포함)은 tools/list 로 노출된다. 도구 반환은
 `{ tool, args, asOf, data }` — `data` 는 REST API DTO 와 같다. `list_matches` 는 자동으로

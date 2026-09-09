@@ -4,14 +4,17 @@ import '@/styles/index.css'
 import '@/i18n/index.js'
 import { NotificationProvider } from '@/contexts/NotificationContext'
 import { AssistantProvider } from '@/contexts/AssistantContext'
+import { FavoritesProvider } from '@/contexts/FavoritesContext'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <NotificationProvider>
-      <AssistantProvider>
-        <App />
-      </AssistantProvider>
-    </NotificationProvider>
+    <FavoritesProvider>
+      <NotificationProvider>
+        <AssistantProvider>
+          <App />
+        </AssistantProvider>
+      </NotificationProvider>
+    </FavoritesProvider>
   </StrictMode>,
 )
