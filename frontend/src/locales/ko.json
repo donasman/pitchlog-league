@@ -390,6 +390,8 @@
     "evidenceSource": "출처",
     "asOfSuffix": "기준",
     "dataLabel": "데이터",
+    "showData": "근거 데이터 보기",
+    "hideData": "근거 데이터 접기",
     "dataNote": "답변의 숫자는 조회 결과입니다. 근거와 기준 시각이 함께 표시됩니다.",
     "thinking": "조회하는 중",
     "thinkingTools": "조회 도구",
