@@ -14,7 +14,6 @@ import {
   FAVORITE_TEAMS_LIMIT,
   addFavoriteTeam,
   getFavoriteTeams,
-  isFavoriteTeam,
   removeFavoriteTeam,
   toggleFavoriteTeam,
 } from '@/services/favorites'
@@ -65,7 +64,3 @@ export function useFavorites() {
   if (!ctx) throw new Error('useFavorites must be used inside FavoritesProvider')
   return ctx
 }
-
-// isFavoriteTeam · addFavoriteTeam 등을 직접 import 하지 않기 위해 우회 경로도 제공한다
-// (테스트 · CLI 도구에서 훅 없이 저장만 만지고 싶을 때만 사용)
-export { isFavoriteTeam }
