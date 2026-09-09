@@ -10,7 +10,7 @@
  *
  * 상한:
  *   - 도구 호출 총 MAX_TOOL_CALLS(5) 회. 넘으면 마지막 응답 text 로 answer, truncated:true.
- *   - 전체 REQUEST_TIMEOUT_MS(30_000) 밖으로 나가면 AbortController 로 진행 중 호출을 취소하고,
+ *   - 전체 REQUEST_TIMEOUT_MS(75_000) 밖으로 나가면 AbortController 로 진행 중 호출을 취소하고,
  *     지금까지 evidence·data 로 truncated:true 반환.
  *
  * 왜 parametersJsonSchema 인가:
@@ -34,7 +34,8 @@ export const MAX_TOOL_CALLS = 5;
  *  step 상한(5)은 왕복 상한이지만, 한 step 안에서 모델이 다수 functionCall 을 반환할 수 있어
  *  실행 수가 폭주하는 걸 못 막는다. MAX_TOOL_EXECUTIONS 는 이 실행 수 자체를 캡한다. */
 export const MAX_TOOL_EXECUTIONS = 8;
-export const REQUEST_TIMEOUT_MS = 30_000;
+// gemini-3.x 계열은 추론 단계가 있어 왕복 2회면 30초를 넘긴다 (2026-09-09 실측: 3.6-flash 타임아웃)
+export const REQUEST_TIMEOUT_MS = 75_000;
 
 export const SYSTEM_PROMPT =
   '너는 PitchLog 축구 데이터 어시스턴트다.\n' +
