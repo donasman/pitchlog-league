@@ -4,6 +4,7 @@
  *   npm run ingest -- l1
  *   npm run ingest -- l2 [--all-seasons] [--season=<year>]
  *   npm run ingest -- l6 [--all-seasons] [--season=<year>] [--only=players|rankings|teams]
+ *   npm run ingest -- backfill [--season=<year>] [--limit=<N>] [--dry-run]
  *   npm run ingest -- probe-players [--all-seasons]
  *   npm run ingest -- probe-details --fixture=<id[,id,...]>
  *   npm run ingest -- status
@@ -18,6 +19,7 @@ import { L0Service } from '../ingestion/l0/l0.service.js';
 import { L1Service } from '../ingestion/l1/l1.service.js';
 import { L2Service } from '../ingestion/l2/l2.service.js';
 import { L6Service, L6_BRANCHES, type L6Branch } from '../ingestion/l6/l6.service.js';
+import { MatchDetailsBackfillService } from '../ingestion/backfill/match-details-backfill.service.js';
 import { LogoService } from '../ingestion/logos/logo.service.js';
 import { ProbeService } from '../ingestion/probe/probe.service.js';
 import { QuotaService } from '../ingestion/api-football/quota.service.js';
@@ -28,6 +30,7 @@ const logger = new Logger('ingest');
 
 const USAGE =
   'l0 | l1 | l2 [--all-seasons] [--season=<year>] | l6 [--all-seasons] [--season=<year>] [--only=players|rankings|teams] | ' +
+  'backfill [--season=<year>] [--limit=<N>] [--dry-run] | ' +
   'probe-players [--all-seasons] | probe-details --fixture=<id[,id,...]> | status | logos [--force]';
 
 /** `--season=` 검증 — 잘못된 연도로 수백 콜을 태우지 않는다. 부르기 전에 막는다 */
@@ -51,7 +54,9 @@ async function main(): Promise<void> {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['log', 'warn', 'error'] });
   try {
     // 로고는 공개 media 호스트에서 받는다 — 키를 요구하지 않는다
-    const needsApiKey = command !== 'logos';
+    // backfill --dry-run 은 API 를 안 부르므로 키가 없어도 돈다 (대상 조회만)
+    const isDryRunBackfill = command === 'backfill' && hasFlag('dry-run');
+    const needsApiKey = command !== 'logos' && !isDryRunBackfill;
     if (needsApiKey && !app.get(ApiFootballClient).isConfigured) {
       logger.error('API_FOOTBALL_KEY 가 없다 — backend/.env 에 넣고 다시 실행');
       process.exitCode = 1;
@@ -114,6 +119,57 @@ async function main(): Promise<void> {
         });
         logger.log(JSON.stringify(s, null, 2));
         await app.get(QuotaService).snapshot();
+        if (s.partial) process.exitCode = 1;
+        break;
+      }
+      case 'backfill': {
+        const season = parseSeasonFlag();
+        if (!season.ok) {
+          logger.error(`--season=${season.raw} 은 수집 대상이 아니다 — ${SEASON_YEARS.join(' | ')} 중 하나`);
+          process.exitCode = 1;
+          break;
+        }
+        const limitRaw = flagValue('limit');
+        let limit: number | undefined;
+        if (limitRaw !== null) {
+          const n = Number(limitRaw);
+          if (!Number.isInteger(n) || n <= 0) {
+            logger.error(`--limit 은 양의 정수 (받은 값 "${limitRaw}")`);
+            process.exitCode = 1;
+            break;
+          }
+          limit = n;
+        }
+        const dryRun = hasFlag('dry-run');
+
+        // dry-run 은 API 안 부른다 — 그래도 quota snapshot 은 남긴다 (있으면). 없으면 skip
+        const configured = app.get(ApiFootballClient).isConfigured;
+        if (dryRun && !configured) {
+          logger.warn('API_FOOTBALL_KEY 없음 — dry-run 은 이어가지만 quota snapshot 은 남기지 않는다');
+        }
+        const before = configured ? await app.get(QuotaService).snapshot() : null;
+        if (before !== null) logger.log(`quota before: used=${before.used}/${before.limit}`);
+
+        const service = app.get(MatchDetailsBackfillService);
+        const s = await service.run({ season: season.year, limit, dryRun });
+
+        // 요약 출력 — JSON 이 아니라 사람이 읽기 좋은 표
+        logger.log('=== backfill 요약 ===');
+        for (const r of s.perSeason) {
+          const errPart = r.lastError ? ` err=${r.lastError.slice(0, 120)}` : '';
+          logger.log(
+            `  cs=${r.competitionSeasonId} ${r.competitionName} ${r.seasonYear}: ` +
+              `targeted=${r.targeted} processed=${r.processed} failed=${r.failed} stop=${r.stoppedReason}${errPart}`,
+          );
+        }
+        logger.log(
+          `총 처리 ${s.totalProcessed} · 실패 ${s.totalFailed} · 전체 중단 사유 ${s.overallStopped}${s.dryRun ? ' [DRY RUN]' : ''}`,
+        );
+        if (configured) {
+          const after = await app.get(QuotaService).snapshot();
+          const delta = before !== null ? after.used - before.used : after.used;
+          logger.log(`quota after:  used=${after.used}/${after.limit} (delta ${delta})`);
+        }
         if (s.partial) process.exitCode = 1;
         break;
       }
