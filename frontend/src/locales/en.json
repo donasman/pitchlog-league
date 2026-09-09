@@ -347,7 +347,15 @@
     "aggregateScore": "{{home}} – {{away}} agg.",
     "sideStandingsTitle": "Standings",
     "sideScoringTitle": "Top Scorers",
-    "eplTopScorerLabel": "EPL Top Scorer"
+    "eplTopScorerLabel": "EPL Top Scorer",
+    "myTeams": {
+      "title": "My Teams",
+      "empty_hint": "Tap the star on any team to add it to your favorites. Their next match and latest result will appear here.",
+      "browser_only_notice": "Saved on this browser only. Won't appear in other devices or private windows.",
+      "no_next_match": "No upcoming match",
+      "no_last_result": "No recent result",
+      "no_ranking": "No league ranking"
+    }
   },
   "stats": {
     "pageTitle": "Stats",
@@ -381,6 +389,9 @@
     "evidenceAsOf": "As of",
     "evidenceSource": "Source",
     "asOfSuffix": "as of",
+    "dataLabel": "Data",
+    "showData": "Show source data",
+    "hideData": "Hide source data",
     "dataNote": "Numbers in answers are retrieved data. Source and timestamp shown below.",
     "thinking": "Looking up",
     "thinkingTools": "Tools",
@@ -395,7 +406,21 @@
     "comparison": "Comparison",
     "liveNote": "Live match — numbers change as the game progresses.",
     "recoverTip": "Get a notification when stats are confirmed?",
-    "clearChat": "Clear"
+    "clearChat": "Clear",
+    "viewAllStandings": "View full standings",
+    "viewAllMatches": "View all matches ({{total}})",
+    "topScorers": "Top scorers",
+    "topAssisters": "Top assisters",
+    "unitGoals": "goals",
+    "unitAssists": "assists",
+    "asOfLabel": "Answer as of",
+    "error": {
+      "not_configured": "Assistant is not configured yet. Please contact the administrator.",
+      "rate_limited": "Please try again in a moment.",
+      "model_error": "Failed to generate an answer. Please try again.",
+      "timeout": "Response is taking too long. Please try again.",
+      "generic": "An error occurred."
+    }
   },
   "notif": {
     "bell": "Notifications",
@@ -477,6 +502,11 @@
     "phase5": "Phase 5",
     "season": "2026-27 season",
     "country": "Country"
+  },
+  "favorites": {
+    "add": "Add {{name}} to favorites",
+    "remove": "Remove {{name}} from favorites",
+    "limit_reached": "You can save up to {{limit}} favorites."
   },
   "errors": {
     "notImplemented": "Not available from the backend yet ({{what}})",

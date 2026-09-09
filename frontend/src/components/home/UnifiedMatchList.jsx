@@ -59,7 +59,7 @@ export default function UnifiedMatchList({ matches = [], maxRows = 8 }) {
               {/* 홈팀 */}
               <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
                 <span className="text-sm text-foreground truncate text-right">{m.homeTeam?.shortName ?? m.homeTeam?.name}</span>
-                <TeamBadge initials={m.homeTeam?.initials} color={m.homeTeam?.color} size="xs" name={m.homeTeam?.name} />
+                <TeamBadge initials={m.homeTeam?.initials} color={m.homeTeam?.color} logoUrl={m.homeTeam?.logoUrl} size="xs" name={m.homeTeam?.name} />
               </div>
 
               {/* 스코어 */}
@@ -75,7 +75,7 @@ export default function UnifiedMatchList({ matches = [], maxRows = 8 }) {
 
               {/* 원정팀 */}
               <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                <TeamBadge initials={m.awayTeam?.initials} color={m.awayTeam?.color} size="xs" name={m.awayTeam?.name} />
+                <TeamBadge initials={m.awayTeam?.initials} color={m.awayTeam?.color} logoUrl={m.awayTeam?.logoUrl} size="xs" name={m.awayTeam?.name} />
                 <span className="text-sm text-foreground truncate">{m.awayTeam?.shortName ?? m.awayTeam?.name}</span>
               </div>
 

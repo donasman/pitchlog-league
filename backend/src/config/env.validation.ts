@@ -50,6 +50,17 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   LOGO_OUTPUT_DIR?: string;
+
+  /** Gemini API 키. 없으면 부팅은 성공하지만 POST /api/assistant 호출 시 503 */
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  GEMINI_API_KEY?: string;
+
+  /** Gemini 모델 ID. 기본값 gemini-3.5-flash */
+  @IsString()
+  @MinLength(1)
+  GEMINI_MODEL: string = 'gemini-3.5-flash';
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

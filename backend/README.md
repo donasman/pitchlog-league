@@ -68,6 +68,37 @@ npm run ingest -- logos   # 로고를 받아 ../frontend/public/logos 에 저장
 
 스케줄러는 아직 없다. Phase 2 에서 붙인다.
 
+### 어시스턴트 (MCP)
+
+`backend/src/assistant/` — 조회 서비스 10개를 LLM 이 부를 수 있는 **MCP 도구**로 감싼 계층.
+직접 부르는 채팅 UI 는 없다 (후속 판). stdio 서버로 Claude Desktop 등 외부 MCP 클라이언트가 접속한다.
+
+```bash
+npm run mcp   # nest build && node dist/cli/mcp.js — stdout 은 JSON-RPC 전용, 로그는 stderr
+```
+
+Claude Code CLI 는 프로젝트마다 `mcp.cmd` 를 wrapper 로 두고 `claude mcp add` 로 등록한다:
+
+```bash
+claude mcp add pitchlog --scope user -- cmd /c C:\Dev\pitchlog-league\backend\mcp.cmd
+```
+
+`mcp.cmd` (3줄) 는 자기 폴더로 cd 후 `node dist\cli\mcp.js` 를 부른다.
+cwd 가 `backend/` 이므로 서버 프로세스가 `.env` 를 직접 읽는다 —
+`claude mcp add --env DATABASE_URL=...` 로 값을 넘기지 않는다.
+실측 사고(2026-09-09): 셸 파싱이 `postgresql://postgres.xxx:pw@host` 형식의
+사용자명을 `postgres` 로 잘라 인증 실패. wrapper 방식으로 우회한다.
+
+등록 후 `claude mcp list` 로 확인. Claude 세션에서 `list_competitions` 등
+도구 10개가 노출된다 (2026-09-09 실 연결 · 질의 성공).
+
+도구 목록·인자 스키마·description(3상태 문구 포함)은 tools/list 로 노출된다. 도구 반환은
+`{ tool, args, asOf, data }` — `data` 는 REST API DTO 와 같다. `list_matches` 는 자동으로
+`from/to = today ±7d (KST)`, `limit=50` (max 200) — 잘렸으면 wrapper 에 `truncated:true, total:N`.
+
+`GEMINI_MODEL` 은 3.x flash 계열을 쓴다. `gemini-2.5-flash` 는 신규 프로젝트에 제공되지 않는다
+(404 NOT_FOUND — "no longer available to new users", 2026-09-09 실측). 권장 기본값 `gemini-3.6-flash`.
+
 ### 백업
 
 ```bash
@@ -84,6 +115,7 @@ npm run backup:verify     # 일회용 postgres 컨테이너에 복원해 운영 
 ```
 src/
 ├── competition/ team/ match/ standing/ player/ statistics/  조회 API
+├── assistant/               MCP 도구 층 (조회 서비스 wrapper)
 ├── ingestion/
 │   ├── api-football/      HTTP client · 쿼터 스냅샷
 │   ├── l0/                대회·시즌·팀·경기장 + 카탈로그

@@ -12,7 +12,7 @@
  */
 
 import i18n from '@/i18n'
-import { apiGet, NotImplementedError } from './http'
+import { apiGet, apiPost, NotImplementedError } from './http'
 import {
   VISIBLE_COMPETITION_API_IDS,
   competitionRefFromSlug,
@@ -32,21 +32,119 @@ import { isPastSeason } from '../utils/seasons'
 import { kstDateKey } from '../utils/dateFormat'
 import { isLive } from '../utils/matchStatus'
 
-/** 헤더·검색·페이지가 모두 대회 목록을 부른다. 한 번만 받아서 나눠 쓴다 */
-let competitionsPromise = null
+// ─── 요청 합치기 + TTL 캐시 ───────────────────────────────────
+//
+// 화면 한 장에서 같은 GET 이 여러 번 나가는 경우가 있다(오버뷰가 대회 목록·순위·경기를
+// 병렬로 부르고, 그 안에서 다시 대회 목록을 참조한다). fetch 를 그대로 두면 같은 URL
+// 요청이 겹쳐서 나간다. 여기서 두 겹으로 막는다:
+//   1) inflight  — 진행 중인 promise 를 URL 로 공유해 동시 요청을 한 번으로 합친다
+//   2) cache     — 응답을 TTL 동안 보관해 반복 조회를 아예 없앤다
+//
+// 캐시 계층은 live.js 안에서만 쓴다. mock.js 는 이 계층을 안 타므로 Mock 모드에서는
+// 자연히 우회된다(services/api.js 스위치가 mock 을 고른다). live 는 모드 판정을
+// 하지 않는다 — 실 API 를 부를 때 캐시를 걸 뿐이다.
+
+/** 진행 중인 GET 프라미스 (같은 key 는 하나만 보낸다) */
+const inflight = new Map()
+
+/** 응답 캐시 {value, expiresAt} */
+const cache = new Map()
+
+/** 대회·팀 메타는 자주 변하지 않아 300s. 그 외는 60s */
+const TTL_LONG_MS  = 300_000
+const TTL_SHORT_MS = 60_000
+
+/** path → TTL. 대회·팀 메타만 길게 잡는다 */
+function _ttlFor(path) {
+  if (path.startsWith('/api/competitions') || path.startsWith('/api/teams')) return TTL_LONG_MS
+  return TTL_SHORT_MS
+}
+
+/** null·undefined·빈 문자열을 뺀 뒤 정렬한 쿼리스트링. http.js 의 toQuery 와 같은 규칙 */
+function _cacheKey(path, params) {
+  const entries = Object.entries(params ?? {})
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => [k, String(v)])
+  if (entries.length === 0) return path
+  return path + '?' + new URLSearchParams(entries).toString()
+}
+
+/** 유효 캐시가 있으면 값, 없으면 null. 만료된 항목은 여기서 지운다 */
+function _cacheGet(key) {
+  const hit = cache.get(key)
+  if (!hit) return null
+  if (hit.expiresAt <= Date.now()) {
+    cache.delete(key)
+    return null
+  }
+  return hit.value
+}
+
+/** 새 응답을 저장한다. TTL 은 _ttlFor 로 정한다 */
+function _cacheSet(key, value, ttlMs) {
+  cache.set(key, { value, expiresAt: Date.now() + ttlMs })
+}
+
+/**
+ * apiGet 을 감싼다. 순서:
+ *   1) inflight 에 같은 key 가 있으면 그 promise 를 그대로 돌려준다
+ *   2) 캐시가 유효하면 그 값을 Promise.resolve 로 감싸 준다
+ *   3) 없으면 apiGet 을 부르고 성공 시 캐시에 넣는다. 실패는 캐시하지 않는다
+ * inflight 는 성공·실패와 관계없이 마지막에 제거한다.
+ */
+function _cachedGet(path, params) {
+  const key = _cacheKey(path, params)
+  const running = inflight.get(key)
+  if (running) return running
+
+  const cached = _cacheGet(key)
+  if (cached !== null) return Promise.resolve(cached)
+
+  const ttl = _ttlFor(path)
+  const p = apiGet(path, params)
+    .then(value => {
+      _cacheSet(key, value, ttl)
+      return value
+    })
+    .finally(() => {
+      inflight.delete(key)
+    })
+  inflight.set(key, p)
+  return p
+}
+
+/**
+ * 테스트 전용 — 캐시·inflight 를 통째로 비운다.
+ * 프로덕션 코드는 부르지 않는다(대회 목록 무효화는 invalidateCompetitions 를 쓴다).
+ */
+export function __resetCache() {
+  cache.clear()
+  inflight.clear()
+}
+
+// ─── 대회 목록 캐시 ────────────────────────────────────────────
 
 function loadCompetitions() {
-  competitionsPromise ??= apiGet('/api/competitions').then(res =>
+  return _cachedGet('/api/competitions').then(res =>
     res.items
       .filter(c => VISIBLE_COMPETITION_API_IDS.includes(c.apiId))
       .map(normalizeCompetition),
   )
-  return competitionsPromise
 }
 
-/** 대회 목록이 바뀌었을 때(언어 전환 등) 캐시를 버린다 */
+/**
+ * 대회 목록이 바뀌었을 때(언어 전환 등) 캐시를 버린다.
+ * `/api/competitions` · `/api/teams` prefix 를 함께 지운다 —
+ * 대회 표기 언어가 바뀌면 팀 목록 표기도 같이 갱신되어야 한다.
+ * inflight 은 손대지 않는다 — 진행 중 promise 는 이번 사용자 요청의 결과라 유지한다.
+ */
 export function invalidateCompetitions() {
-  competitionsPromise = null
+  for (const key of Array.from(cache.keys())) {
+    if (key.startsWith('/api/competitions') || key.startsWith('/api/teams')) {
+      cache.delete(key)
+    }
+  }
 }
 
 /** @param {string} featureKey  i18n 키 (errors.feature.*) */
@@ -69,7 +167,7 @@ export async function fetchCompetitionsOverview() {
 /** @param {string} slugOrRef  화면 라우팅은 기존 slug 를 쓴다 — 목록에서 ref 를 찾는다 */
 export async function fetchCompetition(slugOrRef) {
   const ref = await toCompetitionRef(slugOrRef)
-  const dto = await apiGet(`/api/competitions/${encodeURIComponent(ref)}`)
+  const dto = await _cachedGet(`/api/competitions/${encodeURIComponent(ref)}`)
   return { ...normalizeCompetition(dto), seasons: (dto.seasons ?? []).map(normalizeSeason) }
 }
 
@@ -100,7 +198,7 @@ async function toCompetitionRef(slugOrRef) {
 export async function fetchTeams({ competition, season } = {}) {
   if (!competition) throw new Error(i18n.t('errors.competitionRequired'))
   const ref = await toCompetitionRef(competition)
-  const res = await apiGet('/api/teams', { competition: ref, season })
+  const res = await _cachedGet('/api/teams', { competition: ref, season })
   return res.items.map(normalizeTeam)
 }
 
@@ -120,7 +218,7 @@ export async function fetchTeamsByLeague() {
 }
 
 export async function fetchTeam(slugOrRef) {
-  const dto = await apiGet(`/api/teams/${encodeURIComponent(slugOrRef)}`)
+  const dto = await _cachedGet(`/api/teams/${encodeURIComponent(slugOrRef)}`)
   return normalizeTeam(dto)
 }
 
@@ -174,7 +272,7 @@ async function isPastSeasonYear(season, ref) {
 
 /** `/api/matches` 한 번 — 정규화된 경기 배열과 목록 asOf 를 같이 준다 */
 async function loadMatches(params = {}) {
-  const res = await apiGet('/api/matches', params)
+  const res = await _cachedGet('/api/matches', params)
   return { items: (res.items ?? []).map(normalizeMatch), asOf: res.asOf ?? null }
 }
 
@@ -195,7 +293,8 @@ export async function fetchAllMatches({ competitionSlug, displayState, season } 
   if (past && !competitionSlug) return { items: [], unavailableReason: 'COMPETITION_REQUIRED' }
 
   const competition = past ? await toCompetitionRef(competitionSlug) : undefined
-  const { items } = await loadMatches({ competition, season, ...(past ? {} : matchWindow()) })
+  // 과거 시즌·단일 대회는 ≈380경기 — 백엔드 기본 limit 로는 페이지가 잘려 나온다. 명시적으로 올린다
+  const { items } = await loadMatches({ competition, season, limit: 500, ...(past ? {} : matchWindow()) })
   let result = items
   if (competitionSlug) result = result.filter(m => m.competitionSlug === competitionSlug)
   if (displayState)    result = result.filter(m => m.displayState === displayState)
@@ -219,7 +318,7 @@ export async function fetchMatchesByCompetition(slugOrRef, season) {
  * @param {string|number} id  API-Football fixture id
  */
 export async function fetchMatchDetail(id) {
-  const dto = await apiGet(`/api/matches/${encodeURIComponent(id)}`)
+  const dto = await _cachedGet(`/api/matches/${encodeURIComponent(id)}`)
   return {
     match:    normalizeMatch(dto),
     stats:    null,
@@ -242,7 +341,7 @@ export async function fetchMatch(id) {
 
 /** `/api/standings?competition=` 은 표 1장을 items 에 담아 준다. 없으면 실패다 */
 async function loadStandingsTable(ref, slugOrRef, season) {
-  const res = await apiGet('/api/standings', { competition: ref, season })
+  const res = await _cachedGet('/api/standings', { competition: ref, season })
   const table = res.items?.[0]
   if (!table) throw new Error(i18n.t('errors.competitionNotFound', { ref: slugOrRef }))
   return table
@@ -260,7 +359,8 @@ export async function fetchStandings(slugOrRef, season) {
   const range = await matchWindowFor(season, ref)
   const [table, { items: matches }] = await Promise.all([
     loadStandingsTable(ref, slugOrRef, season),
-    loadMatches({ competition: ref, season, ...range }),
+    // 과거 시즌엔 창이 걷혀 시즌 전체(≈380경기)가 온다. 안전판으로 limit 명시
+    loadMatches({ competition: ref, season, limit: 500, ...range }),
   ])
   return normalizeStandings(table, matches)
 }
@@ -278,9 +378,10 @@ export async function fetchCompetitionHub(slugOrRef, season) {
   // 대회 상세가 시즌 목록을 같이 주므로 isCurrent 로 직접 가린다 — 과거 시즌엔 공통 창이 0건을 만든다
   const range = isPastSeason(season, comp.seasons) ? {} : matchWindow()
   const [{ items: matches }, table, teamsRes] = await Promise.all([
-    loadMatches({ competition: comp.ref, season, ...range }),
+    // 과거 시즌엔 창이 걷혀 대회 시즌 전체(≈380경기)가 온다. 안전판으로 limit 명시
+    loadMatches({ competition: comp.ref, season, limit: 500, ...range }),
     loadStandingsTable(comp.ref, slugOrRef, season),
-    apiGet('/api/teams', { competition: comp.ref, season }),
+    _cachedGet('/api/teams', { competition: comp.ref, season }),
   ])
   return {
     comp,
@@ -300,8 +401,9 @@ export async function fetchCompetitionHub(slugOrRef, season) {
  */
 export async function fetchTeamFixtures(ref) {
   const [teamDto, { items: matches }, comps] = await Promise.all([
-    apiGet(`/api/teams/${encodeURIComponent(ref)}`),
-    loadMatches({ team: ref }),
+    _cachedGet(`/api/teams/${encodeURIComponent(ref)}`),
+    // 팀 일정은 시즌 전체(과거·오늘·미래 전부) — 6대회 × 시즌이면 60경기가 넘을 수 있어 명시
+    loadMatches({ team: ref, limit: 500 }),
     loadCompetitions(),
   ])
   const team = normalizeTeam(teamDto)
@@ -336,8 +438,9 @@ function byKickoff(a, b) {
 export async function fetchOverview() {
   const [comps, matchesRes, standingsRes] = await Promise.all([
     loadCompetitions(),
-    loadMatches(matchWindow()),
-    apiGet('/api/standings'),
+    // 공통 창(−14~+21일) 안이라도 6대회 합치면 수백 건이 나올 수 있어 안전판으로 limit 명시
+    loadMatches({ ...matchWindow(), limit: 500 }),
+    _cachedGet('/api/standings'),
   ])
   const allMatches = matchesRes.items
   const tables     = standingsRes.items ?? []
@@ -382,7 +485,9 @@ export async function fetchOverview() {
       stage:         deriveStage(matches, nowDate),
       leader: first
         ? { teamId: first.teamId, teamSlug: first.teamSlug, teamName: first.teamName,
-            teamInitials: first.teamInitials, teamColor: first.teamColor, points: first.points }
+            teamInitials: first.teamInitials, teamColor: first.teamColor,
+            teamLogoUrl: first.teamLogoUrl, teamApiId: first.teamApiId,
+            points: first.points }
         : null,
       nextKickoff: next?.date ?? null,
       updatedAt:   tableFor(comp)?.asOf ?? null,
@@ -417,6 +522,20 @@ export async function fetchOverview() {
   }
 }
 
+// ─── 어시스턴트 ────────────────────────────────────────────────
+
+/**
+ * AI 어시스턴트 — `POST /api/assistant` 로 질문을 보낸다.
+ * 4xx/5xx 는 apiPost 규약대로 그대로 throw 한다 (컨텍스트가 error 상태로 그린다).
+ * signal 이 abort 되면 fetch 가 AbortError 로 reject — 컨텍스트가 signal.aborted 로 걸러 낸다.
+ * @param {string} question
+ * @param {AbortSignal} [signal]  이전 질문 취소용
+ * @returns {Promise<{answer:string, evidence:Array<{tool:string,args:object,asOf:string|null}>, data:Array<object>, truncated:boolean, model:string}>}
+ */
+export async function askAssistant(question, signal) {
+  return apiPost('/api/assistant', { question }, { signal })
+}
+
 // ─── 아직 백엔드에 없는 것 ─────────────────────────────────────
 // L1 스쿼드(9단계) · 이벤트·라인업·통계(10단계) 이후에 생긴다.
 
@@ -430,7 +549,7 @@ export const fetchPlayerStats      = () => notImplemented('errors.feature.player
  * @param {string} slug
  */
 export async function fetchPlayerDetail(slug) {
-  const dto = await apiGet(`/api/players/${encodeURIComponent(slug)}`)
+  const dto = await _cachedGet(`/api/players/${encodeURIComponent(slug)}`)
   return normalizePlayerDetail(dto)
 }
 
@@ -444,8 +563,8 @@ export const fetchTopScorersAll    = () => notImplemented('errors.feature.stats'
  */
 export async function fetchAllStats() {
   const [scorers, assisters] = await Promise.all([
-    apiGet('/api/stats/scorers'),
-    apiGet('/api/stats/assisters'),
+    _cachedGet('/api/stats/scorers'),
+    _cachedGet('/api/stats/assisters'),
   ])
   return {
     topScorers:   (scorers.items   ?? []).map(normalizeStatsRow),
@@ -461,8 +580,8 @@ export async function fetchCompetitionStats(slug) {
   const ref = await toCompetitionRef(slug)
   const [comp, scorers, assisters] = await Promise.all([
     fetchCompetition(slug),
-    apiGet('/api/stats/scorers',   { competition: ref }),
-    apiGet('/api/stats/assisters', { competition: ref }),
+    _cachedGet('/api/stats/scorers',   { competition: ref }),
+    _cachedGet('/api/stats/assisters', { competition: ref }),
   ])
   return {
     comp,

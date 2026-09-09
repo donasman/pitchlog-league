@@ -161,6 +161,14 @@ frontend/
 - API 키와 비밀번호는 프론트엔드 환경변수에 저장하지 않음
 - `VITE_` 접두사 환경변수는 브라우저에 공개된다는 전제로 사용함
 
+### 요청 합치기 · TTL 캐시 (실 API 모드)
+
+- `services/live.js` 안에 요청 합치기 + TTL 캐시 계층을 둔다. 같은 URL 이 이미 떠 있으면 같은 Promise 를 돌려주고, 응답은 URL 을 key 로 캐시한다.
+- 기본 TTL 60 초. 대회·시즌·팀 목록(`/api/competitions*`·`/api/teams*`)은 300 초.
+- Mock 모드는 이 계층 밖 — `mock.js` 는 캐시 없이 즉시 반환.
+- `invalidateCompetitions()` 는 대회·팀 캐시를 비운다 (언어 전환 등 명명 갱신 시).
+- 백엔드가 붙이는 `ETag`·`Cache-Control` 은 브라우저 HTTP 캐시가 자동으로 처리한다 — 프론트가 명시적으로 헤더를 다루지 않는다.
+
 ## 6. 빌드와 품질 기준
 
 기본 명령은 다음과 같이 구성함.
@@ -267,11 +275,28 @@ TypeScript 타입, `interface`, `type` 선언, `as const` 등 JavaScript에서 �
 - 이미지 너비와 높이를 지정하여 레이아웃 이동을 줄임
 - 화면 밖 이미지는 `loading="lazy"`로 불러옴
 - 로고 로딩 실패 시 팀 이니셜 배지를 표시함
+- 팀·대회 로고는 `services/normalize.js` 의 `localLogo(kind, apiId, sourceUrl)` 가 로컬 경로(`/logos/{kind}/{apiId}.webp`)로 바꾼다. 순위표(`normalizeStanding` 의 `teamLogoUrl`)·통계 랭킹(`normalizeStatsRow`)·대회 선두 팀(`live.js:fetchOverview` leader)·홈 대회 카드도 이 값을 쓴다. `TeamBadge` 는 로드 실패 시 이니셜로 폴백한다.
 - WebP 또는 SVG를 우선 사용함
 - 선수·경기 목록은 페이지네이션 또는 구간 로딩을 사용함
 - 차트·포메이션처럼 큰 컴포넌트는 지연 로딩함
 - Vite 개발 서버는 운영에 사용하지 않고 `dist` 결과물만 배포함
 - `package-lock.json`을 유지하고 CI에서는 `npm ci`를 사용함
+
+### 어시스턴트 근거 카드 매핑
+
+`AssistantPanel` 은 응답의 `data[]` (각 원소 = 도구 wrapper) 를 순회하며 `tool` 필드로 카드 종류를 고른다. 어시스턴트 전용 표를 새로 만들지 않고 기존 컴포넌트를 재사용한다.
+
+| 도구 | 카드 | 규격 |
+|---|---|---|
+| `get_standings` | `StandingsTable` (`maxRows=10`, `compact`) + "전체 순위 보기 → `/standings?competition=<slug>`" 링크 | wrapper.data 를 `normalizeStandings` 로 정규화 |
+| `list_matches` · `get_match` | `MatchCard` 그리드 (`repeat(auto-fill, minmax(260px, 1fr))`, 최대 10) + 10 초과 시 "경기 전체 보기 → `/matches?competition=<slug>`" 링크 | `wrapper.data.items` 각각 `normalizeMatch` |
+| `get_top_scorers` · `get_top_assisters` | `StatsRanking` (title = 도구별 i18n, unit = 골/도움) | `wrapper.data.items` 각각 `normalizeStatsRow` |
+| 그 외 (get_competition · list_competitions · get_team · list_teams · get_player) | 접힘 JSON (기존 `DataTable`) | 정규화 없이 원문 그대로 |
+
+- 카드가 하나라도 그려지면 접힘 JSON 은 "원본 데이터 보기" 토글로 남긴다.
+- `wrapper.data` 는 백엔드 조회 API DTO 원문. StandingsTable 등 컴포넌트는 정규화된 shape 을 요구하므로 `services/normalize.js` 함수를 반드시 태운다.
+- 최상위 `asOf` (= evidence 중 가장 오래된 값) 는 답변 카드 하단에 "이 답변 기준 · {KST}" 로 표시한다. 여러 도구를 다른 시점 데이터로 조합한 답변임을 사용자에게 보이는 장치.
+- 요청 경합 방어: `AssistantContext` 는 요청마다 seq 를 증가시키고 이전 요청은 `AbortController.abort()` 로 취소한다. 늦게 온 응답(seq 미스매치)은 버린다. 패널 닫기(closePanel)도 진행 중 요청을 abort.
 
 ## 13. 한국어·영어 지원 방향
 
