@@ -5,6 +5,7 @@
  *   npm run ingest -- l2 [--all-seasons] [--season=<year>]
  *   npm run ingest -- l6 [--all-seasons] [--season=<year>] [--only=players|rankings|teams]
  *   npm run ingest -- probe-players [--all-seasons]
+ *   npm run ingest -- probe-details --fixture=<id[,id,...]>
  *   npm run ingest -- status
  *   npm run ingest -- logos [--force]
  *
@@ -27,7 +28,7 @@ const logger = new Logger('ingest');
 
 const USAGE =
   'l0 | l1 | l2 [--all-seasons] [--season=<year>] | l6 [--all-seasons] [--season=<year>] [--only=players|rankings|teams] | ' +
-  'probe-players [--all-seasons] | status | logos [--force]';
+  'probe-players [--all-seasons] | probe-details --fixture=<id[,id,...]> | status | logos [--force]';
 
 /** `--season=` 검증 — 잘못된 연도로 수백 콜을 태우지 않는다. 부르기 전에 막는다 */
 const parseSeasonFlag = (): { ok: true; year: number | undefined } | { ok: false; raw: string } => {
@@ -114,6 +115,36 @@ async function main(): Promise<void> {
         logger.log(JSON.stringify(s, null, 2));
         await app.get(QuotaService).snapshot();
         if (s.partial) process.exitCode = 1;
+        break;
+      }
+      case 'probe-details': {
+        const raw = flagValue('fixture');
+        if (raw === null) {
+          logger.error('--fixture=<id[,id,...]> 필요 — 예: --fixture=1557377,1557378');
+          process.exitCode = 1;
+          break;
+        }
+        const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+        const ids: number[] = [];
+        let hasInvalid = false;
+        for (const p of parts) {
+          const n = Number(p);
+          if (!Number.isInteger(n) || n <= 0) {
+            hasInvalid = true;
+            break;
+          }
+          ids.push(n);
+        }
+        if (hasInvalid || ids.length === 0) {
+          logger.error(`--fixture 값이 잘못됐다: ${raw} (양의 정수를 콤마로 구분)`);
+          process.exitCode = 1;
+          break;
+        }
+        await app.get(QuotaService).snapshot();
+        const summary = await app.get(ProbeService).probeDetails(ids);
+        logger.log(JSON.stringify(summary, null, 2));
+        await app.get(QuotaService).snapshot();
+        if (summary.errors.length > 0) process.exitCode = 1;
         break;
       }
       case 'probe-players': {
