@@ -4,18 +4,20 @@
  * 실제 L3·L5 서비스를 통해 DB 에 쓴다. ApiFootballClient 는 픽스처 3개(1451160·1557387·1622630) 를
  * 로드해 fixture 마다 다른 응답을 준다. QuotaService 도 override — /status 를 안 부르고 스크립트로 준다.
  *
- * 검증 대상 10 케이스:
+ * 검증 대상 12 케이스:
  *   1. 대상 SELECT 필터 — detailCheckedAt≠null · detailEligible=false · 24h 안 · status NS/LIVE ·
  *      다른 대회시즌 → 모두 제외. 자격 있는 것만 처리
  *   2. 커서 뒤만 처리 — backfillJob.cursorMatchId 세팅 시 그 뒤 id 만
  *   3. --limit min(N, budget) — limit 이 작으면 limit 대로
- *   4. --limit min 이 budget 이 작은 경우 — budget 이 잘라낸다
+ *   4a. 자율 상한 (daily_cap) — used=5692, limit=7500 → floor((5700-5692)/4)=2 경기 · daily_cap
+ *   4b. API 상한 (quota_exhausted) — used=7496, limit=7500 → floor((7500-7496)/4)=1 경기 · quota_exhausted
  *   5. ApiQuotaExhaustedError 중단 — overallStopped=quota_exhausted · cursor 는 마지막 성공 경기
  *   6. 한 엔드포인트 실패 — 그 경기 failed=1 · 나머지 서비스 · 다음 경기 정상
  *   7. DONE 인 job 은 skip — API 안 부름
  *   8. dry-run — 실 API 안 부름 · targeted 만 계산
  *   9. no_targets — 커서 뒤 대상 없으면 stoppedReason='no_targets'
  *  10. season 지정 안 하면 isCurrent+screenCompetitionWhere 만
+ *  11. 매 경기 앞 quota 재확인 — 시즌 시작 시 여유 있어도 경기 처리 중 quota 가 자율 상한 넘으면 그 경기 앞에서 중단
  *
  * 밴드 997_4xx (l3·l5 밴드 밖).
  *
@@ -148,20 +150,33 @@ class FakeApiFootballClient {
 /**
  * Fake QuotaService — /status 실 호출 대신 스크립트로 주는 값을 돌려준다.
  * 인수 없는 constructor.
+ *
+ * `deltaPerSnapshot` 은 snapshot 이 리턴하기 직전에 used 를 이만큼 늘린다 —
+ * "매 경기 앞 재확인" 케이스에서 quota 소진 진행을 흉내낸다.
+ * 다만 최초 snapshot 을 skipFirstDelta 번 만큼은 그대로 준다 — 시즌 진입 첫 snapshot 을
+ * 진짜 상태 그대로 보고 싶을 때 씀.
  */
 class FakeQuotaService {
   used = 0;
   limit = 7_500;
   snapshotCount = 0;
+  deltaPerSnapshot = 0;
+  skipFirstDelta = 0;
 
   async snapshot(): Promise<{ used: number; limit: number; overWarn: boolean; expiresOn: Date | null }> {
     this.snapshotCount++;
-    return {
+    const snap = {
       used: this.used,
       limit: this.limit,
       overWarn: this.used >= 6_000,
       expiresOn: null,
     };
+    if (this.skipFirstDelta > 0) {
+      this.skipFirstDelta--;
+    } else if (this.deltaPerSnapshot !== 0) {
+      this.used += this.deltaPerSnapshot;
+    }
+    return snap;
   }
 }
 
@@ -417,6 +432,8 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     fakeQuota.used = 0;
     fakeQuota.limit = 7_500;
     fakeQuota.snapshotCount = 0;
+    fakeQuota.deltaPerSnapshot = 0;
+    fakeQuota.skipFirstDelta = 0;
   };
 
   const cleanupFixture = async () => {
@@ -571,19 +588,37 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
   }, 180_000);
 
   // ================================================================================================
-  // Case 4: --limit min 이 budget 인 경우
+  // Case 4a: 자율 상한 (daily_cap) — used < limit 이지만 자율 상한(5700) 을 이미 넘긴 상태
   // ================================================================================================
-  it('4. --limit=100 · 예산 2 경기치만 → 2 경기만', async () => {
+  it('4a. --limit=100 · 자율 상한 앞 2경기치만 → 2 경기 · daily_cap', async () => {
     await resetSeason();
-    // limit=7500, used=7492 → remaining=8, /4=2
-    fakeQuota.used = 7_492;
+    // limit=7500, used=5692, 자율 상한 5700 → remaining=8, /4=2
+    fakeQuota.used = 5_692;
     fakeQuota.limit = 7_500;
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 100 });
     expect(res.totalProcessed).toBe(2);
     expect(res.perSeason[0].processed).toBe(2);
-    // 남은 대상은 있으니 limit_reached 로 잘림 (targeted > processed)
-    expect(res.overallStopped).toBe('limit_reached');
+    // 두 경기 처리 후 매 경기 앞 재확인에서 자율 상한에 도달 → daily_cap
+    expect(res.overallStopped).toBe('daily_cap');
+    expect(res.perSeason[0].stoppedReason).toBe('daily_cap');
+  }, 180_000);
+
+  // ================================================================================================
+  // Case 4b: API 상한 (quota_exhausted) — 시즌 진입에서 used>=limit 인 극단 상태
+  // ================================================================================================
+  it('4b. --limit=100 · 시즌 진입 시 used>=limit → 0 경기 · quota_exhausted', async () => {
+    await resetSeason();
+    // used=7500, limit=7500 → remaining=0. 시즌 진입 quota 판정에서 quota_exhausted
+    fakeQuota.used = 7_500;
+    fakeQuota.limit = 7_500;
+
+    const res = await backfill.run({ season: SEASON_YEAR, limit: 100 });
+    expect(res.totalProcessed).toBe(0);
+    expect(res.perSeason[0].processed).toBe(0);
+    // used >= limit → quota_exhausted
+    expect(res.overallStopped).toBe('quota_exhausted');
+    expect(res.perSeason[0].stoppedReason).toBe('quota_exhausted');
   }, 180_000);
 
   // ================================================================================================
@@ -756,5 +791,36 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     expect(otherM.hasLineups).toBeNull();
     expect(otherM.hasEvents).toBeNull();
     expect(otherM.detailCheckedAt).toBeNull();
+  }, 180_000);
+
+  // ================================================================================================
+  // Case 11: 매 경기 앞 quota 재확인 — 시즌 시작 시 여유 있어도 진행 중 자율 상한 넘으면 그 경기 앞에서 중단
+  // ================================================================================================
+  it('11. 매 경기 앞 재확인 — used 가 진행 중 자율 상한 넘기면 그 경기 앞에서 daily_cap', async () => {
+    await resetSeason();
+    // 시즌 진입 시 used=5000 (자율 상한 5700 대비 700 여유 · 예산상 175 경기치)
+    // 시즌 진입 snapshot 은 skip. 매 경기 앞 snapshot 마다 used 를 232 씩 늘림 →
+    //   경기1 앞: used=5000 (통과, 5700-5000=700 >= 4) → 이후 5232
+    //   경기2 앞: used=5232 (통과, 5700-5232=468 >= 4) → 이후 5464
+    //   경기3 앞: used=5464 (통과, 5700-5464=236 >= 4) → 이후 5696
+    //   경기4 앞: used=5696 (부족, 5700-5696=4 == PER_MATCH_CALLS 통과) → 이후 5928
+    //   → 필요한 건 4 미만이 되게 하는 것. delta 를 233 으로 조정:
+    //   경기1 앞 5000 → 이후 5233
+    //   경기2 앞 5233 → 이후 5466
+    //   경기3 앞 5466 → 이후 5699 (5700-5466=234 >= 4 통과)
+    //   경기4 앞 5699 → 5700-5699=1 < 4 → daily_cap 중단
+    //   확인: 3경기 처리, 4번째 경기 앞에서 중단
+    fakeQuota.used = 5_000;
+    fakeQuota.limit = 7_500;
+    fakeQuota.skipFirstDelta = 1; // 시즌 진입 snapshot 은 delta 적용 안 함
+    fakeQuota.deltaPerSnapshot = 233;
+
+    const res = await backfill.run({ season: SEASON_YEAR, limit: 100 });
+    const s = res.perSeason[0];
+    expect(s.processed).toBe(3);
+    expect(s.stoppedReason).toBe('daily_cap');
+    expect(res.overallStopped).toBe('daily_cap');
+    // API 호출은 3경기 × 4엔드포인트 = 12
+    expect(fake.callCount).toBe(12);
   }, 180_000);
 });

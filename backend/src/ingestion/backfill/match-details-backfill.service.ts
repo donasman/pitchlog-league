@@ -9,11 +9,14 @@
  *   시도한 뒤 갱신된다 — 이 판이 죽어도 다음 판이 뒤부터.
  *
  * ## 예산 (INGESTION_STRATEGY 3-5)
- *   경기당 4콜 고정. quota.snapshot 이 준 `limit_day - used` 를 4로 나눈 만큼만 잡는다.
- *   `limit_day` 는 API-Football 이 준 값(Pro 는 7,500). 5,700 은 경고선이지 상한이 아니다 —
- *   상한은 API 가 준 값이다. WARN 은 QuotaService 로그가 낸다.
- *   경기마다 quota 를 다시 안 부른다 — 4콜 뒤에도 남은 상한이 4콜치 아래로 떨어졌는지는
- *   L3·L5 가 `ApiQuotaExhaustedError` 로 알려준다.
+ *   경기당 4콜 고정. 우리는 API 상한(Pro=7,500)보다 낮은 5,700 을 자율 상한으로 지킨다 —
+ *   `effectiveLimit = min(quota.limit, DAILY_CAP_CALLS=5700)`. `remaining = effectiveLimit - used`
+ *   를 4로 나눈 만큼만 잡는다. 우리 자율 상한이 API 상한보다 먼저 걸린다.
+ *   중단 사유는 실제 원인을 구분한다:
+ *     - `quota_exhausted`: used >= quota.limit (API 가 실제로 429 낼 상태)
+ *     - `daily_cap`: used < quota.limit 이지만 used >= DAILY_CAP_CALLS (우리 자율 상한)
+ *   시즌 진입 시 1회, 그리고 **매 경기 처리 앞에서** quota 를 다시 스냅숏한다 —
+ *   같은 판 안에서 다른 시즌·다른 프로세스가 예산을 먹었을 수 있다.
  *
  * ## 소유권 (D18·D19·D20)
  *   여기서 matches 를 직접 갱신하지 않는다. L3·L5 가 각자의 has_* 를 세우고
@@ -91,6 +94,8 @@ export interface BackfillDetailsResult {
 }
 
 const PER_MATCH_CALLS = 4;
+/** 우리 자율 일일 상한 (INGESTION_STRATEGY 3-5). API 상한(Pro=7500)보다 낮다 — 우리가 먼저 멈춘다 */
+const DAILY_CAP_CALLS = 5_700;
 const RECENT_MATCH_LOCK_MS = 24 * 60 * 60 * 1_000;
 const PROGRESS_EVERY = 50;
 
@@ -176,10 +181,13 @@ export class MatchDetailsBackfillService {
           limitForThisSeason = opts.limit ?? Number.MAX_SAFE_INTEGER;
         } else {
           const q = await this.quota.snapshot();
-          const remainingByBudget = Math.floor((q.limit - q.used) / PER_MATCH_CALLS);
+          const effectiveLimit = Math.min(q.limit, DAILY_CAP_CALLS);
+          const remainingByBudget = Math.floor((effectiveLimit - q.used) / PER_MATCH_CALLS);
           if (remainingByBudget <= 0) {
             const reason: BackfillStopReason = q.used >= q.limit ? 'quota_exhausted' : 'daily_cap';
-            this.logger.warn(`${label}: 남은 예산 부족 — ${reason} (used=${q.used}/${q.limit})`);
+            this.logger.warn(
+              `${label}: 남은 예산 부족 — ${reason} (used=${q.used}/${q.limit} · cap=${DAILY_CAP_CALLS})`,
+            );
             overallStopped = reason;
             perSeason.push({
               competitionSeasonId: cs.id,
@@ -271,6 +279,19 @@ export class MatchDetailsBackfillService {
             if (opts.limit !== undefined && totalProcessed + processed >= opts.limit) {
               seasonStop = 'limit_reached';
               overallStopped = 'limit_reached';
+              break;
+            }
+
+            // 예산 재확인 (매 경기 앞) — 같은 판 안에서도 quota 는 계속 흘러간다.
+            // 시즌 시작 스냅숏 이후에 다른 프로세스·이전 경기 처리로 quota 가 상한을 넘었을 수 있다.
+            const q2 = await this.quota.snapshot();
+            const effectiveLimit2 = Math.min(q2.limit, DAILY_CAP_CALLS);
+            if (effectiveLimit2 - q2.used < PER_MATCH_CALLS) {
+              seasonStop = q2.used >= q2.limit ? 'quota_exhausted' : 'daily_cap';
+              overallStopped = seasonStop;
+              this.logger.warn(
+                `${label}: 매 경기 예산 재확인 부족 — ${seasonStop} (used=${q2.used}/${q2.limit} · cap=${DAILY_CAP_CALLS}) · 이 경기부터 중단`,
+              );
               break;
             }
 
