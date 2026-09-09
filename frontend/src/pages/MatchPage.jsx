@@ -120,7 +120,7 @@ function ScoreBanner({ match, t, locale }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12 }}>
         {/* 홈팀 */}
         <div style={{ display: 'grid', gap: 8, justifyItems: 'center', minWidth: 0 }}>
-          <TeamBadge initials={match.homeTeam?.initials} color={match.homeTeam?.color} size="lg" name={match.homeTeam?.name} />
+          <TeamBadge initials={match.homeTeam?.initials} color={match.homeTeam?.color} logoUrl={match.homeTeam?.logoUrl} size="lg" name={match.homeTeam?.name} />
           <span className="tname t-card" style={{ fontWeight: 700, textAlign: 'center', width: '100%' }} title={homeName}>
             {homeName}
           </span>
@@ -160,7 +160,7 @@ function ScoreBanner({ match, t, locale }) {
 
         {/* 원정팀 */}
         <div style={{ display: 'grid', gap: 8, justifyItems: 'center', minWidth: 0 }}>
-          <TeamBadge initials={match.awayTeam?.initials} color={match.awayTeam?.color} size="lg" name={match.awayTeam?.name} />
+          <TeamBadge initials={match.awayTeam?.initials} color={match.awayTeam?.color} logoUrl={match.awayTeam?.logoUrl} size="lg" name={match.awayTeam?.name} />
           <span className="tname t-card" style={{ fontWeight: 700, textAlign: 'center', width: '100%' }} title={awayName}>
             {awayName}
           </span>

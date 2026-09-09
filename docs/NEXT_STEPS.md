@@ -57,6 +57,12 @@
 그래서 5장 "로고 자체 저장" 을 8단계 백필보다 앞으로 당겼다.
 받아서 96×96 webp 로 줄이니 161개 1.1MB(평균 4.3KB) — 원본 그대로면 14.5MB 였다.
 
+### 관찰 (09-09, 즐겨찾기 판 브라우저 실측)
+
+`/teams` 페이지가 가로 스크롤 28px. **이번 판 회귀 아니다** — FavoriteToggle 별 버튼을
+`display:none` 으로 두고 재측정해도 `scrollWidth` 1498 로 동일. 카드 그리드 자체가 뷰포트를
+넘는다. 다음 화면 정비 판(7장)에서 같이 본다.
+
 ### 다음 진행 순서 — 09-07 중간 점검 후 확정 (`PLAN_REVIEW.md`)
 
 09-07 에 계획한 것은 다 끝났다. **Phase 1 관문(스쿼드 diff)은 통과했다.**
@@ -82,6 +88,11 @@
 | 5 | **전환** — 워커 대상이 "어제 끝난 경기" 로 바뀐다. 코드 변경 없음 | 8-c | ~50/일 | 라이브만 빼고 **하루 지연으로 완전** |
 | 6 | **L4 실시간** — 폴링 윈도우 · 15초 강등 · `data_version` · FT → L5 | 10 | 경기일 ~4,700 | 홈 LIVE 히어로 · 요약 스트립 |
 | 7 | L6 보정 · 한국어 팀명 110 · L1 #9~#11 · 알림 · AI · L2-b 녹아웃 tie (2027-02) | 8-d·9·11 | | |
+| ~~8~~ | ~~**챗봇 도구 층 (MCP)**~~ ✅ 09-08 PR #38 — `backend/src/assistant/` 도구 10개(list_competitions·get_competition·list_teams·get_team·list_matches·get_match·get_standings·get_top_scorers·get_top_assisters·get_player) · `cli/mcp.ts` stdio 서버 · golden.json 15건 · e2e 25/25. LLM 호출·채팅 UI 없음 | 6·9 | 0 | ✅ LLM 이 결정적 계층을 부를 배관 |
+| ~~9~~ | ~~**즐겨찾기 (팀)**~~ ✅ 09-09 PR #39 — 팀만 로컬 저장(`localStorage: pitchlog-favorites`, 상한 5). `FavoritesContext`·`FavoriteToggle`·홈 `MyTeamsSection`(다음 경기·최근 결과·리그 순위). 선수·대회 북마크는 후속 판 | — | 0 | ✅ 즐겨찾기 목록 화면 |
+| ~~10~~ | ~~**챗봇 LLM 연결 + 로고 적용**~~ ✅ 09-09 PR #41 — `POST /api/assistant` (Gemini · @google/genai@2.21.0 · 상한 5호출/30초 · 메모리 rate limit) · `AssistantPanel` 실 API 연결 · 저장돼 있는데 안 쓰이던 팀·대회 로고 161개를 순위표·통계·홈 대회 카드에 적용(`normalizeStanding`·`normalizeStatsRow`·leader shape 에 `teamLogoUrl` 추가). 배포·서버화는 후속 판 | 6·9 | 0 | ✅ 자연어 질문 · 화면에 로고 |
+| ~~11~~ | ~~**조회 성능 (캐시 헤더 · 페이지 상한 · 프론트 요청 합치기)**~~ ✅ 09-09 PR #42 — `/api/*` 전역 `CacheHeaderInterceptor` (ETag · If-None-Match 304 · Cache-Control 60s) · `/api/matches` `limit`(기본 100·최대 500) + `total`·`hasMore` · `services/live.js` 요청 합치기 + TTL 캐시(기본 60s · competitions/teams 300s · Mock 우회 · **askAssistant POST 는 캐시 밖**). assistant 실행 상한·최상위 asOf·규칙 6 은 PR #41 위 후속 판 | 6·9 | 0 | ✅ /standings 재방문 캐시 hit |
+| ~~12~~ | ~~**어시스턴트 근거 카드 (도구별 컴포넌트 재사용) + 실행 상한 8 + 최상위 asOf + 규칙 6**~~ ✅ 09-09 PR #<TBD> — `AssistantPanel` 이 `data[]` 를 tool 별로 매핑해 `StandingsTable`·`MatchCard`·`StatsRanking` 재사용(그 외는 접힘 JSON). `MAX_TOOL_EXECUTIONS=8` (왕복 5·전체 30초와 별개). 응답 최상위 `asOf` = evidence 중 사전순 최소. `AssistantContext` 요청 경합 방어(seq · AbortController). SYSTEM_PROMPT 규칙 6 "판정 표현 금지" | 8 | 0 | ✅ 어시스턴트 답변에 표가 아니라 카드 |
 
 4번의 6일은 손이 아니라 쿼터가 쓰는 시간이다. 그동안 남은 프론트 화면(경기 상세 탭 · CompetitionHub 랭킹) ·
 한국어 팀명 CSV 를 만든다.

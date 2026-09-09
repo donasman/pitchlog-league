@@ -7,6 +7,7 @@ import { useParams, Link } from 'react-router-dom'
 import { MapPin, Calendar, ChevronRight, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import TeamBadge from '@/components/ui/TeamBadge'
+import FavoriteToggle from '@/components/ui/FavoriteToggle'
 import FormBadge from '@/components/ui/FormBadge'
 import MatchCard from '@/components/ui/MatchCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -52,9 +53,12 @@ export default function TeamPage() {
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8 space-y-5">
       {/* 팀 헤더 */}
       <div className="pl-card" style={{ padding: 'clamp(14px,3vw,24px)', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <TeamBadge initials={team.initials} color={team.color} size="lg" name={team.name} />
+        <TeamBadge initials={team.initials} color={team.color} logoUrl={team.logoUrl} size="lg" name={team.name} />
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-foreground truncate">{teamDisplayName}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <h1 className="text-2xl font-bold text-foreground truncate" style={{ margin: 0, minWidth: 0 }}>{teamDisplayName}</h1>
+            <FavoriteToggle slug={slug} label={teamDisplayName} size="md" />
+          </div>
           <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5"><MapPin size={13} aria-hidden="true" />{team.stadium}</span>
             <span>{t('team.founded')} {team.foundedYear}</span>

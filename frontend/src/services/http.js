@@ -58,6 +58,43 @@ export async function apiGet(path, params) {
   return res.json()
 }
 
+/**
+ * POST 요청 — 어시스턴트 질문 등 쓰기 없는 명령형 호출에 쓴다.
+ * 오류는 apiGet 과 같은 규약: 2xx 가 아니면 백엔드가 준 message 를 살려 throw.
+ *
+ * opts.signal 로 AbortController 를 전달할 수 있다 — 어시스턴트가 새 질문을
+ * 보낼 때 이전 진행 중 요청을 취소하는 데 쓴다. abort 시 fetch 는 AbortError 로
+ * reject 하고, 호출자(AssistantContext)가 `signal.aborted` 로 걸러 조용히 무시한다.
+ *
+ * @param {string} path  `/api/` 로 시작하는 경로
+ * @param {object} [body] JSON 직렬화 가능한 본문
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function apiPost(path, body, opts = {}) {
+  const url = `${BASE}${path}`
+
+  let res
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body ?? {}),
+      signal: opts.signal,
+    })
+  } catch (cause) {
+    throw new Error(i18n.t('errors.networkFailed', { detail: `${url} — ${cause.message}` }), { cause })
+  }
+
+  if (!res.ok) {
+    const detail = await readErrorMessage(res)
+    throw new Error(
+      i18n.t('errors.requestFailed', { status: res.status, detail: detail ?? `${res.statusText} ${path}` }),
+    )
+  }
+
+  return res.json()
+}
+
 /** Nest 예외 필터가 { message } 를 준다. 본문이 없거나 JSON 이 아니면 조용히 포기한다 */
 async function readErrorMessage(res) {
   try {

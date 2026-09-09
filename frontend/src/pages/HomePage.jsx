@@ -10,6 +10,7 @@
  *  ⑤ 푸터
  */
 
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
@@ -20,6 +21,7 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import NotImplementedState from '@/components/ui/NotImplementedState'
 import AskBar from '@/components/home/AskBar'
+import MyTeamsSection from '@/components/home/MyTeamsSection'
 import { toKSTTime } from '@/utils/dateFormat'
 
 /* ── 구역 색 (tokens.css --z-* 와 동일) ── */
@@ -199,6 +201,45 @@ function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   CompetitionEmblem — 대회 로고, 없으면 shortName 텍스트로 폴백
+   normalize.js 가 채워 준 comp.logoUrl 을 소비한다. 로딩 실패 시 이니셜로 떨어진다
+   (TeamBadge 폴백과 같은 규칙 — 이 자리는 span 이라 별도 상태를 둔다).
+───────────────────────────────────────────────────────────── */
+function CompetitionEmblem({ comp }) {
+  const [failed, setFailed] = useState(false)
+  const showImg = comp.logoUrl && !failed
+  return (
+    <span
+      className="pl-emblem"
+      style={{
+        width: 36,
+        height: 36,
+        fontSize: 11,
+        fontWeight: 700,
+        background: showImg ? 'transparent' : 'var(--pl-fill-2)',
+        color: 'var(--pl-sub)',
+        borderRadius: 8,
+        flexShrink: 0,
+      }}
+    >
+      {showImg ? (
+        <img
+          src={comp.logoUrl}
+          alt={comp.name ?? comp.shortName}
+          width={36}
+          height={36}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          style={{ width: 36, height: 36, objectFit: 'contain' }}
+        />
+      ) : (
+        comp.shortName
+      )}
+    </span>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    CompetitionCard — 6개 대회 각 카드
 ───────────────────────────────────────────────────────────── */
 function CompetitionCard({ comp, t, locale }) {
@@ -221,22 +262,7 @@ function CompetitionCard({ comp, t, locale }) {
     >
       {/* 헤더: 엠블럼 + 이름 + 상태 배지 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* 대회 이니셜 배지 */}
-        <span
-          className="pl-emblem"
-          style={{
-            width: 36,
-            height: 36,
-            fontSize: 11,
-            fontWeight: 700,
-            background: 'var(--pl-fill-2)',
-            color: 'var(--pl-sub)',
-            borderRadius: 8,
-            flexShrink: 0,
-          }}
-        >
-          {comp.shortName}
-        </span>
+        <CompetitionEmblem comp={comp} />
         <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
           <span className="t-card tname" style={{ fontWeight: 600 }}>{compName}</span>
           <span className="t-cap">{comp.shortName}</span>
@@ -274,6 +300,7 @@ function CompetitionCard({ comp, t, locale }) {
             <TeamBadge
               initials={comp.leader.teamInitials}
               color={comp.leader.teamColor}
+              logoUrl={comp.leader.teamLogoUrl}
               size="xs"
               name={comp.leader.teamName}
             />
@@ -641,6 +668,9 @@ export default function HomePage() {
 
         {/* ② 6개 대회 현황 */}
         <CompetitionSection competitions={competitions} t={t} locale={locale} />
+
+        {/* ② + ½ 내 팀 (즐겨찾기) */}
+        <MyTeamsSection />
 
         {/* ③ 바로 가기 */}
         <ShortcutsSection

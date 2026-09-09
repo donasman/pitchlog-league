@@ -403,9 +403,12 @@ export function normalizeStanding(row, { format, groupCount = 1 } = {}) {
     groupName: row.groupName ?? null,
     teamId: row.team.ref,
     teamSlug: row.team.ref,
+    teamApiId: row.team.apiId,
     teamName: row.team.displayName,
     teamInitials: teamInitials(row.team),
     teamColor: teamColor(row.team.apiId),
+    // 로고는 파생 필드 — 화면·홈 카드가 손으로 localLogo 를 만들지 않도록 여기서 한 번에 만든다
+    teamLogoUrl: localLogo('teams', row.team.apiId, row.team.logoUrl),
     played: row.played,
     won:    row.win,
     drawn:  row.draw,
@@ -543,6 +546,8 @@ export function normalizeStatsRow(dto) {
     teamName:     t?.shortDisplayName || t?.displayName || '',
     teamInitials: t?.code || deriveInitials(t?.shortDisplayName || t?.displayName || ''),
     teamColor:    teamColor(t?.apiId),
+    // 로고 파생 — 순위 카드가 손으로 localLogo 를 만들지 않도록 (StandingsTable · StatsRanking 대칭)
+    teamLogoUrl:  localLogo('teams', t?.apiId, t?.logoUrl),
     value:        dto.value,
     breakdown:    Array.isArray(dto.breakdown)
       ? dto.breakdown.map(b => ({
@@ -570,6 +575,92 @@ export function groupCountOf(rows) {
     if (n) names.add(n)
   }
   return Math.max(1, names.size)
+}
+
+// ─── 내 팀 카드 ────────────────────────────────────────────────
+
+/**
+ * 종료로 치는 표시 상태 — 취소도 그 라운드에서는 더 진행될 것이 없다.
+ * 홈 "내 팀" 카드에서 "최근 결과" 판정에 쓴다.
+ */
+const SETTLED_DISPLAY_STATES = new Set(['confirmed', 'recheck', 'final', 'cancelled'])
+
+/**
+ * 홈 "내 팀" 카드 — 즐겨찾기 한 팀의 다음 경기·최근 결과·리그 순위를 한 조각으로 묶는다.
+ *
+ * 왜 정규화 계층에 두는가:
+ *   화면(MyTeamCard)이 다음 · 최근 · 순위를 각자 판정하기 시작하면 판정 규칙(어느 상태가
+ *   "끝난 것" 인지, 홈·원정을 어떻게 가리는지)이 컴포넌트마다 다르게 굳는다. 여기서
+ *   한 번 정해 두면 다른 화면(관심 팀 대시보드 등)이 같은 규칙을 물려받는다.
+ *
+ * @param {object} team  fetchTeamFixtures 가 준 정규화 팀 객체 (`team.slug` = `team.ref`)
+ * @param {object} teamFixturesPayload  fetchTeamFixtures 반환. `matches` 는 이미 normalizeMatch 결과다
+ * @param {{ competitionSlug:string, competitionName:string, rows:Array<object> }|null} standingsShape
+ *   리그 순위표(정규화된 entries)와 대회 표시 정보. KNOCKOUT · EMPTY · 리그 아님 · 에러면 null
+ * @returns {{
+ *   teamRef:string, teamName:string, teamColor:string, teamInitials:string, teamLogoUrl:string|null,
+ *   nextMatch: (null|object), lastResult: (null|object),
+ *   ranking: (null|{competitionSlug:string, competitionName:string, rank:number, played:number, points:number})
+ * }}
+ */
+export function myTeamCard(team, teamFixturesPayload, standingsShape) {
+  const matches = teamFixturesPayload?.matches ?? []
+
+  const scheduled = matches
+    .filter(m => m.displayState === 'scheduled' && m.date)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+  const settled = matches
+    .filter(m => SETTLED_DISPLAY_STATES.has(m.displayState) && m.date)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+
+  const nextMatch = scheduled[0] ? matchSummary(team, scheduled[0]) : null
+  const lastResult = settled[0]  ? matchSummary(team, settled[0])  : null
+
+  let ranking = null
+  if (standingsShape && Array.isArray(standingsShape.rows) && standingsShape.rows.length > 0) {
+    const row = standingsShape.rows.find(r => r.teamSlug === team.slug) ?? null
+    if (row) {
+      ranking = {
+        competitionSlug: standingsShape.competitionSlug,
+        competitionName: standingsShape.competitionName,
+        rank:   row.rank,
+        played: row.played,
+        points: row.points,
+      }
+    }
+  }
+
+  return {
+    teamRef:      team.ref,
+    teamName:     team.name,
+    teamColor:    team.color,
+    teamInitials: team.initials,
+    teamLogoUrl:  team.logoUrl,
+    nextMatch,
+    lastResult,
+    ranking,
+  }
+}
+
+/** 카드에서 그리는 경기 한 조각. matches 원본의 필드를 얇게 옮긴다 */
+function matchSummary(team, m) {
+  const isHome = m.homeTeam?.slug === team.slug
+  const opponent = isHome ? m.awayTeam : m.homeTeam
+  return {
+    id: m.id,
+    competitionSlug: m.competitionSlug,
+    competitionName: m.competitionName,
+    date: m.date,
+    opponent: {
+      name:     opponent?.name ?? '',
+      initials: opponent?.initials ?? '?',
+      color:    opponent?.color ?? '#2d4060',
+    },
+    isHome,
+    statusCode:   m.statusCode,
+    score:        m.score,
+    displayState: m.displayState,
+  }
 }
 
 /**
