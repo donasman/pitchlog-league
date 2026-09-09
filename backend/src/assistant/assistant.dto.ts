@@ -54,4 +54,12 @@ export class AskAssistantResponseDto {
 
   @ApiProperty({ description: '실제로 부른 모델 ID', example: 'gemini-3.5-flash' })
   model!: string;
+
+  @ApiProperty({
+    description: 'evidence 중 가장 오래된 asOf (ISO 시각 문자열). evidence 가 비면 null.',
+    example: '2026-09-09T00:00:00.000Z',
+    nullable: true,
+    type: String,
+  })
+  asOf!: string | null;
 }

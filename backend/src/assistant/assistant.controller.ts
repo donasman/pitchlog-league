@@ -33,6 +33,7 @@ export class AssistantController {
       data: result.data,
       truncated: result.truncated,
       model: result.model,
+      asOf: result.asOf,
     };
   }
 }
