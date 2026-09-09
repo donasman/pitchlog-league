@@ -2,6 +2,7 @@
  * main.ts 와 e2e 가 같은 앱 설정을 쓴다 — 테스트가 실제 라우팅(/api 접두사)·검증 파이프와 어긋나지 않게.
  */
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { CacheHeaderInterceptor } from './common/cache-headers.interceptor.js';
 
 /**
  * 허용 출처 목록. 쉼표로 여러 개. 비어 있으면 CORS 를 켜지 않는다 —
@@ -32,5 +33,7 @@ export function setupApp(app: INestApplication): INestApplication {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
+  // 조회 응답에 ETag · Cache-Control 60s. `/api/*` 만 대상 (`/health` 자연 제외)
+  app.useGlobalInterceptors(new CacheHeaderInterceptor());
   return app;
 }
