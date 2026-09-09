@@ -68,6 +68,33 @@ npm run ingest -- logos   # 로고를 받아 ../frontend/public/logos 에 저장
 
 스케줄러는 아직 없다. Phase 2 에서 붙인다.
 
+### 어시스턴트 (MCP)
+
+`backend/src/assistant/` — 조회 서비스 10개를 LLM 이 부를 수 있는 **MCP 도구**로 감싼 계층.
+직접 부르는 채팅 UI 는 없다 (후속 판). stdio 서버로 Claude Desktop 등 외부 MCP 클라이언트가 접속한다.
+
+```bash
+npm run mcp   # nest build && node dist/cli/mcp.js — stdout 은 JSON-RPC 전용, 로그는 stderr
+```
+
+Claude Desktop 설정 예 (Windows `%APPDATA%\Claude\claude_desktop_config.json` · macOS `~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "pitchlog": {
+      "command": "node",
+      "args": ["C:/Dev/pitchlog-league/backend/dist/cli/mcp.js"],
+      "env": { "DATABASE_URL": "postgres://…" }
+    }
+  }
+}
+```
+
+도구 목록·인자 스키마·description(3상태 문구 포함)은 tools/list 로 노출된다. 도구 반환은
+`{ tool, args, asOf, data }` — `data` 는 REST API DTO 와 같다. `list_matches` 는 자동으로
+`from/to = today ±7d (KST)`, `limit=50` (max 200) — 잘렸으면 wrapper 에 `truncated:true, total:N`.
+
 ### 백업
 
 ```bash
@@ -84,6 +111,7 @@ npm run backup:verify     # 일회용 postgres 컨테이너에 복원해 운영 
 ```
 src/
 ├── competition/ team/ match/ standing/ player/ statistics/  조회 API
+├── assistant/               MCP 도구 층 (조회 서비스 wrapper)
 ├── ingestion/
 │   ├── api-football/      HTTP client · 쿼터 스냅샷
 │   ├── l0/                대회·시즌·팀·경기장 + 카탈로그
