@@ -95,29 +95,49 @@ function EvidenceItem({ e, locale, t }) {
   );
 }
 
-/* ── 데이터 배열 표시 — 도구 반환 원문을 JSON 으로 그대로 렌더 ── */
+/* ── 데이터 배열 표시 — 기본 접힘, 토글로 열면 max-height 240px 스크롤 ── */
 function DataTable({ data, t }) {
+  const [expanded, setExpanded] = useState(false);
   if (!Array.isArray(data) || data.length === 0) return null;
   return (
     <div style={{ display: "grid", gap: 6 }}>
-      <span className="t-cap">{t("assistant.dataLabel")}</span>
-      <pre
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="t-cap"
         style={{
-          margin: 0,
-          padding: 10,
-          background: "var(--pl-fill)",
-          borderRadius: 8,
-          fontSize: 11,
-          fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-          overflowX: "auto",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          color: "var(--pl-text)",
+          justifySelf: "start",
+          padding: "4px 8px",
+          border: "1px solid var(--pl-line)",
+          borderRadius: 6,
+          background: "transparent",
+          color: "var(--pl-sub)",
+          cursor: "pointer",
         }}
       >
-        {JSON.stringify(data, null, 2)}
-      </pre>
+        {expanded ? t("assistant.hideData") : t("assistant.showData")}
+      </button>
+      {expanded && (
+        <pre
+          style={{
+            margin: 0,
+            padding: 10,
+            background: "var(--pl-fill)",
+            borderRadius: 8,
+            fontSize: 11,
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+            overflow: "auto",
+            maxHeight: 240,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            color: "var(--pl-text)",
+          }}
+        >
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      )}
     </div>
   );
 }

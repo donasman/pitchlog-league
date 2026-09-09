@@ -390,6 +390,8 @@
     "evidenceSource": "Source",
     "asOfSuffix": "as of",
     "dataLabel": "Data",
+    "showData": "Show source data",
+    "hideData": "Hide source data",
     "dataNote": "Numbers in answers are retrieved data. Source and timestamp shown below.",
     "thinking": "Looking up",
     "thinkingTools": "Tools",
