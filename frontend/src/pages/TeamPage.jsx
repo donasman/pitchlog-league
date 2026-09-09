@@ -53,7 +53,7 @@ export default function TeamPage() {
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8 space-y-5">
       {/* 팀 헤더 */}
       <div className="pl-card" style={{ padding: 'clamp(14px,3vw,24px)', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <TeamBadge initials={team.initials} color={team.color} size="lg" name={team.name} />
+        <TeamBadge initials={team.initials} color={team.color} logoUrl={team.logoUrl} size="lg" name={team.name} />
         <div className="flex-1 min-w-0">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
             <h1 className="text-2xl font-bold text-foreground truncate" style={{ margin: 0, minWidth: 0 }}>{teamDisplayName}</h1>
