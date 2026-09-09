@@ -293,7 +293,8 @@ export async function fetchAllMatches({ competitionSlug, displayState, season } 
   if (past && !competitionSlug) return { items: [], unavailableReason: 'COMPETITION_REQUIRED' }
 
   const competition = past ? await toCompetitionRef(competitionSlug) : undefined
-  const { items } = await loadMatches({ competition, season, ...(past ? {} : matchWindow()) })
+  // 과거 시즌·단일 대회는 ≈380경기 — 백엔드 기본 limit 로는 페이지가 잘려 나온다. 명시적으로 올린다
+  const { items } = await loadMatches({ competition, season, limit: 500, ...(past ? {} : matchWindow()) })
   let result = items
   if (competitionSlug) result = result.filter(m => m.competitionSlug === competitionSlug)
   if (displayState)    result = result.filter(m => m.displayState === displayState)
@@ -358,7 +359,8 @@ export async function fetchStandings(slugOrRef, season) {
   const range = await matchWindowFor(season, ref)
   const [table, { items: matches }] = await Promise.all([
     loadStandingsTable(ref, slugOrRef, season),
-    loadMatches({ competition: ref, season, ...range }),
+    // 과거 시즌엔 창이 걷혀 시즌 전체(≈380경기)가 온다. 안전판으로 limit 명시
+    loadMatches({ competition: ref, season, limit: 500, ...range }),
   ])
   return normalizeStandings(table, matches)
 }
@@ -376,7 +378,8 @@ export async function fetchCompetitionHub(slugOrRef, season) {
   // 대회 상세가 시즌 목록을 같이 주므로 isCurrent 로 직접 가린다 — 과거 시즌엔 공통 창이 0건을 만든다
   const range = isPastSeason(season, comp.seasons) ? {} : matchWindow()
   const [{ items: matches }, table, teamsRes] = await Promise.all([
-    loadMatches({ competition: comp.ref, season, ...range }),
+    // 과거 시즌엔 창이 걷혀 대회 시즌 전체(≈380경기)가 온다. 안전판으로 limit 명시
+    loadMatches({ competition: comp.ref, season, limit: 500, ...range }),
     loadStandingsTable(comp.ref, slugOrRef, season),
     _cachedGet('/api/teams', { competition: comp.ref, season }),
   ])
@@ -399,7 +402,8 @@ export async function fetchCompetitionHub(slugOrRef, season) {
 export async function fetchTeamFixtures(ref) {
   const [teamDto, { items: matches }, comps] = await Promise.all([
     _cachedGet(`/api/teams/${encodeURIComponent(ref)}`),
-    loadMatches({ team: ref }),
+    // 팀 일정은 시즌 전체(과거·오늘·미래 전부) — 6대회 × 시즌이면 60경기가 넘을 수 있어 명시
+    loadMatches({ team: ref, limit: 500 }),
     loadCompetitions(),
   ])
   const team = normalizeTeam(teamDto)
@@ -434,7 +438,8 @@ function byKickoff(a, b) {
 export async function fetchOverview() {
   const [comps, matchesRes, standingsRes] = await Promise.all([
     loadCompetitions(),
-    loadMatches(matchWindow()),
+    // 공통 창(−14~+21일) 안이라도 6대회 합치면 수백 건이 나올 수 있어 안전판으로 limit 명시
+    loadMatches({ ...matchWindow(), limit: 500 }),
     _cachedGet('/api/standings'),
   ])
   const allMatches = matchesRes.items
