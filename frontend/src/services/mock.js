@@ -25,6 +25,7 @@ import {
   getCompetitionScorers,
   getCompetitionAssisters,
 } from '@/mocks/players'
+import { ASSISTANT_SAMPLES } from '@/mocks/assistant'
 import { apiIdFromAlias, normalizePlayerDetail } from './normalize'
 
 // ─── 대회 ──────────────────────────────────────────────────────
@@ -377,5 +378,39 @@ export async function fetchCompetitionStats(slug) {
     comp,
     topScorers:   getCompetitionScorers(slug),
     topAssisters: getCompetitionAssisters(slug),
+  }
+}
+
+// ─── 어시스턴트 ────────────────────────────────────────────────
+
+/**
+ * AI 어시스턴트 Mock — ASSISTANT_SAMPLES 를 실 API 응답 shape 으로 변환.
+ * 실 shape: { answer, evidence: [{tool, args, asOf}], data: [], truncated, model }.
+ * ASSISTANT_SAMPLES 는 evidence 가 단일 객체(tool/args/asOf/source)라 배열로 감싸고,
+ * 카드 데이터는 data 배열로 옮긴다. 매칭 안 되는 질문은 tool 없이 "그 질문은 아직 데이터가 없다".
+ * @param {string} question
+ */
+export async function askAssistant(question) {
+  const sample = ASSISTANT_SAMPLES.find(s => s.question === question)
+  if (!sample) {
+    // 백엔드 응답 shape 을 흉내낸다. answer 는 도구 결과 문장 자리 —
+    // 실 서비스에서는 LLM/도구 결과가 그대로 오므로 서비스 계층에서 번역하지 않는다.
+    return {
+      answer:    'No data available for that question yet.',
+      evidence:  [],
+      data:      [],
+      truncated: false,
+      model:     'mock',
+    }
+  }
+  const evidence = sample.evidence
+    ? [{ tool: sample.evidence.tool, args: sample.evidence.args, asOf: sample.evidence.asOf }]
+    : []
+  return {
+    answer:    sample.answer,
+    evidence,
+    data:      sample.cards ?? [],
+    truncated: false,
+    model:     'mock',
   }
 }

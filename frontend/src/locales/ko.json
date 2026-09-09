@@ -389,6 +389,7 @@
     "evidenceAsOf": "기준",
     "evidenceSource": "출처",
     "asOfSuffix": "기준",
+    "dataLabel": "데이터",
     "dataNote": "답변의 숫자는 조회 결과입니다. 근거와 기준 시각이 함께 표시됩니다.",
     "thinking": "조회하는 중",
     "thinkingTools": "조회 도구",
@@ -403,7 +404,14 @@
     "comparison": "비교",
     "liveNote": "진행 중인 경기입니다. 숫자는 계속 바뀝니다.",
     "recoverTip": "확정 시 알림을 받으시겠어요?",
-    "clearChat": "초기화"
+    "clearChat": "초기화",
+    "error": {
+      "not_configured": "어시스턴트가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요.",
+      "rate_limited": "잠시 후 다시 시도해 주세요.",
+      "model_error": "답변을 만들지 못했습니다. 다시 시도해 주세요.",
+      "timeout": "응답이 너무 오래 걸립니다. 다시 시도해 주세요.",
+      "generic": "오류가 발생했습니다."
+    }
   },
   "notif": {
     "bell": "알림",
