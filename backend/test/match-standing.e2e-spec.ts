@@ -132,11 +132,12 @@ describe('경기·순위표 API (e2e)', () => {
 
   describe('GET /api/matches', () => {
     it('기본 — 화면 대회의 현재 시즌 경기. 리그 포함 · 컵 미포함 · 킥오프 오름차순 · asOf', async () => {
+      // 기본 limit=100 계약(feature/perf-and-assistant-limits) 도입 후, 실 DB 매치가 앞 100건을 점유해 시드 3개가 이 응답에 반드시 들어오리라 보장할 수 없다.
+      // 이 케이스는 default 호출 규격(현재 시즌만·컵 제외·kickoff asc·season null·asOf 유효) 만 본다. 시드 3개 존재는 아래 `competition + season` 케이스가 잠근다.
       const res = await get('/api/matches').expect(200);
       const items: Item[] = res.body.items;
       const ids = items.map((i) => i.id);
-      expect(ids).toEqual(expect.arrayContaining([API + 1, API + 2, API + 3]));
-      expect(ids).not.toContain(API + 4); // 2025 시즌
+      expect(ids).not.toContain(API + 4); // 2025 시즌 (default 는 현재 시즌만)
       expect(ids).not.toContain(API + 5); // 컵 — displayOrder 9,102 는 화면 범위 밖
       for (let i = 1; i < items.length; i++) expect(items[i].kickoffAt >= items[i - 1].kickoffAt).toBe(true);
       expect(res.body.season).toBeNull();
