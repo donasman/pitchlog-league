@@ -20,7 +20,7 @@
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { config as loadEnv } from 'dotenv'
 
 const BACKEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -42,9 +42,9 @@ try {
 }
 
 const { NestFactory } = await import('@nestjs/core')
-const { AppModule } = await import(resolve(BACKEND_DIR, 'dist/app.module.js').replace(/\\/g, '/'))
-const { GeminiService } = await import(resolve(BACKEND_DIR, 'dist/assistant/gemini.service.js').replace(/\\/g, '/'))
-const { AssistantToolRegistry } = await import(resolve(BACKEND_DIR, 'dist/assistant/assistant-tool.registry.js').replace(/\\/g, '/'))
+const { AppModule } = await import(pathToFileURL(resolve(BACKEND_DIR, 'dist/app.module.js')).href)
+const { GeminiService } = await import(pathToFileURL(resolve(BACKEND_DIR, 'dist/assistant/gemini.service.js')).href)
+const { AssistantToolRegistry } = await import(pathToFileURL(resolve(BACKEND_DIR, 'dist/assistant/assistant-tool.registry.js')).href)
 
 const golden = JSON.parse(readFileSync(resolve(BACKEND_DIR, 'src/assistant/golden.json'), 'utf8'))
 /** @type {Array<{id:string, question:string, tool:string|null, args?:object, reason?:string}>} */
@@ -80,16 +80,45 @@ try {
   /** @type {Array<{id:string, question:string, tool:string, evidenceCount:number, dataCount:number, halluc:string, snippet:string}>} */
   const rows = []
   let anyFail = false
+  // 무료 등급 한도로 못 돈 건은 '실패' 가 아니라 '검증 불가' 다 — 종료 코드를 나눈다
+  let quotaFail = 0
+
+  // 무료 등급은 분당 요청 수가 작고(한 질문이 모델 호출 2~3회를 쓴다), 모델이 혼잡하면 503 이 온다.
+  // 간격을 두고 두 번까지 다시 시도한다 — 일시적 혼잡을 실패로 기록하지 않기 위해 (2026-09-09 실측).
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const RETRYABLE = /rate_limited|model_error|empty_response/
+  let first = true
 
   for (const c of picked) {
+    if (!first) await sleep(8000)
+    first = false
     process.stdout.write(`[smoke] ${c.id} "${c.question}" ...\n`)
     let result
-    try {
-      result = await gemini.ask(c.question)
-    } catch (err) {
-      console.error(`  FAIL: ask() 예외 — ${err.message}`)
-      anyFail = true
-      rows.push({ id: c.id, question: c.question, tool: 'ERR', evidenceCount: 0, dataCount: 0, halluc: 'n/a', snippet: err.message.slice(0, 80) })
+    let lastErr
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        process.stdout.write(`  … 재시도 ${attempt} (${lastErr.message})\n`)
+        await sleep(20000 * attempt)
+      }
+      try {
+        result = await gemini.ask(c.question)
+        // 빈 응답(도구도 문장도 없음)은 모델 쪽 일시 현상이다 — 예외가 아니라 값으로 오므로 여기서 재시도한다
+        if (!result.answer && result.evidence.length === 0 && attempt < 2) {
+          lastErr = new Error('empty_response')
+          continue
+        }
+        lastErr = undefined
+        break
+      } catch (err) {
+        lastErr = err
+        if (!RETRYABLE.test(err.message)) break
+      }
+    }
+    if (lastErr) {
+      console.error(`  FAIL: ask() 예외 — ${lastErr.message}`)
+      if (/rate_limited/.test(lastErr.message)) quotaFail += 1
+      else anyFail = true
+      rows.push({ id: c.id, question: c.question, tool: 'ERR', evidenceCount: 0, dataCount: 0, halluc: 'n/a', snippet: lastErr.message.slice(0, 80) })
       continue
     }
 
@@ -132,8 +161,20 @@ try {
       }
       // 환각 검사 — 답에서 뽑은 각 숫자가 data JSON 안 문자열로 존재해야 함
       const dataStr = JSON.stringify(result.data)
+      // 배열 길이도 정당한 숫자다 — "17개 대회" 처럼 모델이 받은 목록을 센 값은 환각이 아니다
+      // (2026-09-09 실측 오탐: data 가 대회 17개 배열인데 "17" 이 값으로는 없어 FAIL 이 났다)
+      const counts = new Set()
+      const walk = (v) => {
+        if (Array.isArray(v)) {
+          counts.add(String(v.length))
+          v.forEach(walk)
+        } else if (v && typeof v === 'object') {
+          Object.values(v).forEach(walk)
+        }
+      }
+      walk(result.data)
       const nums = extractNumbers(result.answer)
-      const missing = nums.filter((n) => !dataStr.includes(n))
+      const missing = nums.filter((n) => !dataStr.includes(n) && !counts.has(n))
       if (missing.length > 0) {
         console.error(`  FAIL: 환각 의심 — data 에 없는 숫자 ${missing.join(', ')} 가 답에 등장: "${result.answer}"`)
         anyFail = true
@@ -165,6 +206,11 @@ try {
   if (anyFail) {
     console.error('\n[smoke] 하나 이상 실패 — exit 1')
     process.exit(1)
+  }
+  if (quotaFail > 0) {
+    // 계약 위반이 아니라 무료 등급 한도다. 초록으로 넘기지도, 빨강으로 막지도 않는다.
+    console.error(`\n[smoke] ${quotaFail}건이 무료 등급 한도로 못 돌았다 — 검증 불가 (exit 2). 한도가 회복된 뒤 다시 돌린다`)
+    process.exit(2)
   }
   console.log('\n[smoke] 5건 모두 통과')
   process.exit(0)
