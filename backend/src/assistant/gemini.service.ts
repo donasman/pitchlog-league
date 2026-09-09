@@ -77,6 +77,10 @@ export interface GeminiClientLike {
     }) => Promise<{
       text?: string;
       functionCalls?: Array<{ name?: string; args?: Record<string, unknown> }>;
+      /** 모델 턴 원문. Gemini 3 계열은 functionCall part 에 thoughtSignature 를 실어 보내고,
+       *  다음 요청에 그 part 를 **그대로** 되돌려주지 않으면 400 INVALID_ARGUMENT 가 난다.
+       *  (2026-09-09 실측: "Function call is missing a thought_signature in functionCall parts") */
+      candidates?: Array<{ content?: Content }>;
     }>;
   };
 }
@@ -195,8 +199,15 @@ export class GeminiService {
         }
 
         // 모델이 예측한 functionCall 을 그대로 contents 에 넣고 (role:'model'), 각 결과를 functionResponse Part 로 append
-        const modelParts = calls.map((c) => ({ functionCall: { name: c.name ?? '', args: c.args ?? {} } }));
-        contents.push({ role: 'model', parts: modelParts });
+        // 모델 턴은 **응답 원문을 그대로** 되돌린다 — 재구성하면 thoughtSignature 가 떨어져 400 이 난다.
+        // 원문이 없을 때만 name·args 로 최소 복원한다 (테스트 Mock 경로).
+        const modelContent = response.candidates?.[0]?.content;
+        contents.push(
+          modelContent ?? {
+            role: 'model',
+            parts: calls.map((c) => ({ functionCall: { name: c.name ?? '', args: c.args ?? {} } })),
+          },
+        );
 
         const responseParts: Array<{ functionResponse: { name: string; response: Record<string, unknown> } }> = [];
         for (const c of calls) {
