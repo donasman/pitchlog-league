@@ -478,6 +478,11 @@
     "season": "2026-27 season",
     "country": "Country"
   },
+  "favorites": {
+    "add": "Add {{name}} to favorites",
+    "remove": "Remove {{name}} from favorites",
+    "limit_reached": "You can save up to {{limit}} favorites."
+  },
   "errors": {
     "notImplemented": "Not available from the backend yet ({{what}})",
     "networkFailed": "Could not reach the backend: {{detail}}",
