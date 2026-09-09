@@ -102,8 +102,11 @@ export class GeminiService {
   private readonly logger = new Logger(GeminiService.name);
   private readonly client: GeminiClientLike | null;
   private readonly modelName: string;
-  /** 테스트에서 setClient 로 갈아 끼울 수 있게 held (production 은 생성자에서만 세팅) */
+  /** 테스트에서 setClient 로 갈아 끼울 수 있게 held (production 은 생성자에서만 세팅).
+   *  `null` 도 유효한 override 값(= 강제 미설정)이므로 sentinel 로 활성 여부를 별도 관리한다.
+   *  (2026-09-09 실측: .env 에 GEMINI_API_KEY 가 있으면 `setClient(null)` 이 실 client 로 폴백돼 e2e Case 1 이 깨졌다) */
   private clientOverride: GeminiClientLike | null = null;
+  private overrideActive = false;
 
   constructor(
     private readonly config: ConfigService,
@@ -119,13 +122,14 @@ export class GeminiService {
     }
   }
 
-  /** 테스트 전용 — MockGeminiClient 를 주입한다 */
+  /** 테스트 전용 — MockGeminiClient 를 주입한다. `null` 을 넘기면 실 client 로 폴백하지 않고 강제 미설정. */
   setClient(client: GeminiClientLike | null): void {
     this.clientOverride = client;
+    this.overrideActive = true;
   }
 
   private getClient(): GeminiClientLike | null {
-    return this.clientOverride ?? this.client;
+    return this.overrideActive ? this.clientOverride : this.client;
   }
 
   async ask(question: string, opts: AskOpts = {}): Promise<AskResult> {

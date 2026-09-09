@@ -25,11 +25,14 @@ describe('POST /api/assistant (e2e)', () => {
     const originalKey = process.env.GEMINI_API_KEY;
 
     beforeAll(async () => {
-      // 환경변수를 지운 상태로 앱을 부팅한다 — GeminiService 생성자에서 client=null 이 된다
+      // 환경변수를 지운 상태로 앱을 부팅한다 — GeminiService 생성자에서 client=null 이 된다.
+      // ConfigModule 이 .env 를 재로드해 값을 되살릴 수 있으므로, 부팅 후 setClient(null) 로
+      // 강제 미설정을 명시한다 (사용자 .env 에 GEMINI_API_KEY 가 있는 환경에서도 통과).
       delete process.env.GEMINI_API_KEY;
       const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
       app = setupApp(mod.createNestApplication());
       await app.init();
+      app.get(GeminiService).setClient(null);
     });
 
     afterAll(async () => {
