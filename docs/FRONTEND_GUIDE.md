@@ -156,6 +156,14 @@ frontend/
 - API 키와 비밀번호는 프론트엔드 환경변수에 저장하지 않음
 - `VITE_` 접두사 환경변수는 브라우저에 공개된다는 전제로 사용함
 
+### 요청 합치기 · TTL 캐시 (실 API 모드)
+
+- `services/live.js` 안에 요청 합치기 + TTL 캐시 계층을 둔다. 같은 URL 이 이미 떠 있으면 같은 Promise 를 돌려주고, 응답은 URL 을 key 로 캐시한다.
+- 기본 TTL 60 초. 대회·시즌·팀 목록(`/api/competitions*`·`/api/teams*`)은 300 초.
+- Mock 모드는 이 계층 밖 — `mock.js` 는 캐시 없이 즉시 반환.
+- `invalidateCompetitions()` 는 대회·팀 캐시를 비운다 (언어 전환 등 명명 갱신 시).
+- 백엔드가 붙이는 `ETag`·`Cache-Control` 은 브라우저 HTTP 캐시가 자동으로 처리한다 — 프론트가 명시적으로 헤더를 다루지 않는다.
+
 ## 6. 빌드와 품질 기준
 
 기본 명령은 다음과 같이 구성함.
