@@ -6,6 +6,7 @@ import {
   normalizeMatch,
   normalizeStanding,
   normalizeStandings,
+  normalizeStatsRow,
   normalizeTeam,
   deriveStage,
   competitionRefFromSlug,
@@ -314,6 +315,57 @@ describe('normalizeStanding', () => {
       zone: 'champions_league',
     })
     expect(row.teamSlug).toBe(row.teamId)
+  })
+
+  // ★ 로고 파생 — 원본 있으면 로컬 URL, 원본 null 이면 null 그대로.
+  // 화면·홈 카드가 손으로 localLogo 를 조립하지 않도록 정규화 계층이 책임진다.
+  it('derives teamLogoUrl from the row team logoUrl (local /logos path)', () => {
+    const row = normalizeStanding(standingRowDto(), { format: 'league' })
+    expect(row.teamApiId).toBe(50)
+    expect(row.teamLogoUrl).toBe('/logos/teams/50.webp')
+  })
+
+  it('leaves teamLogoUrl null when row.team.logoUrl is null (no source, no local file)', () => {
+    const row = normalizeStanding(
+      standingRowDto({ team: { ...teamDto(50, 'Manchester City', 'MCI'), logoUrl: null } }),
+      { format: 'league' },
+    )
+    expect(row.teamLogoUrl).toBeNull()
+  })
+})
+
+// ─── normalizeStatsRow ─────────────────────────────────────────
+
+describe('normalizeStatsRow', () => {
+  const statsRowDto = (overrides = {}) => ({
+    rank: 1,
+    player: { apiId: 306, ref: '306-erling-haaland', displayName: 'E. Haaland' },
+    team: {
+      apiId: 50, ref: '50-manchester-city',
+      displayName: 'Manchester City', shortDisplayName: 'Man City', code: 'MCI',
+      logoUrl: 'https://media.example/teams/50.png',
+    },
+    value: 14,
+    breakdown: null,
+    ...overrides,
+  })
+
+  it('derives teamLogoUrl from the row team logoUrl (local /logos path)', () => {
+    const row = normalizeStatsRow(statsRowDto())
+    expect(row.teamLogoUrl).toBe('/logos/teams/50.webp')
+  })
+
+  it('leaves teamLogoUrl null when team.logoUrl is null', () => {
+    const row = normalizeStatsRow(statsRowDto({
+      team: { apiId: 50, displayName: 'Manchester City', shortDisplayName: 'Man City', code: 'MCI', logoUrl: null },
+    }))
+    expect(row.teamLogoUrl).toBeNull()
+  })
+
+  it('leaves teamLogoUrl null when team itself is missing (defensive)', () => {
+    // dto.team 이 null 로 오는 실 응답은 없지만 방어적으로 확인 — apiId 도 undefined 라 localLogo 도 null
+    const row = normalizeStatsRow({ rank: 1, player: null, team: null, value: 0, breakdown: null })
+    expect(row.teamLogoUrl).toBeNull()
   })
 })
 
