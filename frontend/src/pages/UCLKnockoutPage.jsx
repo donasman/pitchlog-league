@@ -77,7 +77,7 @@ function TieCard({ tie, t }) {
               to={`/teams/${team.slug}`}
               style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, textDecoration: 'none' }}
             >
-              <TeamBadge initials={team.initials} color={team.color} size="xs" name={team.name} />
+              <TeamBadge initials={team.initials} color={team.color} logoUrl={team.logoUrl} size="xs" name={team.name} />
               <span
                 className="tname"
                 style={{ fontWeight: isWinner ? 700 : 500, fontSize: 13, color: 'var(--pl-text)' }}

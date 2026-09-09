@@ -153,7 +153,7 @@ export default function CompetitionPage() {
                     className="pl-card"
                     style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', textDecoration: 'none', color: 'inherit', minHeight: 44 }}
                   >
-                    <TeamBadge initials={team.initials} color={team.color} size="xs" name={team.name} />
+                    <TeamBadge initials={team.initials} color={team.color} logoUrl={team.logoUrl} size="xs" name={team.name} />
                     <span className="tname t-sub" style={{ color: 'var(--pl-text)', fontWeight: 600 }}>{team.shortName}</span>
                   </Link>
                 ))}

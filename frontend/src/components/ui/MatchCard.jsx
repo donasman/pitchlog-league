@@ -33,6 +33,7 @@ function TeamRow({ team, score, win, live, compact, locale }) {
       <TeamBadge
         initials={team?.initials}
         color={team?.color}
+        logoUrl={team?.logoUrl}
         size={compact ? 'xs' : 'sm'}
         name={team?.name}
       />

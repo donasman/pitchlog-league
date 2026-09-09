@@ -47,7 +47,7 @@ export default function LiveHeroCard({ match, fallbackMatch }) {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-            <TeamBadge initials={m.homeTeam?.initials} color={m.homeTeam?.color} size="lg" name={m.homeTeam?.name} />
+            <TeamBadge initials={m.homeTeam?.initials} color={m.homeTeam?.color} logoUrl={m.homeTeam?.logoUrl} size="lg" name={m.homeTeam?.name} />
             <span className="text-sm font-medium text-foreground text-center truncate w-full px-1">{homeName}</span>
           </div>
           <div className="text-center flex-shrink-0">
@@ -55,7 +55,7 @@ export default function LiveHeroCard({ match, fallbackMatch }) {
             <div className="text-xs text-muted-foreground mt-1">{toKSTDate(m.date, locale)}</div>
           </div>
           <div className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-            <TeamBadge initials={m.awayTeam?.initials} color={m.awayTeam?.color} size="lg" name={m.awayTeam?.name} />
+            <TeamBadge initials={m.awayTeam?.initials} color={m.awayTeam?.color} logoUrl={m.awayTeam?.logoUrl} size="lg" name={m.awayTeam?.name} />
             <span className="text-sm font-medium text-foreground text-center truncate w-full px-1">{awayName}</span>
           </div>
         </div>
@@ -97,7 +97,7 @@ export default function LiveHeroCard({ match, fallbackMatch }) {
       {/* 스코어 */}
       <div className="flex items-center gap-3 mb-3">
         <div className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-          <TeamBadge initials={m.homeTeam?.initials} color={m.homeTeam?.color} size="lg" name={m.homeTeam?.name} />
+          <TeamBadge initials={m.homeTeam?.initials} color={m.homeTeam?.color} logoUrl={m.homeTeam?.logoUrl} size="lg" name={m.homeTeam?.name} />
           <span className="text-sm font-semibold text-foreground text-center truncate w-full px-1">{homeName}</span>
         </div>
         <div className="text-center flex-shrink-0">
@@ -106,7 +106,7 @@ export default function LiveHeroCard({ match, fallbackMatch }) {
           </div>
         </div>
         <div className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-          <TeamBadge initials={m.awayTeam?.initials} color={m.awayTeam?.color} size="lg" name={m.awayTeam?.name} />
+          <TeamBadge initials={m.awayTeam?.initials} color={m.awayTeam?.color} logoUrl={m.awayTeam?.logoUrl} size="lg" name={m.awayTeam?.name} />
           <span className="text-sm font-semibold text-foreground text-center truncate w-full px-1">{awayName}</span>
         </div>
       </div>
