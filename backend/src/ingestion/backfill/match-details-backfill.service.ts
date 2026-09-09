@@ -21,18 +21,16 @@
  * ## 소유권 (D18·D19·D20)
  *   여기서 matches 를 직접 갱신하지 않는다. L3·L5 가 각자의 has_* 를 세우고
  *   `promoteIfAllDetailsChecked` 가 detail_checked_at·stats_state 를 올린다.
- *   이 파일은 `backfill_jobs.cursor_match_id` 만 쓴다.
+ *   이 파일은 `backfill_jobs.cursor_match_id`·`total`·`done`·`failed`·`last_error` 만 쓴다.
  *
- * ## 왜 DONE 인 시즌은 skip 인가
- *   L6 가 백필-1 끝에 DONE 을 세운다 (backfill-job.service.ts 머리말). 백필-2 는 DETAILS 로
- *   되돌리지 않고, 이미 DONE 인 시즌은 건너뛴다. 한 번 done 한 시즌을 다시 훑고 싶으면
- *   backfill_jobs 에서 phase 를 손으로 되돌린다.
- *
- * ## `trackJob` 조건
- *   `season` 이 지정됐거나 `--all-seasons` 상당(여기선 season 지정)일 때만 begin/complete/fail 을 쓴다.
- *   기본(현재 시즌만) 모드는 매일 돌 수 있으므로 backfill_jobs 를 건드리지 않는다 — L6 와 같은 이유.
- *   ...아니다. 백필-2 는 본질적으로 "과거를 훑는" 작업이라 현재 시즌도 상관없이 phase 를 잡는다.
- *   대신 DONE 은 대상 소진했을 때만 세운다. limit 이나 quota 로 멈춘 시즌은 DETAILS 로 남긴다.
+ * ## backfill_jobs.phase 는 읽지도 쓰지도 않는다
+ *   L2·L6 백필-1 완료 표시(`dataStateOf` → 프론트 시즌 선택기)와 L1 락
+ *   (`BACKFILL_IN_PROGRESS` in l1.service.ts:43) 에 공유되는 신호라 우리 소유가 아니다.
+ *   상세 백필이 phase 를 DETAILS 로 세우면 며칠 도는 동안 L1 스쿼드가 잠긴다.
+ *   DONE 으로 세우면 L6 가 세운 완료 표시와 구분이 안 된다.
+ *   대신 skip 판정은 **대상 SELECT 자체가 한다** — detail_checked_at IS NULL 이 걸리면
+ *   targets 가 0 이라 아무 API 도 안 부르고 continue.
+ *   진행 지표는 `updateDetailProgress` (backfill-job.service.ts) 하나로만 쓴다.
  *
  * ## 트랜잭션
  *   여기는 트랜잭션이 없다. L3·L5 가 자체 트랜잭션을 짧게 잡는다.
@@ -49,7 +47,7 @@ import { L3EventsService } from '../l3/events.service.js';
 import { L5TeamStatsService } from '../l5/team-stats.service.js';
 import { L5PlayerStatsService } from '../l5/player-stats.service.js';
 import { screenCompetitionWhere } from '../screen-scope.js';
-import { BackfillPhase, IngestionLayer } from '../../generated/prisma/client.js';
+import { IngestionLayer } from '../../generated/prisma/client.js';
 
 export interface BackfillDetailsOptions {
   /** 없으면 화면 6대회의 현재 시즌만 */
@@ -157,23 +155,13 @@ export class MatchDetailsBackfillService {
       for (const cs of seasons) {
         const label = `${cs.competition.name} ${cs.season.year}`;
 
-        // 이미 DONE 인 시즌은 skip — L6 가 백필-1 끝에 세운 상태 그대로 존중
+        // skip 판정은 phase 가 아니라 대상 SELECT 로 한다 —
+        //   detail_checked_at IS NULL 조건이 걸려 있어 이미 다 채운 시즌은 targets 가 0 이라
+        //   자연히 continue. phase 는 우리 소유가 아니라 여기서 읽지 않는다.
+        // 다만 cursor 는 필요하므로 job 은 확인한다.
         const existingJob = await this.prisma.backfillJob.findUnique({
           where: { competitionSeasonId: cs.id },
         });
-        if (existingJob?.phase === BackfillPhase.DONE) {
-          this.logger.log(`${label}: 이미 DONE — skip`);
-          perSeason.push({
-            competitionSeasonId: cs.id,
-            competitionName: cs.competition.name,
-            seasonYear: cs.season.year,
-            targeted: 0,
-            processed: 0,
-            failed: 0,
-            stoppedReason: 'done',
-          });
-          continue;
-        }
 
         // 남은 예산 계산 (dry-run 은 quota 안 부름)
         let limitForThisSeason: number;
@@ -233,10 +221,8 @@ export class MatchDetailsBackfillService {
         });
 
         if (targets.length === 0) {
-          // 남은 대상 없음. 이미 뒤에 처리해야 할 것이 없으면 DONE 으로 닫는다
-          if (!opts.dryRun && targeted === 0) {
-            await this.jobs.complete(cs.id, null);
-          }
+          // 남은 대상 없음. phase 를 건드리지 않으므로 job 도 만들지 않는다 —
+          // 대상이 없으면 아무 상태도 남기지 않는 게 옳다 (다음 판이 다시 대상 SELECT 로 판정).
           this.logger.log(`${label}: 대상 없음 (targeted=${targeted})`);
           perSeason.push({
             competitionSeasonId: cs.id,
@@ -265,7 +251,7 @@ export class MatchDetailsBackfillService {
           continue;
         }
 
-        await this.jobs.begin(cs.id, BackfillPhase.DETAILS);
+        // begin 호출 없음 — phase 는 우리 소유가 아니다. cursor·total·done·failed 만 쓴다.
 
         let processed = 0;
         let failed = 0;
@@ -325,14 +311,17 @@ export class MatchDetailsBackfillService {
               }
             }
 
-            // 커서 갱신 — 경기 하나 시도 완료마다. 다음 판이 여기부터 이어간다
-            await this.prisma.backfillJob.update({
-              where: { competitionSeasonId: cs.id },
-              data: { cursorMatchId: m.id },
-            });
-
             processed++;
             if (anyFailed) failed++;
+
+            // 커서·진행 지표 갱신 — 경기 하나 시도 완료마다. 다음 판이 여기부터 이어간다.
+            // phase 는 건드리지 않는다 (updateDetailProgress 규약). lastError 는 유지(undefined).
+            await this.jobs.updateDetailProgress(cs.id, {
+              cursorMatchId: m.id,
+              total: targeted,
+              done: processed,
+              failed,
+            });
 
             if (processed % PROGRESS_EVERY === 0) {
               const q2 = await this.quota.snapshot();
@@ -360,14 +349,24 @@ export class MatchDetailsBackfillService {
             seasonStop = 'error';
             overallStopped = 'error';
             lastError = err instanceof Error ? err.message : String(err);
-            // 예상치 못한 예외만 FAILED 로 닫는다. 쿼터 소진은 DETAILS 로 남긴다 — 다음 판이 이어간다
-            await this.jobs.fail(cs.id, lastError);
+            // 상세 백필은 phase 를 안 건드린다. 오류만 lastError 에 남긴다 — 다음 판이 커서부터 이어간다.
+            await this.jobs.updateDetailProgress(cs.id, {
+              total: targeted,
+              done: processed,
+              failed,
+              lastError,
+            });
           }
         }
 
-        // done 이면 complete. 다른 사유는 DETAILS 로 남는다 (다음 판이 이어간다)
+        // 정상 종료. phase 는 건드리지 않고 lastError 만 지운다 (이전 판의 흔적 청소).
         if (seasonStop === 'done') {
-          await this.jobs.complete(cs.id, null);
+          await this.jobs.updateDetailProgress(cs.id, {
+            total: targeted,
+            done: processed,
+            failed,
+            lastError: null,
+          });
         }
 
         perSeason.push({

@@ -4,7 +4,7 @@
  * 실제 L3·L5 서비스를 통해 DB 에 쓴다. ApiFootballClient 는 픽스처 3개(1451160·1557387·1622630) 를
  * 로드해 fixture 마다 다른 응답을 준다. QuotaService 도 override — /status 를 안 부르고 스크립트로 준다.
  *
- * 검증 대상 12 케이스:
+ * 검증 대상 13 케이스 (2026-09-10 재작성 — phase 안 쓰는 규약 반영):
  *   1. 대상 SELECT 필터 — detailCheckedAt≠null · detailEligible=false · 24h 안 · status NS/LIVE ·
  *      다른 대회시즌 → 모두 제외. 자격 있는 것만 처리
  *   2. 커서 뒤만 처리 — backfillJob.cursorMatchId 세팅 시 그 뒤 id 만
@@ -13,11 +13,13 @@
  *   4b. API 상한 (quota_exhausted) — used=7496, limit=7500 → floor((7500-7496)/4)=1 경기 · quota_exhausted
  *   5. ApiQuotaExhaustedError 중단 — overallStopped=quota_exhausted · cursor 는 마지막 성공 경기
  *   6. 한 엔드포인트 실패 — 그 경기 failed=1 · 나머지 서비스 · 다음 경기 정상
- *   7. DONE 인 job 은 skip — API 안 부름
+ *   7. **모든 대상 매치가 detail_checked_at 이 채워진 대회시즌은 targeted=0 이라 skip** (phase 무관)
  *   8. dry-run — 실 API 안 부름 · targeted 만 계산
- *   9. no_targets — 커서 뒤 대상 없으면 stoppedReason='no_targets'
+ *   9. no_targets — 이미 다 처리된 시즌 → job 생성 안 함 · stoppedReason='no_targets'
  *  10. season 지정 안 하면 isCurrent+screenCompetitionWhere 만
  *  11. 매 경기 앞 quota 재확인 — 시즌 시작 시 여유 있어도 경기 처리 중 quota 가 자율 상한 넘으면 그 경기 앞에서 중단
+ *  12. **상세 백필은 backfill_jobs.phase 를 안 건드린다** — DONE 이 미리 세팅돼도 DONE 유지 · cursor/done/failed 만 갱신
+ *  13. **cursor/total/done/failed 가 진행에 맞게 갱신된다** — 5경기 처리 후 진행 지표 정확
  *
  * 밴드 997_4xx (l3·l5 밴드 밖).
  *
@@ -647,7 +649,8 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     // 그러므로 cursor 는 2번째(sorted[1]) 경기 id
     const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
     expect(job.cursorMatchId).toBe(sorted[1].id);
-    expect(job.phase).toBe(BackfillPhase.DETAILS); // FAILED 로 닫지 않음 (quota 는 재시도 가능)
+    // 상세 백필은 phase 를 안 건드린다. 최초 create 는 default(PENDING) 로 남는다.
+    expect(job.phase).toBe(BackfillPhase.PENDING);
     expect(s.processed).toBe(2); // 2 경기 완료 시도
   }, 180_000);
 
@@ -704,25 +707,28 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
   }, 180_000);
 
   // ================================================================================================
-  // Case 7: DONE 인 job 은 skip
+  // Case 7: 모든 대상 매치가 detail_checked_at 이 채워진 대회시즌은 targeted=0 이라 skip
+  // (예전 phase=DONE skip 케이스 재작성 — 이제 phase 는 오케스트레이터가 안 읽는다)
   // ================================================================================================
-  it('7. 이미 DONE 인 시즌 → skip · API 안 부름', async () => {
+  it('7. 모든 대상 매치가 detail_checked_at 이 채워진 대회시즌은 targeted=0 이라 skip (phase 무관)', async () => {
     await resetSeason();
-    await prisma.backfillJob.create({
-      data: { competitionSeasonId, phase: BackfillPhase.DONE, startedAt: new Date() },
+    // 모든 정상 대상 매치를 이미 처리된 상태로 세팅
+    const matchIds = [...matchIdByFx.values()];
+    await prisma.match.updateMany({
+      where: { id: { in: matchIds } },
+      data: { detailCheckedAt: new Date() },
     });
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 10 });
     const s = res.perSeason[0];
-    expect(s.stoppedReason).toBe('done');
+    expect(s.targeted).toBe(0);
     expect(s.processed).toBe(0);
-    // API 안 부름 (quota snapshot 도 안 부르나? 코드에서는 이 skip 이 quota 앞에 있다)
+    expect(s.stoppedReason).toBe('no_targets');
+    // API 는 한 번도 안 부름
     expect(fake.callCount).toBe(0);
-    // 매치 상태 그대로
-    const processed = await prisma.match.count({
-      where: { competitionSeasonId, detailCheckedAt: { not: null } },
-    });
-    expect(processed).toBe(0);
+    // backfillJob row 자체가 생성되지 않음 (오케스트레이터가 continue 로 통과)
+    const job = await prisma.backfillJob.findUnique({ where: { competitionSeasonId } });
+    expect(job).toBeNull();
   }, 60_000);
 
   // ================================================================================================
@@ -750,9 +756,10 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
   }, 60_000);
 
   // ================================================================================================
-  // Case 9: no_targets — 커서 뒤 대상 없으면 stoppedReason='no_targets'
+  // Case 9: no_targets — 커서 뒤 대상 없으면 stoppedReason='no_targets' · job 자체 생성 안 함
+  // (phase 를 안 쓰는 규약 — 대상 없으면 아무 상태도 남기지 않는다)
   // ================================================================================================
-  it('9. no_targets — 이미 다 처리된 시즌 → complete 호출 · stoppedReason=no_targets', async () => {
+  it('9. no_targets — 이미 다 처리된 시즌 → job 생성 안 함 · stoppedReason=no_targets', async () => {
     await resetSeason();
     // 모든 매치를 detailCheckedAt 세팅 → 대상 0
     await prisma.match.updateMany({
@@ -766,9 +773,9 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     expect(s.processed).toBe(0);
     expect(s.stoppedReason).toBe('no_targets');
 
-    // DONE 으로 닫혔는지
-    const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
-    expect(job.phase).toBe(BackfillPhase.DONE);
+    // 상세 백필은 대상 없으면 job 을 만들지 않는다 (phase 소유권 규약)
+    const job = await prisma.backfillJob.findUnique({ where: { competitionSeasonId } });
+    expect(job).toBeNull();
   }, 60_000);
 
   // ================================================================================================
@@ -822,5 +829,77 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     expect(res.overallStopped).toBe('daily_cap');
     // API 호출은 3경기 × 4엔드포인트 = 12
     expect(fake.callCount).toBe(12);
+  }, 180_000);
+
+  // ================================================================================================
+  // Case 12: 상세 백필을 돌려도 backfill_jobs.phase 가 변하지 않는다
+  // (L2·L6 백필-1 완료 표시 · L1 락과 공유되는 신호라 우리 소유가 아니다)
+  // ================================================================================================
+  it('12. 상세 백필을 돌려도 backfill_jobs.phase 는 변하지 않는다 (DONE 유지)', async () => {
+    await resetSeason();
+    fakeQuota.used = 0;
+    fakeQuota.limit = 7_500;
+
+    // 시나리오: L6 백필-1 이 이미 세운 DONE 상태 + cursor 없음
+    const jobStartedAt = new Date(Date.now() - 24 * 60 * 60 * 1_000);
+    await prisma.backfillJob.create({
+      data: {
+        competitionSeasonId,
+        phase: BackfillPhase.DONE,
+        startedAt: jobStartedAt,
+        cursorMatchId: null,
+        total: 0,
+        done: 0,
+        failed: 0,
+      },
+    });
+
+    const res = await backfill.run({ season: SEASON_YEAR, limit: 3 });
+    const s = res.perSeason[0];
+    // 상세 백필은 phase 를 무시하고 대상 SELECT 로만 판정 — 3 경기 처리
+    expect(s.processed).toBe(3);
+    expect(s.targeted).toBe(N_FIXTURES);
+
+    const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
+    // phase 는 그대로 DONE — 상세 백필이 덮지 않는다
+    expect(job.phase).toBe(BackfillPhase.DONE);
+    // cursor/done/failed 는 상세 백필이 갱신
+    expect(job.cursorMatchId).not.toBeNull();
+    expect(job.done).toBe(3);
+    expect(job.failed).toBe(0);
+    // startedAt 도 유지 (create 안 됐고 update 만 됐다)
+    expect(job.startedAt?.getTime()).toBe(jobStartedAt.getTime());
+  }, 180_000);
+
+  // ================================================================================================
+  // Case 13: cursor/total/done/failed 가 진행에 맞게 갱신된다
+  // ================================================================================================
+  it('13. cursor·total·done·failed 가 진행에 맞게 갱신된다 (한 endpoint 실패 시 failed 증가)', async () => {
+    await resetSeason();
+    fakeQuota.used = 0;
+    fakeQuota.limit = 7_500;
+
+    // 정렬된 5 매치 중 2번째의 events 만 실패시키기
+    const sorted = await prisma.match.findMany({
+      where: { competitionSeasonId, detailEligible: true, detailCheckedAt: null },
+      orderBy: { id: 'asc' },
+      select: { id: true, apiFixtureId: true },
+    });
+    const secondFx = sorted[1].apiFixtureId;
+    fake.failEndpointAt = { fixture: secondFx, path: '/fixtures/events', message: 'test events fail' };
+
+    const res = await backfill.run({ season: SEASON_YEAR, limit: 5 });
+    const s = res.perSeason[0];
+    expect(s.processed).toBe(5);
+    expect(s.failed).toBe(1);
+
+    // job 진행 지표 확인 — cursor 는 5번째 매치 · done=5 · failed=1 · total=targeted
+    const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
+    expect(job.cursorMatchId).toBe(sorted[4].id);
+    expect(job.done).toBe(5);
+    expect(job.failed).toBe(1);
+    expect(job.total).toBe(N_FIXTURES);
+    // phase 는 create default(PENDING) 그대로 — 상세 백필이 안 건드림
+    expect(job.phase).toBe(BackfillPhase.PENDING);
   }, 180_000);
 });
