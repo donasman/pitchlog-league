@@ -30,7 +30,11 @@ backend/src
 │   ├── l1/                       스쿼드 스냅샷 + diff — 있음
 │   ├── logos/                    로고 자체 저장 — 있음
 │   ├── screen-scope.ts           "화면에 나오는 대회" 단일 정의 — 있음
-│   └── l2/ l3/ l4/ l5/ l6/       Phase 2
+│   ├── l2/                      Phase 2 · L2 5시즌 완료
+│   ├── l3/                      Phase 2 · 경기 상세 쓰기 (lineups · events, 2026-09-10)
+│   ├── l4/                      Phase 2 · 실시간 (예정)
+│   ├── l5/                      Phase 2 · 경기 상세 쓰기 (team_stats · player_stats, 2026-09-10)
+│   └── l6/                      Phase 2 · 시즌 집계 완료
 ├── realtime/                     Phase 2 (Gateway)
 ├── ai/                           Phase 5
 ├── cli/ config/ health/ prisma/  있음
@@ -86,6 +90,18 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 - 브라우저는 중복·역순 version을 무시한다.
 - 최초 연결과 재연결은 REST 풀 싱크 후 room을 구독한다.
 - 단일 인스턴스에서는 Redis를 사용하지 않는다. 다중 Gateway 확장 시 Redis adapter를 추가한다.
+
+## 경기 상세 (L3·L5)
+
+- L3 lineups: /fixtures/lineups → MatchLineup + LineupEntry. Coach·Player 최소 upsert.
+- L3 events: /fixtures/events → MatchEvent. API 응답이 시간순이 아니라 (elapsed asc, extra ?? 0 asc, 응답 index) 로 정렬해 seq 매김. minute_extra 컬럼은 NULL 유지.
+- L5 team_stats: /fixtures/statistics → TeamMatchStat 18항목 (Red Cards null → 0, Ball Possession/Passes % 는 "55%" → Int 55, expected_goals/goals_prevented 는 Decimal · null 유지).
+- L5 player_stats: /fixtures/players → PlayerMatchStat + Player 최소 upsert. rating 은 null 유지 (미출장·5분 이하). passes_accuracy 는 퍼센트 아니라 정확 패스 횟수 (문자열 → Int). API 오타 penalty.commited 는 penalty_committed 로 재매핑.
+- has_* 4상태 (D3): NULL=미조회 / true=200+비지않음+upsert완료 / false=200+빈배열 / 에러·429·타임아웃은 NULL 유지.
+- 4개 has_* 가 모두 non-NULL 이 되면 detail_checked_at=now() + stats_state=CONFIRMED + confirmed_at=now() (common/match-detail-status.ts:promoteIfAllDetailsChecked). RECHECK 는 L4 가 처리.
+- 트랜잭션은 엔드포인트 단위로 짧게. Events 는 deleteMany → createMany → updateMany 세 문장 하나 트랜잭션 (재실행 시 이벤트 수 줄면 옛 행 남기 방지). 경기 단위 트랜잭션은 안 함 (4콜 사이 실패는 부분 저장돼야).
+- matches 갱신은 has_lineups/has_events/has_team_stats/has_player_stats/detail_checked_at/stats_state/confirmed_at 7개 컬럼만. updateMany + detailEligible:true · count===1 확인 (D20).
+- 오케스트레이터(backfill worker)는 다음 판. 이 판은 서비스 4개만.
 
 ## AI · Assistant (MCP)
 
