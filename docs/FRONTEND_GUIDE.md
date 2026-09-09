@@ -277,6 +277,22 @@ TypeScript 타입, `interface`, `type` 선언, `as const` 등 JavaScript에서 �
 - Vite 개발 서버는 운영에 사용하지 않고 `dist` 결과물만 배포함
 - `package-lock.json`을 유지하고 CI에서는 `npm ci`를 사용함
 
+### 어시스턴트 근거 카드 매핑
+
+`AssistantPanel` 은 응답의 `data[]` (각 원소 = 도구 wrapper) 를 순회하며 `tool` 필드로 카드 종류를 고른다. 어시스턴트 전용 표를 새로 만들지 않고 기존 컴포넌트를 재사용한다.
+
+| 도구 | 카드 | 규격 |
+|---|---|---|
+| `get_standings` | `StandingsTable` (`maxRows=10`, `compact`) + "전체 순위 보기 → `/standings?competition=<slug>`" 링크 | wrapper.data 를 `normalizeStandings` 로 정규화 |
+| `list_matches` · `get_match` | `MatchCard` 그리드 (`repeat(auto-fill, minmax(260px, 1fr))`, 최대 10) + 10 초과 시 "경기 전체 보기 → `/matches?competition=<slug>`" 링크 | `wrapper.data.items` 각각 `normalizeMatch` |
+| `get_top_scorers` · `get_top_assisters` | `StatsRanking` (title = 도구별 i18n, unit = 골/도움) | `wrapper.data.items` 각각 `normalizeStatsRow` |
+| 그 외 (get_competition · list_competitions · get_team · list_teams · get_player) | 접힘 JSON (기존 `DataTable`) | 정규화 없이 원문 그대로 |
+
+- 카드가 하나라도 그려지면 접힘 JSON 은 "원본 데이터 보기" 토글로 남긴다.
+- `wrapper.data` 는 백엔드 조회 API DTO 원문. StandingsTable 등 컴포넌트는 정규화된 shape 을 요구하므로 `services/normalize.js` 함수를 반드시 태운다.
+- 최상위 `asOf` (= evidence 중 가장 오래된 값) 는 답변 카드 하단에 "이 답변 기준 · {KST}" 로 표시한다. 여러 도구를 다른 시점 데이터로 조합한 답변임을 사용자에게 보이는 장치.
+- 요청 경합 방어: `AssistantContext` 는 요청마다 seq 를 증가시키고 이전 요청은 `AbortController.abort()` 로 취소한다. 늦게 온 응답(seq 미스매치)은 버린다. 패널 닫기(closePanel)도 진행 중 요청을 abort.
+
 ## 13. 한국어·영어 지원 방향
 
 한국어·영어 지원은 **UI 문구 번역**과 **축구 고유명사 매칭**을 분리해서 구현함.

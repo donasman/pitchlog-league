@@ -10,7 +10,7 @@
  *
  * 상한:
  *   - 도구 호출 총 MAX_TOOL_CALLS(5) 회. 넘으면 마지막 응답 text 로 answer, truncated:true.
- *   - 전체 REQUEST_TIMEOUT_MS(30_000) 밖으로 나가면 AbortController 로 진행 중 호출을 취소하고,
+ *   - 전체 REQUEST_TIMEOUT_MS(75_000) 밖으로 나가면 AbortController 로 진행 중 호출을 취소하고,
  *     지금까지 evidence·data 로 truncated:true 반환.
  *
  * 왜 parametersJsonSchema 인가:
@@ -30,7 +30,12 @@ import { AssistantToolRegistry } from './assistant-tool.registry.js';
 import type { AssistantTool, ToolResult } from './assistant.types.js';
 
 export const MAX_TOOL_CALLS = 5;
-export const REQUEST_TIMEOUT_MS = 30_000;
+/** step 상한과 별도로, 실제로 registry.call 을 도는 총 실행 수 상한.
+ *  step 상한(5)은 왕복 상한이지만, 한 step 안에서 모델이 다수 functionCall 을 반환할 수 있어
+ *  실행 수가 폭주하는 걸 못 막는다. MAX_TOOL_EXECUTIONS 는 이 실행 수 자체를 캡한다. */
+export const MAX_TOOL_EXECUTIONS = 8;
+// gemini-3.x 계열은 추론 단계가 있어 왕복 2회면 30초를 넘긴다 (2026-09-09 실측: 3.6-flash 타임아웃)
+export const REQUEST_TIMEOUT_MS = 75_000;
 
 export const SYSTEM_PROMPT =
   '너는 PitchLog 축구 데이터 어시스턴트다.\n' +
@@ -39,7 +44,8 @@ export const SYSTEM_PROMPT =
   "2. 도구로 답할 수 없는 것은 '그 데이터는 아직 없다' 고 말하고 추측하지 않는다.\n" +
   "3. null 은 0 이 아니라 '측정 안 됨' 이다.\n" +
   '4. 답변 언어는 질문 언어를 따른다.\n' +
-  '5. 마크다운 표(| ... |)를 쓰지 않는다. 표가 필요한 답은 짧은 문장으로 요약하고 상세는 근거 데이터에 맡긴다.';
+  '5. 마크다운 표(| ... |)를 쓰지 않는다. 표가 필요한 답은 짧은 문장으로 요약하고 상세는 근거 데이터에 맡긴다.\n' +
+  '6. 판정 표현("무패" · "압도적" · "최고" · "부진") 을 쓰지 않는다. 서버가 판정하지 않는 한 조회된 수치만 말한다. 숫자 나열 대신 한두 문장 요약.';
 
 export interface AskEvidence {
   tool: string;
@@ -53,11 +59,15 @@ export interface AskResult {
   data: unknown[];
   truncated: boolean;
   model: string;
+  /** evidence 중 가장 오래된 asOf. evidence 가 비면 null.
+   *  ISO 8601 문자열은 사전순 = 시간순 정렬이라 min 은 lexicographic min 이다. */
+  asOf: string | null;
 }
 
 export interface AskOpts {
   timeoutMs?: number;
   maxToolCalls?: number;
+  maxToolExecutions?: number;
 }
 
 /**
@@ -84,6 +94,14 @@ export interface GeminiClientLike {
       candidates?: Array<{ content?: Content }>;
     }>;
   };
+}
+
+/** evidence 중 가장 오래된 asOf 를 뽑는다. 없으면 null.
+ *  프론트 카드 헤더에 "언제 기준" 을 한 줄로 표시하려면 여러 도구 asOf 중 최솟값이 안전하다. */
+export function pickAsOf(evidence: AskEvidence[]): string | null {
+  if (evidence.length === 0) return null;
+  // ISO 8601 문자열은 사전순 = 시간순. `map` 이 이미 새 배열을 만들어 sort 가 원본을 건드리지 않는다.
+  return evidence.map((e) => e.asOf).sort()[0] ?? null;
 }
 
 /** registry 의 AssistantTool 을 Gemini FunctionDeclaration 으로 변환한다 (raw JSON Schema 경로) */
@@ -139,10 +157,12 @@ export class GeminiService {
     }
 
     const maxToolCalls = opts.maxToolCalls ?? MAX_TOOL_CALLS;
+    const maxExecutions = opts.maxToolExecutions ?? MAX_TOOL_EXECUTIONS;
     const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
     const evidence: AskEvidence[] = [];
     const data: unknown[] = [];
+    let executions = 0;
     let truncated = false;
 
     // 도구 10개를 FunctionDeclaration 으로 변환 — 매 호출마다 같은 배열
@@ -188,6 +208,7 @@ export class GeminiService {
             data,
             truncated,
             model: this.modelName,
+            asOf: pickAsOf(evidence),
           };
         }
 
@@ -200,6 +221,7 @@ export class GeminiService {
             data,
             truncated,
             model: this.modelName,
+            asOf: pickAsOf(evidence),
           };
         }
 
@@ -215,7 +237,16 @@ export class GeminiService {
         );
 
         const responseParts: Array<{ functionResponse: { name: string; response: Record<string, unknown> } }> = [];
+        let outerBreak = false;
         for (const c of calls) {
+          // 실행 수 상한(MAX_TOOL_EXECUTIONS): step 상한과 별개로, 한 step 안에서 다수 functionCall 이 몰릴 때도
+          // 서비스 호출이 폭주하지 않도록 실행 카운트 자체를 캡한다. 발동 시 이 도구부터는 실행하지 않고 outer 도 break.
+          if (executions >= maxExecutions) {
+            truncated = true;
+            outerBreak = true;
+            break;
+          }
+          executions++;
           const name = c.name ?? '';
           const args = c.args ?? {};
           let result: ToolResult;
@@ -240,10 +271,12 @@ export class GeminiService {
           });
         }
         contents.push({ role: 'user', parts: responseParts });
+        if (outerBreak) break;
       }
 
-      // 이론상 여기 도달 안 함 (루프 안에서 return) — 안전망
-      return { answer: lastAnswer, evidence, data, truncated: true, model: this.modelName };
+      // 이론상 여기 도달 안 함 (루프 안에서 return) — 안전망.
+      // MAX_TOOL_EXECUTIONS 발동으로 outer break 를 타면 여기로 온다 — truncated 는 이미 true 로 세팅됨.
+      return { answer: lastAnswer, evidence, data, truncated: true, model: this.modelName, asOf: pickAsOf(evidence) };
     } finally {
       clearTimeout(timeoutHandle);
     }
