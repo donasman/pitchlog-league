@@ -12,7 +12,7 @@
  */
 
 import i18n from '@/i18n'
-import { apiGet, NotImplementedError } from './http'
+import { apiGet, apiPost, NotImplementedError } from './http'
 import {
   VISIBLE_COMPETITION_API_IDS,
   competitionRefFromSlug,
@@ -485,7 +485,9 @@ export async function fetchOverview() {
       stage:         deriveStage(matches, nowDate),
       leader: first
         ? { teamId: first.teamId, teamSlug: first.teamSlug, teamName: first.teamName,
-            teamInitials: first.teamInitials, teamColor: first.teamColor, points: first.points }
+            teamInitials: first.teamInitials, teamColor: first.teamColor,
+            teamLogoUrl: first.teamLogoUrl, teamApiId: first.teamApiId,
+            points: first.points }
         : null,
       nextKickoff: next?.date ?? null,
       updatedAt:   tableFor(comp)?.asOf ?? null,
@@ -518,6 +520,18 @@ export async function fetchOverview() {
     eplTop3,
     topScorers: null,
   }
+}
+
+// ─── 어시스턴트 ────────────────────────────────────────────────
+
+/**
+ * AI 어시스턴트 — `POST /api/assistant` 로 질문을 보낸다.
+ * 4xx/5xx 는 apiPost 규약대로 그대로 throw 한다 (컨텍스트가 error 상태로 그린다).
+ * @param {string} question
+ * @returns {Promise<{answer:string, evidence:Array<{tool:string,args:object,asOf:string|null}>, data:Array<object>, truncated:boolean, model:string}>}
+ */
+export async function askAssistant(question) {
+  return apiPost('/api/assistant', { question })
 }
 
 // ─── 아직 백엔드에 없는 것 ─────────────────────────────────────

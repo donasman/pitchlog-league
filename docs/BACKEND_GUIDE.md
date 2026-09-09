@@ -96,6 +96,12 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 - 도구 반환은 `{ tool, args, asOf, data }` wrapper. `data` 는 조회 API DTO 그대로 — 프론트/AI 가 같은 계약을 본다. `list_matches` 는 필요 시 `truncated`/`total` 도 함께.
 - 도구 인자 · 반환 · `asOf` 를 응답에 남긴다. UI 는 "근거 카드" 로 이 값을 그대로 보여준다.
 - 도구 description 최상단에 3상태 문구(0=실측 0 · null=측정 안 됨 · 미제공 플래그) 를 박는다 — LLM 이 null 을 0 으로 접지 않도록.
+- **`POST /api/assistant`** (2026-09-09) — Gemini 클라이언트가 assistant 도구 층을 부른다. 요청 `{question:string, 1~500자}` · 응답 `{answer, evidence:[{tool,args,asOf}], data:[wrapper 그대로], truncated, model}`. IP 당 분당 10회 메모리 카운터 (커스텀 `AssistantRateLimitGuard`).
+- 상한: 도구 호출 5회 · 전체 30초. 넘으면 지금까지 받은 데이터로 답하고 `truncated:true`.
+- 에러: 키 없음 503 · Gemini 429 → 429 · Gemini 오류 502 · 타임아웃 504. 메시지는 i18n 키 (`assistant.error.*`).
+- 시스템 프롬프트 규칙: 도구 없이 숫자·순위·기록을 말하지 않는다 · 도구로 답할 수 없으면 "그 데이터는 아직 없다" 고 답한다 · `null` 은 0 이 아니라 "측정 안 됨" 이다 · 답변 언어는 질문 언어를 따른다.
+- 실 키 smoke: `npm run smoke:assistant` — golden.json 에서 5건(답 가능 3 + tool:null 2)을 실행해 환각 검사(answer 의 숫자가 data 에 실제 존재하는지)까지 확인. 키 없으면 SKIP 하고 exit 0.
+- SDK: `@google/genai@2.21.0` (function calling). 모델은 `GEMINI_MODEL` (기본 `gemini-3.5-flash`).
 
 ## 응답 캐시 · 페이지 상한
 
@@ -118,5 +124,7 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 - `JWT_SECRET`(관리 기능 도입 시)
 - `REDIS_URL`(BullMQ 또는 다중 인스턴스 도입 시)
 - `LLM_API_KEY`(Phase 5)
+- `GEMINI_API_KEY` — `POST /api/assistant` 용. 미설정 시 엔드포인트가 503
+- `GEMINI_MODEL` — Gemini 모델 이름 (기본 `gemini-3.5-flash`)
 
 기준은 `backend/.env.example` 이다. 새 변수는 거기에 먼저 넣는다.

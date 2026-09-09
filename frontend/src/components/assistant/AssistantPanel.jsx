@@ -13,12 +13,8 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAssistant } from "@/contexts/AssistantContext";
-import MatchStatusBadge from "@/components/ui/MatchStatusBadge";
-import TeamBadge from "@/components/ui/TeamBadge";
-import { ZONE_COLOR_VAR, ZONE_PAT } from "@/utils/standingsZone";
 import { toKSTDateTime } from "@/utils/dateFormat";
 
 /* ── P 마크 (AI 아바타) ── */
@@ -67,291 +63,147 @@ function UserMessage({ text }) {
   );
 }
 
-/* ── 순위 데이터 카드 ── */
-function StandingsDataCard({ rows, t }) {
-  if (!rows?.length) return null;
+/* ── 실 응답 근거 항목 (evidence 배열의 한 원소) ── */
+function EvidenceItem({ e, locale, t }) {
+  const asOf = e.asOf ? toKSTDateTime(e.asOf, locale) : "—";
+  // args 는 도구 인자 객체 — 원문을 그대로 보여준다 (임의 요약이 아니라 재현 가능한 값)
+  const argsStr =
+    e.args && typeof e.args === "object"
+      ? JSON.stringify(e.args)
+      : String(e.args ?? "");
   return (
     <div
       style={{
-        borderRadius: 10,
-        overflow: "hidden",
-        boxShadow: "inset 0 0 0 1px var(--pl-line)",
-      }}
-    >
-      <div
-        className="zrow t-cap"
-        style={{ gridTemplateColumns: "26px 1fr 44px", height: 28 }}
-      >
-        <span>{t("assistant.rank")}</span>
-        <span>{t("assistant.team")}</span>
-        <span style={{ textAlign: "right" }}>{t("assistant.points")}</span>
-      </div>
-      {rows.map((r) => {
-        const zc = ZONE_COLOR_VAR[r.zone];
-        const pat = ZONE_PAT[r.zone];
-        return (
-          <div
-            /* 조별리그 순위가 흘러들면 rank 1 이 조마다 하나씩 나온다 — 팀 식별자로 잡는다 */
-            key={r.teamId ?? r.teamSlug ?? r.rank}
-            className="zrow num"
-            data-zone={zc ? r.zone : undefined}
-            data-pat={pat && pat !== "solid" ? pat : undefined}
-            style={{
-              "--zc": zc ?? "transparent",
-              gridTemplateColumns: "26px 1fr 44px",
-              height: 36,
-            }}
-          >
-            <span style={{ fontWeight: 700 }}>{r.rank}</span>
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 7,
-                minWidth: 0,
-                fontVariantNumeric: "normal",
-                fontWeight: 600,
-              }}
-            >
-              <TeamBadge
-                initials={r.teamInitials}
-                color={r.teamColor}
-                size="xs"
-                name={r.teamName}
-              />
-              <span className="tname">{r.teamName}</span>
-            </span>
-            <span style={{ textAlign: "right", fontWeight: 700 }}>
-              {r.points}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ── 경기 데이터 카드 ── */
-function MatchDataCard({ card, t }) {
-  const live = card.displayState === "live" || card.displayState === "halftime";
-  const hasScore = card.homeScore !== null && card.awayScore !== null;
-
-  return (
-    <div
-      className="pl-card"
-      style={{
-        padding: 12,
         display: "grid",
+        gridTemplateColumns: "auto 1fr auto",
         gap: 8,
-        boxShadow: live
-          ? "inset 0 0 0 1.5px var(--st-neg)"
-          : "inset 0 0 0 1px var(--pl-line)",
+        fontSize: 12,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
+      <span className="t-cap">{t("assistant.evidenceTool")}</span>
+      <span
+        className="t-sub"
+        style={{ color: "var(--pl-text)", minWidth: 0, wordBreak: "break-all" }}
       >
-        <MatchStatusBadge state={card.displayState} />
-        {live && card.minute && (
-          <span className="t-cap num" style={{ color: "var(--st-neg-text)" }}>
-            {card.minute}′
-          </span>
-        )}
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto",
-          gap: 8,
-          alignItems: "center",
-        }}
-      >
-        <span className="t-body tname" style={{ fontWeight: 600 }}>
-          {card.homeName}
-        </span>
-        <span className="num t-body" style={{ fontWeight: 700 }}>
-          {hasScore ? card.homeScore : "–"}
-        </span>
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto",
-          gap: 8,
-          alignItems: "center",
-        }}
-      >
-        <span className="t-body tname" style={{ fontWeight: 600 }}>
-          {card.awayName}
-        </span>
-        <span className="num t-body" style={{ fontWeight: 700 }}>
-          {hasScore ? card.awayScore : "–"}
-        </span>
-      </div>
-      {card.matchId && (
-        <Link
-          to={`/matches/${card.matchId}`}
-          className="pl-link"
-          style={{ fontSize: 12, justifySelf: "start" }}
-        >
-          {t("assistant.matchDetail")}
-        </Link>
-      )}
+        {e.tool}
+        {argsStr ? ` (${argsStr})` : ""}
+      </span>
+      <span className="t-cap num" style={{ color: "var(--pl-sub)" }}>
+        {asOf}
+      </span>
     </div>
   );
 }
 
-/* ── 통계 비교 데이터 카드 ── */
-function StatsDataCard({ rows }) {
+/* ── 데이터 배열 표시 — 기본 접힘, 토글로 열면 max-height 240px 스크롤 ── */
+function DataTable({ data, t }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!Array.isArray(data) || data.length === 0) return null;
   return (
-    <div
-      style={{
-        borderRadius: 10,
-        overflow: "hidden",
-        boxShadow: "inset 0 0 0 1px var(--pl-line)",
-      }}
-    >
-      {rows.map((r, i) => (
-        <div
-          key={i}
-          className="num"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 72px 72px",
-            gap: 8,
-            padding: "0 12px",
-            height: 34,
-            alignItems: "center",
-            borderTop: i ? "1px solid var(--pl-line)" : "none",
-            fontSize: 13,
-          }}
-        >
-          <span className="t-sub" style={{ fontVariantNumeric: "normal" }}>
-            {r[0]}
-          </span>
-          <span style={{ textAlign: "right", fontWeight: 700 }}>{r[1]}</span>
-          <span style={{ textAlign: "right", fontWeight: 700 }}>{r[2]}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ── 데이터 카드 디스패처 ── */
-function DataCard({ card, t }) {
-  if (card.type === "standings")
-    return <StandingsDataCard rows={card.rows} t={t} />;
-  if (card.type === "match") return <MatchDataCard card={card} t={t} />;
-  if (card.type === "stats") return <StatsDataCard rows={card.rows} />;
-  return null;
-}
-
-/* ── 근거 카드 (접힘/펼침) ── */
-function EvidenceSection({ evidence, dataStatus, locale, t }) {
-  const [open, setOpen] = useState(false);
-
-  const isRecheck = dataStatus === "recheck";
-  const isLive = dataStatus === "live";
-
-  if (!evidence) return null;
-
-  const asOf = evidence.asOf ? toKSTDateTime(evidence.asOf, locale) : "—";
-
-  return (
-    <div
-      style={{
-        borderTop: "1px solid var(--pl-line)",
-        paddingTop: 10,
-        display: "grid",
-        gap: 8,
-      }}
-    >
-      <div
+    <div style={{ display: "grid", gap: 6 }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="t-cap"
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          flexWrap: "wrap",
+          justifySelf: "start",
+          padding: "4px 8px",
+          border: "1px solid var(--pl-line)",
+          borderRadius: 6,
+          background: "transparent",
+          color: "var(--pl-sub)",
+          cursor: "pointer",
         }}
       >
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="pl-link"
+        {expanded ? t("assistant.hideData") : t("assistant.showData")}
+      </button>
+      {expanded && (
+        <pre
           style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-          }}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              display: "inline-block",
-              transform: open ? "rotate(90deg)" : "none",
-              transition: "transform .15s",
-              fontSize: 10,
-            }}
-          >
-            ▸
-          </span>
-          {t("assistant.evidenceBtn")}
-        </button>
-
-        {/* 재검증 중 / 라이브 배지 — 접힌 상태에서도 표시 */}
-        {isRecheck && <MatchStatusBadge state="recheck" />}
-        {isLive && <MatchStatusBadge state="live" />}
-
-        <span
-          className="t-cap num"
-          style={{ marginLeft: "auto", color: "var(--pl-sub)" }}
-        >
-          {asOf} {t("assistant.asOfSuffix")}
-        </span>
-      </div>
-
-      {open && (
-        <div
-          style={{
+            margin: 0,
+            padding: 10,
             background: "var(--pl-fill)",
             borderRadius: 8,
-            padding: 12,
-            display: "grid",
-            gap: 6,
+            fontSize: 11,
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+            overflow: "auto",
+            maxHeight: 240,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            color: "var(--pl-text)",
           }}
         >
-          {[
-            [t("assistant.evidenceTool"), evidence.tool],
-            [t("assistant.evidenceAsOf"), asOf],
-            [t("assistant.evidenceSource"), evidence.source],
-          ].map(([label, val]) => (
-            <div
-              key={label}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "52px 1fr",
-                gap: 10,
-              }}
-            >
-              <span className="t-cap">{label}</span>
-              <span className="t-sub" style={{ color: "var(--pl-text)" }}>
-                {val}
-              </span>
-            </div>
-          ))}
-        </div>
+          {JSON.stringify(data, null, 2)}
+        </pre>
       )}
     </div>
   );
 }
 
-/* ── AI 답변 메시지 ── */
-function AiMessage({ sample, locale, t }) {
-  const { answer, cards, evidence, dataStatus, note, suggestions } = sample;
+/**
+ * 백엔드 오류 메시지 → i18n 키.
+ * 백엔드 예외 메시지에 `assistant.error.<code>` 형태가 들어오면 그대로 쓴다.
+ * 알 수 없는 값은 assistant.error.generic 으로 폴백.
+ */
+function errorKeyFor(message) {
+  const s = String(message ?? "");
+  if (s.includes("assistant.error.not_configured"))
+    return "assistant.error.not_configured";
+  if (s.includes("assistant.error.rate_limited"))
+    return "assistant.error.rate_limited";
+  if (s.includes("assistant.error.model_error"))
+    return "assistant.error.model_error";
+  if (s.includes("assistant.error.timeout"))
+    return "assistant.error.timeout";
+  return "assistant.error.generic";
+}
+
+/* ── AI 답변 메시지 — 실 API 응답 shape 소비 ── */
+function AiMessage({ msg, locale, t, onRetry }) {
+  // 오류 상태 — 빈 데이터로 감추지 않고 명시적으로 그린다
+  if (msg.error) {
+    return (
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <PMark />
+        <div
+          className="pl-card"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: 14,
+            display: "grid",
+            gap: 10,
+            boxShadow: "inset 0 0 0 1px var(--st-neg, var(--pl-line))",
+          }}
+        >
+          <span className="t-body" style={{ color: "var(--st-neg-text, var(--pl-text))" }}>
+            {t(errorKeyFor(msg.error))}
+          </span>
+          {msg.question && (
+            <button
+              className="pl-btn pl-btn-ghost"
+              style={{
+                justifySelf: "start",
+                height: 36,
+                fontSize: 13,
+                fontWeight: 500,
+              }}
+              onClick={() => onRetry(msg.question)}
+            >
+              {t("assistant.retry")}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const result = msg.result ?? {};
+  const answer = result.answer ?? "";
+  const evidence = Array.isArray(result.evidence) ? result.evidence : [];
+  const data = Array.isArray(result.data) ? result.data : [];
 
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -363,43 +215,24 @@ function AiMessage({ sample, locale, t }) {
         {/* 본문 텍스트 */}
         <span className="t-body">{answer}</span>
 
-        {/* 데이터 카드들 */}
-        {(cards ?? []).map((card, i) => (
-          <DataCard key={i} card={card} t={t} />
-        ))}
+        {/* 데이터 표 — 실 응답 data 배열 원문 */}
+        <DataTable data={data} t={t} />
 
-        {/* 노트 (재검증 중, 라이브 등) */}
-        {note && <span className="t-sub">{note}</span>}
-
-        {/* 답할 수 없음 — 대안 제시 */}
-        {dataStatus === "unanswerable" && suggestions?.length > 0 && (
-          <div style={{ display: "grid", gap: 8 }}>
-            <span className="t-sub">{t("assistant.unanswerableNote")}</span>
-            {suggestions.map((q) => (
-              <button
-                key={q}
-                className="pl-btn pl-btn-ghost"
-                style={{
-                  justifyContent: "flex-start",
-                  height: 40,
-                  fontWeight: 500,
-                  fontSize: 13,
-                }}
-                onClick={() => {}}
-              >
-                {q}
-              </button>
+        {/* 근거 — 도구·인자·기준 시각 (기존 EvidenceSection 은 sample.evidence 단일 객체 전용이라 재사용 안 함) */}
+        {evidence.length > 0 && (
+          <div
+            style={{
+              borderTop: "1px solid var(--pl-line)",
+              paddingTop: 10,
+              display: "grid",
+              gap: 6,
+            }}
+          >
+            {evidence.map((e, i) => (
+              <EvidenceItem key={i} e={e} locale={locale} t={t} />
             ))}
           </div>
         )}
-
-        {/* 근거 카드 */}
-        <EvidenceSection
-          evidence={evidence}
-          dataStatus={dataStatus}
-          locale={locale}
-          t={t}
-        />
       </div>
     </div>
   );
@@ -774,9 +607,10 @@ export default function AssistantPanel() {
                 ) : (
                   <AiMessage
                     key={msg.id}
-                    sample={msg.sample}
+                    msg={msg}
                     locale={locale}
                     t={t}
+                    onRetry={handleAsk}
                   />
                 ),
               )}

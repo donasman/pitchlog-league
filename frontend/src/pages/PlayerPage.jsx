@@ -121,7 +121,7 @@ export default function PlayerPage() {
           </div>
           {team && (
             <Link to={`/teams/${team.slug}`} className="inline-flex items-center gap-2 mt-3 group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded">
-              <TeamBadge initials={team.initials} color={team.color} size="xs" name={team.name} />
+              <TeamBadge initials={team.initials} color={team.color} logoUrl={team.logoUrl} size="xs" name={team.name} />
               <span className="text-sm text-foreground group-hover:text-primary transition-colors">{teamName}</span>
             </Link>
           )}

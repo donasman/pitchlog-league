@@ -213,6 +213,7 @@ function DesktopTable({ rows, competitionSlug, t, locale }) {
                 <TeamBadge
                   initials={entry.teamInitials}
                   color={entry.teamColor}
+                  logoUrl={entry.teamLogoUrl}
                   size="xs"
                   name={entry.teamName}
                 />
@@ -322,7 +323,7 @@ function MobileTable({ rows, t, locale }) {
             >
               <span style={{ fontWeight: 700, color: 'var(--pl-sub)' }}>{entry.rank}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                <TeamBadge initials={entry.teamInitials} color={entry.teamColor} size="xs" name={entry.teamName} />
+                <TeamBadge initials={entry.teamInitials} color={entry.teamColor} logoUrl={entry.teamLogoUrl} size="xs" name={entry.teamName} />
                 <span
                   className="tname"
                   style={{ fontWeight: 600, fontSize: 12, color: 'var(--pl-text)' }}
@@ -451,7 +452,7 @@ function CompactTable({ rows, competitionSlug, t, locale }) {
                       minHeight: 44,
                     }}
                   >
-                    <TeamBadge initials={entry.teamInitials} color={entry.teamColor} size="xs" name={entry.teamName} />
+                    <TeamBadge initials={entry.teamInitials} color={entry.teamColor} logoUrl={entry.teamLogoUrl} size="xs" name={entry.teamName} />
                     <span className="tname" style={{ fontWeight: 500, fontSize: 13, maxWidth: 90 }}>
                       {getLocalizedName(teamObj, locale) || entry.teamName}
                     </span>

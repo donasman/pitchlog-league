@@ -3,6 +3,7 @@
  * 6개 대회를 3×2 그리드로 표시 — HomePage CompetitionCard와 같은 형태
  */
 
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
@@ -11,6 +12,44 @@ import TeamBadge from '@/components/ui/TeamBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import { getLocalizedCompetitionName } from '@/utils/localization'
+
+/**
+ * CompetitionEmblem — 대회 로고, 없으면 shortName 텍스트 폴백.
+ * HomePage 것과 같은 규칙이지만 파일 간 컴포넌트 공유 대신 각 페이지에 두는 것이
+ * 지금 골든 룰이다 (프로젝트에 공용 CompetitionBadge 자리가 아직 없음 — 다음 판).
+ */
+function CompetitionEmblem({ comp }) {
+  const [failed, setFailed] = useState(false)
+  const showImg = comp.logoUrl && !failed
+  return (
+    <span
+      className="pl-emblem"
+      style={{
+        width: 36,
+        height: 36,
+        fontSize: 11,
+        fontWeight: 700,
+        flexShrink: 0,
+        borderRadius: 8,
+        background: showImg ? 'transparent' : undefined,
+      }}
+    >
+      {showImg ? (
+        <img
+          src={comp.logoUrl}
+          alt={comp.name ?? comp.shortName}
+          width={36}
+          height={36}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          style={{ width: 36, height: 36, objectFit: 'contain' }}
+        />
+      ) : (
+        comp.shortName
+      )}
+    </span>
+  )
+}
 
 export default function CompetitionsPage() {
   const { t, i18n } = useTranslation()
@@ -58,12 +97,7 @@ export default function CompetitionsPage() {
               >
                 {/* 헤더 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span
-                    className="pl-emblem"
-                    style={{ width: 36, height: 36, fontSize: 11, fontWeight: 700, flexShrink: 0, borderRadius: 8 }}
-                  >
-                    {comp.shortName}
-                  </span>
+                  <CompetitionEmblem comp={comp} />
                   <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
                     <span className="t-card tname" style={{ fontWeight: 600 }}>
                       {getLocalizedCompetitionName(comp, locale)}
@@ -89,7 +123,7 @@ export default function CompetitionsPage() {
                 {comp.leader && (
                   <div style={{ borderTop: '1px solid var(--pl-line)', paddingTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="t-cap">{t('home.leaderLabel')}</span>
-                    <TeamBadge initials={comp.leader.teamInitials} color={comp.leader.teamColor} size="xs" name={comp.leader.teamName} />
+                    <TeamBadge initials={comp.leader.teamInitials} color={comp.leader.teamColor} logoUrl={comp.leader.teamLogoUrl} size="xs" name={comp.leader.teamName} />
                     <span className="tname t-body" style={{ fontWeight: 600, flex: 1 }}>{comp.leader.teamName}</span>
                     {comp.leader.points != null && (
                       <span className="num t-body" style={{ fontWeight: 700, flexShrink: 0 }}>

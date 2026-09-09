@@ -1,8 +1,11 @@
 /**
- * AssistantModule — MCP 도구 레지스트리만 provide/export 한다.
+ * AssistantModule — 도구 레지스트리 + HTTP 어시스턴트(GeminiService + Controller).
  *
- * 이 판(A 조각) 시점에는 AppModule 에 등록되지 않는다 — B 조각(cli/mcp.ts) 이 stdio 서버에서 이 모듈을 부트한다.
- * B 통합 전에는 부팅에도 안 붙고 e2e 도 없다. tsc/lint 만 통과하면 된다.
+ * 두 진입점:
+ *   1. HTTP POST /api/assistant (AssistantController → GeminiService → AssistantToolRegistry)
+ *   2. MCP stdio 서버 (cli/mcp.ts → AssistantToolRegistry 만)
+ *
+ * exports: 다른 모듈이 registry·service 를 직접 쓸 수 있게 열어 둔다.
  */
 import { Module } from '@nestjs/common';
 import { CompetitionModule } from '../competition/competition.module.js';
@@ -11,11 +14,15 @@ import { PlayerModule } from '../player/player.module.js';
 import { StandingModule } from '../standing/standing.module.js';
 import { StatisticsModule } from '../statistics/statistics.module.js';
 import { TeamModule } from '../team/team.module.js';
+import { AssistantController } from './assistant.controller.js';
+import { AssistantRateLimitGuard } from './assistant-rate-limit.guard.js';
 import { AssistantToolRegistry } from './assistant-tool.registry.js';
+import { GeminiService } from './gemini.service.js';
 
 @Module({
   imports: [CompetitionModule, TeamModule, MatchModule, StandingModule, StatisticsModule, PlayerModule],
-  providers: [AssistantToolRegistry],
-  exports: [AssistantToolRegistry],
+  controllers: [AssistantController],
+  providers: [AssistantToolRegistry, GeminiService, AssistantRateLimitGuard],
+  exports: [AssistantToolRegistry, GeminiService],
 })
 export class AssistantModule {}

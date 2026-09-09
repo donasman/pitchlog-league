@@ -60,3 +60,6 @@ export const fetchOverview             = (...a) => impl.fetchOverview(...a)
 export const fetchHomeData             = (...a) => impl.fetchHomeData(...a)
 export const fetchNotifications        = (...a) => impl.fetchNotifications(...a)
 export const fetchNotificationSettings = (...a) => impl.fetchNotificationSettings(...a)
+
+// 어시스턴트
+export const askAssistant              = (...a) => impl.askAssistant(...a)
