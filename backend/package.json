@@ -28,7 +28,8 @@
     "ingest": "nest build && node dist/cli/ingest.js",
     "mcp": "nest build && node dist/cli/mcp.js",
     "backup": "node scripts/backup.mjs",
-    "backup:verify": "node scripts/restore-check.mjs"
+    "backup:verify": "node scripts/restore-check.mjs",
+    "smoke:assistant": "node scripts/assistant-smoke.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
