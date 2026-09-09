@@ -96,6 +96,9 @@ cwd 가 `backend/` 이므로 서버 프로세스가 `.env` 를 직접 읽는다 
 `{ tool, args, asOf, data }` — `data` 는 REST API DTO 와 같다. `list_matches` 는 자동으로
 `from/to = today ±7d (KST)`, `limit=50` (max 200) — 잘렸으면 wrapper 에 `truncated:true, total:N`.
 
+`GEMINI_MODEL` 은 3.x flash 계열을 쓴다. `gemini-2.5-flash` 는 신규 프로젝트에 제공되지 않는다
+(404 NOT_FOUND — "no longer available to new users", 2026-09-09 실측). 권장 기본값 `gemini-3.6-flash`.
+
 ### 백업
 
 ```bash

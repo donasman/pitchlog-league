@@ -13,9 +13,19 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAssistant } from "@/contexts/AssistantContext";
 import { toKSTDateTime } from "@/utils/dateFormat";
+import {
+  cardKindForTool,
+  competitionSlugFromWrapper,
+  normalizeCardPayload,
+  pickAsOf,
+} from "@/utils/assistantCards";
+import StandingsTable from "@/components/ui/StandingsTable";
+import MatchCard from "@/components/ui/MatchCard";
+import StatsRanking from "@/components/ui/StatsRanking";
 
 /* ── P 마크 (AI 아바타) ── */
 function PMark({ size = 28 }) {
@@ -93,6 +103,96 @@ function EvidenceItem({ e, locale, t }) {
       </span>
     </div>
   );
+}
+
+/* ── 도구별 재사용 카드 렌더 ──
+   백엔드 응답의 evidence[i] · data[i] 는 인덱스 매칭 (gemini.service.ts:238-241).
+   여기서 짝지어 `{tool, data, asOf}` wrapper 를 만들어 assistantCards 유틸로 kind 판정한다. */
+function DataCards({ wrappers, t }) {
+  if (!Array.isArray(wrappers) || wrappers.length === 0) return null;
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {wrappers.map((w, i) => (
+        <DataCard key={i} wrapper={w} t={t} />
+      ))}
+    </div>
+  );
+}
+
+function DataCard({ wrapper, t }) {
+  const kind = cardKindForTool(wrapper?.tool);
+  if (kind === "json") return null; // json 은 DataTable 이 원본으로 그린다
+
+  const payload = normalizeCardPayload(kind, wrapper?.data);
+  const compSlug = competitionSlugFromWrapper(wrapper);
+
+  if (kind === "standings") {
+    return (
+      <div style={{ display: "grid", gap: 6 }}>
+        <StandingsTable
+          entries={payload?.entries ?? []}
+          maxRows={10}
+          competitionSlug={compSlug}
+          compact
+        />
+        {compSlug && (
+          <Link
+            to={`/standings?competition=${compSlug}`}
+            className="pl-link"
+            style={{ fontSize: 12 }}
+          >
+            {t("assistant.viewAllStandings")}
+          </Link>
+        )}
+      </div>
+    );
+  }
+
+  if (kind === "matches") {
+    const list = Array.isArray(payload) ? payload : [];
+    const shown = list.slice(0, 10);
+    return (
+      <div style={{ display: "grid", gap: 6 }}>
+        <div
+          style={{
+            display: "grid",
+            gap: 8,
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+          }}
+        >
+          {shown.map((m) => (
+            <MatchCard key={m.id} match={m} compact />
+          ))}
+        </div>
+        {list.length > 10 && compSlug && (
+          <Link
+            to={`/matches?competition=${compSlug}`}
+            className="pl-link"
+            style={{ fontSize: 12 }}
+          >
+            {t("assistant.viewAllMatches", { total: list.length })}
+          </Link>
+        )}
+      </div>
+    );
+  }
+
+  if (kind === "match") {
+    return payload ? <MatchCard match={payload} /> : null;
+  }
+
+  if (kind === "stats") {
+    const list = Array.isArray(payload) ? payload : [];
+    const isScorers = wrapper?.tool === "get_top_scorers";
+    // t() 를 리터럴 형태로 풀어 쓴다 — checkI18n 의 T_RE 는 t('key') 리터럴만 잡는다
+    const title = isScorers ? t("assistant.topScorers") : t("assistant.topAssisters");
+    const unit  = isScorers ? t("assistant.unitGoals")  : t("assistant.unitAssists");
+    return (
+      <StatsRanking title={title} unit={unit} entries={list} />
+    );
+  }
+
+  return null;
 }
 
 /* ── 데이터 배열 표시 — 기본 접힘, 토글로 열면 max-height 240px 스크롤 ── */
@@ -205,6 +305,18 @@ function AiMessage({ msg, locale, t, onRetry }) {
   const evidence = Array.isArray(result.evidence) ? result.evidence : [];
   const data = Array.isArray(result.data) ? result.data : [];
 
+  // evidence[i] · data[i] 를 wrapper 로 짝짓는다 (백엔드 계약: 인덱스 매칭)
+  const wrappers = evidence.map((e, i) => ({
+    tool: e?.tool,
+    args: e?.args,
+    asOf: e?.asOf,
+    data: data[i],
+  }));
+
+  // 최상위 asOf: 백엔드가 최상위 필드로 실어 오면(구 응답에는 없을 수도) 그것,
+  // 아니면 evidence[] 의 최소값 (assistantCards.pickAsOf)
+  const topAsOf = result.asOf ?? pickAsOf(evidence);
+
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
       <PMark />
@@ -215,7 +327,10 @@ function AiMessage({ msg, locale, t, onRetry }) {
         {/* 본문 텍스트 */}
         <span className="t-body">{answer}</span>
 
-        {/* 데이터 표 — 실 응답 data 배열 원문 */}
+        {/* 도구별 재사용 카드 — StandingsTable · MatchCard · StatsRanking */}
+        <DataCards wrappers={wrappers} t={t} />
+
+        {/* 데이터 원본 — 접힘 상태로 남겨 "원본 데이터 보기" 접근성 유지 */}
         <DataTable data={data} t={t} />
 
         {/* 근거 — 도구·인자·기준 시각 (기존 EvidenceSection 은 sample.evidence 단일 객체 전용이라 재사용 안 함) */}
@@ -231,6 +346,16 @@ function AiMessage({ msg, locale, t, onRetry }) {
             {evidence.map((e, i) => (
               <EvidenceItem key={i} e={e} locale={locale} t={t} />
             ))}
+          </div>
+        )}
+
+        {/* 최상위 asOf — "이 답변 기준" · evidence 여러 개의 최소값 */}
+        {topAsOf && (
+          <div
+            className="t-cap"
+            style={{ color: "var(--pl-sub)", marginTop: 2 }}
+          >
+            {t("assistant.asOfLabel")} · {toKSTDateTime(topAsOf, locale)}
           </div>
         )}
       </div>

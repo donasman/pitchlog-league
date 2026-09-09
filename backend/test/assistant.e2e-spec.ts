@@ -7,6 +7,8 @@
  * Case 3: toFunctionDeclaration 변환 → 10개 · name·description·parametersJsonSchema 존재 · schema.type === 'object'
  * Case 4: description 3상태 문구 보존 ('do not conflate'·'not measured'·'API did not provide' 셋 다)
  * Case 5: MockGeminiClient 로 도구 호출 상한 5회 검증 → truncated:true · evidence.length === 5
+ * Case 6: MAX_TOOL_EXECUTIONS 8 — step 마다 3개 functionCall 을 반환해도 실행 8회에서 컷
+ * Case 7: 최상위 asOf 가 evidence 중 최소값 (사전순 = 시간순 min)
  */
 import 'dotenv/config';
 import { Test } from '@nestjs/testing';
@@ -17,6 +19,7 @@ import { AppModule } from '../src/app.module.js';
 import { setupApp } from '../src/app.setup.js';
 import { AssistantToolRegistry } from '../src/assistant/assistant-tool.registry.js';
 import { GeminiService, toFunctionDeclaration, type GeminiClientLike } from '../src/assistant/gemini.service.js';
+import type { AssistantTool, ToolResult } from '../src/assistant/assistant.types.js';
 
 describe('POST /api/assistant (e2e)', () => {
   // ── Case 1. 키 미설정 → 503 ─────────────────────────────
@@ -156,6 +159,135 @@ describe('POST /api/assistant (e2e)', () => {
       expect(result.data).toHaveLength(5);
       // 마지막 텍스트는 mock 이 준 것
       expect(result.answer).toMatch(/^mock text step /);
+    });
+
+    // ── Case 6. step 마다 다수 functionCall → MAX_TOOL_EXECUTIONS 8 컷 ─
+    it('Case 6: step 마다 3개 functionCall → executions 상한 8 · evidence.length===8 · truncated===true', async () => {
+      // step 상한(5) 은 여유롭게 남긴 채, 실행 카운트 자체가 8 에서 컷되는지 검증.
+      // step 1 → 3개 (executions 1,2,3), step 2 → 3개 (4,5,6), step 3 → 3개 중 2개만 실행(7,8) 후 break.
+      let stepCount = 0;
+      const mock: GeminiClientLike = {
+        models: {
+          async generateContent() {
+            stepCount++;
+            if (stepCount >= 4) {
+              // 안전망 — outer break 이후 여기 도달하면 안 됨. 도달 시엔 text 만 반환해 종료 유도.
+              return { text: `mock text step ${stepCount}`, functionCalls: [] };
+            }
+            return {
+              text: `mock text step ${stepCount}`,
+              functionCalls: [
+                { name: 'list_competitions', args: {} },
+                { name: 'list_competitions', args: {} },
+                { name: 'list_competitions', args: {} },
+              ],
+            };
+          },
+        },
+      };
+      gemini.setClient(mock);
+
+      const result = await gemini.ask('실행 상한 반례');
+      expect(result.truncated).toBe(true);
+      expect(result.evidence).toHaveLength(8);
+      expect(result.data).toHaveLength(8);
+      // outer break 는 step 3 안에서 발생 — 그 step 이 stepCount===3 이었음
+      expect(stepCount).toBe(3);
+      // evidence 는 모두 list_competitions
+      for (const e of result.evidence) {
+        expect(e.tool).toBe('list_competitions');
+      }
+    });
+  });
+
+  // ── Case 7. 최상위 asOf = evidence 중 최소값 ────────────────
+  // fake AssistantToolRegistry 를 override 로 주입해 asOf 를 매 호출 다르게 통제한다.
+  describe('Case 7: 최상위 asOf = evidence 중 최소값 (별도 앱 · fake registry)', () => {
+    let app: INestApplication;
+    let gemini: GeminiService;
+    const originalKey = process.env.GEMINI_API_KEY;
+
+    // 매 call 마다 다른 asOf 를 돌려주는 fake — 순서: 09-07, 09-01, 09-09
+    // 실 registry 는 CompetitionService 등에 의존하지만 여기선 getAll·call 만 쓴다.
+    const asOfSequence = [
+      '2026-09-07T00:00:00.000Z',
+      '2026-09-01T00:00:00.000Z',
+      '2026-09-09T00:00:00.000Z',
+    ];
+    let callIdx = 0;
+    const fakeTool: AssistantTool = {
+      name: 'list_competitions',
+      description: 'fake for case 7 (do not conflate · not measured · Missing-data flags placeholder)',
+      argsSchema: { type: 'object', properties: {}, additionalProperties: false },
+      handler: async () => ({ asOf: asOfSequence[0], items: [] }),
+    };
+    const fakeRegistry = {
+      getAll(): AssistantTool[] {
+        return [fakeTool];
+      },
+      get(name: string): AssistantTool | undefined {
+        return name === fakeTool.name ? fakeTool : undefined;
+      },
+      register(): void {
+        // 이 앱에서는 register 를 부르지 않는다.
+      },
+      async call(name: string, args: unknown): Promise<ToolResult> {
+        if (name !== fakeTool.name) throw new Error(`unknown tool ${name}`);
+        const asOf = asOfSequence[callIdx % asOfSequence.length]!;
+        callIdx++;
+        const argsObj = args && typeof args === 'object' ? (args as Record<string, unknown>) : {};
+        return { tool: name, args: argsObj, asOf, data: { asOf, items: [] } };
+      },
+    };
+
+    beforeAll(async () => {
+      process.env.GEMINI_API_KEY = 'test-key-not-used';
+      callIdx = 0;
+      const mod = await Test.createTestingModule({ imports: [AppModule] })
+        .overrideProvider(AssistantToolRegistry)
+        .useValue(fakeRegistry)
+        .compile();
+      app = setupApp(mod.createNestApplication());
+      await app.init();
+      gemini = app.get(GeminiService);
+    });
+
+    afterAll(async () => {
+      await app?.close();
+      if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = originalKey;
+    });
+
+    it('evidence 3건의 asOf 가 [09-07, 09-01, 09-09] 이면 최상위 asOf === 09-01', async () => {
+      // 3번 도구를 부르고 마지막 step 에서 text 만 반환해 확정. step 4 진입 시 종료.
+      let stepCount = 0;
+      const mock: GeminiClientLike = {
+        models: {
+          async generateContent() {
+            stepCount++;
+            if (stepCount >= 4) {
+              return { text: 'final answer', functionCalls: [] };
+            }
+            return {
+              text: `working step ${stepCount}`,
+              functionCalls: [{ name: 'list_competitions', args: {} }],
+            };
+          },
+        },
+      };
+      gemini.setClient(mock);
+
+      const result = await gemini.ask('asOf 최소값 검증');
+      expect(result.truncated).toBe(false);
+      expect(result.evidence).toHaveLength(3);
+      expect(result.evidence.map((e) => e.asOf)).toEqual([
+        '2026-09-07T00:00:00.000Z',
+        '2026-09-01T00:00:00.000Z',
+        '2026-09-09T00:00:00.000Z',
+      ]);
+      // 사전순 min = 시간순 min
+      expect(result.asOf).toBe('2026-09-01T00:00:00.000Z');
+      expect(result.answer).toBe('final answer');
     });
   });
 });
