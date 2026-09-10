@@ -35,7 +35,8 @@ export default function MyTeamsSection() {
             className="myteams-grid"
             style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}
           >
-            <style>{`@media(min-width:768px){.myteams-grid{grid-template-columns:repeat(3,1fr)!important}}`}</style>
+            {/* minmax(0, 1fr) — /teams 와 같은 min-content 하한 버그 방어 · MyTeamCard 안 긴 팀명이 트랙을 밀지 않게 */}
+            <style>{`@media(min-width:768px){.myteams-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}`}</style>
             {cards.map(card => (
               <MyTeamCard key={card.teamRef} card={card} />
             ))}
