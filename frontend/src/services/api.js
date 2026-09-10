@@ -45,21 +45,13 @@ export const fetchTeamFixtures         = (...a) => impl.fetchTeamFixtures(...a)
 export const fetchStandings            = (...a) => impl.fetchStandings(...a)
 
 // 선수·통계
-export const fetchPlayer               = (...a) => impl.fetchPlayer(...a)
-export const fetchPlayerStats          = (...a) => impl.fetchPlayerStats(...a)
 export const fetchPlayerDetail         = (...a) => impl.fetchPlayerDetail(...a)
-export const fetchTopScorers           = (...a) => impl.fetchTopScorers(...a)
-export const fetchTopAssisters         = (...a) => impl.fetchTopAssisters(...a)
-export const fetchTopScorersAll        = (...a) => impl.fetchTopScorersAll(...a)
 export const fetchAllStats             = (...a) => impl.fetchAllStats(...a)
 export const fetchCompetitionStats     = (...a) => impl.fetchCompetitionStats(...a)
 
 // 그 밖
 export const fetchUCLKnockout          = (...a) => impl.fetchUCLKnockout(...a)
 export const fetchOverview             = (...a) => impl.fetchOverview(...a)
-export const fetchHomeData             = (...a) => impl.fetchHomeData(...a)
-export const fetchNotifications        = (...a) => impl.fetchNotifications(...a)
-export const fetchNotificationSettings = (...a) => impl.fetchNotificationSettings(...a)
 
 // 어시스턴트
 export const askAssistant              = (...a) => impl.askAssistant(...a)

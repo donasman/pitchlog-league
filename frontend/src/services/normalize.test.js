@@ -8,12 +8,14 @@ import {
   normalizeStandings,
   normalizeStatsRow,
   normalizeTeam,
+  normalizeTeamDetail,
   deriveStage,
   competitionRefFromSlug,
   normalizePlayerDetail,
   playerTotals,
   formatStat,
   matchDetail,
+  scorerRowsFromRanking,
 } from './normalize.js'
 import { MATCHES } from '../mocks/matches.js'
 
@@ -286,14 +288,26 @@ describe('normalizeMatch', () => {
 // ─── normalizeStanding ─────────────────────────────────────────
 
 describe('normalizeStanding', () => {
-  it('splits the form string into an array of W/D/L', () => {
-    const row = normalizeStanding(standingRowDto({ form: 'WWDLW' }), { format: 'league' })
-    expect(row.form).toEqual(['W', 'W', 'D', 'L', 'W'])
+  // API 의 form 은 최신순 문자열 — 예: "WDWLL" = 최신 W → 오래된 L.
+  // 표시 배열은 왼쪽=오래된 관습(StandingsTable · TeamPage 둘 다) 이라 뒤집는다.
+  // 2026-09-10 실측 (레알 소시에다드): 실 경기 L L W D W · API form "WDWLL" — 뒤집으면 일치.
+  it('splits the API form string (newest-first) and reverses to oldest-first for display', () => {
+    const row = normalizeStanding(standingRowDto({ form: 'WDWLL' }), { format: 'league' })
+    expect(row.form).toEqual(['L', 'L', 'W', 'D', 'W'])
   })
 
-  it('keeps only the last five results and drops unknown letters', () => {
+  // 회귀 방지: 5글자짜리로만 검사하면 잘림 방향(앞·뒤) 을 못 잡는다 — 6+ 로 검사.
+  // 이전 코드는 slice(-5) 라 6글자 "WDWLLL" 에서 최신 W 를 잘라 냈다. 이제 앞 5글자(=최신) 를 유지.
+  it('trims to the FIVE most recent results — drops the oldest tail when longer than 5', () => {
+    const row = normalizeStanding(standingRowDto({ form: 'WDWLLL' }), { format: 'league' })
+    // 최신 5개 = WDWLL · 뒤집어 오래된→최신
+    expect(row.form).toEqual(['L', 'L', 'W', 'D', 'W'])
+  })
+
+  it('drops unknown letters and still yields the FIVE most recent in oldest-first order', () => {
+    // 'LWWDLWX' — X 제거 후 'LWWDLW' (6글자) · 최신 5개 = 'LWWDL' · reverse = ['L','D','W','W','L']
     const row = normalizeStanding(standingRowDto({ form: 'LWWDLWX' }), { format: 'league' })
-    expect(row.form).toEqual(['W', 'W', 'D', 'L', 'W'])
+    expect(row.form).toEqual(['L', 'D', 'W', 'W', 'L'])
   })
 
   it('returns an empty form when the backend gives null', () => {
@@ -845,5 +859,139 @@ describe('myTeamCard', () => {
     // ranking comes from the EPL rows even though the team also plays UCL
     expect(card.ranking?.competitionSlug).toBe('premier-league')
     expect(card.ranking?.rank).toBe(3)
+  })
+})
+
+// ─── normalizeTeamDetail — TeamDetailDto → TeamPage shape ────────────────
+// 3상태 규약(DATA_RULES 3장): 값(스칼라·0 포함) · null(미측정) · 빈 배열(실제 0건) 을 구분한다.
+// 배열이 참조 무결성 대신 null 로 오면 fetchTeamDetail 이 상위에서 판정(예: players=null 스쿼드 API 미배선).
+describe('normalizeTeamDetail', () => {
+  function teamDetailDto(overrides = {}) {
+    return {
+      ref: '33-manchester-united',
+      apiId: 33,
+      displayName: 'Manchester United',
+      shortDisplayName: 'Man Utd',
+      originalName: 'Manchester United',
+      code: 'MUN',
+      country: 'England',
+      founded: 1878,
+      logoUrl: 'https://media.api-sports.io/football/teams/33.png',
+      venue: {
+        name: 'Old Trafford',
+        city: 'Manchester',
+        capacity: 76212,
+        surface: 'grass',
+        imageUrl: 'https://media.api-sports.io/football/venues/556.png',
+      },
+      participations: [
+        { competitionRef: '39-premier-league', competitionName: 'Premier League', seasons: [2026, 2025] },
+      ],
+      asOf: '2026-11-23T15:00:00.000Z',
+      ...overrides,
+    }
+  }
+
+  it('maps every scalar the screen reads and passes participations through', () => {
+    const out = normalizeTeamDetail(teamDetailDto())
+    expect(out.ref).toBe('33-manchester-united')
+    expect(out.slug).toBe('33-manchester-united')
+    expect(out.apiId).toBe(33)
+    expect(out.name).toBe('Manchester United')
+    expect(out.shortName).toBe('Man Utd')
+    expect(out.initials).toBe('MA') // shortDisplayName 첫 2글자 대문자
+    expect(out.color).toBeNull() // 백엔드 미제공 — 표시 없음
+    expect(out.manager).toBeNull() // 백엔드 미제공 — 표시 없음
+    expect(out.country).toBe('England')
+    expect(out.foundedYear).toBe(1878)
+    expect(out.stadium).toBe('Old Trafford')
+    expect(out.stadiumCapacity).toBe(76212)
+    expect(out.stadiumCity).toBe('Manchester')
+    expect(out.stadiumSurface).toBe('grass')
+    expect(out.stadiumImageUrl).toBe('https://media.api-sports.io/football/venues/556.png')
+    expect(out.participations).toHaveLength(1)
+    expect(out.participations[0].competitionRef).toBe('39-premier-league')
+    expect(out.asOf).toBe('2026-11-23T15:00:00.000Z')
+  })
+
+  // 0 은 값 · null 은 미측정 — 0/null 을 구분해서 뭉개지 않는지 (DATA_RULES 3장)
+  it('keeps capacity=0 as a value (does not coerce to null)', () => {
+    const out = normalizeTeamDetail(teamDetailDto({
+      venue: { name: 'Empty Stadium', city: null, capacity: 0, surface: null, imageUrl: null },
+    }))
+    expect(out.stadiumCapacity).toBe(0)
+    expect(out.stadium).toBe('Empty Stadium')
+    expect(out.stadiumCity).toBeNull()
+    expect(out.stadiumSurface).toBeNull()
+    expect(out.stadiumImageUrl).toBeNull()
+  })
+
+  // venue 자체가 없으면(컵 하위 팀 등) 다섯 필드 전부 null. 빈 문자열이나 0 으로 뭉개면 안 된다
+  it('nulls all venue-derived fields when venue is null', () => {
+    const out = normalizeTeamDetail(teamDetailDto({ venue: null, founded: null, country: null }))
+    expect(out.stadium).toBeNull()
+    expect(out.stadiumCapacity).toBeNull()
+    expect(out.stadiumCity).toBeNull()
+    expect(out.stadiumSurface).toBeNull()
+    expect(out.stadiumImageUrl).toBeNull()
+    expect(out.foundedYear).toBeNull()
+    expect(out.country).toBeNull()
+  })
+
+  // 빈 배열은 "리그 참가 이력 0건" 이라는 값 · fetchTeamDetail 상위에서 leagueRank=null 판정 근거
+  it('passes an empty participations array through (not null)', () => {
+    const out = normalizeTeamDetail(teamDetailDto({ participations: [] }))
+    expect(Array.isArray(out.participations)).toBe(true)
+    expect(out.participations).toHaveLength(0)
+  })
+})
+
+// ─── scorerRowsFromRanking — RankingListDto → HomePage scorerRows shape ──
+// HomePage:471 이 topScorers === null 과 빈 배열을 다른 UI 로 그린다 —
+// null=NotImplementedState · []=ShortcutCard 껍데기. 둘을 뭉개면 안 된다.
+describe('scorerRowsFromRanking', () => {
+  it('returns null when the upstream request failed (null dto)', () => {
+    expect(scorerRowsFromRanking(null)).toBeNull()
+    expect(scorerRowsFromRanking(undefined)).toBeNull()
+  })
+
+  // 6대회 합산이 0건이라 items:[] 로 200 응답이 올 수 있다 — 이건 실패가 아니다 (dto 주석)
+  it('returns an empty array when items=[] (0-hit is not a failure)', () => {
+    const out = scorerRowsFromRanking({ competition: null, season: null, items: [], asOf: '2026-11-23T15:00:00.000Z' })
+    expect(Array.isArray(out)).toBe(true)
+    expect(out).toHaveLength(0)
+  })
+
+  it('maps rank·value·player.displayName·team.displayName to HomePage row shape', () => {
+    const dto = {
+      competition: null,
+      season: null,
+      items: [
+        { rank: 1, value: 22, player: { displayName: 'Erling Haaland' }, team: { displayName: 'Manchester City' } },
+        { rank: 2, value: 18, player: { displayName: 'Mohamed Salah' }, team: { displayName: 'Liverpool' } },
+      ],
+      asOf: '2026-11-23T15:00:00.000Z',
+    }
+    const out = scorerRowsFromRanking(dto)
+    expect(out).toHaveLength(2)
+    expect(out[0]).toEqual({ rank: 1, value: 22, playerName: 'Erling Haaland', teamName: 'Manchester City' })
+    expect(out[1]).toEqual({ rank: 2, value: 18, playerName: 'Mohamed Salah', teamName: 'Liverpool' })
+  })
+
+  // value=0 은 실제 값 · null 로 뭉개면 안 됨 (DATA_RULES 3장)
+  it('keeps value=0 as a value (does not coerce to null)', () => {
+    const out = scorerRowsFromRanking({
+      items: [{ rank: 1, value: 0, player: { displayName: 'Zero Goal' }, team: { displayName: 'Team A' } }],
+    })
+    expect(out[0].value).toBe(0)
+  })
+
+  // 실 API 는 항상 player·team 을 주지만 방어 — displayName 없으면 빈 문자열
+  it('defends against missing player/team displayName (empty string, not null)', () => {
+    const out = scorerRowsFromRanking({
+      items: [{ rank: 1, value: 5, player: {}, team: {} }],
+    })
+    expect(out[0].playerName).toBe('')
+    expect(out[0].teamName).toBe('')
   })
 })
