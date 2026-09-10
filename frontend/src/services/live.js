@@ -445,10 +445,16 @@ function byKickoff(a, b) {
 /**
  * 홈 오버뷰 — 대회 6개 × (경기 공통 창 + 순위표 + 득점 순위) 를 네 번의 호출로 받아 Mock `overview.js` 형태로 묶는다.
  *
- * 득점 순위(모드 B · 6대회 합산)는 4번째 병렬로 별도 `.catch(() => null)` 로 감싼다 —
- * 이 하나가 실패해도 대회 카드·순위·라이브 티커는 살아 있어야 한다. 실패 시 null 을
- * 넘겨 HomePage ShortcutCard 가 NotImplementedState 로 자연스럽게 갈린다
- * (scorerRowsFromRanking 이 null → null · items:[] → [] 두 갈래를 유지).
+ * 득점 순위(모드 B · 6대회 합산)는 4번째 병렬. 이 하나가 실패해도 대회 카드·순위·라이브 티커는
+ * 살아 있어야 하지만, 실패를 "기능 없음" 으로 위장하면 안 된다 (회고 4-6). 그래서 catch 는 삼키지
+ * 않는다 — console.error 로 로깅하고 에러 sentinel 을 돌려주어 셋 다 다른 UI 로 갈리게 한다:
+ *   - 성공(items 있음) → `topScorers: [...]`,  `topScorersError: null`  → ShortcutCard
+ *   - 성공(items=[]  ) → `topScorers: []`,     `topScorersError: null`  → ShortcutCard(껍데기, 0명)
+ *   - 미구현(하드코딩) → `topScorers: null`,   `topScorersError: null`  → NotImplementedState
+ *   - 실패            → `topScorers: null`,   `topScorersError: msg`   → ErrorState
+ *
+ * @returns {Promise<{competitions:Array, livePulse:Array, nextKickoff:object|null, dataAsOf:string|null,
+ *   eplTop3:Array, topScorers:Array|null, topScorersError:string|null}>}
  */
 export async function fetchOverview() {
   const [comps, matchesRes, standingsRes, scorersRes] = await Promise.all([
@@ -456,7 +462,11 @@ export async function fetchOverview() {
     // 공통 창(−14~+21일) 안이라도 6대회 합치면 수백 건이 나올 수 있어 안전판으로 limit 명시
     loadMatches({ ...matchWindow(), limit: 500 }),
     _cachedGet('/api/standings'),
-    _cachedGet('/api/stats/scorers', { limit: 5 }).catch(() => null),
+    _cachedGet('/api/stats/scorers', { limit: 5 }).catch(err => {
+      // 무음 catch 금지 — 실패 사실을 콘솔에 남기고 sentinel 로 반환해 UI 가 에러 상태로 갈리게 한다
+      console.error('[fetchOverview] /api/stats/scorers failed', err)
+      return { __error: true, message: String(err?.message ?? err) }
+    }),
   ])
   const allMatches = matchesRes.items
   const tables     = standingsRes.items ?? []
@@ -528,13 +538,16 @@ export async function fetchOverview() {
   const epl = comps.find(c => c.slug === 'premier-league')
   const eplTop3 = epl ? rowsFor(epl).slice(0, 3) : []
 
+  // sentinel 을 여기서 걸러 낸다 — scorerRowsFromRanking 이 에러 객체를 items 로 오해하지 않도록
+  const scorersFailed = scorersRes !== null && typeof scorersRes === 'object' && scorersRes.__error === true
   return {
     competitions,
     livePulse,
     nextKickoff,
-    dataAsOf:   maxIso([matchesRes.asOf, standingsRes.asOf, ...allMatches.map(m => m.asOf)]),
+    dataAsOf:        maxIso([matchesRes.asOf, standingsRes.asOf, ...allMatches.map(m => m.asOf)]),
     eplTop3,
-    topScorers: scorerRowsFromRanking(scorersRes),
+    topScorers:      scorersFailed ? null : scorerRowsFromRanking(scorersRes),
+    topScorersError: scorersFailed ? scorersRes.message : null,
   }
 }
 
@@ -569,7 +582,8 @@ const LEAGUE_FORMAT = 'league'
  * 리그 판정: 화면이 6개 대회만 그리는데 팀 상세는 컵 하부(FA Cup 32강 등)까지 들어 있다.
  * `format === 'league'` (ROUND_ROBIN) 인 것만 리그로 친다 — LEAGUE_PHASE_KNOCKOUT(UCL 리그페이즈)은
  * 순위표가 있어도 이 자리에서는 넣지 않는다 (팀 페이지는 국내 리그 순위를 기대). displayOrder 순으로
- * 여러 개면 첫 번째. 순위표 호출은 `.catch(() => null)` — 실패해도 팀 페이지 전체는 살린다.
+ * 여러 개면 첫 번째. 순위표 호출 실패는 로깅 후 leagueRank=null 로 팀 페이지 전체는 살린다 —
+ * 상단 배지 자체가 사라져 정보 없는 자리가 생기지 않는다 (감독 행과 같은 규칙).
  *
  * leagueRank shape: `{ rank, points, form: string[] }` — form 은 normalizeStanding 이 이미
  * 문자열 "WWDLW" 를 배열로 자른다 (normalize.js:420). form=null 이거나 빈 문자열이면 [].
@@ -613,8 +627,10 @@ export async function fetchTeamDetail(ref) {
           leagueRank = { rank: row.rank, points: row.points, form: row.form }
         }
       }
-    } catch {
-      // 순위표 하나가 죽어도 팀 페이지 전체는 죽지 않는다 — leagueRank=null 로 그린다 (배지 자체를 숨김)
+    } catch (err) {
+      // 순위표 하나가 죽어도 팀 페이지 전체는 죽지 않는다 — leagueRank=null 로 그린다 (배지 자체를 숨김).
+      // 무음 catch 금지 — 로깅으로 실패를 남긴다 (회고 4-6 "조용히 망가지는 것" 규칙)
+      console.error('[fetchTeamDetail] /api/standings failed for', leagueComp.ref, err)
       leagueRank = null
     }
   }
