@@ -262,6 +262,53 @@ function StatusNotice({ state, t }) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   UnavailableCard — availability 두 값('not_provided'|'not_collected') 을
+   서로 다른 문구로 그린다. NotImplementedState 와 다르다:
+     · not_provided — 그 경기가 원본에서 라인업/통계를 안 준 것 (하위 리그·컵)
+     · not_collected — 백엔드가 아직 안 받아온 것 (백필 대기)
+     · NotImplementedState — 기능 자체가 백엔드에 없는 것 (H2H)
+───────────────────────────────────────────────────────────── */
+function UnavailableCard({ status, kind, t }) {
+  // status 는 'not_provided' 또는 'not_collected'. 그 외 값이면 아무것도 안 그린다
+  if (status !== 'not_provided' && status !== 'not_collected') return null
+  const message = t(`match.unavailable.${status}.${kind}`)
+  return (
+    <div
+      className="pl-card"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '48px 24px',
+        gap: 12,
+        textAlign: 'center',
+      }}
+      role="status"
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 48, height: 48, borderRadius: 12,
+          background: 'var(--pl-fill)',
+          display: 'grid', placeItems: 'center',
+        }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+             stroke="var(--pl-sub)" strokeWidth="1.6"
+             strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4M12 16h.01" />
+        </svg>
+      </span>
+      <p style={{ fontWeight: 600, fontSize: 15, color: 'var(--pl-text)', margin: 0 }}>
+        {message}
+      </p>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    TabBar
 ───────────────────────────────────────────────────────────── */
 function TabBar({ active, onSelect, t }) {
@@ -923,9 +970,12 @@ export default function MatchPage() {
   }
 
   const { match, stats, lineup, topRated } = data
-  // 실 API 는 아직 라인업·통계·H2H·이벤트가 없다 — `unavailable` 에 i18n 키가 실린다.
-  // "없음"(EmptyState) 으로 위장하지 않고 "아직 없음" 으로 그린다. Mock 은 이 키가 없어 기존 분기 그대로다.
-  const unavailable = data.unavailable ?? {}
+  // availability 는 각 갈래마다 세 값('ok'|'not_provided'|'not_collected') 을 실어 온다.
+  // 'ok' 면 정상 렌더, 그 외 값이면 UnavailableCard 가 두 갈래 문구로 그린다.
+  // 실 API 도 Mock 도 같은 shape 을 준다 — 없으면(방어) 전부 'ok' 로 가정한다.
+  const availability = data.availability ?? {
+    lineups: 'ok', events: 'ok', teamStats: 'ok', playerStats: 'ok',
+  }
   const showStatus = ['final', 'recheck', 'confirmed'].includes(match.displayState)
 
   const homeShort = getLocalizedShortName(match.homeTeam, locale) || match.homeTeam?.shortName
@@ -956,17 +1006,18 @@ export default function MatchPage() {
           <TabBar active={tab} onSelect={setTab} t={t} />
 
           {/* 탭 콘텐츠 */}
-          {tab === 'lineup' && unavailable.lineup && (
-            <div className="pl-card"><NotImplementedState featureKey={unavailable.lineup} /></div>
-          )}
-          {tab === 'lineup' && !unavailable.lineup && (
-            <LineupTab
-              match={match}
-              lineup={lineup}
-              topRated={topRated}
-              t={t}
-              locale={locale}
-            />
+          {tab === 'lineup' && (
+            availability.lineups === 'ok'
+              ? (
+                <LineupTab
+                  match={match}
+                  lineup={lineup}
+                  topRated={topRated}
+                  t={t}
+                  locale={locale}
+                />
+              )
+              : <UnavailableCard status={availability.lineups} kind="lineup" t={t} />
           )}
 
           {tab === 'stats' && (
@@ -975,26 +1026,28 @@ export default function MatchPage() {
               className="stats-grid"
             >
               <style>{`@media(min-width:768px){.stats-grid{grid-template-columns:1fr 300px!important}}`}</style>
-              {unavailable.stats
-                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.stats} /></div>
-                : <StatsPanel stats={stats} t={t} />}
-              {unavailable.timeline
-                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.timeline} /></div>
-                : (
+              {availability.teamStats === 'ok'
+                ? <StatsPanel stats={stats} t={t} />
+                : <UnavailableCard status={availability.teamStats} kind="stats" t={t} />}
+              {availability.events === 'ok'
+                ? (
                   <TimelinePanel
                     events={match.events}
                     homeTeamName={homeShort}
                     awayTeamName={awayShort}
                     t={t}
                   />
-                )}
+                )
+                : <UnavailableCard status={availability.events} kind="events" t={t} />}
             </div>
           )}
 
+          {/* H2H 는 백엔드에 아직 기능 자체가 없다.
+              Mock 에는 match.headToHead 가 있어 여전히 그리고, 실 API 는 null → NotImplementedState */}
           {tab === 'h2h' && (
-            unavailable.h2h
-              ? <div className="pl-card"><NotImplementedState featureKey={unavailable.h2h} /></div>
-              : <H2HTab match={match} t={t} locale={locale} />
+            match.headToHead
+              ? <H2HTab match={match} t={t} locale={locale} />
+              : <div className="pl-card"><NotImplementedState featureKey="errors.feature.h2h" /></div>
           )}
 
           {tab === 'timeline' && (
@@ -1003,19 +1056,19 @@ export default function MatchPage() {
               className="timeline-grid"
             >
               <style>{`@media(min-width:768px){.timeline-grid{grid-template-columns:1fr 300px!important}}`}</style>
-              {unavailable.timeline
-                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.timeline} /></div>
-                : (
+              {availability.events === 'ok'
+                ? (
                   <TimelinePanel
                     events={match.events}
                     homeTeamName={homeShort}
                     awayTeamName={awayShort}
                     t={t}
                   />
-                )}
-              {unavailable.stats
-                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.stats} /></div>
-                : <StatsPanel stats={stats} t={t} />}
+                )
+                : <UnavailableCard status={availability.events} kind="events" t={t} />}
+              {availability.teamStats === 'ok'
+                ? <StatsPanel stats={stats} t={t} />
+                : <UnavailableCard status={availability.teamStats} kind="stats" t={t} />}
             </div>
           )}
         </div>

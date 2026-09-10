@@ -104,16 +104,25 @@ export async function fetchMatch(id) {
 
 /**
  * 경기 상세 + 팀 통계 + 라인업 + 평점 상위 선수
- * 백엔드 연결 시 GET /api/matches/:id/detail 으로 대체
+ * availability 는 실 API 와 shape 을 맞춘다 — 라인업이 없으면 'not_provided' (킥오프 1h 전 공개 규약).
+ * Mock 은 이벤트·통계·선수 통계 원본이 있으면 'ok' · 없으면 'not_provided'.
  */
 export async function fetchMatchDetail(id) {
   const match = getMatchById(id)
   if (!match) throw new Error(`Match not found: ${id}`)
+  const stats  = MATCH_TEAM_STATS[id] ?? null
+  const lineup = getLineup(id)
   return {
     match,
-    stats:    MATCH_TEAM_STATS[id] ?? null,
-    lineup:   getLineup(id),        // null = 라인업 미공개 (31경기)
+    stats,
+    lineup,                                // null = 라인업 미공개 (31경기)
     topRated: getTopRated(id, 3),
+    availability: {
+      lineups:     lineup ? 'ok' : 'not_provided',
+      events:      (match.events && match.events.length > 0) ? 'ok' : 'not_provided',
+      teamStats:   stats  ? 'ok' : 'not_provided',
+      playerStats: getTopRated(id, 3).length > 0 ? 'ok' : 'not_provided',
+    },
   }
 }
 

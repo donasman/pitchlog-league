@@ -18,6 +18,7 @@ import {
   competitionRefFromSlug,
   deriveStage,
   groupCountOf,
+  matchDetail,
   normalizeCompetition,
   normalizeMatch,
   normalizePlayerDetail,
@@ -313,23 +314,31 @@ export async function fetchMatchesByCompetition(slugOrRef, season) {
 }
 
 /**
- * 경기 상세. 라인업·통계·이벤트·H2H 는 아직 백엔드에 없다 — 빈 값으로 위장하지 않고
- * `unavailable` 에 i18n 키를 실어 화면이 "아직 없음" 으로 그리게 한다.
+ * 경기 상세 — 두 API 를 병렬로 받는다.
+ *   /api/matches/:ref         — 경기 요약 (스코어보드·상태)
+ *   /api/matches/:ref/detail  — 라인업·이벤트·팀 통계·선수 통계 + availability (A-L3)
+ *
+ * detail 응답의 `events` 는 요약이 준 빈 배열을 대체한다. availability 는 각 갈래마다
+ * 세 값('ok'|'not_provided'|'not_collected') 을 실어 화면이 두 갈래 문구로 그리게 한다.
+ * H2H 는 아직 없어 headToHead:null 유지.
+ *
  * @param {string|number} id  API-Football fixture id
  */
 export async function fetchMatchDetail(id) {
-  const dto = await _cachedGet(`/api/matches/${encodeURIComponent(id)}`)
+  const [main, detail] = await Promise.all([
+    _cachedGet(`/api/matches/${encodeURIComponent(id)}`),
+    _cachedGet(`/api/matches/${encodeURIComponent(id)}/detail`),
+  ])
+  const match = normalizeMatch(main)
+  const detailNorm = matchDetail(detail)
   return {
-    match:    normalizeMatch(dto),
-    stats:    null,
-    lineup:   null,
-    topRated: [],
-    unavailable: {
-      lineup:   'errors.feature.lineups',
-      stats:    'errors.feature.match_stats',
-      h2h:      'errors.feature.h2h',
-      timeline: 'errors.feature.events',
-    },
+    // events 는 detail 이 준 것으로 덮는다 (요약은 빈 배열)
+    match:        { ...match, events: detailNorm.events },
+    stats:        detailNorm.stats,
+    lineup:       detailNorm.lineup,
+    topRated:     detailNorm.topRated,
+    availability: detailNorm.availability,
+    asOf:         detailNorm.asOf,
   }
 }
 
