@@ -99,6 +99,34 @@ cwd 가 `backend/` 이므로 서버 프로세스가 `.env` 를 직접 읽는다 
 `GEMINI_MODEL` 은 3.x flash 계열을 쓴다. `gemini-2.5-flash` 는 신규 프로젝트에 제공되지 않는다
 (404 NOT_FOUND — "no longer available to new users", 2026-09-09 실측). 권장 기본값 `gemini-3.6-flash`.
 
+### 경기 상세 백필 (L3·L5)
+
+L3·L5 4개 서비스(`lineups` · `events` · `team_stats` · `player_stats`)를 대회시즌 순서로 순차 호출하는
+오케스트레이터(`MatchDetailsBackfillService`). `backfill_jobs.cursor_match_id` 로 재실행이 이어진다.
+자세한 규칙은 [BACKEND_GUIDE.md](../docs/BACKEND_GUIDE.md) "오케스트레이터 (backfill)" 절.
+
+- **스키마**: `matches.detail_eligible` · `matches.has_lineups/has_events/has_team_stats/has_player_stats` ·
+  `matches.detail_checked_at` · `matches.stats_state` · `backfill_jobs(phase='DETAILS', cursor_match_id, total, done, failed)`
+- **사전 조건**: L0·L1·L2 완료(대회시즌·팀·경기 존재), 대상 시즌에 `detail_eligible=true` 인 매치가 있어야
+  한다. `matches.status_short IN ('FT','AET','PEN')` 이면서 종료 후 24시간 지난 경기만 집는다.
+
+사용법:
+
+```bash
+npm run ingest -- backfill --dry-run                 # 대상 수·예정 콜 수·남은 상한만 출력, API 안 부름
+npm run ingest -- backfill --limit=50                # 50경기 시범 (관문 5단계 중)
+npm run ingest -- backfill                           # 오늘 남은 상한까지
+npm run ingest -- backfill --season=2025 --limit=200 # 특정 시즌만
+```
+
+`--season` 없으면 화면 6대회 현재 시즌만 (`isCurrent:true` + `screenCompetitionWhere`).
+`--limit` 없으면 오늘 남은 상한(5,700 - used)까지. 매 경기 앞에 상한 재확인.
+
+**관문**: 첫 대량 쓰기 전 `npm run backup` 필수. 무인 실행(나머지 4시즌)은 백업 자동화 이후.
+
+중단 사유 6종(`quota_exhausted` · `daily_cap` · `limit_reached` · `no_targets` · `done` · `error`)은
+stdout 요약에 대회시즌별 `processed`·`failed`·`stoppedReason` 으로 표시된다.
+
 ### 백업
 
 ```bash
