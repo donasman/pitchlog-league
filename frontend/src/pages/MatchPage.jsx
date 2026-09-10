@@ -24,6 +24,7 @@ import NotImplementedState from '@/components/ui/NotImplementedState'
 import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
 import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
 import { isLive } from '@/utils/matchStatus'
+import { buildEventMapByRef } from '@/utils/matchEvents'
 
 /* ── 포메이션 파싱 및 선수 좌표 계산 ── */
 const POS_ORDER = { GK: 0, DEF: 1, MID: 2, FWD: 3 }
@@ -61,11 +62,13 @@ function computePitchPositions(startingXI, formation, isAway = false) {
   return result
 }
 
-/* ── 이벤트 맵 (선수이름 → 이벤트 목록) ── */
-function buildEventMap(events = []) {
+/* ── 이벤트 맵 폴백 (선수이름 → 이벤트 목록) ──
+ * Mock 라인업은 playerRef 가 없어 이름으로 붙인다. 실 API 는 buildEventMapByRef 를 쓴다.
+ */
+function buildEventMapByName(events = []) {
   const map = {}
   events.forEach(e => {
-    if (!e.playerName) return
+    if (!e?.playerName) return
     if (!map[e.playerName]) map[e.playerName] = []
     map[e.playerName].push(e.type)
   })
@@ -309,7 +312,8 @@ function TabBar({ active, onSelect, t }) {
    가로(데스크톱): left=px%, top=py%
 ───────────────────────────────────────────────────────────── */
 function PlayerMarker({ player, eventMap = {}, isAway, vertical }) {
-  const events = eventMap[player.name] ?? []
+  // 실 API 라인업은 playerRef 로 매칭한다. Mock 라인업은 playerRef 가 없어 이름 폴백.
+  const events = (player.playerRef && eventMap[player.playerRef]) || eventMap[player.name] || []
   const hasGoal = events.includes('goal')
   const hasYellow = events.includes('yellow_card')
   const hasRed = events.includes('red_card')
@@ -587,15 +591,19 @@ function LineupTab({ match, lineup, topRated, t, locale }) {
     )
   }
 
-  const eventMap = buildEventMap(match.events)
-  const homeEventMap = {}
-  const awayEventMap = {}
-  Object.entries(eventMap).forEach(([name, types]) => {
-    // heuristic: assign based on score events
-    const ev = (match.events ?? []).find(e => e.playerName === name)
-    if (ev?.team === 'home') homeEventMap[name] = types
-    else if (ev?.team === 'away') awayEventMap[name] = types
-  })
+  // 홈·원정 이벤트 분리. 실 API 는 playerRef 기준, Mock 은 playerName 기준.
+  // 이벤트 자체에 team='home'|'away' 가 이미 실려 있으므로(normalize.matchDetail 이 판정) 그걸로 가른다.
+  const events = match.events ?? []
+  const homeEvents = events.filter(e => e?.team === 'home')
+  const awayEvents = events.filter(e => e?.team === 'away')
+  // 실 API: playerRef 기준. Mock: playerRef 가 없어 결과 맵이 비지만 이름 폴백이 산다
+  const homeEventMapByRef  = buildEventMapByRef(homeEvents)
+  const awayEventMapByRef  = buildEventMapByRef(awayEvents)
+  const homeEventMapByName = buildEventMapByName(homeEvents)
+  const awayEventMapByName = buildEventMapByName(awayEvents)
+  // 두 맵을 병합 — PlayerMarker 가 ref 로 먼저 찾고, 없으면 name 으로 폴백
+  const homeEventMap = { ...homeEventMapByName, ...homeEventMapByRef }
+  const awayEventMap = { ...awayEventMapByName, ...awayEventMapByRef }
 
   const homePlayers = computePitchPositions(lineup.home.startingXI, lineup.home.formation, false)
   const awayPlayers = computePitchPositions(lineup.away.startingXI, lineup.away.formation, true)
