@@ -51,9 +51,12 @@ import type {
 
 /** 카탈로그·다른 e2e 와 겹치지 않는 대역. 997_4xx (l3=997_1xx · l5=997_2xx · l1=990 · l2=991~995 · l6=996 밖) */
 const COMP_API_ID = 997_401;
-/** 현재 시즌은 화면 selection 을 위해 SEASON_YEARS 안 값(2026)이 좋지만, 이 판에서는 season 인자로 강제한다.
- *  season 지정 없는 case 10 은 isCurrent=true 로 뽑는다 */
-const SEASON_YEAR = 2026;
+/** 다른 e2e 스펙(l2/l6 는 2022~2026)과 절대 안 겹치는 시즌 연도.
+ *  fileParallelism:false 로 같은 DB 를 공유하는데 season=2026 을 쓰면 다른 스펙의 잔존
+ *  competitionSeason(예: l2 991_140 + 2026)이 이 스펙의 `screenCompetitionWhere + season:{year:2026}`
+ *  필터에 함께 잡혀 `res.perSeason.length > 1` 로 격리가 깨진다. 2099 로 못 박아 격리한다.
+ *  season 지정 없는 case 10 은 isCurrent=true 로 뽑되 자기 competitionSeasonId 만 검사한다. */
+const SEASON_YEAR = 2099;
 
 /** 픽스처 원문의 team.id — apiTeamId 로 upsert (팀 매핑 검증) */
 const TEAM_LIV = 40;
@@ -253,9 +256,10 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
         type: CompetitionType.LEAGUE,
         format: CompetitionFormat.ROUND_ROBIN,
         isTracked: true,
-        displayOrder: 95,
+        // displayOrder > 100 (screenCompetitionWhere 밖) — season 필터에도 안 잡히게. Case 10 은 isCurrent=false 로 자연 격리.
+        displayOrder: 200,
       },
-      update: { isTracked: true, displayOrder: 95 },
+      update: { isTracked: true, displayOrder: 200 },
     });
     const otherCs = await prisma.competitionSeason.upsert({
       where: { competitionId_seasonId: { competitionId: otherComp.id, seasonId: season.id } },
@@ -411,23 +415,35 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     await app?.close();
   });
 
-  /** 각 테스트 앞에서 이 대회시즌의 매치 상태·backfillJob·부산물을 초기화 */
+  /** 각 테스트 앞에서 이 스펙이 만든 모든 매치 상태·backfillJob·부산물을 초기화.
+   *  otherMatchId · excludedMatchIds 도 포함해야 앞 테스트 잔여가 뒤 테스트로 흘러가지 않음. */
   const resetSeason = async () => {
-    const matchIds = [...matchIdByFx.values()];
-    // 자식: player/team stats · events · lineups → matches state 리셋
-    await prisma.playerMatchStat.deleteMany({ where: { matchId: { in: matchIds } } });
-    await prisma.teamMatchStat.deleteMany({ where: { matchId: { in: matchIds } } });
-    await prisma.matchEvent.deleteMany({ where: { matchId: { in: matchIds } } });
-    await prisma.lineupEntry.deleteMany({ where: { matchId: { in: matchIds } } });
-    await prisma.matchLineup.deleteMany({ where: { matchId: { in: matchIds } } });
+    const allIds = [...matchIdByFx.values(), ...excludedMatchIds];
+    if (otherMatchId > 0) allIds.push(otherMatchId);
+    await prisma.playerMatchStat.deleteMany({ where: { matchId: { in: allIds } } });
+    await prisma.teamMatchStat.deleteMany({ where: { matchId: { in: allIds } } });
+    await prisma.matchEvent.deleteMany({ where: { matchId: { in: allIds } } });
+    await prisma.lineupEntry.deleteMany({ where: { matchId: { in: allIds } } });
+    await prisma.matchLineup.deleteMany({ where: { matchId: { in: allIds } } });
+    // 정상 대상 20 경기는 초기 상태 (has_*=null · detail_checked_at=null · statsState=NONE)
     await prisma.match.updateMany({
-      where: { id: { in: matchIds } },
+      where: { id: { in: [...matchIdByFx.values(), otherMatchId].filter((n) => n > 0) } },
       data: {
         hasLineups: null, hasEvents: null, hasTeamStats: null, hasPlayerStats: null,
-        detailCheckedAt: null, confirmedAt: null,
+        detailCheckedAt: null, confirmedAt: null, statsState: 'NONE',
       },
     });
-    await prisma.backfillJob.deleteMany({ where: { competitionSeasonId } });
+    // 반례 경기들은 시드된 조건 (detailCheckedAt=997_481 만 세팅 등) 유지 — 대신 has_* 는 항상 null
+    await prisma.match.updateMany({
+      where: { id: { in: excludedMatchIds } },
+      data: {
+        hasLineups: null, hasEvents: null, hasTeamStats: null, hasPlayerStats: null,
+        confirmedAt: null, statsState: 'NONE',
+      },
+    });
+    await prisma.backfillJob.deleteMany({
+      where: { competitionSeasonId: { in: [competitionSeasonId, otherCompetitionSeasonId].filter((n) => n > 0) } },
+    });
     fake.calls.length = 0;
     fake.quotaExhaustAt = null;
     fake.failEndpointAt = null;
@@ -436,6 +452,13 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     fakeQuota.snapshotCount = 0;
     fakeQuota.deltaPerSnapshot = 0;
     fakeQuota.skipFirstDelta = 0;
+  };
+
+  /** 자기 competitionSeasonId 만 골라 검사. 다른 스펙 잔존 시즌이 함께 잡혀도 격리. */
+  const mySeason = <T extends { competitionSeasonId: number }>(res: { perSeason: T[] }): T => {
+    const s = res.perSeason.find((r) => r.competitionSeasonId === competitionSeasonId);
+    if (!s) throw new Error(`perSeason 에 competitionSeasonId=${competitionSeasonId} 없음`);
+    return s;
   };
 
   const cleanupFixture = async () => {
@@ -495,8 +518,8 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     fakeQuota.limit = 7_500;
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 3 });
-    expect(res.perSeason).toHaveLength(1);
-    const s = res.perSeason[0];
+    // 다른 스펙(l2/l6) 잔존 시즌이 함께 잡힐 수 있음 — 자기 competitionSeasonId 만 검사
+    const s = mySeason(res);
     expect(s.competitionSeasonId).toBe(competitionSeasonId);
     // targeted 는 정확히 20 (반례 5 개는 걸림)
     expect(s.targeted).toBe(N_FIXTURES);
@@ -527,6 +550,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
       where: {
         competitionSeasonId,
         detailCheckedAt: { not: null },
+        id: { notIn: excludedMatchIds }, // 반례 997_481 은 seed 시점 detail_checked_at 세팅 · 제외
       },
       orderBy: { id: 'asc' },
       select: { id: true, hasLineups: true, hasEvents: true, hasTeamStats: true, hasPlayerStats: true },
@@ -559,14 +583,14 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     });
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 2 });
-    const s = res.perSeason[0];
+    const s = mySeason(res);
     // targeted 는 cursor 뒤: 20 - 10 = 10
     expect(s.targeted).toBe(N_FIXTURES - 10);
     expect(s.processed).toBe(2);
 
     // 처리된 매치는 sorted[10], sorted[11]
     const processed = await prisma.match.findMany({
-      where: { competitionSeasonId, detailCheckedAt: { not: null } },
+      where: { competitionSeasonId, detailCheckedAt: { not: null }, id: { notIn: excludedMatchIds } },
       orderBy: { id: 'asc' },
       select: { id: true },
     });
@@ -583,7 +607,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 5 });
     expect(res.totalProcessed).toBe(5);
-    expect(res.perSeason[0].processed).toBe(5);
+    expect(mySeason(res).processed).toBe(5);
     expect(res.overallStopped).toBe('limit_reached');
     // 4 콜 × 5 경기 = 20
     expect(fake.callCount).toBe(20);
@@ -600,10 +624,10 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 100 });
     expect(res.totalProcessed).toBe(2);
-    expect(res.perSeason[0].processed).toBe(2);
+    expect(mySeason(res).processed).toBe(2);
     // 두 경기 처리 후 매 경기 앞 재확인에서 자율 상한에 도달 → daily_cap
     expect(res.overallStopped).toBe('daily_cap');
-    expect(res.perSeason[0].stoppedReason).toBe('daily_cap');
+    expect(mySeason(res).stoppedReason).toBe('daily_cap');
   }, 180_000);
 
   // ================================================================================================
@@ -617,10 +641,10 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 100 });
     expect(res.totalProcessed).toBe(0);
-    expect(res.perSeason[0].processed).toBe(0);
+    expect(mySeason(res).processed).toBe(0);
     // used >= limit → quota_exhausted
     expect(res.overallStopped).toBe('quota_exhausted');
-    expect(res.perSeason[0].stoppedReason).toBe('quota_exhausted');
+    expect(mySeason(res).stoppedReason).toBe('quota_exhausted');
   }, 180_000);
 
   // ================================================================================================
@@ -641,7 +665,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     fake.quotaExhaustAt = { fixture: thirdFx, path: '/fixtures/lineups' };
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 10 });
-    const s = res.perSeason[0];
+    const s = mySeason(res);
     expect(s.stoppedReason).toBe('quota_exhausted');
     expect(res.overallStopped).toBe('quota_exhausted');
     // 3번째 경기까지 시도했고 lineups 에서 죽었다. cursor 는 그 경기 id
@@ -671,7 +695,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     fake.failEndpointAt = { fixture: secondFx, path: '/fixtures/events', message: 'test events fail' };
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 3 });
-    const s = res.perSeason[0];
+    const s = mySeason(res);
     expect(s.processed).toBe(3);
     expect(s.failed).toBe(1);
     // 진행은 계속되므로 overallStopped 는 limit_reached (limit=3 인데 3 다 처리하고 뒤에 남음)
@@ -720,7 +744,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     });
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 10 });
-    const s = res.perSeason[0];
+    const s = mySeason(res);
     expect(s.targeted).toBe(0);
     expect(s.processed).toBe(0);
     expect(s.stoppedReason).toBe('no_targets');
@@ -740,12 +764,12 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     const res = await backfill.run({ season: SEASON_YEAR, limit: 3, dryRun: true });
     expect(res.dryRun).toBe(true);
     expect(fake.callCount).toBe(0);
-    const s = res.perSeason[0];
+    const s = mySeason(res);
     expect(s.targeted).toBe(N_FIXTURES);
     expect(s.processed).toBe(0);
-    // 매치 안 건드림
+    // 매치 안 건드림 (반례 997_481 은 seed 시점 detailCheckedAt 세팅 · 제외)
     const processed = await prisma.match.count({
-      where: { competitionSeasonId, detailCheckedAt: { not: null } },
+      where: { competitionSeasonId, detailCheckedAt: { not: null }, id: { notIn: excludedMatchIds } },
     });
     expect(processed).toBe(0);
     // backfillJob 안 만듦
@@ -768,7 +792,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     });
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 10 });
-    const s = res.perSeason[0];
+    const s = mySeason(res);
     expect(s.targeted).toBe(0);
     expect(s.processed).toBe(0);
     expect(s.stoppedReason).toBe('no_targets');
@@ -823,7 +847,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     fakeQuota.deltaPerSnapshot = 233;
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 100 });
-    const s = res.perSeason[0];
+    const s = mySeason(res);
     expect(s.processed).toBe(3);
     expect(s.stoppedReason).toBe('daily_cap');
     expect(res.overallStopped).toBe('daily_cap');
@@ -855,7 +879,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     });
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 3 });
-    const s = res.perSeason[0];
+    const s = mySeason(res);
     // 상세 백필은 phase 를 무시하고 대상 SELECT 로만 판정 — 3 경기 처리
     expect(s.processed).toBe(3);
     expect(s.targeted).toBe(N_FIXTURES);
@@ -889,7 +913,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     fake.failEndpointAt = { fixture: secondFx, path: '/fixtures/events', message: 'test events fail' };
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 5 });
-    const s = res.perSeason[0];
+    const s = mySeason(res);
     expect(s.processed).toBe(5);
     expect(s.failed).toBe(1);
 

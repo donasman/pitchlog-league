@@ -165,6 +165,7 @@ export class MatchDetailsBackfillService {
 
         // 남은 예산 계산 (dry-run 은 quota 안 부름)
         let limitForThisSeason: number;
+        let limitedBy: 'user_limit' | 'budget' = 'user_limit';
         if (opts.dryRun) {
           limitForThisSeason = opts.limit ?? Number.MAX_SAFE_INTEGER;
         } else {
@@ -188,9 +189,10 @@ export class MatchDetailsBackfillService {
             });
             break;
           }
-          limitForThisSeason = opts.limit !== undefined
-            ? Math.min(opts.limit - totalProcessed, remainingByBudget)
-            : remainingByBudget;
+          // 어느 쪽이 상한을 잘랐는지 기억 (loop 정상 종료 후 seasonStop 판정에 쓴다)
+          const userLimitLeft = opts.limit !== undefined ? opts.limit - totalProcessed : Infinity;
+          limitForThisSeason = Math.min(userLimitLeft, remainingByBudget);
+          limitedBy = userLimitLeft <= remainingByBudget ? 'user_limit' : 'budget';
           if (opts.limit !== undefined && limitForThisSeason <= 0) {
             overallStopped = 'limit_reached';
             this.logger.log(`${label}: --limit 도달 (총 ${totalProcessed}) — 남은 시즌 중단`);
@@ -331,15 +333,17 @@ export class MatchDetailsBackfillService {
             }
           }
 
-          // 정상 종료. 커서 이후 남은 대상 없이 targeted 를 다 처리했으면 done
-          if (seasonStop === 'done') {
-            if (processed >= targeted) {
-              seasonStop = 'done';
+          // 정상 종료. targeted 를 다 처리했으면 done. 아니면 왜 잘렸는지 판정
+          if (seasonStop === 'done' && processed < targeted) {
+            // take: limitForThisSeason 로 잘랐다 — 시즌 진입 시 기억해둔 limitedBy 로 판정
+            if (limitedBy === 'budget') {
+              // 예산이 잘랐다 — used 가 상한을 이미 넘겼는지 확인해 daily_cap/quota_exhausted 구분
+              const qEnd = await this.quota.snapshot();
+              seasonStop = qEnd.used >= qEnd.limit ? 'quota_exhausted' : 'daily_cap';
             } else {
-              // targets 를 LIMIT 만큼 잘라 왔고, 남은 targeted 가 있다 — --limit 로 잘린 것
               seasonStop = 'limit_reached';
-              overallStopped = 'limit_reached';
             }
+            overallStopped = seasonStop;
           }
         } catch (err) {
           if (err instanceof ApiQuotaExhaustedError) {
