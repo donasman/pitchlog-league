@@ -216,3 +216,301 @@ export class MatchListDto {
   @ApiProperty({ description: '목록 전체의 데이터 기준 시각 (ISO 8601)' })
   asOf!: string;
 }
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/matches/:ref/detail — 라인업 · 이벤트 · 팀 통계 · 선수 통계
+// ─────────────────────────────────────────────────────────────
+//
+// 3-값 availability (D3):
+//   ok            = has_* = true  (수집했고 있다)
+//   not_provided  = has_* = false (수집했으나 없다 — API 가 안 준다)
+//   not_collected = has_* = null  (아직 확인 안 함)
+//
+// Prisma Decimal 필드(rating · expectedGoals · goalsPrevented)는 null 유지한다 —
+// 0 과 null 은 다르다 (평점 0 은 실제 평점이 아니라 "없음" 이거나 실제로 0 인 경우가 있다,
+// schema.prisma player_match_stats.rating 주석). 통계도 마찬가지.
+
+export type MatchAvailability = 'ok' | 'not_provided' | 'not_collected';
+
+export class MatchAvailabilityDto {
+  @ApiProperty({ enum: ['ok', 'not_provided', 'not_collected'], description: 'lineups 수집 상태' })
+  lineups!: MatchAvailability;
+
+  @ApiProperty({ enum: ['ok', 'not_provided', 'not_collected'], description: 'events 수집 상태' })
+  events!: MatchAvailability;
+
+  @ApiProperty({ enum: ['ok', 'not_provided', 'not_collected'], description: 'team_match_stats 수집 상태' })
+  teamStats!: MatchAvailability;
+
+  @ApiProperty({ enum: ['ok', 'not_provided', 'not_collected'], description: 'player_match_stats 수집 상태' })
+  playerStats!: MatchAvailability;
+}
+
+export class CoachRefDto {
+  @ApiProperty({ example: 'J. Klopp' })
+  name!: string;
+}
+
+export class LineupEntryDto {
+  @ApiProperty({ description: '선수 ref = `<apiPlayerId>-<slug>`', example: '186-mo-salah' })
+  playerRef!: string;
+
+  @ApiProperty({ example: 'Mohamed Salah' })
+  playerName!: string;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: '등번호', example: 11 })
+  number!: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: '포지션 코드 (G·D·M·F)', example: 'F' })
+  position!: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: '포메이션 좌표. 벤치는 null', example: '4:2' })
+  grid!: string | null;
+}
+
+export class MatchLineupDto {
+  @ApiProperty({ description: '팀 ref', example: '33-manchester-united' })
+  teamRef!: string;
+
+  @ApiProperty({ example: 'Manchester United' })
+  teamName!: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: '포메이션', example: '4-3-3' })
+  formation!: string | null;
+
+  @ApiPropertyOptional({ type: CoachRefDto, nullable: true, description: '감독. 없으면 null' })
+  coach!: CoachRefDto | null;
+
+  @ApiProperty({ type: [LineupEntryDto], description: '선발 11명 — jerseyNumber asc' })
+  startXI!: LineupEntryDto[];
+
+  @ApiProperty({ type: [LineupEntryDto], description: '벤치 선수 — 시드 순 (id asc)' })
+  bench!: LineupEntryDto[];
+}
+
+export class MatchEventDto {
+  @ApiProperty({ description: '경기 내 순서 (0 부터, 오름차순). WHERE (match_id, seq) unique', example: 12 })
+  seq!: number;
+
+  @ApiProperty({ description: '경기 시각 분', example: 47 })
+  minute!: number;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: '추가 시간 분 (있으면)', example: 3 })
+  minuteExtra!: number | null;
+
+  @ApiProperty({ description: '팀 ref', example: '33-manchester-united' })
+  teamRef!: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: '주 선수 ref. VAR 같이 팀 단위 이벤트는 null' })
+  playerRef!: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  playerName!: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: '어시스트/부(補) 선수 ref' })
+  assistPlayerRef!: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  assistPlayerName!: string | null;
+
+  @ApiProperty({ description: '이벤트 종류 원문 — Goal · Card · subst · Var', example: 'Goal' })
+  type!: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: '세부 원문 — "Normal Goal" · "Yellow Card"' })
+  detail!: string | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  comments!: string | null;
+}
+
+export class TeamStatDto {
+  @ApiProperty({ description: '팀 ref', example: '33-manchester-united' })
+  teamRef!: string;
+
+  @ApiProperty({ example: 'Manchester United' })
+  teamName!: string;
+
+  @ApiProperty({ example: 5 })
+  shotsOnGoal!: number;
+
+  @ApiProperty({ example: 3 })
+  shotsOffGoal!: number;
+
+  @ApiProperty({ example: 12 })
+  totalShots!: number;
+
+  @ApiProperty({ example: 2 })
+  blockedShots!: number;
+
+  @ApiProperty({ example: 8 })
+  shotsInsidebox!: number;
+
+  @ApiProperty({ example: 4 })
+  shotsOutsidebox!: number;
+
+  @ApiProperty({ example: 11 })
+  fouls!: number;
+
+  @ApiProperty({ example: 6 })
+  cornerKicks!: number;
+
+  @ApiProperty({ example: 3 })
+  offsides!: number;
+
+  @ApiProperty({ description: '점유율 (%)', example: 58 })
+  ballPossession!: number;
+
+  @ApiProperty({ example: 2 })
+  yellowCards!: number;
+
+  @ApiProperty({ example: 0 })
+  redCards!: number;
+
+  @ApiProperty({ example: 4 })
+  goalkeeperSaves!: number;
+
+  @ApiProperty({ example: 512 })
+  totalPasses!: number;
+
+  @ApiProperty({ example: 458 })
+  passesAccurate!: number;
+
+  @ApiProperty({ description: '패스 정확도 (%)', example: 89 })
+  passesPercentage!: number;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: '기대 득점 xG. API 가 안 주면 null (0 이 아니다)', example: 1.87 })
+  expectedGoals!: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: '골키퍼 세이브 xG. API 가 안 주면 null (0 이 아니다)', example: 0.42 })
+  goalsPrevented!: number | null;
+}
+
+export class PlayerStatDto {
+  @ApiProperty({ description: '선수 ref', example: '186-mo-salah' })
+  playerRef!: string;
+
+  @ApiProperty({ example: 'Mohamed Salah' })
+  playerName!: string;
+
+  @ApiProperty({ description: '팀 ref (이 경기에서 뛴 팀)', example: '40-liverpool' })
+  teamRef!: string;
+
+  @ApiProperty({ example: 90 })
+  minutes!: number;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: '평점. null 은 없음이며 0 이 아니다 (schema.prisma 주석)', example: 8.4 })
+  rating!: number | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, example: 11 })
+  jerseyNumber!: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'F' })
+  position!: string | null;
+
+  @ApiProperty({ example: false })
+  isCaptain!: boolean;
+
+  @ApiProperty({ example: false })
+  isSubstitute!: boolean;
+
+  @ApiProperty({ example: 4 })
+  shotsTotal!: number;
+
+  @ApiProperty({ example: 3 })
+  shotsOn!: number;
+
+  @ApiProperty({ example: 1 })
+  goalsTotal!: number;
+
+  @ApiProperty({ example: 0 })
+  goalsConceded!: number;
+
+  @ApiProperty({ example: 1 })
+  assists!: number;
+
+  @ApiProperty({ example: 0 })
+  saves!: number;
+
+  @ApiProperty({ example: 42 })
+  passesTotal!: number;
+
+  @ApiProperty({ example: 3 })
+  passesKey!: number;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: '패스 정확도 (%). 패스 0회면 null (schema.prisma 주석)', example: 88 })
+  passesAccuracy!: number | null;
+
+  @ApiProperty({ example: 2 })
+  tacklesTotal!: number;
+
+  @ApiProperty({ example: 1 })
+  blocks!: number;
+
+  @ApiProperty({ example: 2 })
+  interceptions!: number;
+
+  @ApiProperty({ example: 12 })
+  duelsTotal!: number;
+
+  @ApiProperty({ example: 7 })
+  duelsWon!: number;
+
+  @ApiProperty({ example: 4 })
+  dribblesAttempts!: number;
+
+  @ApiProperty({ example: 3 })
+  dribblesSuccess!: number;
+
+  @ApiProperty({ example: 1 })
+  dribblesPast!: number;
+
+  @ApiProperty({ example: 3 })
+  foulsDrawn!: number;
+
+  @ApiProperty({ example: 1 })
+  foulsCommitted!: number;
+
+  @ApiProperty({ example: 1 })
+  yellowCards!: number;
+
+  @ApiProperty({ example: 0 })
+  redCards!: number;
+
+  @ApiProperty({ example: 1 })
+  penaltyWon!: number;
+
+  @ApiProperty({ example: 0 })
+  penaltyCommitted!: number;
+
+  @ApiProperty({ example: 1 })
+  penaltyScored!: number;
+
+  @ApiProperty({ example: 0 })
+  penaltyMissed!: number;
+
+  @ApiProperty({ example: 0 })
+  penaltySaved!: number;
+
+  @ApiProperty({ example: 0 })
+  offsides!: number;
+}
+
+export class MatchFullDetailDto extends MatchDto {
+  @ApiProperty({ type: MatchAvailabilityDto, description: '4갈래 3값 상태 — has_* 원본이 그대로 3값 을 만든다' })
+  availability!: MatchAvailabilityDto;
+
+  @ApiProperty({
+    type: [MatchLineupDto],
+    description: '팀별 라인업(최대 2개, 홈·원정 순). has_lineups 가 true 여도 배열이 비어 있을 수 있다',
+  })
+  lineups!: MatchLineupDto[];
+
+  @ApiProperty({ type: [MatchEventDto], description: 'seq 오름차순' })
+  events!: MatchEventDto[];
+
+  @ApiProperty({ type: [TeamStatDto], description: '팀별 통계 (최대 2개, 홈·원정 순)' })
+  teamStats!: TeamStatDto[];
+
+  @ApiProperty({ type: [PlayerStatDto], description: '선수별 통계. 시드 순 (id asc)' })
+  playerStats!: PlayerStatDto[];
+}
