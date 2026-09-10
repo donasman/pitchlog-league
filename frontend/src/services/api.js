@@ -53,5 +53,8 @@ export const fetchCompetitionStats     = (...a) => impl.fetchCompetitionStats(..
 export const fetchUCLKnockout          = (...a) => impl.fetchUCLKnockout(...a)
 export const fetchOverview             = (...a) => impl.fetchOverview(...a)
 
+// 검색
+export const fetchSearch               = (...a) => impl.fetchSearch(...a)
+
 // 어시스턴트
 export const askAssistant              = (...a) => impl.askAssistant(...a)

@@ -20,6 +20,7 @@ import { MatchModule } from './match/match.module.js';
 import { StandingModule } from './standing/standing.module.js';
 import { PlayerModule } from './player/player.module.js';
 import { StatisticsModule } from './statistics/statistics.module.js';
+import { SearchModule } from './search/search.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 
 /**
@@ -56,6 +57,7 @@ import { AssistantModule } from './assistant/assistant.module.js';
     StandingModule,
     PlayerModule,
     StatisticsModule,
+    SearchModule,
     AssistantModule,
   ],
 })

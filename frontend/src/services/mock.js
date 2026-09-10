@@ -336,6 +336,30 @@ export async function fetchCompetitionStats(slug) {
   }
 }
 
+// ─── 검색 ──────────────────────────────────────────────────────
+
+/**
+ * 검색 Mock — 클라이언트 인덱스(`utils/searchIndex.js`)를 그대로 재사용.
+ *
+ * 실 API 는 백엔드가 매칭하지만 Mock 모드는 백엔드가 없다 —
+ * `getSearchIndex()` 로 팀·선수·대회 인덱스를 한 번 만든 뒤 `searchAll` 로 걸러 낸다.
+ * 반환 shape 은 실 API 와 같은 { teams, players, competitions }.
+ *
+ * signal 은 Mock 에서 의미가 없지만 시그니처는 실 API 와 맞춘다 —
+ * useSearch 가 abort 됐다고 판정하면 그 결과를 버리므로 결과가 유해하지 않다.
+ *
+ * @param {string} q
+ * @param {{ signal?: AbortSignal, limit?: number, locale?: string }} [_opts]
+ */
+export async function fetchSearch(q, _opts = {}) {
+  const { getSearchIndex, searchAll } = await import('@/utils/searchIndex')
+  const limit = _opts.limit ?? 5
+  const index = await getSearchIndex()
+  // searchAll 은 기존 클라이언트 인덱스 아이템 shape(초기 label/sublabel/initials/color/logoUrl/shortName/names)을 그대로 준다 —
+  // SearchPanel 이 같은 shape 를 소비하므로 여기서 다시 정규화하지 않는다
+  return searchAll(index, q, limit)
+}
+
 // ─── 어시스턴트 ────────────────────────────────────────────────
 
 /**

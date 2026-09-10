@@ -28,6 +28,7 @@
     "ingest": "nest build && node dist/cli/ingest.js",
     "mcp": "nest build && node dist/cli/mcp.js",
     "check:details": "nest build && node dist/cli/check-details.js",
+    "seed:localized-names": "nest build && node dist/cli/seed-localized-names.js",
     "backup": "node scripts/backup.mjs",
     "backup:verify": "node scripts/restore-check.mjs",
     "smoke:assistant": "node scripts/assistant-smoke.mjs"
