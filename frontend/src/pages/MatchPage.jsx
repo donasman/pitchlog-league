@@ -25,6 +25,7 @@ import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
 import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
 import { isLive } from '@/utils/matchStatus'
 import { buildEventMapByRef } from '@/utils/matchEvents'
+import { computeBarPct } from './statsBar'
 
 /* ── 포메이션 파싱 및 선수 좌표 계산 ── */
 const POS_ORDER = { GK: 0, DEF: 1, MID: 2, FWD: 3 }
@@ -746,13 +747,8 @@ function LineupTab({ match, lineup, topRated, t, locale }) {
 ───────────────────────────────────────────────────────────── */
 function StatRow({ label, homeVal, awayVal, unit = '', barHome, note }) {
   const fmt = v => v == null ? '—' : `${v}${unit}`
-
-  let pct = 50  // default 50/50
-  if (barHome != null) {
-    pct = Math.max(5, Math.min(95, barHome))
-  } else if (homeVal != null && awayVal != null && homeVal + awayVal > 0) {
-    pct = Math.round((homeVal / (homeVal + awayVal)) * 100)
-  }
+  // pct === null → 막대 트랙 자체를 안 그린다. "동점 위장(50:50)" 금지 (DATA_RULES 3장).
+  const pct = computeBarPct({ barHome, homeVal, awayVal })
 
   return (
     <div style={{ display: 'grid', gap: 6 }}>
@@ -761,10 +757,12 @@ function StatRow({ label, homeVal, awayVal, unit = '', barHome, note }) {
         <span className="t-sub" style={{ textAlign: 'center' }}>{label}</span>
         <span className="num t-body" style={{ fontWeight: 700, textAlign: 'right' }}>{fmt(awayVal)}</span>
       </div>
-      <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: 'var(--pl-fill-2)' }}>
-        <span style={{ width: `${pct}%`, background: 'var(--pl-text)', transition: 'width .3s' }} />
-        <span style={{ flex: 1, background: 'var(--pl-fill-2)' }} />
-      </div>
+      {pct !== null && (
+        <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: 'var(--pl-fill-2)' }}>
+          <span style={{ width: `${pct}%`, background: 'var(--pl-text)', transition: 'width .3s' }} />
+          <span style={{ flex: 1, background: 'var(--pl-fill-2)' }} />
+        </div>
+      )}
       {note && <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>{note}</span>}
     </div>
   )

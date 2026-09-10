@@ -77,11 +77,12 @@ export default function CompetitionsPage() {
           <span className="t-sub">{(competitions ?? []).length}{(competitions ?? []).find(c => c.currentSeason)?.currentSeason ? ` · ${(competitions ?? []).find(c => c.currentSeason).currentSeason}` : ''}</span>
         </div>
 
+        {/* minmax(0, 1fr) — /teams 와 같은 min-content 하한 버그 방어 · CompetitionCard 안 긴 대회명이 트랙을 밀지 않게 */}
         <div
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}
           className="comp-list-grid"
         >
-          <style>{`@media(min-width:640px){.comp-list-grid{grid-template-columns:repeat(3,1fr)!important}}`}</style>
+          <style>{`@media(min-width:640px){.comp-list-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}`}</style>
 
           {(competitions ?? []).map(comp => {
             const liveCount     = comp.liveCount ?? 0
@@ -99,7 +100,7 @@ export default function CompetitionsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <CompetitionEmblem comp={comp} />
                   <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
-                    <span className="t-card tname" style={{ fontWeight: 600 }}>
+                    <span className="t-card tname" style={{ fontWeight: 600 }} title={getLocalizedCompetitionName(comp, locale)}>
                       {getLocalizedCompetitionName(comp, locale)}
                     </span>
                     <span className="t-cap">{comp.country}</span>
@@ -116,15 +117,15 @@ export default function CompetitionsPage() {
                   </span>
                 </div>
 
-                {/* 라운드 */}
-                <span className="t-sub">{comp.stage?.label}</span>
+                {/* 라운드 — 긴 문자열 방어 · 트랙 좁아지면 말줄임 */}
+                <span className="t-sub tname" title={comp.stage?.label ?? ''}>{comp.stage?.label}</span>
 
                 {/* 선두 */}
                 {comp.leader && (
                   <div style={{ borderTop: '1px solid var(--pl-line)', paddingTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="t-cap">{t('home.leaderLabel')}</span>
                     <TeamBadge initials={comp.leader.teamInitials} color={comp.leader.teamColor} logoUrl={comp.leader.teamLogoUrl} size="xs" name={comp.leader.teamName} />
-                    <span className="tname t-body" style={{ fontWeight: 600, flex: 1 }}>{comp.leader.teamName}</span>
+                    <span className="tname t-body" style={{ fontWeight: 600, flex: 1 }} title={comp.leader.teamName}>{comp.leader.teamName}</span>
                     {comp.leader.points != null && (
                       <span className="num t-body" style={{ fontWeight: 700, flexShrink: 0 }}>
                         {t('home.ptsUnit', { pts: comp.leader.points })}

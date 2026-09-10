@@ -51,10 +51,13 @@ export default function TeamsPage() {
                 <span style={{ fontWeight: 400, opacity: 0.7 }}>{teams.length}</span>
               </h2>
               <div
-                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}
                 className="teams-grid"
               >
-                <style>{`@media(min-width:480px){.teams-grid{grid-template-columns:repeat(3,1fr)!important}}@media(min-width:768px){.teams-grid{grid-template-columns:repeat(4,1fr)!important}}@media(min-width:1024px){.teams-grid{grid-template-columns:repeat(5,1fr)!important}}`}</style>
+                {/* minmax(0, 1fr) — 1fr 의 하한 auto(=min-content) 를 없앤다. 하한이 살아 있으면
+                    가장 긴 팀명(예: "Borussia Mönchengladbach" min-content 236px) 이 트랙 폭을 밀어
+                    분데스리가 section 이 컨테이너(1068px) 를 넘어 오버플로 (2026-09-10 실측 +52px). */}
+                <style>{`@media(min-width:480px){.teams-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}@media(min-width:768px){.teams-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}@media(min-width:1024px){.teams-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important}}`}</style>
                 {teams.map(team => {
                   const isUCL = team.competitions?.includes('champions-league')
                   const name  = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
