@@ -783,7 +783,7 @@ function StatsPanel({ stats, t }) {
     { label: t('match.shotsOnGoal'),   hv: h.shotsOnGoal,    av: a.shotsOnGoal },
     { label: t('match.cornerKicks'),   hv: h.cornerKicks,    av: a.cornerKicks },
     { label: t('match.fouls'),         hv: h.fouls,          av: a.fouls },
-    { label: t('match.passAccuracy'),  hv: h.passesPercent,  av: a.passesPercent, unit: '%', barHome: h.passesPercent },
+    { label: t('match.passAccuracy'),  hv: h.passesPercentage, av: a.passesPercentage, unit: '%', barHome: h.passesPercentage },
     /* xG — null은 0으로 바꾸지 않는다 */
     {
       label: t('match.xGoals'),

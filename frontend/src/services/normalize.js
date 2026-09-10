@@ -694,7 +694,7 @@ function normalizeTeamStatsRow(row) {
     shotsOnGoal:     row?.shotsOnGoal ?? null,
     cornerKicks:     row?.cornerKicks ?? null,
     fouls:           row?.fouls ?? null,
-    passesPercent:   row?.passesPercent ?? null,
+    passesPercentage: row?.passesPercentage ?? null,
     expectedGoals:   row?.expectedGoals ?? null,
     goalsPrevented:  row?.goalsPrevented ?? null,
   }
@@ -790,7 +790,7 @@ export function matchDetail(dto) {
       position:  p.position ?? null,
       statistics: {
         games: {
-          number:  p.number ?? null,
+          number:  p.jerseyNumber ?? null,
           minutes: p.minutes ?? null,
           rating:  p.rating,
         },
