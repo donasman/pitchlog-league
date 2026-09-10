@@ -71,8 +71,10 @@ export function applyListMatchesDefaults(args: MatchListQueryDto & { limit?: num
     out.from = kstDateLabel(new Date(today.getTime() - 7 * DAY_MS));
     out.to = kstDateLabel(new Date(today.getTime() + 7 * DAY_MS));
   }
-  // ajv 가 default 50 을 채우지만 registry 가 아닌 경로에서도 안전하게
-  const limit = out.limit ?? 50;
+  // 어시스턴트 도구 경로 default 10 (D3) — HTTP /api/matches 는 별도 (MatchListQueryDto default 100 유지).
+  // ajv 의 schemas.ts limit default 50 이 registry 진입 시 먼저 채워지지만, 이 함수는
+  // registry 밖 경로(팩토리 직접 호출)에서도 안전 폴백을 제공한다.
+  const limit = out.limit ?? 10;
   return { ...out, limit };
 }
 

@@ -94,7 +94,8 @@
 | ~~11~~ | ~~**조회 성능 (캐시 헤더 · 페이지 상한 · 프론트 요청 합치기)**~~ ✅ 09-09 PR #42 — `/api/*` 전역 `CacheHeaderInterceptor` (ETag · If-None-Match 304 · Cache-Control 60s) · `/api/matches` `limit`(기본 100·최대 500) + `total`·`hasMore` · `services/live.js` 요청 합치기 + TTL 캐시(기본 60s · competitions/teams 300s · Mock 우회 · **askAssistant POST 는 캐시 밖**). assistant 실행 상한·최상위 asOf·규칙 6 은 PR #41 위 후속 판 | 6·9 | 0 | ✅ /standings 재방문 캐시 hit |
 | ~~12~~ | ~~**어시스턴트 근거 카드 (도구별 컴포넌트 재사용) + 실행 상한 8 + 최상위 asOf + 규칙 6**~~ ✅ 09-09 PR #43 — `AssistantPanel` 이 `data[]` 를 tool 별로 매핑해 `StandingsTable`·`MatchCard`·`StatsRanking` 재사용(그 외는 접힘 JSON). `MAX_TOOL_EXECUTIONS=8` (왕복 5·전체 75초와 별개 · 3.x 계열 추론으로 30초→75초 실측 상향). 응답 최상위 `asOf` = evidence 중 사전순 최소. `AssistantContext` 요청 경합 방어(seq · AbortController). SYSTEM_PROMPT 규칙 6 "판정 표현 금지". `GEMINI_MODEL` 기본값 `gemini-3.6-flash` (2.5-flash 는 신규 프로젝트 404) | 8 | 0 | ✅ 어시스턴트 답변에 표가 아니라 카드 |
 | ~~13~~ | ~~**경기 상세 조회 (/api/matches/:ref/detail) + 탭 4종 실 API 연결**~~ ✅ 09-10 PR #<TBD> — `MatchFullDetailDto` (lineups·events·teamStats·playerStats·availability·asOf) · `earliestOf` 헬퍼 · 프론트 `matchDetail` 순수 함수 · `buildEventMapByRef` (playerRef 매칭) · availability 3값(`ok`/`not_provided`/`not_collected`) i18n. check:details 에 테이블 크기·5시즌 추정 (Supabase 500MB 대비 %) | — | 0 | ✅ 라인업 · 통계 · 타임라인 3탭 (H2H 는 데이터 없음, unavailable 유지) |
-| 14 | **전역 검색 (시연용)** — `GET /api/search?q=` (팀·선수·대회) + `localized_names` 시드 + SearchPanel 배선. 게이트: `players=13,608 · teams=1,888 · localized_names=0` (09-10 실측). **아래 "검색 판 착수 근거" 절 필독** — 성능 아닌 관련도 정렬이 진짜 문제 · pg_trgm 미리 넣지 말 것 · EXPLAIN ANALYZE p95 50ms 게이트 · 화면 6대회 참가 팀 우선 | 9 | 0 | 헤더 검색으로 팀·선수·대회 이동 |
+| ~~14~~ | ~~**전역 검색 (시연용)**~~ ✅ 09-10 PR #50 — `GET /api/search?q=` (팀·선수·대회 · 정렬 규칙 · pg_trgm GIN + btree lower_prefix) · `localized_names` 90 시드 · SearchPanel debounce+AbortController+3상태 · 손흥민·이강인 한국어 검색 통과 | 9 | 0 | ✅ 헤더 검색으로 팀·선수·대회 이동 |
+| 15 | **어시스턴트 유료 전환 판단 (경비 근거)** — 이번 판(#TBD 압축) 이 세션당 $0.024 → $0.006 로 4× 절감. 무료 티어 유지 중. 429 실제 감소율 · 트래픽 실측 후 판단 (아래 "어시스턴트 유료 전환 근거" 절) | — | 0 | 유료 전환 시 안정성 확보 |
 
 4번의 6일은 손이 아니라 쿼터가 쓰는 시간이다. 그동안 남은 프론트 화면(경기 상세 탭 · CompetitionHub 랭킹) ·
 한국어 팀명 CSV 를 만든다.
@@ -108,6 +109,31 @@
       (`before > 0` 일 때만 걸리므로 첫 실행은 전부 통과한다. 다음 첫 적재 때도 확인한다)
 
 연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma·pg_dump 는 Windows 터미널에서 직접 실행한다.**
+
+---
+
+### 어시스턴트 유료 전환 근거 (2026-09-10 · 판을 시작하기 전에 이 절을 읽는다)
+
+발표 중 3번째 질문부터 429 발생. 압축 판(#TBD) 이 응답 크기와 왕복당 컨텍스트를 크게 줄였다.
+유료 판단은 **압축 판 배포 후 실측**을 근거로 한다.
+
+**Gemini 3.6 flash 요금** (2026-09-10 · https://ai.google.dev/gemini-api/docs/pricing):
+- Input: $0.30 / 1M 토큰 · Output: $2.50 / 1M 토큰 · Context caching 별도
+
+**세션당 비용 (검산 후 정정치)**:
+- 압축 전 (get_standings 모드 B · 왕복 3): input 66k × $0.30/1M = $0.020 · output 1.5k × $2.50/1M = $0.004 → **$0.024/세션**
+- 압축 후 (모드 B 27.6KB · 왕복 3): input 6k = $0.0018 · output 동일 $0.004 → **$0.006/세션**
+- **4× 절감** (input 만은 11× · output $0.004 는 압축 무관 · 총액 기준 4배)
+
+**일일·월간 (트래픽 가정 근거 없음 · 배포 후 실측 필수)**:
+- 하루 50 세션 (내부 시연) → 압축 전 $1.20/일 · 압축 후 $0.30/일 ($9/월)
+- 하루 500 (초기 사용자 · 가정) → $12/일 → $3/일 ($90/월)
+- 하루 5,000 (성장 · 가정) → $120/일 → $30/일 ($900/월)
+
+**판단 기준 (사용자 · 2026-09-10)**:
+- 429 실제로 얼마나 줄었는지 압축 후 재측정 필요
+- 트래픽 (배포처 · AWS/Railway 미정) 가정이 공허 · 실측 후 판단
+- 압축 판이 유료 전환의 선행 가치 — 유료로 가도 10배 절감 (input 만)
 
 ---
 
