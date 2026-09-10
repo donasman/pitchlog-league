@@ -94,6 +94,7 @@
 | ~~11~~ | ~~**조회 성능 (캐시 헤더 · 페이지 상한 · 프론트 요청 합치기)**~~ ✅ 09-09 PR #42 — `/api/*` 전역 `CacheHeaderInterceptor` (ETag · If-None-Match 304 · Cache-Control 60s) · `/api/matches` `limit`(기본 100·최대 500) + `total`·`hasMore` · `services/live.js` 요청 합치기 + TTL 캐시(기본 60s · competitions/teams 300s · Mock 우회 · **askAssistant POST 는 캐시 밖**). assistant 실행 상한·최상위 asOf·규칙 6 은 PR #41 위 후속 판 | 6·9 | 0 | ✅ /standings 재방문 캐시 hit |
 | ~~12~~ | ~~**어시스턴트 근거 카드 (도구별 컴포넌트 재사용) + 실행 상한 8 + 최상위 asOf + 규칙 6**~~ ✅ 09-09 PR #43 — `AssistantPanel` 이 `data[]` 를 tool 별로 매핑해 `StandingsTable`·`MatchCard`·`StatsRanking` 재사용(그 외는 접힘 JSON). `MAX_TOOL_EXECUTIONS=8` (왕복 5·전체 75초와 별개 · 3.x 계열 추론으로 30초→75초 실측 상향). 응답 최상위 `asOf` = evidence 중 사전순 최소. `AssistantContext` 요청 경합 방어(seq · AbortController). SYSTEM_PROMPT 규칙 6 "판정 표현 금지". `GEMINI_MODEL` 기본값 `gemini-3.6-flash` (2.5-flash 는 신규 프로젝트 404) | 8 | 0 | ✅ 어시스턴트 답변에 표가 아니라 카드 |
 | ~~13~~ | ~~**경기 상세 조회 (/api/matches/:ref/detail) + 탭 4종 실 API 연결**~~ ✅ 09-10 PR #<TBD> — `MatchFullDetailDto` (lineups·events·teamStats·playerStats·availability·asOf) · `earliestOf` 헬퍼 · 프론트 `matchDetail` 순수 함수 · `buildEventMapByRef` (playerRef 매칭) · availability 3값(`ok`/`not_provided`/`not_collected`) i18n. check:details 에 테이블 크기·5시즌 추정 (Supabase 500MB 대비 %) | — | 0 | ✅ 라인업 · 통계 · 타임라인 3탭 (H2H 는 데이터 없음, unavailable 유지) |
+| 14 | **전역 검색 (시연용)** — `GET /api/search?q=` (팀·선수·대회) + `localized_names` 시드 + SearchPanel 배선. 게이트: `players=13,608 · teams=1,888 · localized_names=0` (09-10 실측). **아래 "검색 판 착수 근거" 절 필독** — 성능 아닌 관련도 정렬이 진짜 문제 · pg_trgm 미리 넣지 말 것 · EXPLAIN ANALYZE p95 50ms 게이트 · 화면 6대회 참가 팀 우선 | 9 | 0 | 헤더 검색으로 팀·선수·대회 이동 |
 
 4번의 6일은 손이 아니라 쿼터가 쓰는 시간이다. 그동안 남은 프론트 화면(경기 상세 탭 · CompetitionHub 랭킹) ·
 한국어 팀명 CSV 를 만든다.
@@ -107,6 +108,28 @@
       (`before > 0` 일 때만 걸리므로 첫 실행은 전부 통과한다. 다음 첫 적재 때도 확인한다)
 
 연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma·pg_dump 는 Windows 터미널에서 직접 실행한다.**
+
+---
+
+### 검색 판 착수 근거 (2026-09-10 · 판을 시작하기 전에 이 절을 읽는다)
+
+지난 판 04 탐색에서 `GET /api/search` 를 "시연용 ILIKE 풀스캔" 으로 착수하려다 게이트에서 멈췄다.
+사용자 원 게이트 `players < 5000` 이 무너졌다 — 실측 `players=13,608 · teams=1,888 · localized_names=0`.
+멈춘 판단은 맞았지만, **13,608 행은 성능 문제가 아니다**. 다음 판이 새 함정에 빠지지 않게 근거를 남긴다.
+
+- **성능은 아직 걱정할 자리가 아니다.** 이름 컬럼 300KB 안팎이면 순차 스캔이 수 밀리초고,
+  이 프로젝트 API 왕복 ~300ms 에 묻힌다. ILIKE 가 인덱스를 못 쓰는 건 맞지만 인덱스가 실제로
+  필요해지는 규모는 **수십만~수백만 행부터**다. pg_trgm · tsvector 를 **미리 넣지 마라**.
+  먼저 `EXPLAIN ANALYZE` 로 재고, **p95 가 50ms 를 넘을 때만** 논한다.
+- **진짜 위험은 관련도 정렬이다.** `%son%` 이면 Jackson · Johnson · Robertson · Wilson 이
+  수백 건 걸린다. 정렬 없이 5건 자르면 시연에서 "검색이 이상하다" 로 보인다.
+  → 정확 일치 · 접두어 일치 · 부분 일치 순으로 계층 정렬을 먼저 만든다. 트라이그램 유사도 아님.
+- **teams=1,888 도 같은 문제다.** 대부분 예선 팀이라 그대로 검색하면 화면 6대회 팀이 뒤로 밀린다.
+  → **화면 6대회 참가 팀** (`participations.competitionRef IN visible`) 을 우선 정렬로 붙인다.
+- **`localized_names=0`.** 이관은 사용자 명세대로 `LocaleSource` 손수 입력 값으로 upsert 시드.
+  현재 하드코딩 위치: `frontend/src/i18n/entityNames.js` 94개. 이관 후 `getLocalizedName`
+  소비처 (전수 grep 필요) 가 안 깨지는지 먼저 확인.
+- **레이아웃 판 (09-10) 은 갈래 A 를 분리하고 갈래 B 만 진행**하기로 확정 — 검색은 이 14번으로 별도.
 
 ---
 

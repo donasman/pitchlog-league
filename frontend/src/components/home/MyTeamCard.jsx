@@ -31,6 +31,7 @@ export default function MyTeamCard({ card }) {
           to={`/teams/${card.teamRef}`}
           className="tname t-card"
           style={{ fontWeight: 700, textDecoration: 'none', color: 'var(--pl-text)', flex: 1, minWidth: 0 }}
+          title={card.teamName}
         >
           {card.teamName}
         </Link>
