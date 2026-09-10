@@ -24,6 +24,7 @@ import NotImplementedState from '@/components/ui/NotImplementedState'
 import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
 import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
 import { isLive } from '@/utils/matchStatus'
+import { buildEventMapByRef } from '@/utils/matchEvents'
 
 /* ── 포메이션 파싱 및 선수 좌표 계산 ── */
 const POS_ORDER = { GK: 0, DEF: 1, MID: 2, FWD: 3 }
@@ -61,11 +62,13 @@ function computePitchPositions(startingXI, formation, isAway = false) {
   return result
 }
 
-/* ── 이벤트 맵 (선수이름 → 이벤트 목록) ── */
-function buildEventMap(events = []) {
+/* ── 이벤트 맵 폴백 (선수이름 → 이벤트 목록) ──
+ * Mock 라인업은 playerRef 가 없어 이름으로 붙인다. 실 API 는 buildEventMapByRef 를 쓴다.
+ */
+function buildEventMapByName(events = []) {
   const map = {}
   events.forEach(e => {
-    if (!e.playerName) return
+    if (!e?.playerName) return
     if (!map[e.playerName]) map[e.playerName] = []
     map[e.playerName].push(e.type)
   })
@@ -259,6 +262,53 @@ function StatusNotice({ state, t }) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   UnavailableCard — availability 두 값('not_provided'|'not_collected') 을
+   서로 다른 문구로 그린다. NotImplementedState 와 다르다:
+     · not_provided — 그 경기가 원본에서 라인업/통계를 안 준 것 (하위 리그·컵)
+     · not_collected — 백엔드가 아직 안 받아온 것 (백필 대기)
+     · NotImplementedState — 기능 자체가 백엔드에 없는 것 (H2H)
+───────────────────────────────────────────────────────────── */
+function UnavailableCard({ status, kind, t }) {
+  // status 는 'not_provided' 또는 'not_collected'. 그 외 값이면 아무것도 안 그린다
+  if (status !== 'not_provided' && status !== 'not_collected') return null
+  const message = t(`match.unavailable.${status}.${kind}`)
+  return (
+    <div
+      className="pl-card"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '48px 24px',
+        gap: 12,
+        textAlign: 'center',
+      }}
+      role="status"
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 48, height: 48, borderRadius: 12,
+          background: 'var(--pl-fill)',
+          display: 'grid', placeItems: 'center',
+        }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+             stroke="var(--pl-sub)" strokeWidth="1.6"
+             strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4M12 16h.01" />
+        </svg>
+      </span>
+      <p style={{ fontWeight: 600, fontSize: 15, color: 'var(--pl-text)', margin: 0 }}>
+        {message}
+      </p>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    TabBar
 ───────────────────────────────────────────────────────────── */
 function TabBar({ active, onSelect, t }) {
@@ -309,7 +359,8 @@ function TabBar({ active, onSelect, t }) {
    가로(데스크톱): left=px%, top=py%
 ───────────────────────────────────────────────────────────── */
 function PlayerMarker({ player, eventMap = {}, isAway, vertical }) {
-  const events = eventMap[player.name] ?? []
+  // 실 API 라인업은 playerRef 로 매칭한다. Mock 라인업은 playerRef 가 없어 이름 폴백.
+  const events = (player.playerRef && eventMap[player.playerRef]) || eventMap[player.name] || []
   const hasGoal = events.includes('goal')
   const hasYellow = events.includes('yellow_card')
   const hasRed = events.includes('red_card')
@@ -587,15 +638,19 @@ function LineupTab({ match, lineup, topRated, t, locale }) {
     )
   }
 
-  const eventMap = buildEventMap(match.events)
-  const homeEventMap = {}
-  const awayEventMap = {}
-  Object.entries(eventMap).forEach(([name, types]) => {
-    // heuristic: assign based on score events
-    const ev = (match.events ?? []).find(e => e.playerName === name)
-    if (ev?.team === 'home') homeEventMap[name] = types
-    else if (ev?.team === 'away') awayEventMap[name] = types
-  })
+  // 홈·원정 이벤트 분리. 실 API 는 playerRef 기준, Mock 은 playerName 기준.
+  // 이벤트 자체에 team='home'|'away' 가 이미 실려 있으므로(normalize.matchDetail 이 판정) 그걸로 가른다.
+  const events = match.events ?? []
+  const homeEvents = events.filter(e => e?.team === 'home')
+  const awayEvents = events.filter(e => e?.team === 'away')
+  // 실 API: playerRef 기준. Mock: playerRef 가 없어 결과 맵이 비지만 이름 폴백이 산다
+  const homeEventMapByRef  = buildEventMapByRef(homeEvents)
+  const awayEventMapByRef  = buildEventMapByRef(awayEvents)
+  const homeEventMapByName = buildEventMapByName(homeEvents)
+  const awayEventMapByName = buildEventMapByName(awayEvents)
+  // 두 맵을 병합 — PlayerMarker 가 ref 로 먼저 찾고, 없으면 name 으로 폴백
+  const homeEventMap = { ...homeEventMapByName, ...homeEventMapByRef }
+  const awayEventMap = { ...awayEventMapByName, ...awayEventMapByRef }
 
   const homePlayers = computePitchPositions(lineup.home.startingXI, lineup.home.formation, false)
   const awayPlayers = computePitchPositions(lineup.away.startingXI, lineup.away.formation, true)
@@ -728,7 +783,7 @@ function StatsPanel({ stats, t }) {
     { label: t('match.shotsOnGoal'),   hv: h.shotsOnGoal,    av: a.shotsOnGoal },
     { label: t('match.cornerKicks'),   hv: h.cornerKicks,    av: a.cornerKicks },
     { label: t('match.fouls'),         hv: h.fouls,          av: a.fouls },
-    { label: t('match.passAccuracy'),  hv: h.passesPercent,  av: a.passesPercent, unit: '%', barHome: h.passesPercent },
+    { label: t('match.passAccuracy'),  hv: h.passesPercentage, av: a.passesPercentage, unit: '%', barHome: h.passesPercentage },
     /* xG — null은 0으로 바꾸지 않는다 */
     {
       label: t('match.xGoals'),
@@ -915,9 +970,12 @@ export default function MatchPage() {
   }
 
   const { match, stats, lineup, topRated } = data
-  // 실 API 는 아직 라인업·통계·H2H·이벤트가 없다 — `unavailable` 에 i18n 키가 실린다.
-  // "없음"(EmptyState) 으로 위장하지 않고 "아직 없음" 으로 그린다. Mock 은 이 키가 없어 기존 분기 그대로다.
-  const unavailable = data.unavailable ?? {}
+  // availability 는 각 갈래마다 세 값('ok'|'not_provided'|'not_collected') 을 실어 온다.
+  // 'ok' 면 정상 렌더, 그 외 값이면 UnavailableCard 가 두 갈래 문구로 그린다.
+  // 실 API 도 Mock 도 같은 shape 을 준다 — 없으면(방어) 전부 'ok' 로 가정한다.
+  const availability = data.availability ?? {
+    lineups: 'ok', events: 'ok', teamStats: 'ok', playerStats: 'ok',
+  }
   const showStatus = ['final', 'recheck', 'confirmed'].includes(match.displayState)
 
   const homeShort = getLocalizedShortName(match.homeTeam, locale) || match.homeTeam?.shortName
@@ -948,17 +1006,18 @@ export default function MatchPage() {
           <TabBar active={tab} onSelect={setTab} t={t} />
 
           {/* 탭 콘텐츠 */}
-          {tab === 'lineup' && unavailable.lineup && (
-            <div className="pl-card"><NotImplementedState featureKey={unavailable.lineup} /></div>
-          )}
-          {tab === 'lineup' && !unavailable.lineup && (
-            <LineupTab
-              match={match}
-              lineup={lineup}
-              topRated={topRated}
-              t={t}
-              locale={locale}
-            />
+          {tab === 'lineup' && (
+            availability.lineups === 'ok'
+              ? (
+                <LineupTab
+                  match={match}
+                  lineup={lineup}
+                  topRated={topRated}
+                  t={t}
+                  locale={locale}
+                />
+              )
+              : <UnavailableCard status={availability.lineups} kind="lineup" t={t} />
           )}
 
           {tab === 'stats' && (
@@ -967,26 +1026,28 @@ export default function MatchPage() {
               className="stats-grid"
             >
               <style>{`@media(min-width:768px){.stats-grid{grid-template-columns:1fr 300px!important}}`}</style>
-              {unavailable.stats
-                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.stats} /></div>
-                : <StatsPanel stats={stats} t={t} />}
-              {unavailable.timeline
-                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.timeline} /></div>
-                : (
+              {availability.teamStats === 'ok'
+                ? <StatsPanel stats={stats} t={t} />
+                : <UnavailableCard status={availability.teamStats} kind="stats" t={t} />}
+              {availability.events === 'ok'
+                ? (
                   <TimelinePanel
                     events={match.events}
                     homeTeamName={homeShort}
                     awayTeamName={awayShort}
                     t={t}
                   />
-                )}
+                )
+                : <UnavailableCard status={availability.events} kind="events" t={t} />}
             </div>
           )}
 
+          {/* H2H 는 백엔드에 아직 기능 자체가 없다.
+              Mock 에는 match.headToHead 가 있어 여전히 그리고, 실 API 는 null → NotImplementedState */}
           {tab === 'h2h' && (
-            unavailable.h2h
-              ? <div className="pl-card"><NotImplementedState featureKey={unavailable.h2h} /></div>
-              : <H2HTab match={match} t={t} locale={locale} />
+            match.headToHead
+              ? <H2HTab match={match} t={t} locale={locale} />
+              : <div className="pl-card"><NotImplementedState featureKey="errors.feature.h2h" /></div>
           )}
 
           {tab === 'timeline' && (
@@ -995,19 +1056,19 @@ export default function MatchPage() {
               className="timeline-grid"
             >
               <style>{`@media(min-width:768px){.timeline-grid{grid-template-columns:1fr 300px!important}}`}</style>
-              {unavailable.timeline
-                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.timeline} /></div>
-                : (
+              {availability.events === 'ok'
+                ? (
                   <TimelinePanel
                     events={match.events}
                     homeTeamName={homeShort}
                     awayTeamName={awayShort}
                     t={t}
                   />
-                )}
-              {unavailable.stats
-                ? <div className="pl-card"><NotImplementedState featureKey={unavailable.stats} /></div>
-                : <StatsPanel stats={stats} t={t} />}
+                )
+                : <UnavailableCard status={availability.events} kind="events" t={t} />}
+              {availability.teamStats === 'ok'
+                ? <StatsPanel stats={stats} t={t} />
+                : <UnavailableCard status={availability.teamStats} kind="stats" t={t} />}
             </div>
           )}
         </div>

@@ -169,6 +169,15 @@ frontend/
 - `invalidateCompetitions()` 는 대회·팀 캐시를 비운다 (언어 전환 등 명명 갱신 시).
 - 백엔드가 붙이는 `ETag`·`Cache-Control` 은 브라우저 HTTP 캐시가 자동으로 처리한다 — 프론트가 명시적으로 헤더를 다루지 않는다.
 
+### matchDetail 순수 함수 (normalize.js)
+
+`services/normalize.js` 의 `matchDetail(dto)` 는 경기 상세 백엔드 응답(4갈래 배열 + availability + asOf)을 `MatchPage` 4탭 소비 shape 으로 변환한다. 순수 함수 · 반례 테스트로 잠근다.
+
+- `availability`: `{ lineups, events, teamStats, playerStats }` 각각 3값 (`'ok'|'not_provided'|'not_collected'`) 그대로 통과.
+- 이벤트 매칭은 **선수 이름이 아니라 `playerRef`** 기준 (`utils/matchEvents.js:buildEventMapByRef`) — 동명이인·표기 차이에 깨지지 않는다.
+- `rating` · `expectedGoals` · `goalsPrevented` 는 null 유지. 컴포넌트가 "—" 로 렌더.
+- Mock 은 기존 `mocks/lineups.js`·`mocks/matchStats.js` 형태 유지 (mock 은 따라오는 쪽).
+
 ## 6. 빌드와 품질 기준
 
 기본 명령은 다음과 같이 구성함.

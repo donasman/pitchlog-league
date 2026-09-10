@@ -663,6 +663,176 @@ function matchSummary(team, m) {
   }
 }
 
+// ─── 경기 상세 (A-L3) ─────────────────────────────────────────
+
+/**
+ * 라인업 한 사람 (startXI · bench 공통) → LineupTab 이 소비하는 형태.
+ * playerRef 는 백엔드가 준 값을 그대로 살린다 — 이벤트 매칭 · playerStats 조인 키.
+ * playerStats 는 밖에서 넘긴다(주장 판정용) — 없으면 isCaptain=false.
+ *
+ * @param {object} entry  { playerRef, playerName, number, position, grid }
+ * @param {Map<string, boolean>} captainByRef  playerRef → isCaptain (선발 명단에 한해 채워짐)
+ */
+function normalizeLineupEntry(entry, captainByRef) {
+  return {
+    playerRef: entry?.playerRef ?? null,
+    number:    entry?.number ?? null,
+    name:      entry?.playerName ?? '',
+    position:  entry?.position ?? null,
+    isCaptain: captainByRef.get(entry?.playerRef) === true,
+  }
+}
+
+/**
+ * 팀 통계 한 장 → StatsPanel 이 그리는 8항목. null 은 유지한다 — 0 으로 위장하지 않는다.
+ * @param {object} row  { teamRef, ...18항목 }
+ */
+function normalizeTeamStatsRow(row) {
+  return {
+    ballPossession:  row?.ballPossession ?? null,
+    totalShots:      row?.totalShots ?? null,
+    shotsOnGoal:     row?.shotsOnGoal ?? null,
+    cornerKicks:     row?.cornerKicks ?? null,
+    fouls:           row?.fouls ?? null,
+    passesPercentage: row?.passesPercentage ?? null,
+    expectedGoals:   row?.expectedGoals ?? null,
+    goalsPrevented:  row?.goalsPrevented ?? null,
+  }
+}
+
+/**
+ * 경기 상세 (A-L3, `GET /api/matches/:ref/detail`) → MatchPage 가 소비하는 { lineup, stats, topRated, events, playerStats, availability, asOf }.
+ *
+ * 규약:
+ *   - lineup: startXI 없으면 팀 전체가 null(미공개). 두 팀 모두 없으면 lineup=null.
+ *   - stats:  teamStats 배열이 0·1건이면 stats=null (home·away 두 축이 필요).
+ *   - topRated: rating 이 있는 선수 상위 3명. rating desc.
+ *   - events: team 을 home/away 로 판정. 홈/원정 팀 ref 를 lineups 나 teamStats 로 찾는다 —
+ *     둘 다 없으면 이벤트에서 처음 등장한 두 teamRef 를 홈·원정 순으로 배정한다.
+ *   - availability: dto.availability 를 그대로 통과.
+ *
+ * @param {object} dto  MatchFullDetailDto
+ * @returns {{
+ *   lineup: object|null,
+ *   stats: {home:object, away:object}|null,
+ *   topRated: Array<object>,
+ *   events: Array<object>,
+ *   playerStats: Array<object>,
+ *   availability: {lineups:string, events:string, teamStats:string, playerStats:string},
+ *   asOf: string|null
+ * }}
+ */
+export function matchDetail(dto) {
+  const lineups     = Array.isArray(dto?.lineups)     ? dto.lineups     : []
+  const events      = Array.isArray(dto?.events)      ? dto.events      : []
+  const teamStats   = Array.isArray(dto?.teamStats)   ? dto.teamStats   : []
+  const playerStats = Array.isArray(dto?.playerStats) ? dto.playerStats : []
+
+  // 홈·원정 팀 ref 판정 — 라인업이 있으면 첫 번째가 홈. 없으면 teamStats 첫 번째. 그것도 없으면 events 순서
+  let homeRef = lineups[0]?.teamRef ?? teamStats[0]?.teamRef ?? null
+  let awayRef = lineups[1]?.teamRef ?? teamStats[1]?.teamRef ?? null
+  if (!homeRef || !awayRef) {
+    const refs = []
+    for (const e of events) {
+      if (e?.teamRef && !refs.includes(e.teamRef)) refs.push(e.teamRef)
+      if (refs.length >= 2) break
+    }
+    homeRef = homeRef ?? refs[0] ?? null
+    awayRef = awayRef ?? refs[1] ?? null
+  }
+
+  // 주장 판정 — playerStats.isCaptain 이 true 인 playerRef 를 미리 훑는다
+  const captainByRef = new Map()
+  for (const ps of playerStats) {
+    if (ps?.isCaptain === true && ps?.playerRef != null) {
+      captainByRef.set(ps.playerRef, true)
+    }
+  }
+
+  // lineup — 홈·원정 각각의 팀 라인업을 찾아 조립. 두 팀 다 없으면 lineup=null
+  const homeSide = lineups.find(l => l?.teamRef === homeRef) ?? null
+  const awaySide = lineups.find(l => l?.teamRef === awayRef) ?? null
+  const lineup = (homeSide || awaySide)
+    ? {
+        home: homeSide ? {
+          teamRef:     homeSide.teamRef,
+          teamName:    homeSide.teamName ?? '',
+          formation:   homeSide.formation ?? '',
+          startingXI:  (homeSide.startXI ?? []).map(e => normalizeLineupEntry(e, captainByRef)),
+          substitutes: (homeSide.bench   ?? []).map(e => normalizeLineupEntry(e, captainByRef)),
+        } : null,
+        away: awaySide ? {
+          teamRef:     awaySide.teamRef,
+          teamName:    awaySide.teamName ?? '',
+          formation:   awaySide.formation ?? '',
+          startingXI:  (awaySide.startXI ?? []).map(e => normalizeLineupEntry(e, captainByRef)),
+          substitutes: (awaySide.bench   ?? []).map(e => normalizeLineupEntry(e, captainByRef)),
+        } : null,
+      }
+    : null
+
+  // stats — 홈·원정 둘 다 있어야 그린다. 하나만 있으면 축이 안 맞아 null
+  const homeStatsRow = teamStats.find(r => r?.teamRef === homeRef) ?? null
+  const awayStatsRow = teamStats.find(r => r?.teamRef === awayRef) ?? null
+  const stats = (homeStatsRow && awayStatsRow)
+    ? { home: normalizeTeamStatsRow(homeStatsRow), away: normalizeTeamStatsRow(awayStatsRow) }
+    : null
+
+  // topRated — rating 있는 선수 상위 3명. rating desc
+  const topRated = playerStats
+    .filter(p => typeof p?.rating === 'number' && Number.isFinite(p.rating))
+    .slice()
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, 3)
+    .map(p => ({
+      playerRef: p.playerRef ?? null,
+      name:      p.playerName ?? '',
+      position:  p.position ?? null,
+      statistics: {
+        games: {
+          number:  p.jerseyNumber ?? null,
+          minutes: p.minutes ?? null,
+          rating:  p.rating,
+        },
+        shots: {
+          total: p.shotsTotal ?? null,
+          on:    p.shotsOn ?? null,
+        },
+        passes: {
+          total: p.passesTotal ?? null,
+        },
+      },
+    }))
+
+  // events — team 판정을 여기서 결정. playerRef 는 원본 그대로
+  const normalizedEvents = events.map(e => ({
+    minute:          e?.minute ?? null,
+    minuteExtra:     e?.minuteExtra ?? null,
+    type:            e?.type ?? null,
+    team:            e?.teamRef === homeRef ? 'home' : e?.teamRef === awayRef ? 'away' : null,
+    playerName:      e?.playerName ?? null,
+    playerRef:       e?.playerRef ?? null,
+    assistName:      e?.assistPlayerName ?? null,
+    assistPlayerRef: e?.assistPlayerRef ?? null,
+    seq:             e?.seq ?? null,
+  }))
+
+  return {
+    lineup,
+    stats,
+    topRated,
+    events: normalizedEvents,
+    playerStats,
+    availability: dto?.availability ?? {
+      lineups: 'not_collected',
+      events: 'not_collected',
+      teamStats: 'not_collected',
+      playerStats: 'not_collected',
+    },
+    asOf: dto?.asOf ?? null,
+  }
+}
+
 /**
  * 순위표 한 장 → Mock `STANDINGS[slug]` 형태. `unavailableReason`(KNOCKOUT·EMPTY) 이면 entries 는 비운다 —
  * 화면이 "없음" 과 "실패" 를 구분하도록 이유를 같이 넘긴다.

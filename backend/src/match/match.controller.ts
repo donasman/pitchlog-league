@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { MatchService } from './match.service.js';
-import { MatchDto, MatchListDto, MatchListQueryDto } from './match.dto.js';
+import { MatchDto, MatchFullDetailDto, MatchListDto, MatchListQueryDto } from './match.dto.js';
 
 @ApiTags('matches')
 @Controller('matches')
@@ -25,5 +25,18 @@ export class MatchController {
   @ApiNotFoundResponse({ description: '경기가 없다' })
   detail(@Param('ref') ref: string): Promise<MatchDto> {
     return this.matches.detail(ref);
+  }
+
+  // 정적 세그먼트 'detail' 이 파라미터 ':ref' 뒤에 온다 — Nest 는 등록 순서 그대로 매칭한다.
+  // ':ref/detail' 은 ':ref' 보다 더 구체적인 패턴이므로 GET /api/matches/123 은 detail 로,
+  // GET /api/matches/123/detail 은 fullDetail 로 라우팅된다.
+  @Get(':ref/detail')
+  @ApiOperation({ summary: '경기 상세 (라인업·이벤트·팀 통계·선수 통계). MatchDto 위에 availability 3값 · 4갈래 배열이 얹혀 나온다' })
+  @ApiParam({ name: 'ref', example: '1234567', description: 'API-Football fixture id. `<id>-<slug>` 도 받는다' })
+  @ApiOkResponse({ type: MatchFullDetailDto })
+  @ApiBadRequestResponse({ description: 'ref 형식 오류' })
+  @ApiNotFoundResponse({ description: '경기가 없다' })
+  fullDetail(@Param('ref') ref: string): Promise<MatchFullDetailDto> {
+    return this.matches.fullDetail(ref);
   }
 }
