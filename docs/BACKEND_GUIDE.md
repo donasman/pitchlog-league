@@ -120,6 +120,18 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 - `--dry-run` 은 대상 경기 수·예정 콜 수·남은 상한·실제 처리 예정 경기 수만 출력하고 **API 를 한 번도 부르지 않는다**.
 - 진행 로그는 50경기마다 한 줄 (처리/실패/남은 상한). 요약: 대회시즌별 processed·failed·stoppedReason.
 
+### 경기 상세 조회 (/api/matches/:ref/detail)
+
+- **`GET /api/matches/:ref/detail`** — 라인업·이벤트·팀 통계·선수 통계 4갈래 반환. 목록/단건 응답은 경량 유지(어시스턴트 get_match 도 그대로).
+- 응답: `{ lineups, events, teamStats, playerStats, asOf, availability }`.
+  - `lineups`: 팀별 `{ teamRef, teamName, formation, coach:{name}|null, startXI[], bench[] }`. entry = `{ playerRef, playerName, number, position, grid }`.
+  - `events`: `seq` 오름차순 · `{ seq, minute, minuteExtra, teamRef, playerRef|null, playerName|null, assistPlayerRef|null, assistPlayerName|null, type, detail, comments }`.
+  - `teamStats`: 팀별 18항목. `expectedGoals` · `goalsPrevented` 는 **null 을 0 으로 바꾸지 않는다**.
+  - `playerStats`: 매치 참여 선수. `rating` 은 null 유지.
+  - `availability`: 4갈래 각각 `'ok' | 'not_provided' | 'not_collected'`. `has_*=true` → ok · false → not_provided(API 가 빈 배열을 줬다) · null → not_collected(아직 수집 안 함). **이 3값은 DATA_RULES 3장 (null 은 0 아니다 · 있음/없음/미수집 3상태)이다 — 빈 배열 하나로 뭉개지 않는다.**
+  - `asOf`: 네 갈래 갱신 시각 중 **가장 오래된 값** (`earliestOf` 헬퍼 · `common/as-of.ts`).
+- 프론트 소비: `services/live.js:fetchMatchDetail` 이 `/api/matches/:ref` 와 이 엔드포인트를 병렬로 부르고 `normalize.js:matchDetail` 순수 함수가 화면 shape 으로 변환.
+
 ## AI · Assistant (MCP)
 
 - LLM은 DB·외부 API에 직접 접근하지 않는다.
