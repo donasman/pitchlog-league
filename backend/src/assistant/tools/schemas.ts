@@ -98,8 +98,11 @@ export const listMatchesSchema: JsonSchema = {
       type: 'integer',
       minimum: 1,
       maximum: 200,
-      default: 50,
-      description: 'Result cap. Wrapper carries {truncated, total} when applied.',
+      // 2026-09-10 사용자: default 50 → 10 (어시스턴트 도구 경로만 · HTTP /api/matches 는 100 유지).
+      // maximum 200 유지 — "최근 100경기" 같은 명시 요청은 막지 않는다.
+      // registry ajv useDefaults:true (assistant-tool.registry.ts:50) 가 빈 인자에 이 default 를 채운다.
+      default: 10,
+      description: 'Result cap. Default 10 (assistant tool path); wrapper carries {truncated, total} when applied.',
     },
   },
   additionalProperties: false,

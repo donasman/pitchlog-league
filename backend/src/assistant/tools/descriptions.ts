@@ -51,7 +51,7 @@ export const TOOL_NOTES = {
     'KST date filter: from/to are YYYY-MM-DD (inclusive, treated as KST 00:00 to 23:59:59). ' +
     'team is a team ref (home or away). ' +
     'Auto-defaults when no team/from/to: from = today-7d, to = today+7d (KST). ' +
-    'Result is truncated to limit (default 50, max 200); wrapper carries {truncated, total} when applied. ' +
+    'Result is truncated to limit (default 10, max 200); wrapper carries {truncated, total} when applied. ' +
     'hasEvents / hasLineups / hasTeamStats / hasPlayerStats are 3-valued: ' +
     'null=not yet checked, false=checked and API had none, true=present.',
 
@@ -66,7 +66,10 @@ export const TOOL_NOTES = {
     "Returns rows[] for a league. For cup competitions (KNOCKOUT format), items[].rows is [] and unavailableReason='KNOCKOUT'. " +
     "For leagues that haven't started, unavailableReason='EMPTY'. Neither is an error — both return HTTP 200. " +
     'Rows are ordered by groupName then rank. ' +
-    'Values (points/played/W/D/L/goalsFor/etc.) are integers; form is a raw string like "WWDLW".',
+    'Values (points/played/W/D/L/goalsFor/etc.) are integers; form is a raw string like "WWDLW". ' +
+    'USAGE: for a question about ONE competition, competition MUST be provided. ' +
+    'Omit competition (Mode B, all 6 display leagues aggregated) ONLY when the user explicitly asks for a cross-league comparison. ' +
+    'Mode B returns 6× the payload (~27 KB compressed) — do not use it for single-league questions.',
 
   get_top_scorers:
     "TWO MODES. Mode A (competition given): items are that competition/season's TopRanking rows in rank order, " +
