@@ -1,6 +1,7 @@
 # PitchLog League — Claude Code 가이드
 
-> EPL(잉글리시 프리미어리그) 선수 정보·통계 웹서비스 (PitchLog v2)
+> 유럽 5대 리그 + UEFA Champions League 축구 데이터 서비스 (PitchLog v2)
+> 확정 범위: 12대회(5대 리그 + UCL + 국내 컵 6개) × 최근 5시즌 (2026-09-04 확정, `docs/INGESTION_STRATEGY.md` 1장)
 > Repository: https://github.com/donasman/pitchlog-league
 > 환경: Windows Git Bash
 > 전신: `donasman/pitchlog`(2026 WC 아카이브, `47f3749`에서 동결) — 설계 근거는
@@ -15,21 +16,23 @@
 pitchlog-league/                 ← 모노레포 루트
 ├── backend/                     ← NestJS + TypeScript + Prisma
 │   ├── src/
-│   │   ├── competition/ team/ match/ standing/ player/ statistics/   ← 조회 API
-│   │   ├── ingestion/           ← api-football · l0 · l1 · l2 · l6 · backfill · probe · logos · screen-scope.ts
-│   │   ├── cli/                 ← ingest CLI (status · l0 · l1 · l2 · l6 · probe-players · logos)
+│   │   ├── competition/ team/ match/ standing/ player/ statistics/ search/   ← 조회 API
+│   │   ├── assistant/           ← LLM 도구 층 + POST /api/assistant (Gemini)
+│   │   ├── ingestion/           ← api-football · l0 · l1 · l2 · l3 · l5 · l6 · backfill · probe · logos · screen-scope.ts
+│   │   ├── cli/                 ← ingest · mcp(stdio 서버) · check-details · seed-localized-names
 │   │   └── common/ config/ prisma/ health/
-│   ├── prisma/                  ← schema·migration·partial-indexes.sql
+│   ├── prisma/                  ← schema · migration · partial-indexes.sql
 │   ├── scripts/                 ← backup.mjs · restore-check.mjs (DB 백업·복원 리허설)
-│   └── test/                    ← e2e 10파일 85건 (단위는 src 안 *.spec.ts 53건)
+│   └── test/                    ← e2e — l0·l1·l2·l3·l5·l6·assistant·search·match-detail 등. 단위는 src 안 *.spec.ts
 ├── frontend/                    ← React + Vite + JavaScript, Node 22 고정
 │   └── src/
-│       ├── pages/               ← teams, players, matches, standings, stats
+│       ├── pages/               ← competitions · teams · players · matches · standings · stats · notifications · UCLKnockout · Match
 │       ├── routes/              ← React Router 라우트 정의
-│       ├── components/          ← ui, player, team, standings, matches
-│       ├── services/            ← api(전환 스위치) · mock · live · normalize · http
+│       ├── components/          ← ui · home · assistant · layout · notifications
+│       ├── contexts/            ← AssistantContext · FavoritesContext · NotificationContext
+│       ├── services/            ← api(전환 스위치) · mock · live · normalize · http · favorites · clock · env
 │       ├── mocks/               ← 화면 검증용 Mock Data
-│       └── utils/ hooks/ contexts/ i18n/ locales/
+│       └── layouts/ lib/ styles/ utils/ hooks/ i18n/ locales/ assets/
 │   └── public/logos/            ← 자체 저장 로고 (teams · competitions)
 ├── design/                      ← Web Foundation 토큰·다크 테마
 ├── infra/                       ← 배포 설정 (docker-compose.yml 은 예정)
@@ -263,9 +266,9 @@ API-Football API 키는 환경변수로만 주입한다.
 | Phase | 내용 | 검증 기준 | 상태 |
 |---|---|---|---|
 | **0** | 안전장치 + 배포 (PoC 는 재정의 — Railway + Pages + CORS) | 8-2 DoD 4항목 | 🚧 CI·Ruleset·pre-commit·Supabase·스켈레톤 완료 / 배포는 `NEXT_STEPS` 1장 4번 |
-| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — 스키마 29모델 · L0 · 조회 API 10개 · 백업·복원 리허설 2회 · **L1 스쿼드**(155팀·선수 4,863) / L1 #9~#11 남음 |
-| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | 🚧 **백필-1 완료(09-08)** — L2 5시즌 · L6 시즌 집계(선수 30,925 · 랭킹 2,335 · 팀 489) · `backfill_jobs` 30 DONE / 다음은 L3·L5 경기 상세 (`NEXT_STEPS` 1장 3번) |
-| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 (화면·i18n 완료 · **실 API 연결**(대회·팀·경기·순위·홈·팀 일정·**선수·통계** · UCL 조별) / 경기 상세 탭 · 컵·알림·AI 화면 · CompetitionHub 랭킹 · 배포 미착수) |
+| **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — L0 · L1 스쿼드 · 조회 API · 백업·복원 리허설 / L1 #9~#11 남음 |
+| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | 🚧 **백필-1 완료(09-08)** · L3·L5 쓰기 코드 + **현재 시즌 6대회 상세 CONFIRMED**(09-10 PR #46) / 과거 4시즌 상세는 서버화(`NEXT_STEPS` 1장 4번) 뒤 무인 (1장 3~5번) |
+| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 — 실 API 연결 · 경기 상세 3탭(#47) · 팀 상세 배선 + 홈 득점 순위 + 리그 순위 일반화(#48) · 레이아웃 정렬(#49) · 전역 검색 + 한국어 시드(#50) · 어시스턴트(도구 층 + LLM + 근거 카드) · 즐겨찾기(로컬) · 로고 적용 / UCL 녹아웃 대진(2027-02) · 알림 · 배포 미착수 |
 | **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🚧 L6 수집 코드는 09-08 에 들어갔다(백필-1). 주기 보정은 스케줄러 뒤 |
 
 > ⚠️ **범위가 바뀌었다 (2026-09-04~06).** 원래 Phase 1은 EPL 단독이었고 Phase 4가 다중화였으나,
@@ -278,8 +281,9 @@ Phase 0 DoD, PR 단위 분해(#1~#6), Phase 1의 구체적 작업 순서는 `V2_
 
 Phase 3은 백엔드보다 먼저 Mock Data 기반으로 진행했다. `services/api.js` 는 이제
 **`VITE_USE_MOCK` 으로 `mock.js`·`live.js` 중 하나를 고르는 전환 스위치**다 (09-07).
-대회·팀·경기·순위·**선수·통계**는 실 API 를 타고, **경기 상세 탭 · 컵·알림·AI · CompetitionHub 랭킹**은 백엔드에 아직 없어 `NotImplementedError` 로 드러난다.
-남은 것은 나머지 화면의 실 API 전환과 배포다.
+대회·팀·경기·순위·선수·통계·경기 상세·전역 검색·어시스턴트는 실 API 를 타고,
+**UCL 녹아웃 대진**(백엔드 없음, 2027-02)·**알림**은 아직 없어 `NotImplementedError` 로 드러난다.
+남은 것은 배포와 과거 4시즌 경기 상세 백필, 그리고 어시스턴트 응답 압축(다른 세션에서 진행 중)이다.
 **09-07 중간 점검(`docs/PLAN_REVIEW.md`)** 이 순서를 확정했다 — 기록 백필 먼저, 실시간은 그 뒤.
 현재 진행 상황과 다음 순서는 `docs/NEXT_STEPS.md` 1장이 기준이다.
 
@@ -312,12 +316,12 @@ git checkout dev && git pull origin dev
 
 ```bash
 npm run verify                  # prisma validate · typecheck · lint · 단위 테스트
-npm run test:e2e                # e2e 10파일 85건 — l0·l1·l2·l6 는 로컬 DB·CI 에서만 (원격 DB 가드)
+npm run test:e2e                # e2e — l0·l1·l2·l3·l5·l6 는 로컬 DB·CI 에서만 (원격 DB 가드)
 
 npm run ingest -- status        # API 쿼터 스냅샷
 npm run ingest -- l0            # 대회·시즌·팀·경기장
-npm run ingest -- l1            # 스쿼드 스냅샷 + diff (155콜)
-npm run ingest -- l2            # 라운드·경기·순위 — 화면 6대회 현재 시즌 (18콜)
+npm run ingest -- l1            # 스쿼드 스냅샷 + diff
+npm run ingest -- l2            # 라운드·경기·순위 — 화면 6대회 현재 시즌
 npm run ingest -- l2 --all-seasons   # 5시즌 전부 (한 시즌은 --season=2024, 등호 형태다)
 npm run ingest -- l6 --all-seasons   # 시즌 집계 — 선수 통계·랭킹·팀 통계 (--only=players|rankings|teams)
 npm run ingest -- probe-players --all-seasons   # /players 페이지 수 실측 (쓰기 없음)
