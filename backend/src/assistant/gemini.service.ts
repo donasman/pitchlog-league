@@ -28,6 +28,8 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI, type Content, type FunctionDeclaration } from '@google/genai';
 import { AssistantToolRegistry } from './assistant-tool.registry.js';
 import type { AssistantTool, ToolResult } from './assistant.types.js';
+import { compressForModel } from './response-compaction.js';
+import { maskSecrets } from './mask-secrets.js';
 
 export const MAX_TOOL_CALLS = 5;
 /** step 상한과 별도로, 실제로 registry.call 을 도는 총 실행 수 상한.
@@ -261,12 +263,23 @@ export class GeminiService {
           const { tool, args: appliedArgs, asOf } = result;
           const argsObj = appliedArgs && typeof appliedArgs === 'object' ? (appliedArgs as Record<string, unknown>) : {};
           evidence.push({ tool, args: argsObj, asOf });
+          // 프론트로 나가는 배열은 원본 유지 (금지 규약).
           data.push(result.data);
+          const compressed = compressForModel(name, result.data);
+          // 모드 B (get_standings competition 생략 시 items 여러 개) 호출 실측 로그 — 다음 판 competitions:string[] 도입 근거.
+          // 실측 (2026-09-10): 모드 B 6대회 압축 후 27.6KB · 다른 도구 <5KB. Q3 게이트(10KB) 유일 초과 자리.
+          if (name === 'get_standings' && argsObj.competition == null) {
+            const items = (compressed as { items?: unknown[] } | null)?.items;
+            const compBytes = Buffer.byteLength(JSON.stringify(compressed));
+            this.logger.log(`[assistant.modeB] tool=${name} competitions=${Array.isArray(items) ? items.length : 0} compressedBytes=${compBytes}`);
+          }
           responseParts.push({
             functionResponse: {
               name,
-              // SDK 는 { response: Record<string, unknown> } 를 기대한다. 원 데이터가 배열/객체 어떤 형태여도 여기 감싼다.
-              response: { result: result.data, asOf: result.asOf },
+              // SDK 는 { response: Record<string, unknown> } 를 기대한다.
+              // 모델로는 응답을 압축해서 되돌린다 — 429 근본 대응 (response-compaction.ts).
+              // 압축은 새 객체를 만들어 반환하므로 result.data 는 mutation 되지 않는다.
+              response: { result: compressed, asOf: result.asOf },
             },
           });
         }
@@ -282,17 +295,29 @@ export class GeminiService {
     }
   }
 
-  /** SDK 오류를 HttpException 으로 매핑 */
+  /**
+   * SDK 오류를 HttpException 으로 매핑 · 근본 파악 로그 (D1).
+   *
+   * @google/genai `ApiError` 는 message 에 `JSON.stringify(errorBody)` 를 담는다
+   * (index.mjs:8679~8687). errorBody.error = { code, status, message, details? }.
+   * 429 은 details[] 에 quotaMetric/quotaValue/retryDelay 가 실려 나오므로
+   * 여기서 파싱해 로그로 남긴다 (프론트로는 여전히 'assistant.error.rate_limited' 만).
+   *
+   * 로그로 나가는 모든 문자열은 maskSecrets 로 API 키·Bearer 를 지운다 (Q5).
+   */
   private wrapSdkError(cause: unknown, aborted: boolean): HttpException {
     if (aborted) {
       return new HttpException('assistant.error.timeout', HttpStatus.GATEWAY_TIMEOUT);
     }
     // @google/genai ApiError 는 { status: number } 를 갖는다 (d.ts:538~542)
     const status = extractStatus(cause);
+    const detail = parseErrorBody(cause);
+
     if (status === 429) {
+      this.logger.warn(maskSecrets(formatSdkErrorLog(status, detail, cause)));
       return new HttpException('assistant.error.rate_limited', HttpStatus.TOO_MANY_REQUESTS);
     }
-    this.logger.warn(`Gemini call failed (status=${status ?? 'unknown'}): ${errMessage(cause)}`);
+    this.logger.warn(maskSecrets(formatSdkErrorLog(status, detail, cause)));
     return new HttpException('assistant.error.model_error', HttpStatus.BAD_GATEWAY);
   }
 }
@@ -308,4 +333,42 @@ function extractStatus(cause: unknown): number | undefined {
 function errMessage(cause: unknown): string {
   if (cause instanceof Error) return cause.message;
   return String(cause);
+}
+
+interface SdkErrorBodyDetail {
+  errStatus?: string; // "RESOURCE_EXHAUSTED" 등 (errorBody.error.status)
+  errMessage?: string; // errorBody.error.message
+  details?: unknown[]; // errorBody.error.details[]
+}
+
+/**
+ * ApiError.message 는 `JSON.stringify(errorBody)` — errorBody = { error: { code, status, message, details? } }.
+ * 형태가 안 맞으면 undefined 를 반환한다 (원문 message 는 formatSdkErrorLog 가 대신 실는다).
+ */
+function parseErrorBody(cause: unknown): SdkErrorBodyDetail | undefined {
+  if (!(cause instanceof Error)) return undefined;
+  const raw = cause.message;
+  if (!raw || raw[0] !== '{') return undefined;
+  try {
+    const parsed = JSON.parse(raw) as { error?: { status?: unknown; message?: unknown; details?: unknown } };
+    const err = parsed.error;
+    if (!err || typeof err !== 'object') return undefined;
+    const out: SdkErrorBodyDetail = {};
+    if (typeof err.status === 'string') out.errStatus = err.status;
+    if (typeof err.message === 'string') out.errMessage = err.message;
+    if (Array.isArray(err.details)) out.details = err.details;
+    return out;
+  } catch {
+    return undefined;
+  }
+}
+
+function formatSdkErrorLog(status: number | undefined, detail: SdkErrorBodyDetail | undefined, cause: unknown): string {
+  // 괄호 안에 status · errStatus 를 콤마로 이어붙인 뒤 닫는다 — "Gemini call failed (status=429, errStatus=RESOURCE_EXHAUSTED): ..."
+  const inParen: string[] = [`status=${status ?? 'unknown'}`];
+  if (detail?.errStatus) inParen.push(`errStatus=${detail.errStatus}`);
+  const line = `Gemini call failed (${inParen.join(', ')})`;
+  const body = detail?.errMessage ?? errMessage(cause);
+  const details = detail?.details && detail.details.length > 0 ? ` details=${JSON.stringify(detail.details)}` : '';
+  return `${line}: ${body}${details}`;
 }
