@@ -78,4 +78,77 @@ export class BackfillJobService {
     });
     this.logger.warn(`백필 실패 기록 — 대회시즌 ${competitionSeasonId}: ${lastError}`);
   }
+
+  /**
+   * L3·L5 상세 백필 전용 진행 지표 갱신. **phase 는 건드리지 않는다.**
+   *
+   * 왜 상세 백필이 phase 를 안 쓰나:
+   *   - `dataStateOf(job)` 가 phase 를 읽어 대회 API 의 dataState 로 나간다. 프론트 시즌 선택기가
+   *     그 값을 본다. L6 가 백필-1 끝에 DONE 을 세우는데 상세 백필이 DETAILS/DONE 으로 덮으면
+   *     이미 완료된 백필-1 표시가 사라진다.
+   *   - `l1.service.ts` 의 `BACKFILL_IN_PROGRESS` 가 DETAILS 를 포함해 그 대회시즌 팀 스쿼드를
+   *     잠근다. 상세 백필이 며칠 도는 동안 L1 이 영원히 멈춘다.
+   *   phase 는 L2·L6 백필-1 · L1 락과 공유되는 신호라 우리 소유가 아니다.
+   *   상세 백필은 cursor·total·done·failed·lastError 만 쓴다.
+   *
+   * `lastError` 규약: `undefined` = 그대로 유지 · `null` = 지움 · 문자열 = 2000자로 자름.
+   * job 이 없으면 create 하되 phase 는 default(PENDING) 로 명시. 있으면 update 만 (phase 미포함).
+   */
+  async updateDetailProgress(
+    competitionSeasonId: number,
+    progress: {
+      cursorMatchId?: number;
+      total?: number;
+      done?: number;
+      failed?: number;
+      lastError?: string | null;
+    },
+  ): Promise<void> {
+    const { cursorMatchId, total, done, failed, lastError } = progress;
+
+    const existing = await this.prisma.backfillJob.findUnique({
+      where: { competitionSeasonId },
+      select: { id: true },
+    });
+
+    const normalizedLastError =
+      lastError === undefined ? undefined : lastError === null ? null : lastError.slice(0, 2000);
+
+    if (!existing) {
+      // 최초 생성 — phase 는 default(PENDING) 명시. 상세 백필은 이후에도 phase 를 건드리지 않는다.
+      await this.prisma.backfillJob.create({
+        data: {
+          competitionSeasonId,
+          phase: BackfillPhase.PENDING,
+          startedAt: new Date(),
+          cursorMatchId: cursorMatchId ?? null,
+          total: total ?? 0,
+          done: done ?? 0,
+          failed: failed ?? 0,
+          lastError: normalizedLastError ?? null,
+        },
+      });
+      return;
+    }
+
+    // update — 인자로 준 필드만. phase 는 절대 포함하지 않는다.
+    const data: {
+      cursorMatchId?: number;
+      total?: number;
+      done?: number;
+      failed?: number;
+      lastError?: string | null;
+    } = {};
+    if (cursorMatchId !== undefined) data.cursorMatchId = cursorMatchId;
+    if (total !== undefined) data.total = total;
+    if (done !== undefined) data.done = done;
+    if (failed !== undefined) data.failed = failed;
+    if (normalizedLastError !== undefined) data.lastError = normalizedLastError;
+    if (Object.keys(data).length === 0) return;
+
+    await this.prisma.backfillJob.update({
+      where: { competitionSeasonId },
+      data,
+    });
+  }
 }
