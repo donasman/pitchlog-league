@@ -34,16 +34,25 @@ function toQuery(params) {
 
 /**
  * GET 요청. 2xx 가 아니면 백엔드가 준 message 를 살려 throw 한다.
+ *
+ * opts.signal 은 AbortController 를 실어 이전 요청을 취소하는 데 쓴다.
+ * 검색처럼 사용자가 계속 새 요청을 보내는 자리(SearchPanel · 어시스턴트)에서 필요하다.
+ * abort 시 fetch 는 AbortError 로 reject 하고 호출자가 `signal.aborted` 로 걸러 조용히 무시한다.
+ *
  * @param {string} path  `/api/` 로 시작하는 경로
  * @param {Record<string, string|number|undefined|null>} [params]
+ * @param {{ signal?: AbortSignal }} [opts]
  */
-export async function apiGet(path, params) {
+export async function apiGet(path, params, opts = {}) {
   const url = `${BASE}${path}${toQuery(params)}`
 
   let res
   try {
-    res = await fetch(url, { headers: { Accept: 'application/json' } })
+    res = await fetch(url, { headers: { Accept: 'application/json' }, signal: opts.signal })
   } catch (cause) {
+    // AbortError 는 취소 의도 — 네트워크 오류로 변환하지 않고 그대로 다시 던진다.
+    // 호출자(useSearch 등)가 `signal.aborted` 로 걸러 조용히 무시한다.
+    if (opts.signal?.aborted) throw cause
     // fetch 는 네트워크·CORS 실패에서만 reject 한다. 4xx·5xx 는 아래에서 처리
     throw new Error(i18n.t('errors.networkFailed', { detail: `${url} — ${cause.message}` }), { cause })
   }

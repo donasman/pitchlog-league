@@ -22,6 +22,7 @@ import {
   normalizeCompetition,
   normalizeMatch,
   normalizePlayerDetail,
+  normalizeSearchResults,
   normalizeSeason,
   normalizeStanding,
   normalizeStandings,
@@ -549,6 +550,29 @@ export async function fetchOverview() {
     topScorers:      scorersFailed ? null : scorerRowsFromRanking(scorersRes),
     topScorersError: scorersFailed ? scorersRes.message : null,
   }
+}
+
+// ─── 검색 ──────────────────────────────────────────────────────
+
+/**
+ * 검색 — `GET /api/search?q=<string>&limit=<1~20>`. 백엔드가 팀·선수·대회를 배열 셋으로 나눠 준다.
+ *
+ * `_cachedGet` 을 쓰지 않는다 — 매 입력마다 q 가 달라 캐시 명중률이 0 이고 TTL 캐시만 오염된다.
+ * 대신 SearchPanel 이 250ms 디바운스 + AbortController 로 이전 요청을 취소한다 — abort 시
+ * fetch 는 AbortError 로 reject 하고, useSearch 가 `signal.aborted` 로 걸러 조용히 무시한다.
+ *
+ * q.length <= 1 은 백엔드가 200 with 빈 배열로 답한다 (400 아님) — 클라이언트가 미리 막지 않는다.
+ * 반환 shape 은 SearchPanel 이 소비하는 { teams, players, competitions } 형태로 정규화한다
+ * (팀 initials·color 는 백엔드가 안 주므로 normalizeTeam 이 apiId 로 파생).
+ *
+ * @param {string} q  검색어
+ * @param {{ signal?: AbortSignal, limit?: number, locale?: string }} [opts]
+ * @returns {Promise<{teams:Array,players:Array,competitions:Array}>}
+ */
+export async function fetchSearch(q, opts = {}) {
+  const limit = opts.limit ?? 5
+  const dto = await apiGet('/api/search', { q, limit }, { signal: opts.signal })
+  return normalizeSearchResults(dto, opts.locale)
 }
 
 // ─── 어시스턴트 ────────────────────────────────────────────────

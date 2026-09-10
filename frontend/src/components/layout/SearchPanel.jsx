@@ -10,10 +10,11 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { getSearchIndex, searchAll } from '@/utils/searchIndex'
-import { useData } from '@/hooks/useData'
+import { useSearch } from '@/hooks/useSearch'
 import TeamBadge from '@/components/ui/TeamBadge'
 import { getLocalizedName } from '@/utils/localization'
+
+const EMPTY_GROUP = []
 
 export default function SearchPanel({ onClose }) {
   const { t, i18n } = useTranslation()
@@ -23,12 +24,14 @@ export default function SearchPanel({ onClose }) {
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(-1)
 
-  // 인덱스는 서비스 계층에서 받는다 — 실 API 모드면 대회·팀을 실제로 조회한다
-  const { data: index, error: indexError } = useData(getSearchIndex, [])
-  const results = useMemo(() => searchAll(index, query), [index, query])
+  // 검색은 백엔드가 매칭한다 — 250ms 디바운스 + AbortController 는 훅 안에서
+  const { results, loading, error: searchError } = useSearch(query)
+  const teams        = results?.teams        ?? EMPTY_GROUP
+  const players      = results?.players      ?? EMPTY_GROUP
+  const competitions = results?.competitions ?? EMPTY_GROUP
   const flat = useMemo(
-    () => [...results.teams, ...results.players, ...results.competitions],
-    [results]
+    () => [...teams, ...players, ...competitions],
+    [teams, players, competitions]
   )
 
   // 마운트 시 입력창 자동 포커스
@@ -72,7 +75,9 @@ export default function SearchPanel({ onClose }) {
   }
 
   const hasResults = flat.length > 0
-  const showNoResults = query.trim() && !hasResults
+  // "결과 없음" 은 실제로 응답이 왔고 (results !== null) 로딩·오류가 아닐 때만 —
+  // 첫 요청 진행 중이거나 실패한 경우를 결과 없음으로 위장하지 않는다
+  const showNoResults = query.trim() && !loading && !searchError && results !== null && !hasResults
 
   return (
     <>
@@ -114,20 +119,26 @@ export default function SearchPanel({ onClose }) {
 
           {/* 결과 영역 */}
           <div className="max-h-[60vh] overflow-y-auto">
-            {indexError && (
-              <p className="text-sm text-destructive text-center py-8">{indexError}</p>
+            {searchError && (
+              <p className="text-sm text-destructive text-center py-8">{searchError}</p>
             )}
 
-            {!indexError && showNoResults && (
+            {!searchError && loading && !hasResults && (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                {t('common.loading')}
+              </p>
+            )}
+
+            {!searchError && showNoResults && (
               <p className="text-sm text-muted-foreground text-center py-8">
                 {t('header.searchNoResults')}
               </p>
             )}
 
-            {results.teams.length > 0 && (
+            {teams.length > 0 && (
               <ResultGroup
                 label={t('nav.teams')}
-                items={results.teams}
+                items={teams}
                 startIdx={0}
                 activeIdx={activeIdx}
                 locale={locale}
@@ -135,22 +146,22 @@ export default function SearchPanel({ onClose }) {
               />
             )}
 
-            {results.players.length > 0 && (
+            {players.length > 0 && (
               <ResultGroup
                 label={t('nav.players')}
-                items={results.players}
-                startIdx={results.teams.length}
+                items={players}
+                startIdx={teams.length}
                 activeIdx={activeIdx}
                 locale={locale}
                 onSelect={go}
               />
             )}
 
-            {results.competitions.length > 0 && (
+            {competitions.length > 0 && (
               <ResultGroup
                 label={t('nav.competition')}
-                items={results.competitions}
-                startIdx={results.teams.length + results.players.length}
+                items={competitions}
+                startIdx={teams.length + players.length}
                 activeIdx={activeIdx}
                 locale={locale}
                 onSelect={go}
