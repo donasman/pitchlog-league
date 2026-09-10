@@ -628,21 +628,21 @@ describe('matchDetail', () => {
       teamStats: [
         { teamRef: HOME_REF, teamName: 'Manchester City',
           ballPossession: 56, totalShots: 12, shotsOnGoal: 5, cornerKicks: 7, fouls: 8,
-          passesPercent: 88, expectedGoals: 1.8, goalsPrevented: 0.4 },
+          passesPercentage: 88, expectedGoals: 1.8, goalsPrevented: 0.4 },
         { teamRef: AWAY_REF, teamName: 'Arsenal',
           ballPossession: 44, totalShots: 9,  shotsOnGoal: 3, cornerKicks: 4, fouls: 12,
-          passesPercent: 79, expectedGoals: 0.9, goalsPrevented: -0.2 },
+          passesPercentage: 79, expectedGoals: 0.9, goalsPrevented: -0.2 },
       ],
       playerStats: [
         { playerRef: '2-haaland', playerName: 'Haaland', teamRef: HOME_REF, position: 'FWD',
-          number: 9, minutes: 90, rating: 8.7, shotsTotal: 5, shotsOn: 3, passesTotal: 32, isCaptain: true },
+          jerseyNumber: 9,  minutes: 90, rating: 8.7, shotsTotal: 5, shotsOn: 3, passesTotal: 32, isCaptain: true },
         { playerRef: '4-raya',    playerName: 'Raya',    teamRef: AWAY_REF, position: 'GK',
-          number: 22, minutes: 90, rating: 7.2, shotsTotal: 0, shotsOn: 0, passesTotal: 40, isCaptain: false },
+          jerseyNumber: 22, minutes: 90, rating: 7.2, shotsTotal: 0, shotsOn: 0, passesTotal: 40, isCaptain: false },
         { playerRef: '1-ederson', playerName: 'Ederson', teamRef: HOME_REF, position: 'GK',
-          number: 31, minutes: 90, rating: 7.8, shotsTotal: 0, shotsOn: 0, passesTotal: 25, isCaptain: false },
+          jerseyNumber: 31, minutes: 90, rating: 7.8, shotsTotal: 0, shotsOn: 0, passesTotal: 25, isCaptain: false },
         // rating null — topRated 에서 제외되어야 한다
         { playerRef: '3-ortega',  playerName: 'Ortega',  teamRef: HOME_REF, position: 'GK',
-          number: 18, minutes: 0,  rating: null, shotsTotal: 0, shotsOn: 0, passesTotal: 0, isCaptain: false },
+          jerseyNumber: 18, minutes: 0,  rating: null, shotsTotal: 0, shotsOn: 0, passesTotal: 0, isCaptain: false },
       ],
       asOf: '2026-11-23T15:00:00.000Z',
       availability: { lineups: 'ok', events: 'ok', teamStats: 'ok', playerStats: 'ok' },
@@ -703,16 +703,51 @@ describe('matchDetail', () => {
       teamStats: [
         { teamRef: HOME_REF, teamName: 'Manchester City',
           ballPossession: 56, totalShots: 12, shotsOnGoal: 5, cornerKicks: 7, fouls: 8,
-          passesPercent: 88, expectedGoals: null, goalsPrevented: null },
+          passesPercentage: 88, expectedGoals: null, goalsPrevented: null },
         { teamRef: AWAY_REF, teamName: 'Arsenal',
           ballPossession: 44, totalShots: 9,  shotsOnGoal: 3, cornerKicks: 4, fouls: 12,
-          passesPercent: 79, expectedGoals: null, goalsPrevented: null },
+          passesPercentage: 79, expectedGoals: null, goalsPrevented: null },
       ],
     }))
     expect(out.stats.home.expectedGoals).toBeNull()
     expect(out.stats.away.expectedGoals).toBeNull()
     expect(out.stats.home.goalsPrevented).toBeNull()
     expect(out.stats.away.goalsPrevented).toBeNull()
+  })
+
+  // 회귀: TeamStatDto 를 그대로 넣었을 때 화면이 읽는 필드가 null 로 안 떨어지는지 (0 과 null 구분).
+  // 09-10 실측 — normalize 가 API 계약과 다른 이름(passesPercent)을 읽어 항상 null 이 됐다.
+  it('maps every teamStats field the screen reads directly from the API contract (0 !== null)', () => {
+    const dto = detailDto({
+      teamStats: [
+        { teamRef: HOME_REF, teamName: 'Manchester City',
+          // 0 과 null 구분 — passesPercentage=0 은 값이고 goalsPrevented=null 은 미측정
+          ballPossession: 0, totalShots: 0, shotsOnGoal: 0, cornerKicks: 0, fouls: 0,
+          passesPercentage: 0, expectedGoals: 0, goalsPrevented: null },
+        { teamRef: AWAY_REF, teamName: 'Arsenal',
+          ballPossession: 100, totalShots: 20, shotsOnGoal: 10, cornerKicks: 8, fouls: 5,
+          passesPercentage: 90, expectedGoals: 2.5, goalsPrevented: 0.3 },
+      ],
+    })
+    const out = matchDetail(dto)
+    // 홈 — 값이 0 인 필드는 0 이어야 한다 (null 로 뭉개면 안 됨)
+    expect(out.stats.home.ballPossession).toBe(0)
+    expect(out.stats.home.totalShots).toBe(0)
+    expect(out.stats.home.shotsOnGoal).toBe(0)
+    expect(out.stats.home.cornerKicks).toBe(0)
+    expect(out.stats.home.fouls).toBe(0)
+    expect(out.stats.home.passesPercentage).toBe(0)
+    expect(out.stats.home.expectedGoals).toBe(0)
+    expect(out.stats.home.goalsPrevented).toBeNull()  // null 유지
+    // 원정 — 값 살아 있어야 함
+    expect(out.stats.away.ballPossession).toBe(100)
+    expect(out.stats.away.totalShots).toBe(20)
+    expect(out.stats.away.shotsOnGoal).toBe(10)
+    expect(out.stats.away.cornerKicks).toBe(8)
+    expect(out.stats.away.fouls).toBe(5)
+    expect(out.stats.away.passesPercentage).toBe(90)  // 이 자리가 09-10 버그
+    expect(out.stats.away.expectedGoals).toBe(2.5)
+    expect(out.stats.away.goalsPrevented).toBe(0.3)
   })
 })
 
