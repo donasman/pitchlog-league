@@ -901,6 +901,77 @@ export function matchDetail(dto) {
   }
 }
 
+// ─── 검색 ──────────────────────────────────────────────────────
+
+/**
+ * 검색 응답(SearchResultsDto) → SearchPanel 이 소비하는 { teams, players, competitions } 아이템 배열 셋.
+ *
+ * 백엔드는 이름 매칭을 이미 마쳤다 — 프론트는 표시용 shape 로 변환만 한다.
+ *   - teams: initials·color·logoUrl 은 백엔드가 안 준다. `normalizeTeam` 이 apiId 로 파생.
+ *     SearchPanel 이 `<TeamBadge>` 에 그대로 넣는다.
+ *   - players: photoUrl 은 SearchPanel 이 아직 안 쓴다 (필요할 때 다음 판에).
+ *   - competitions: logoUrl 은 파일이 있으면 로컬 경로, 없으면 null. shortName 은 3자 배지 폴백용.
+ *
+ * label 로는 `displayName` 을 쓴다 — 백엔드가 이 시점의 locale 을 반영해 반환하는 게 목표다.
+ * 아직 백엔드가 localized 를 안 붙이는 이번 판 구현이면 displayName === originalName 이라 결과가 같다.
+ * SearchPanel 이 `getLocalizedName` 으로 마지막 폴백을 걸어 화면 표기가 언어와 맞춰진다.
+ *
+ * names 는 빈 배열 — 매칭은 백엔드가 했으므로 SearchPanel 이 다시 필터링하지 않는다.
+ *
+ * @param {object} dto  SearchResultsDto — { q, teams, players, competitions, asOf }
+ * @param {string} [_locale]  향후 백엔드 locale 반환이 붙을 때를 위해 자리만 잡아 둔다
+ * @returns {{teams:Array,players:Array,competitions:Array}}
+ */
+export function normalizeSearchResults(dto, _locale) {
+  const teams = (dto?.teams ?? []).map(t => {
+    // 백엔드가 안 주는 필드(code · founded · venue)는 undefined 로 두면 normalizeTeam 의 폴백이 살아난다
+    const normalized = normalizeTeam({
+      ref:              t.ref,
+      apiId:            t.apiId,
+      displayName:      t.displayName,
+      shortDisplayName: t.shortDisplayName,
+      code:             null,
+      country:          t.country,
+      founded:          null,
+      logoUrl:          t.logoUrl,
+    })
+    return {
+      type:     'team',
+      id:       t.ref,
+      slug:     t.ref,
+      label:    t.displayName,
+      sublabel: t.country ?? null,
+      initials: normalized.initials,
+      color:    normalized.color,
+      logoUrl:  normalized.logoUrl,
+      names:    [],
+    }
+  })
+
+  const players = (dto?.players ?? []).map(p => ({
+    type:     'player',
+    id:       p.ref,
+    slug:     p.ref,
+    label:    p.displayName,
+    sublabel: p.teamName ?? null,
+    names:    [],
+  }))
+
+  const competitions = (dto?.competitions ?? []).map(c => ({
+    type:      'competition',
+    id:        c.ref,
+    slug:      c.ref,
+    label:     c.displayName,
+    sublabel:  c.country ?? null,
+    shortName: c.shortDisplayName,
+    // 검색 DTO 에 logoUrl 이 없다 — SearchPanel 이 shortName 3자 배지로 폴백한다
+    logoUrl:   null,
+    names:     [],
+  }))
+
+  return { teams, players, competitions }
+}
+
 /**
  * 순위표 한 장 → Mock `STANDINGS[slug]` 형태. `unavailableReason`(KNOCKOUT·EMPTY) 이면 entries 는 비운다 —
  * 화면이 "없음" 과 "실패" 를 구분하도록 이유를 같이 넘긴다.

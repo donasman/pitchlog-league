@@ -4,6 +4,7 @@ import {
   teamColor,
   myTeamCard,
   normalizeMatch,
+  normalizeSearchResults,
   normalizeStanding,
   normalizeStandings,
   normalizeStatsRow,
@@ -993,5 +994,131 @@ describe('scorerRowsFromRanking', () => {
     })
     expect(out[0].playerName).toBe('')
     expect(out[0].teamName).toBe('')
+  })
+})
+
+// ─── normalizeSearchResults — SearchResultsDto → SearchPanel item shape ──
+//
+// 백엔드가 이미 이름 매칭을 마쳤다 — 프론트는 표시용 shape 로 변환만 한다.
+// SearchPanel 이 소비하는 필드: {type,id,slug,label,sublabel,initials?,color?,logoUrl?,shortName?,names}.
+// UI 는 손대지 않는 대신 shape 을 정확히 맞춰 SearchPanel 이 조건분기 없이 렌더링하게 한다.
+
+describe('normalizeSearchResults', () => {
+  const dto = {
+    q: 'man',
+    asOf: '2026-11-23T15:00:00.000Z',
+    teams: [
+      {
+        ref: '33-manchester-united', apiId: 33,
+        displayName: 'Manchester United', shortDisplayName: 'Man Utd', originalName: 'Manchester United',
+        logoUrl: 'https://media.api-sports.io/football/teams/33.png',
+        country: 'England',
+      },
+      {
+        ref: '50-manchester-city', apiId: 50,
+        displayName: 'Manchester City', shortDisplayName: 'Man City', originalName: 'Manchester City',
+        logoUrl: null, // 원본 없음 → 로컬 파일도 없음
+        country: 'England',
+      },
+    ],
+    players: [
+      {
+        ref: '154-manuel-neuer', apiId: 154,
+        displayName: 'Manuel Neuer', shortDisplayName: 'M. Neuer', originalName: 'Manuel Neuer',
+        photoUrl: null,
+        teamName: 'Bayern Munich',
+      },
+    ],
+    competitions: [
+      {
+        ref: '39-premier-league', apiId: 39,
+        displayName: 'Premier League', shortDisplayName: 'EPL', originalName: 'Premier League',
+        country: 'England',
+      },
+    ],
+  }
+
+  it('maps three arrays into SearchPanel item shape', () => {
+    const out = normalizeSearchResults(dto)
+    expect(out.teams).toHaveLength(2)
+    expect(out.players).toHaveLength(1)
+    expect(out.competitions).toHaveLength(1)
+  })
+
+  it('team items carry apiId-derived initials·color·logoUrl (backend does not provide these)', () => {
+    const [mun, mci] = normalizeSearchResults(dto).teams
+    expect(mun).toMatchObject({
+      type: 'team',
+      id:   '33-manchester-united',
+      slug: '33-manchester-united',
+      label: 'Manchester United',
+      sublabel: 'England',
+      logoUrl: '/logos/teams/33.webp',
+    })
+    expect(mun.color).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(mun.initials).toBeTruthy()
+    // logoUrl 은 원본이 null 이면 로컬 파일도 없다 (정직 규약)
+    expect(mci.logoUrl).toBeNull()
+  })
+
+  it('player items map ref·displayName·teamName', () => {
+    const [player] = normalizeSearchResults(dto).players
+    expect(player).toEqual({
+      type: 'player',
+      id:   '154-manuel-neuer',
+      slug: '154-manuel-neuer',
+      label: 'Manuel Neuer',
+      sublabel: 'Bayern Munich',
+      names: [],
+    })
+  })
+
+  it('competition items map ref·displayName·country·shortDisplayName as shortName', () => {
+    const [comp] = normalizeSearchResults(dto).competitions
+    expect(comp).toEqual({
+      type: 'competition',
+      id:   '39-premier-league',
+      slug: '39-premier-league',
+      label: 'Premier League',
+      sublabel: 'England',
+      shortName: 'EPL',
+      logoUrl: null,   // 검색 DTO 에 logoUrl 없음 — shortName 3자 배지로 폴백
+      names: [],
+    })
+  })
+
+  // names 는 빈 배열 — 매칭은 백엔드가 이미 했다. SearchPanel 은 매칭 필드를 안 쓴다
+  it('leaves names empty (backend already matched — no client-side re-filtering)', () => {
+    const out = normalizeSearchResults(dto)
+    for (const group of [out.teams, out.players, out.competitions]) {
+      for (const item of group) expect(item.names).toEqual([])
+    }
+  })
+
+  // q.length <= 1 은 200 with 빈 배열들 — 400 아님 (백엔드 계약)
+  it('handles empty-arrays response (short query · 0-hit both are shaped the same)', () => {
+    const out = normalizeSearchResults({ q: 'a', teams: [], players: [], competitions: [], asOf: null })
+    expect(out).toEqual({ teams: [], players: [], competitions: [] })
+  })
+
+  // teams·players·competitions 셋 중 하나가 undefined 로 오는 상황 방어 (실 API 는 항상 배열)
+  it('defends against missing arrays (falls back to empty)', () => {
+    const out = normalizeSearchResults({ q: 'x' })
+    expect(out).toEqual({ teams: [], players: [], competitions: [] })
+  })
+
+  // 백엔드가 localized displayName 을 주는 미래에도 label 은 그대로 displayName 을 쓴다 —
+  // 프론트가 originalName 을 다시 선택하지 않는다. 여기서는 displayName 이 다른 값으로 오는 상황만 잠근다.
+  it('uses displayName as label even when it differs from originalName (backend locale responsibility)', () => {
+    const out = normalizeSearchResults({
+      q: 'x',
+      teams: [{
+        ref: '33-manchester-united', apiId: 33,
+        displayName: 'LocalizedName', shortDisplayName: 'Short', originalName: 'Manchester United',
+        country: 'England', logoUrl: null,
+      }],
+      players: [], competitions: [],
+    })
+    expect(out.teams[0].label).toBe('LocalizedName')
   })
 })
