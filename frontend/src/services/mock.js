@@ -172,10 +172,10 @@ export async function fetchTeamDetail(slug) {
   const team = getTeamBySlug(slug)
   if (!team) throw new Error(`Team not found: ${slug}`)
   const matches      = getMatchesByTeam(slug)
-  const eplRank      = STANDINGS['premier-league']?.entries.find(e => e.teamSlug === slug) ?? null
+  const leagueRank   = STANDINGS['premier-league']?.entries.find(e => e.teamSlug === slug) ?? null
   const players      = PLAYERS.filter(p => p.teamSlug === slug)
   const competitions = team.competitions.map(s => getCompetitionBySlug(s)).filter(Boolean)
-  return { team, matches, eplRank, players, competitions }
+  return { team, matches, leagueRank, players, competitions }
 }
 
 /**
@@ -200,18 +200,6 @@ export async function fetchStandings(competitionSlug, _season) {
 }
 
 // ─── 선수 ──────────────────────────────────────────────────────
-
-/** 선수 상세 */
-export async function fetchPlayer(slug) {
-  const player = getPlayerBySlug(slug)
-  if (!player) throw new Error(`Player not found: ${slug}`)
-  return player
-}
-
-/** 선수 통계 */
-export async function fetchPlayerStats(slug, competitionId) {
-  return getPlayerStats(slug, competitionId)
-}
 
 /**
  * 선수 상세 페이지 묶음 데이터.
@@ -292,30 +280,7 @@ export async function fetchPlayerDetail(slug) {
   return normalizePlayerDetail(dto)
 }
 
-// ─── 통계 순위 ─────────────────────────────────────────────────
-
-/** 득점 순위 (EPL) */
-export async function fetchTopScorers() { return TOP_SCORERS }
-
-/** 도움 순위 (EPL) */
-export async function fetchTopAssisters() { return TOP_ASSISTERS }
-
-/** 득점 순위 (전체 대회 합산) */
-export async function fetchTopScorersAll() { return TOP_SCORERS_ALL }
-
-// ─── 알림 ───────────────────────────────────────────────────────
-
-import { NOTIFICATIONS, NOTIFICATION_SETTINGS } from '@/mocks/notifications'
-
-/** 알림 목록 */
-export async function fetchNotifications() {
-  return NOTIFICATIONS
-}
-
-/** 알림 설정 (권한 상태 포함) */
-export async function fetchNotificationSettings() {
-  return NOTIFICATION_SETTINGS
-}
+// ─── 통계 ─────────────────────────────────────────────────────
 
 /**
  * 통계 — 전체 대회 합산 + 대회별 분해
@@ -353,25 +318,6 @@ export async function fetchOverview() {
     dataAsOf:     DATA_AS_OF,
     topScorers:   TOP_SCORERS_ALL.slice(0, 3),
     eplTop3:      eplStandings,
-  }
-}
-
-/**
- * 홈 초기 데이터 (필터링은 컴포넌트에서 수행)
- * 백엔드 연결 시 단일 엔드포인트 GET /api/home 으로 대체
- */
-export async function fetchHomeData() {
-  const COMP_SLUGS = ['premier-league','la-liga','bundesliga','serie-a','ligue-1','champions-league']
-  const competitionScorers = {}
-  for (const slug of COMP_SLUGS) {
-    competitionScorers[slug] = getCompetitionScorers(slug)
-  }
-  return {
-    competitions:       COMPETITIONS,
-    allMatches:         MATCHES,
-    standings:          STANDINGS,
-    uclKnockout:        UCL_KNOCKOUT_TIES,
-    competitionScorers,
   }
 }
 

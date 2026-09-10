@@ -43,3 +43,35 @@ export function mergeAndSort(matchArrays) {
 export function filterTodayMatches(matches, todayKey = todayKstKey()) {
   return matches.filter(m => m.date != null && kstDateKey(m.date) === todayKey)
 }
+
+/**
+ * 팀 상세 "다음 경기" — 킥오프 오름차순(가까운 것부터) 앞에서 n 개.
+ *
+ * 라운드 번호로 정렬하지 않는다 — 연기 경기가 뒤 라운드에 얹혀 킥오프 순서와 어긋난다
+ * (예: 라리가 R1 8/27 이 R2 8/23 보다 뒤). 항상 `m.date` (=백엔드 kickoffAt) 기준.
+ * @param {Array<Object>} matches
+ * @param {number} n
+ */
+export function pickUpcoming(matches, n) {
+  return (matches ?? [])
+    .filter(m => m?.displayState === 'scheduled')
+    .slice()
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .slice(0, n)
+}
+
+/**
+ * 팀 상세 "최근 결과" — 킥오프 내림차순(최신부터) 앞에서 n 개.
+ *
+ * 백엔드가 라운드 번호로 준 배열을 그대로 slice(0, n) 하면 오래된 경기부터 나온다
+ * (2026-09-10 실측: 바르셀로나 R4 9/6 이 잘려나감). 최신순 정렬 필수.
+ * @param {Array<Object>} matches
+ * @param {number} n
+ */
+export function pickRecent(matches, n) {
+  return (matches ?? [])
+    .filter(m => ['confirmed', 'recheck', 'final'].includes(m?.displayState))
+    .slice()
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, n)
+}

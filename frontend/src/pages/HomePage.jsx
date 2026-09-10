@@ -431,7 +431,7 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
 /* ─────────────────────────────────────────────────────────────
    ShortcutsSection — 3열 바로 가기
 ───────────────────────────────────────────────────────────── */
-function ShortcutsSection({ eplTop3, topScorers, competitions, t }) {
+function ShortcutsSection({ eplTop3, topScorers, topScorersError, competitions, t }) {
   const standingsRows = (eplTop3 ?? []).map(e => ({
     rank: e.rank,
     label: e.teamName,
@@ -467,8 +467,14 @@ function ShortcutsSection({ eplTop3, topScorers, competitions, t }) {
           zoneFirst
           t={t}
         />
-        {/* 득점 순위는 실 API 에 아직 없다(null). 빈 배열(0명) 과 구분해 "아직 없음" 카드로 그린다 */}
-        {topScorers === null ? (
+        {/* 세 상태로 갈린다 — 에러(호출 실패) · 미구현(하드코딩 null) · 성공(빈 배열 포함).
+            빈 배열은 "득점자 0명" 이므로 ShortcutCard 껍데기가 뜨는 게 맞다. 에러를 null 로 뭉개면
+            "기능 없음" 으로 위장돼 회고 4-6 이 막으려던 자리가 된다. */}
+        {topScorersError ? (
+          <div className="pl-card">
+            <ErrorState description={topScorersError} />
+          </div>
+        ) : topScorers === null ? (
           <div className="pl-card">
             <NotImplementedState featureKey="errors.feature.top_scorers" />
           </div>
@@ -642,7 +648,7 @@ export default function HomePage() {
     )
   }
 
-  const { competitions, livePulse, nextKickoff, dataAsOf, topScorers, eplTop3 } = overview ?? {}
+  const { competitions, livePulse, nextKickoff, dataAsOf, topScorers, topScorersError, eplTop3 } = overview ?? {}
   /** 시즌 라벨은 응답에서 — 실 API 대회 객체의 currentSeason. Mock 오버뷰에는 없어 표기가 빠진다 */
   const season = (competitions ?? []).find(c => c.currentSeason)?.currentSeason ?? null
 
@@ -676,6 +682,7 @@ export default function HomePage() {
         <ShortcutsSection
           eplTop3={eplTop3}
           topScorers={topScorers}
+          topScorersError={topScorersError}
           competitions={competitions}
           t={t}
         />
