@@ -13,6 +13,7 @@ import {
   normalizePlayerDetail,
   playerTotals,
   formatStat,
+  matchDetail,
 } from './normalize.js'
 import { MATCHES } from '../mocks/matches.js'
 
@@ -585,6 +586,133 @@ describe('normalizePlayerSeasonStat / playerTotals / formatStat', () => {
     expect(formatStat(0)).toBe(0)
     expect(formatStat(5)).toBe(5)
     expect(formatStat(149)).toBe(149)
+  })
+})
+
+// ─── matchDetail ───────────────────────────────────────────────
+//
+// A-L3: `GET /api/matches/:ref/detail` — lineups·events·teamStats·playerStats + availability.
+// availability 는 세 값(ok · not_provided · not_collected)이며 화면이 두 갈래로 다른 문구를 그린다.
+
+describe('matchDetail', () => {
+  const HOME_REF = '50-manchester-city'
+  const AWAY_REF = '42-arsenal'
+
+  function detailDto(overrides = {}) {
+    return {
+      lineups: [
+        {
+          teamRef: HOME_REF, teamName: 'Manchester City', formation: '4-3-3', coach: { name: 'Guardiola' },
+          startXI: [
+            { playerRef: '1-ederson',  playerName: 'Ederson',  number: 31, position: 'GK',  grid: '1:1' },
+            { playerRef: '2-haaland',  playerName: 'Haaland',  number: 9,  position: 'FWD', grid: '4:2' },
+          ],
+          bench: [
+            { playerRef: '3-ortega',   playerName: 'Ortega',   number: 18, position: 'GK',  grid: null },
+          ],
+        },
+        {
+          teamRef: AWAY_REF, teamName: 'Arsenal', formation: '4-4-2', coach: { name: 'Arteta' },
+          startXI: [
+            { playerRef: '4-raya',     playerName: 'Raya',     number: 22, position: 'GK',  grid: '1:1' },
+          ],
+          bench: [],
+        },
+      ],
+      events: [
+        { seq: 1, minute: 12, minuteExtra: null, teamRef: HOME_REF, playerRef: '2-haaland', playerName: 'Haaland',
+          assistPlayerRef: null, assistPlayerName: null, type: 'goal', detail: 'Normal Goal', comments: null },
+        { seq: 2, minute: 45, minuteExtra: 2,   teamRef: AWAY_REF, playerRef: '4-raya',    playerName: 'Raya',
+          assistPlayerRef: null, assistPlayerName: null, type: 'yellow_card', detail: 'Yellow Card', comments: null },
+      ],
+      teamStats: [
+        { teamRef: HOME_REF, teamName: 'Manchester City',
+          ballPossession: 56, totalShots: 12, shotsOnGoal: 5, cornerKicks: 7, fouls: 8,
+          passesPercent: 88, expectedGoals: 1.8, goalsPrevented: 0.4 },
+        { teamRef: AWAY_REF, teamName: 'Arsenal',
+          ballPossession: 44, totalShots: 9,  shotsOnGoal: 3, cornerKicks: 4, fouls: 12,
+          passesPercent: 79, expectedGoals: 0.9, goalsPrevented: -0.2 },
+      ],
+      playerStats: [
+        { playerRef: '2-haaland', playerName: 'Haaland', teamRef: HOME_REF, position: 'FWD',
+          number: 9, minutes: 90, rating: 8.7, shotsTotal: 5, shotsOn: 3, passesTotal: 32, isCaptain: true },
+        { playerRef: '4-raya',    playerName: 'Raya',    teamRef: AWAY_REF, position: 'GK',
+          number: 22, minutes: 90, rating: 7.2, shotsTotal: 0, shotsOn: 0, passesTotal: 40, isCaptain: false },
+        { playerRef: '1-ederson', playerName: 'Ederson', teamRef: HOME_REF, position: 'GK',
+          number: 31, minutes: 90, rating: 7.8, shotsTotal: 0, shotsOn: 0, passesTotal: 25, isCaptain: false },
+        // rating null — topRated 에서 제외되어야 한다
+        { playerRef: '3-ortega',  playerName: 'Ortega',  teamRef: HOME_REF, position: 'GK',
+          number: 18, minutes: 0,  rating: null, shotsTotal: 0, shotsOn: 0, passesTotal: 0, isCaptain: false },
+      ],
+      asOf: '2026-11-23T15:00:00.000Z',
+      availability: { lineups: 'ok', events: 'ok', teamStats: 'ok', playerStats: 'ok' },
+      ...overrides,
+    }
+  }
+
+  // 세 availability 값이 그대로 통과하는지 — 화면이 두 갈래(not_provided · not_collected) 문구로 갈리므로 값이 살아야 한다
+  it('passes availability values through unchanged (ok · not_provided · not_collected)', () => {
+    const okDto      = detailDto({ availability: { lineups: 'ok',            events: 'ok',            teamStats: 'ok',            playerStats: 'ok' } })
+    const notProvDto = detailDto({ availability: { lineups: 'not_provided',  events: 'not_provided',  teamStats: 'not_provided',  playerStats: 'not_provided' } })
+    const notCollDto = detailDto({ availability: { lineups: 'not_collected', events: 'not_collected', teamStats: 'not_collected', playerStats: 'not_collected' } })
+    expect(matchDetail(okDto).availability.lineups).toBe('ok')
+    expect(matchDetail(notProvDto).availability.lineups).toBe('not_provided')
+    expect(matchDetail(notCollDto).availability.lineups).toBe('not_collected')
+    // events · teamStats · playerStats 도 대칭
+    expect(matchDetail(notProvDto).availability.events).toBe('not_provided')
+    expect(matchDetail(notCollDto).availability.teamStats).toBe('not_collected')
+    expect(matchDetail(okDto).availability.playerStats).toBe('ok')
+  })
+
+  // 이벤트가 팀별로 home/away 로 옳게 갈리고 playerRef 가 살아 있는지 (MatchPage 가 playerRef 로 마커 찾음)
+  it('splits events by home/away teamRef and preserves playerRef for matching', () => {
+    const out = matchDetail(detailDto())
+    expect(out.events).toHaveLength(2)
+    expect(out.events[0]).toMatchObject({
+      minute: 12, type: 'goal', team: 'home', playerName: 'Haaland', playerRef: '2-haaland',
+    })
+    expect(out.events[1]).toMatchObject({
+      minute: 45, minuteExtra: 2, type: 'yellow_card', team: 'away', playerRef: '4-raya',
+    })
+  })
+
+  // rating null 이 topRated 에서 빠지고 rating desc 로 정렬되는지
+  it('excludes players without a rating from topRated and sorts by rating desc', () => {
+    const out = matchDetail(detailDto())
+    expect(out.topRated).toHaveLength(3)  // 4명 중 rating null 하나 제외
+    expect(out.topRated.map(p => p.name)).toEqual(['Haaland', 'Ederson', 'Raya'])
+    expect(out.topRated[0].statistics.games.rating).toBe(8.7)
+    // 주장 판정은 startingXI 라인업 항목에서 확인한다 (topRated 자체는 isCaptain 을 안 담는다)
+    const homeStart = out.lineup.home.startingXI.find(p => p.playerRef === '2-haaland')
+    expect(homeStart.isCaptain).toBe(true)
+  })
+
+  // lineups 가 아예 없으면 lineup=null. stats·events 는 다른 경로로 여전히 나올 수 있다
+  it('returns lineup:null when the detail dto carries no lineups', () => {
+    const out = matchDetail(detailDto({ lineups: [] }))
+    expect(out.lineup).toBeNull()
+    // 라인업이 없어도 events 는 살아 있다 — home/away 판정은 teamStats 로 폴백
+    expect(out.events).toHaveLength(2)
+    expect(out.events[0].team).toBe('home')
+    expect(out.events[1].team).toBe('away')
+  })
+
+  // expectedGoals · goalsPrevented 는 null 을 유지한다 — 0 으로 위장하지 않는다 (DATA_RULES §3)
+  it('keeps expectedGoals null (not coerced to 0)', () => {
+    const out = matchDetail(detailDto({
+      teamStats: [
+        { teamRef: HOME_REF, teamName: 'Manchester City',
+          ballPossession: 56, totalShots: 12, shotsOnGoal: 5, cornerKicks: 7, fouls: 8,
+          passesPercent: 88, expectedGoals: null, goalsPrevented: null },
+        { teamRef: AWAY_REF, teamName: 'Arsenal',
+          ballPossession: 44, totalShots: 9,  shotsOnGoal: 3, cornerKicks: 4, fouls: 12,
+          passesPercent: 79, expectedGoals: null, goalsPrevented: null },
+      ],
+    }))
+    expect(out.stats.home.expectedGoals).toBeNull()
+    expect(out.stats.away.expectedGoals).toBeNull()
+    expect(out.stats.home.goalsPrevented).toBeNull()
+    expect(out.stats.away.goalsPrevented).toBeNull()
   })
 })
 
