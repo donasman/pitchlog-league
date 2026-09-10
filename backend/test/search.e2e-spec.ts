@@ -70,6 +70,8 @@ describe('/api/search (e2e)', () => {
     await cleanup();
 
     // 대회 2개 — 추적 vs 추적 안 함
+    // displayOrder=10 — 화면 6대회 규칙 (is_tracked AND display_order<=100) 안으로.
+    // apiCompetitionId 9,100,000대라 실 대회와 겹치지 않는다. displayOrder 는 unique 아니라 안전.
     const compA = await prisma.competition.create({
       data: {
         apiCompetitionId: API + 1,
@@ -78,7 +80,7 @@ describe('/api/search (e2e)', () => {
         type: CompetitionType.LEAGUE,
         format: CompetitionFormat.ROUND_ROBIN,
         isTracked: true,
-        displayOrder: 91_001,
+        displayOrder: 10,
       },
     });
     const compB = await prisma.competition.create({
@@ -127,6 +129,39 @@ describe('/api/search (e2e)', () => {
       ],
     });
 
+    // 팀 screen_six 판정: has_top_flight=true 라운드에서 실 경기.
+    // CompetitionRound 하나 + Match 2건 (Alpha·AlphaBeta·Aztecs 3팀이 서로 경기 · 3팀 다 s6=1).
+    const round1 = await prisma.competitionRound.create({
+      data: {
+        competitionSeasonId: csA.id,
+        name: 'Regular Season - 1',
+        ordinal: 1,
+        hasTopFlight: true,
+      },
+    });
+    const match1 = await prisma.match.create({
+      data: {
+        apiFixtureId: API + 30,
+        competitionSeasonId: csA.id,
+        roundId: round1.id,
+        kickoffAt: new Date('2099-08-15T18:00:00Z'),
+        statusShort: 'FT',
+        homeTeamId: teamAlpha.id,
+        awayTeamId: teamAlphaBeta.id,
+      },
+    });
+    await prisma.match.create({
+      data: {
+        apiFixtureId: API + 31,
+        competitionSeasonId: csA.id,
+        roundId: round1.id,
+        kickoffAt: new Date('2099-08-22T18:00:00Z'),
+        statusShort: 'FT',
+        homeTeamId: teamAztecs.id,
+        awayTeamId: teamAlpha.id,
+      },
+    });
+
     // 선수 3개
     const playerAlvarez = await prisma.player.create({
       data: { apiPlayerId: API + 20, name: 'Julian Alvarez', firstname: 'Julian', lastname: 'Alvarez', nationality: 'Argentina' },
@@ -146,6 +181,18 @@ describe('/api/search (e2e)', () => {
         seasonYear: 2099,
         validFrom: new Date('2099-08-01'),
         observedAt: new Date('2026-09-10T00:00:00Z'),
+      },
+    });
+
+    // 선수 screen_six 판정: player_match_stats (minutes>0) + has_top_flight=true 라운드.
+    // Alvarez 를 match1 (Alpha vs AlphaBeta) 에 뛰게 · s6=1 확보.
+    await prisma.playerMatchStat.create({
+      data: {
+        matchId: match1.id,
+        playerId: playerAlvarez.id,
+        teamId: teamAlpha.id,
+        competitionSeasonId: csA.id,
+        minutes: 90,
       },
     });
 
@@ -192,6 +239,10 @@ describe('/api/search (e2e)', () => {
     const csIds = (
       await prisma.competitionSeason.findMany({ where: { competitionId: { in: compIds } }, select: { id: true } })
     ).map((c) => c.id);
+    // PlayerMatchStat → Match → CompetitionRound → CompetitionEntry → CompetitionSeason 순으로 삭제 (FK 대체 규약 위반 없음 · onDelete Restrict)
+    await prisma.playerMatchStat.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
+    await prisma.match.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
+    await prisma.competitionRound.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
     await prisma.competitionEntry.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
     await prisma.competitionSeason.deleteMany({ where: { id: { in: csIds } } });
     await prisma.competition.deleteMany({ where: { id: { in: compIds } } });
