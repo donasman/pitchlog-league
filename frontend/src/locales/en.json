@@ -108,6 +108,20 @@
       "stats": "Stats",
       "h2h": "H2H",
       "timeline": "Timeline"
+    },
+    "unavailable": {
+      "not_provided": {
+        "lineup": "Lineup was not provided for this match",
+        "stats": "Stats were not provided for this match",
+        "events": "Events were not provided for this match",
+        "playerStats": "Player stats were not provided for this match"
+      },
+      "not_collected": {
+        "lineup": "Lineup has not been collected yet",
+        "stats": "Stats have not been collected yet",
+        "events": "Events have not been collected yet",
+        "playerStats": "Player stats have not been collected yet"
+      }
     }
   },
   "matches": {

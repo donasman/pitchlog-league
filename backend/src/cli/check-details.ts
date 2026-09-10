@@ -12,6 +12,7 @@
  * 추가 진단 (2026-09-10, 이 판 실측):
  *   - has_* 4컬럼 true/false/null 분포 (경기 수) — 어느 endpoint 가 안 불렸는지 드러남
  *   - detail_checked_at IS NULL 인데 has_* 중 하나 이상 non-NULL 인 경기 수 (콜이 덜 나가 부분 처리된 경기)
+ *   - 테이블 크기 · 5시즌 추정 (pg_total_relation_size) — Supabase 500MB 대비 얼마나 갈지 예상 (관문 4번)
  */
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module.js';
@@ -199,6 +200,54 @@ async function main(): Promise<void> {
     const seqBad = seqBadRes[0].c;
     const seqFlag = seqBad > 0 ? ' ⚠' : '';
     console.log(`  seq 불연속 경기 수 (0이어야)  ${padLeft(seqBad, 6)}${seqFlag}`);
+    console.log('');
+
+    // ── 테이블 크기 · 5시즌 추정 ───────────────────────────
+    // Supabase 무료 티어 500MB 대비 어디까지 갈지 실측 (한 시즌 처리된 경기 수 기준).
+    // 5시즌 추정 = 현재 크기 × (8000 / 180) — 8000 은 5시즌 전체 대상 경기 수 상수(현재
+    // 시즌 실측 180), 180 은 이 판(2026 시즌 부분 처리) 실측치. 정확한 상수는 아니지만
+    // "얼마나 클지" 감을 잡는 데 쓴다. 관문은 사람이 본다.
+    console.log('## 테이블 크기 · 5시즌 추정');
+    const SIZE_MULTIPLIER = 8_000 / 180;
+    const sizeRes = await prisma.$queryRaw<Array<{ relname: string; bytes: bigint; pretty: string }>>`
+      SELECT c.relname,
+             pg_total_relation_size(c.oid) AS bytes,
+             pg_size_pretty(pg_total_relation_size(c.oid)) AS pretty
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relname IN ('matches','match_lineups','lineup_entries','match_events','team_match_stats','player_match_stats')
+      ORDER BY pg_total_relation_size(c.oid) DESC
+    `;
+    // 행당 평균 바이트 계산용 count
+    const rowCountsForSize: Record<string, number> = {
+      matches: matchesTotal,
+      match_lineups: rowCounts.match_lineups,
+      lineup_entries: rowCounts.lineup_entries,
+      match_events: rowCounts.match_events,
+      team_match_stats: rowCounts.team_match_stats,
+      player_match_stats: rowCounts.player_match_stats,
+    };
+    console.log(`  ${pad('table', 20)} ${padLeft('size', 10)} ${padLeft('avg/row', 10)} ${padLeft('5시즌 추정', 14)}`);
+    let totalBytes = 0n;
+    for (const r of sizeRes) {
+      const rows = rowCountsForSize[r.relname] ?? 0;
+      const bytes = Number(r.bytes);
+      totalBytes += r.bytes;
+      const avgPerRow = rows > 0 ? Math.round(bytes / rows) : 0;
+      const projected = bytes * SIZE_MULTIPLIER;
+      const projectedMB = projected / (1024 * 1024);
+      const projectedStr = `${projectedMB.toFixed(1)} MB`;
+      console.log(`  ${pad(r.relname, 20)} ${padLeft(r.pretty, 10)} ${padLeft(`${avgPerRow} B`, 10)} ${padLeft(projectedStr, 14)}`);
+    }
+    // 합계
+    const totalMB = Number(totalBytes) / (1024 * 1024);
+    const totalProjectedMB = (Number(totalBytes) * SIZE_MULTIPLIER) / (1024 * 1024);
+    const supabaseLimitMB = 500;
+    const pctOfLimit = ((totalProjectedMB / supabaseLimitMB) * 100).toFixed(1);
+    console.log(
+      `  합계: ${totalMB.toFixed(1)} MB · 5시즌 추정 ${totalProjectedMB.toFixed(1)} MB · Supabase 500MB 대비 ${pctOfLimit}%`,
+    );
     console.log('');
 
     console.log('# 관문 판단 (판단은 사람 · 스크립트는 표만)');
