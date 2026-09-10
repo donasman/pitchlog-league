@@ -133,6 +133,69 @@ describe('live.js — TTL cache', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('T5b: fetchOverview keeps the rest of the home page alive when /api/stats/scorers fails (retro 4-6)', async () => {
+    // 5xx makes apiGet throw · the 4th Promise.all branch catches it and returns a sentinel so the UI can render ErrorState.
+    // The other three (comps · matches · standings) succeed → the home page cards must stay alive.
+    const compsBody = { items: [{ apiId: 39, ref: '39-premier-league', slug: 'premier-league',
+      displayName: 'Premier League', shortDisplayName: 'EPL', type: 'LEAGUE', format: 'ROUND_ROBIN',
+      currentSeason: { year: 2026, label: '2026-27', isCurrent: true } }] }
+    const fetchMock = vi.fn(async input => {
+      const url = String(input)
+      if (url.includes('/api/stats/scorers')) {
+        return { ok: false, status: 500, statusText: 'Internal Server Error',
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({ message: 'scorers exploded' }),
+          text: async () => JSON.stringify({ message: 'scorers exploded' }) }
+      }
+      const body = url.includes('/api/matches') ? { items: [], asOf: null }
+                 : url.includes('/api/standings') ? { items: [], asOf: null }
+                 : compsBody
+      return { ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }), json: async () => body }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    // console.error 는 catch 안에서 나온다 — 테스트가 조용해지도록 spy 로 삼킨다
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const { fetchOverview } = await import('./live')
+    const out = await fetchOverview()
+
+    // 실패 자리 — 세 상태로 갈라짐 (배열 · null 이 아니라 error)
+    expect(out.topScorers).toBeNull()
+    expect(out.topScorersError).toEqual(expect.stringContaining('500'))
+    // 홈 전체는 살아 있음 — 다른 필드는 정상 계약대로
+    expect(out.competitions).toBeInstanceOf(Array)
+    expect(out.livePulse).toEqual([])       // matches:[] 니까 라이브 없음
+    expect(out.nextKickoff).toBeNull()
+    // console.error 는 반드시 남는다 (무음 catch 금지)
+    expect(errSpy).toHaveBeenCalled()
+
+    errSpy.mockRestore()
+  })
+
+  it('T5c: fetchOverview treats items=[] as a success (0 scorers) — must NOT collapse to null', async () => {
+    // 0 scorers = ShortcutCard shell (empty rank list) · null = NotImplementedState (hard-coded "not built yet") — two distinct UIs
+    const compsBody = { items: [{ apiId: 39, ref: '39-premier-league', slug: 'premier-league',
+      displayName: 'Premier League', shortDisplayName: 'EPL', type: 'LEAGUE', format: 'ROUND_ROBIN',
+      currentSeason: { year: 2026, label: '2026-27', isCurrent: true } }] }
+    const fetchMock = vi.fn(async input => {
+      const url = String(input)
+      const body = url.includes('/api/matches') ? { items: [], asOf: null }
+                 : url.includes('/api/standings') ? { items: [], asOf: null }
+                 : url.includes('/api/stats/scorers') ? { competition: null, season: null, items: [], asOf: '2026-11-23T15:00:00.000Z' }
+                 : compsBody
+      return { ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }), json: async () => body }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchOverview } = await import('./live')
+    const out = await fetchOverview()
+
+    expect(out.topScorers).toEqual([])      // 배열(빈) · null 아님
+    expect(out.topScorersError).toBeNull()
+  })
+
   it('T5: invalidateCompetitions clears /api/competitions and /api/teams but keeps /api/matches', async () => {
     const compsBody = {
       items: [{ apiId: 39, ref: '39-premier-league', slug: 'premier-league',

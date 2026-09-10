@@ -27,6 +27,8 @@ import {
   normalizeStandings,
   normalizeStatsRow,
   normalizeTeam,
+  normalizeTeamDetail,
+  scorerRowsFromRanking,
 } from './normalize'
 import { now, todayKstKey } from './clock'
 import { isPastSeason } from '../utils/seasons'
@@ -441,15 +443,30 @@ function byKickoff(a, b) {
 }
 
 /**
- * 홈 오버뷰 — 대회 6개 × (경기 공통 창 + 순위표) 를 두 번의 호출로 받아 Mock `overview.js` 형태로 묶는다.
- * 득점 순위는 아직 백엔드에 없어 null.
+ * 홈 오버뷰 — 대회 6개 × (경기 공통 창 + 순위표 + 득점 순위) 를 네 번의 호출로 받아 Mock `overview.js` 형태로 묶는다.
+ *
+ * 득점 순위(모드 B · 6대회 합산)는 4번째 병렬. 이 하나가 실패해도 대회 카드·순위·라이브 티커는
+ * 살아 있어야 하지만, 실패를 "기능 없음" 으로 위장하면 안 된다 (회고 4-6). 그래서 catch 는 삼키지
+ * 않는다 — console.error 로 로깅하고 에러 sentinel 을 돌려주어 셋 다 다른 UI 로 갈리게 한다:
+ *   - 성공(items 있음) → `topScorers: [...]`,  `topScorersError: null`  → ShortcutCard
+ *   - 성공(items=[]  ) → `topScorers: []`,     `topScorersError: null`  → ShortcutCard(껍데기, 0명)
+ *   - 미구현(하드코딩) → `topScorers: null`,   `topScorersError: null`  → NotImplementedState
+ *   - 실패            → `topScorers: null`,   `topScorersError: msg`   → ErrorState
+ *
+ * @returns {Promise<{competitions:Array, livePulse:Array, nextKickoff:object|null, dataAsOf:string|null,
+ *   eplTop3:Array, topScorers:Array|null, topScorersError:string|null}>}
  */
 export async function fetchOverview() {
-  const [comps, matchesRes, standingsRes] = await Promise.all([
+  const [comps, matchesRes, standingsRes, scorersRes] = await Promise.all([
     loadCompetitions(),
     // 공통 창(−14~+21일) 안이라도 6대회 합치면 수백 건이 나올 수 있어 안전판으로 limit 명시
     loadMatches({ ...matchWindow(), limit: 500 }),
     _cachedGet('/api/standings'),
+    _cachedGet('/api/stats/scorers', { limit: 5 }).catch(err => {
+      // 무음 catch 금지 — 실패 사실을 콘솔에 남기고 sentinel 로 반환해 UI 가 에러 상태로 갈리게 한다
+      console.error('[fetchOverview] /api/stats/scorers failed', err)
+      return { __error: true, message: String(err?.message ?? err) }
+    }),
   ])
   const allMatches = matchesRes.items
   const tables     = standingsRes.items ?? []
@@ -521,13 +538,16 @@ export async function fetchOverview() {
   const epl = comps.find(c => c.slug === 'premier-league')
   const eplTop3 = epl ? rowsFor(epl).slice(0, 3) : []
 
+  // sentinel 을 여기서 걸러 낸다 — scorerRowsFromRanking 이 에러 객체를 items 로 오해하지 않도록
+  const scorersFailed = scorersRes !== null && typeof scorersRes === 'object' && scorersRes.__error === true
   return {
     competitions,
     livePulse,
     nextKickoff,
-    dataAsOf:   maxIso([matchesRes.asOf, standingsRes.asOf, ...allMatches.map(m => m.asOf)]),
+    dataAsOf:        maxIso([matchesRes.asOf, standingsRes.asOf, ...allMatches.map(m => m.asOf)]),
     eplTop3,
-    topScorers: null,
+    topScorers:      scorersFailed ? null : scorerRowsFromRanking(scorersRes),
+    topScorersError: scorersFailed ? scorersRes.message : null,
   }
 }
 
@@ -545,12 +565,85 @@ export async function askAssistant(question, signal) {
   return apiPost('/api/assistant', { question }, { signal })
 }
 
-// ─── 아직 백엔드에 없는 것 ─────────────────────────────────────
-// L1 스쿼드(9단계) · 이벤트·라인업·통계(10단계) 이후에 생긴다.
+// ─── 팀 상세 ───────────────────────────────────────────────────
 
-export const fetchTeamDetail      = () => notImplemented('errors.feature.team_detail')
-export const fetchPlayer           = () => notImplemented('errors.feature.players')
-export const fetchPlayerStats      = () => notImplemented('errors.feature.players')
+/** ROUND_ROBIN 을 화면 format 규칙으로 옮긴 값 — 백엔드 CompetitionFormat.ROUND_ROBIN → 'league' */
+const LEAGUE_FORMAT = 'league'
+
+/**
+ * 팀 상세 — TeamPage 가 소비하는 { team, matches, leagueRank, players, competitions } 묶음.
+ *
+ * 병렬 4개:
+ *   1) /api/teams/:ref      — 팀 상세 (venue · participations 등)
+ *   2) /api/matches?team=…  — 팀 시즌 전체 경기 (다가올 · 최근)
+ *   3) loadCompetitions()   — 대회 메타 (participations 를 competitions 로 조인)
+ *   4) /api/standings?competition=…  — 팀이 참가한 현재 시즌 LEAGUE 대회 순위표 하나
+ *
+ * 리그 판정: 화면이 6개 대회만 그리는데 팀 상세는 컵 하부(FA Cup 32강 등)까지 들어 있다.
+ * `format === 'league'` (ROUND_ROBIN) 인 것만 리그로 친다 — LEAGUE_PHASE_KNOCKOUT(UCL 리그페이즈)은
+ * 순위표가 있어도 이 자리에서는 넣지 않는다 (팀 페이지는 국내 리그 순위를 기대). displayOrder 순으로
+ * 여러 개면 첫 번째. 순위표 호출 실패는 로깅 후 leagueRank=null 로 팀 페이지 전체는 살린다 —
+ * 상단 배지 자체가 사라져 정보 없는 자리가 생기지 않는다 (감독 행과 같은 규칙).
+ *
+ * leagueRank shape: `{ rank, points, form: string[] }` — form 은 normalizeStanding 이 이미
+ * 문자열 "WWDLW" 를 배열로 자른다 (normalize.js:420). form=null 이거나 빈 문자열이면 [].
+ *
+ * players 는 `null` (백엔드 미제공) — 빈 배열이 아니다. TeamPage 가 `null` 일 때
+ * "선수단 데이터는 아직 수집되지 않았습니다" 상태로 그린다.
+ *
+ * @param {string} ref  팀 ref(`33-manchester-united`). 라우팅 slug 와 같은 값
+ */
+export async function fetchTeamDetail(ref) {
+  // 1·2·3 을 먼저 병렬로 — 4 는 team.participations 를 봐야 어느 대회를 부를지 정해진다
+  const [teamDto, matchesRes, comps] = await Promise.all([
+    _cachedGet(`/api/teams/${encodeURIComponent(ref)}`),
+    // 팀 일정은 시즌 전체(과거·오늘·미래 전부) — fetchTeamFixtures 와 같은 규약(limit 500)
+    loadMatches({ team: ref, limit: 500 }),
+    loadCompetitions(),
+  ])
+
+  const team = normalizeTeamDetail(teamDto)
+
+  // 팀이 참가한 대회 중 화면에 보이는 대회만 (participations 는 백엔드 displayOrder 순)
+  const teamCompetitions = (team.participations ?? [])
+    .map(p => comps.find(c => c.ref === p.competitionRef))
+    .filter(Boolean)
+
+  // 리그 순위 대상 대회 — LEAGUE(ROUND_ROBIN) 만 · 현재 시즌 포함. LEAGUE_PHASE_KNOCKOUT(UCL)은 제외
+  const leagueComp = teamCompetitions.find(c => c.format === LEAGUE_FORMAT) ?? null
+
+  let leagueRank = null
+  if (leagueComp) {
+    try {
+      const res = await _cachedGet('/api/standings', { competition: leagueComp.ref })
+      const table = res.items?.[0]
+      if (table && !table.unavailableReason) {
+        const format = 'league'
+        const groupCount = groupCountOf(table.rows)
+        const rows = (table.rows ?? []).map(row => normalizeStanding(row, { format, groupCount }))
+        const row = rows.find(r => r.teamId === team.ref) ?? null
+        if (row) {
+          // normalizeStanding 이 form 을 이미 W/D/L 배열(최대 5)로 잘라 준다 — TeamPage.jsx:102 `.map` 요구를 맞춘다
+          leagueRank = { rank: row.rank, points: row.points, form: row.form }
+        }
+      }
+    } catch (err) {
+      // 순위표 하나가 죽어도 팀 페이지 전체는 죽지 않는다 — leagueRank=null 로 그린다 (배지 자체를 숨김).
+      // 무음 catch 금지 — 로깅으로 실패를 남긴다 (회고 4-6 "조용히 망가지는 것" 규칙)
+      console.error('[fetchTeamDetail] /api/standings failed for', leagueComp.ref, err)
+      leagueRank = null
+    }
+  }
+
+  return {
+    team,
+    matches: matchesRes.items,
+    leagueRank,
+    // 백엔드에 스쿼드 조회가 아직 없다. 빈 배열로 위장하지 않고 null 을 넘겨 UI 에 드러낸다
+    players: null,
+    competitions: teamCompetitions,
+  }
+}
 
 /**
  * 선수 상세 — `/api/players/:ref`. 화면이 넘기는 slug 는 백엔드 ref(`<apiId>-<slug>`) 와 같은 값이다
@@ -561,10 +654,6 @@ export async function fetchPlayerDetail(slug) {
   const dto = await _cachedGet(`/api/players/${encodeURIComponent(slug)}`)
   return normalizePlayerDetail(dto)
 }
-
-export const fetchTopScorers       = () => notImplemented('errors.feature.stats')
-export const fetchTopAssisters     = () => notImplemented('errors.feature.stats')
-export const fetchTopScorersAll    = () => notImplemented('errors.feature.stats')
 
 /**
  * 전체 합산 통계 — 대회 파라미터 없이 부르면 백엔드가 대회별 breakdown 을 붙여 준다
@@ -599,7 +688,7 @@ export async function fetchCompetitionStats(slug) {
   }
 }
 
+// ─── 아직 백엔드에 없는 것 ─────────────────────────────────────
+// UCL 녹아웃 대진표는 백엔드에 없다. h2h · 라인업/이벤트/통계는 매치 상세에 편입됐다.
+
 export const fetchUCLKnockout      = () => notImplemented('errors.feature.knockout')
-export const fetchHomeData         = () => notImplemented('errors.feature.home')
-export const fetchNotifications    = () => notImplemented('errors.feature.notifications')
-export const fetchNotificationSettings = () => notImplemented('errors.feature.notifications')

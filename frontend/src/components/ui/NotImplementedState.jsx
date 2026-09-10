@@ -3,12 +3,16 @@
  * 데이터가 0건인 것도, 요청이 실패한 것도 아니다. 그 기능이 아직 만들어지지 않았다.
  * 그래서 EmptyState 의 "필터를 바꿔 보라" 힌트가 없고, 재시도 버튼도 없다.
  *
- * @param {{ featureKey: string }} props  i18n 키 (errors.feature.*) — 어떤 기능이 없는지
+ * 문구 두 방식 중 하나를 넘긴다:
+ *   - featureKey: i18n 키 (errors.feature.*) — `errors.notImplemented` 템플릿에 끼워 넣는다 ("아직 백엔드에 없는 데이터입니다 (X)")
+ *   - messageKey: 문구 그대로 표시할 i18n 키 — 자리마다 다른 어감(예: "선수단 데이터는 아직 수집되지 않았습니다") 을 넘길 때
+ *
+ * @param {{ featureKey?: string, messageKey?: string }} props
  */
 
 import { useTranslation } from 'react-i18next'
 
-export default function NotImplementedState({ featureKey }) {
+export default function NotImplementedState({ featureKey, messageKey }) {
   const { t } = useTranslation()
 
   return (
@@ -51,7 +55,7 @@ export default function NotImplementedState({ featureKey }) {
       </span>
 
       <p style={{ fontWeight: 600, fontSize: 15, color: 'var(--pl-text)', margin: 0 }}>
-        {t('errors.notImplemented', { what: t(featureKey) })}
+        {messageKey ? t(messageKey) : t('errors.notImplemented', { what: t(featureKey) })}
       </p>
     </div>
   )

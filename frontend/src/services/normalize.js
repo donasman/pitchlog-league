@@ -175,6 +175,49 @@ export function normalizeTeam(dto) {
   }
 }
 
+/**
+ * 팀 상세 (TeamDetailDto) → TeamPage 가 소비하는 형태.
+ * normalizeTeam 이 목록·상세 공통이라 손대지 않고 상세 전용 필드(수용 인원·감독 등)를
+ * 여기에 얇게 추가한다. TeamPage 는 initials·color 를 위해 파생값도 함께 소비한다.
+ *
+ * 없는 값 규약:
+ *   - venue=null → stadium·stadiumCapacity·stadiumCity·stadiumSurface·stadiumImageUrl 모두 null
+ *   - manager 는 백엔드가 아직 안 준다 → 항상 null (표시 안 함 · 채우면 "미정" 이라 위장하는 셈)
+ *   - color: null — 백엔드에 팀 색이 없다. TeamBadge 는 apiId 로 파생값을 만들어 쓰지만
+ *     그건 리스트용 정규화(normalizeTeam)에서만 하고 상세에서는 null 을 유지 (TeamBadge 가 자체 폴백)
+ *   - capacity: 0 은 값 · null 은 미측정 (0 데이터는 실제로 안 오지만 방어)
+ *
+ * @param {object} dto  TeamDetailDto
+ */
+export function normalizeTeamDetail(dto) {
+  const short = String(dto.shortDisplayName ?? '')
+  const initialsSource = short.length > 0 ? short : String(dto.displayName ?? '')
+  return {
+    id:              dto.ref,
+    slug:            dto.ref,
+    ref:             dto.ref,
+    apiId:           dto.apiId,
+    name:            dto.displayName,
+    shortName:       dto.shortDisplayName,
+    initials:        initialsSource.slice(0, 2).toUpperCase() || '?',
+    // 백엔드 미제공 — TeamBadge 는 null 이면 자체 폴백 색을 쓴다
+    color:           null,
+    logoUrl:         localLogo('teams', dto.apiId, dto.logoUrl),
+    country:         dto.country,
+    foundedYear:     dto.founded,
+    stadium:         dto.venue?.name ?? null,
+    stadiumCapacity: dto.venue?.capacity ?? null,
+    stadiumCity:     dto.venue?.city ?? null,
+    stadiumSurface:  dto.venue?.surface ?? null,
+    stadiumImageUrl: dto.venue?.imageUrl ?? null,
+    // 백엔드 미제공 — 화면은 이 값을 "-" 또는 미표시로 그린다
+    manager:         null,
+    // fetchTeamDetail 이 competitions 조립에 사용 (participations.competitionRef 로 조인)
+    participations:  dto.participations ?? [],
+    asOf:            dto.asOf,
+  }
+}
+
 /** 시즌 요약 — 시즌 선택기용 */
 export function normalizeSeason(dto) {
   return {
@@ -417,7 +460,9 @@ export function normalizeStanding(row, { format, groupCount = 1 } = {}) {
     goalsAgainst:   row.goalsAgainst,
     goalDifference: row.goalDiff,
     points: row.points,
-    form: String(row.form ?? '').split('').filter(c => 'WDL'.includes(c)).slice(-5),
+    // API 의 form 은 최신순 문자열(예: "WDWLL" = 최신 W → 오래된 L). slice(-5) 를 쓰면 뒤쪽=오래된 5개가 잘려 나오므로
+    // slice(0,5) 로 최신 5개를 잡고 .reverse() 로 왼쪽=오래된 순서로 뒤집는다 (배지 표시 관습). StandingsTable·TeamPage 둘 다 같은 배열을 소비.
+    form: String(row.form ?? '').split('').filter(c => 'WDL'.includes(c)).slice(0, 5).reverse(),
     zone: zoneOf(row.description, format, row.rank, { groupCount }),
   }
 }
@@ -490,6 +535,29 @@ export function playerTotals(rows) {
  */
 export function formatStat(value) {
   return value === null || value === undefined ? '-' : value
+}
+
+/**
+ * 랭킹 응답(RankingListDto) → 홈 ShortcutCard 가 소비하는 얇은 rows.
+ *
+ * 세 갈래로 갈린다 — 화면이 이 셋을 서로 다른 상태로 그린다:
+ *   - dto === null           → 반환 null (호출 실패 · UI 는 NotImplementedState)
+ *   - dto.items === []       → 반환 [] (백엔드는 살아 있음 · 카드 껍데기)
+ *   - dto.items 가 채워짐    → { rank, playerName, teamName, value } 배열
+ *
+ * value=0 은 값으로 유지한다 (null 로 뭉개지 않음). displayName 이 없으면 빈 문자열로
+ * 방어 — 실 API 는 항상 준다.
+ * @param {object|null} dto  RankingListDto 또는 실패 시 null
+ * @returns {Array<{rank:number,value:number,playerName:string,teamName:string}>|null}
+ */
+export function scorerRowsFromRanking(dto) {
+  if (dto === null || dto === undefined) return null
+  return (dto.items ?? []).map(r => ({
+    rank:       r.rank,
+    value:      r.value,
+    playerName: r.player?.displayName ?? '',
+    teamName:   r.team?.displayName ?? '',
+  }))
 }
 
 /**
