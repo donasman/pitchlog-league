@@ -264,7 +264,7 @@ function CompetitionCard({ comp, t, locale }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <CompetitionEmblem comp={comp} />
         <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
-          <span className="t-card tname" style={{ fontWeight: 600 }}>{compName}</span>
+          <span className="t-card tname" style={{ fontWeight: 600 }} title={compName}>{compName}</span>
           <span className="t-cap">{comp.shortName}</span>
         </div>
         <span style={{ flexShrink: 0 }}>
@@ -281,8 +281,8 @@ function CompetitionCard({ comp, t, locale }) {
         </span>
       </div>
 
-      {/* 라운드/스테이지 */}
-      <span className="t-sub">{comp.stage?.label}</span>
+      {/* 라운드/스테이지 — 긴 문자열("Regular Season - 2" 등) 방어 · 트랙 좁아지면 말줄임 */}
+      <span className="t-sub tname" title={comp.stage?.label ?? ''}>{comp.stage?.label}</span>
 
       {/* 구분선 + 선두 */}
       <div
@@ -307,6 +307,7 @@ function CompetitionCard({ comp, t, locale }) {
             <span
               className="tname t-body"
               style={{ fontWeight: 600, flex: 1 }}
+              title={comp.leader.teamName}
             >
               {comp.leader.teamName}
             </span>
@@ -343,12 +344,14 @@ function CompetitionSection({ competitions, t, locale }) {
         }}
         className="sm:grid-cols-3"
       >
-        <style>{`@media(min-width:640px){.comp-grid{grid-template-columns:repeat(3,1fr)!important}}`}</style>
+        {/* minmax(0, 1fr) — /teams 와 같은 min-content 하한 버그. 2026-09-10 실측: 645~700px 구간에서
+            분데스리가·UCL 카드가 컨테이너(562px) 를 넘어 트랙이 653px 로 부풀어 카드가 삐져나왔다. */}
+        <style>{`@media(min-width:640px){.comp-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}`}</style>
         <div
           className="comp-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: 12,
             gridColumn: '1 / -1',
           }}
