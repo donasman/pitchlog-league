@@ -93,11 +93,17 @@ PR 절차 · e2e 픽스처 규칙 · 문서 동기화 — 이 셋은 세션마�
 
 | 훅 | 걸리는 도구 | 막는 것 |
 |---|---|---|
-| `hooks/guard-paths.mjs` | Write · Edit · MultiEdit | `frontend/src/mocks/**` · `.env` 계열(`.env.example` 제외) · `frontend/**/*.ts(x)` · `schema.prisma` 의 `relationMode ≠ "prisma"` · 마이그레이션 SQL 의 `FOREIGN KEY`/`REFERENCES` |
-| `hooks/guard-git.mjs` | Bash | `dev`/`main` 에서 `git commit` · `dev`/`main` 으로 `git push` · 보호 경로로 리다이렉션·`sed -i`·`tee`·`cp`·`mv`·`rm` · **인라인 인터프리터(`python -c`·`node -e`·heredoc)로 파일 쓰기** |
+| `.claude/hooks/guard-paths.mjs` | Write · Edit · MultiEdit | `frontend/src/mocks/**` · `.env` 계열(`.env.example` 제외) · `frontend/**/*.ts(x)` · `schema.prisma` 의 `relationMode ≠ "prisma"` · 마이그레이션 SQL 의 `FOREIGN KEY`/`REFERENCES` |
+| `.claude/hooks/guard-git.mjs` | Bash | `dev`/`main` 에서 `git commit` · `dev`/`main` 으로 `git push` · 보호 경로로 리다이렉션·`sed -i`·`tee`·`cp`·`mv`·`rm` · **인라인 인터프리터(`python -c`·`node -e`·heredoc)로 파일 쓰기** · `--no-verify`(pre-commit 우회) · `reset --hard` · `clean -f*` · 강제 push |
+| `.githooks/pre-commit` | git commit | 널 바이트 · 깨진 UTF-8 · `.env` 스테이징 · API 키(이름 기반 4종 + `AIza…` 형식) |
+
+앞 둘은 Claude Code 가 에이전트의 도구 호출 직전에, 마지막 하나는 git 이 커밋 직전에 부른다.
+사람이 직접 쳐도 걸리는 것은 마지막 하나뿐이다.
 
 경로는 **레포 루트 기준**으로 본다. cwd 기준으로 보면 서브에이전트가 `backend/`·`frontend/` 에서 돌 때
 규칙이 통째로 빗나간다.
+
+**`--no-verify` 차단은 Claude Code 훅이 git 훅 우회를 막는 자리다** — 한 층의 구멍을 다른 층이 메운다.
 
 **`@relation` 은 막지 않는다.** 이 레포는 `relationMode = "prisma"` 라 `@relation` 이 DDL 을 만들지 않는다 —
 스키마에 53개가 정상적으로 들어 있다. 외래키를 실제로 켜는 것은 `relationMode` 값과 마이그레이션 SQL 이다.

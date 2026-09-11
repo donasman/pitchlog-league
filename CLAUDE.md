@@ -194,7 +194,12 @@ Phase별 태그 이름: `v0-phase0`, `v1-phase1-domain`, `v2-phase2-scheduler`,
 훅(`.claude/settings.json` → `.claude/hooks/`)이 기계적으로 막는 것: `src/mocks` 수정 · `.env` 계열 수정 ·
 프론트 `.ts/.tsx` 생성 · `schema.prisma` 의 `relationMode` 를 `"prisma"` 밖으로 바꾸기 ·
 마이그레이션 SQL 의 `FOREIGN KEY` · `dev`/`main` 직접 커밋·push ·
-Bash 안 인라인 스크립트(`python -c` · `node -e` · heredoc)로 파일 쓰기.
+Bash 안 인라인 스크립트(`python -c` · `node -e` · heredoc)로 파일 쓰기 ·
+`--no-verify` 로 pre-commit 우회 · `git reset --hard` · `git clean -f` · 강제 push.
+
+이와 별개로 `.githooks/pre-commit` (git 이 커밋 직전에 부른다) 은 널 바이트 · 깨진 UTF-8 ·
+`.env` 스테이징 · API 키(이름 기반 4종 + `AIza…` 형식) 를 잡는다.
+사람이 직접 쳐도 걸리는 것은 이 층이다.
 
 **`@relation` 은 막지 않는다** — `relationMode = "prisma"` 라 외래키가 안 생긴다.
 훅이 막으면 우회하지 않는다 — 막힌 이유가 곧 규칙이다. 자세한 것은 `docs/AGENT_WORKFLOW.md` 7장.
