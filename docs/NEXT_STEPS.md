@@ -93,9 +93,9 @@
 | ~~10~~ | ~~**챗봇 LLM 연결 + 로고 적용**~~ ✅ 09-09 PR #41 — `POST /api/assistant` (Gemini · @google/genai@2.21.0 · 상한 5호출/30초 · 메모리 rate limit) · `AssistantPanel` 실 API 연결 · 저장돼 있는데 안 쓰이던 팀·대회 로고 161개를 순위표·통계·홈 대회 카드에 적용(`normalizeStanding`·`normalizeStatsRow`·leader shape 에 `teamLogoUrl` 추가). 배포·서버화는 후속 판 | 6·9 | 0 | ✅ 자연어 질문 · 화면에 로고 |
 | ~~11~~ | ~~**조회 성능 (캐시 헤더 · 페이지 상한 · 프론트 요청 합치기)**~~ ✅ 09-09 PR #42 — `/api/*` 전역 `CacheHeaderInterceptor` (ETag · If-None-Match 304 · Cache-Control 60s) · `/api/matches` `limit`(기본 100·최대 500) + `total`·`hasMore` · `services/live.js` 요청 합치기 + TTL 캐시(기본 60s · competitions/teams 300s · Mock 우회 · **askAssistant POST 는 캐시 밖**). assistant 실행 상한·최상위 asOf·규칙 6 은 PR #41 위 후속 판 | 6·9 | 0 | ✅ /standings 재방문 캐시 hit |
 | ~~12~~ | ~~**어시스턴트 근거 카드 (도구별 컴포넌트 재사용) + 실행 상한 8 + 최상위 asOf + 규칙 6**~~ ✅ 09-09 PR #43 — `AssistantPanel` 이 `data[]` 를 tool 별로 매핑해 `StandingsTable`·`MatchCard`·`StatsRanking` 재사용(그 외는 접힘 JSON). `MAX_TOOL_EXECUTIONS=8` (왕복 5·전체 75초와 별개 · 3.x 계열 추론으로 30초→75초 실측 상향). 응답 최상위 `asOf` = evidence 중 사전순 최소. `AssistantContext` 요청 경합 방어(seq · AbortController). SYSTEM_PROMPT 규칙 6 "판정 표현 금지". `GEMINI_MODEL` 기본값 `gemini-3.6-flash` (2.5-flash 는 신규 프로젝트 404) | 8 | 0 | ✅ 어시스턴트 답변에 표가 아니라 카드 |
-| ~~13~~ | ~~**경기 상세 조회 (/api/matches/:ref/detail) + 탭 4종 실 API 연결**~~ ✅ 09-10 PR #<TBD> — `MatchFullDetailDto` (lineups·events·teamStats·playerStats·availability·asOf) · `earliestOf` 헬퍼 · 프론트 `matchDetail` 순수 함수 · `buildEventMapByRef` (playerRef 매칭) · availability 3값(`ok`/`not_provided`/`not_collected`) i18n. check:details 에 테이블 크기·5시즌 추정 (Supabase 500MB 대비 %) | — | 0 | ✅ 라인업 · 통계 · 타임라인 3탭 (H2H 는 데이터 없음, unavailable 유지) |
+| ~~13~~ | ~~**경기 상세 조회 (/api/matches/:ref/detail) + 탭 4종 실 API 연결**~~ ✅ 09-10 PR #47 — `MatchFullDetailDto` (lineups·events·teamStats·playerStats·availability·asOf) · `earliestOf` 헬퍼 · 프론트 `matchDetail` 순수 함수 · `buildEventMapByRef` (playerRef 매칭) · availability 3값(`ok`/`not_provided`/`not_collected`) i18n. check:details 에 테이블 크기·5시즌 추정 (Supabase 500MB 대비 %) | — | 0 | ✅ 라인업 · 통계 · 타임라인 3탭 (H2H 는 데이터 없음, unavailable 유지) |
 | ~~14~~ | ~~**전역 검색 (시연용)**~~ ✅ 09-10 PR #50 — `GET /api/search?q=` (팀·선수·대회 · 정렬 규칙 · pg_trgm GIN + btree lower_prefix) · `localized_names` 90 시드 · SearchPanel debounce+AbortController+3상태 · 손흥민·이강인 한국어 검색 통과 | 9 | 0 | ✅ 헤더 검색으로 팀·선수·대회 이동 |
-| 15 | **어시스턴트 유료 전환 판단 (경비 근거)** — 이번 판(#TBD 압축) 이 세션당 $0.024 → $0.006 로 4× 절감. 무료 티어 유지 중. 429 실제 감소율 · 트래픽 실측 후 판단 (아래 "어시스턴트 유료 전환 근거" 절) | — | 0 | 유료 전환 시 안정성 확보 |
+| 15 | **어시스턴트 유료 전환 판단 (경비 근거)** — 이번 판(#52 압축) 이 세션당 $0.024 → $0.006 로 4× 절감. 무료 티어 유지 중. 429 실제 감소율 · 트래픽 실측 후 판단 (아래 "어시스턴트 유료 전환 근거" 절) | — | 0 | 유료 전환 시 안정성 확보 |
 
 4번의 6일은 손이 아니라 쿼터가 쓰는 시간이다. 그동안 남은 프론트 화면(경기 상세 탭 · CompetitionHub 랭킹) ·
 한국어 팀명 CSV 를 만든다.
@@ -114,7 +114,7 @@
 
 ### 어시스턴트 유료 전환 근거 (2026-09-10 · 판을 시작하기 전에 이 절을 읽는다)
 
-발표 중 3번째 질문부터 429 발생. 압축 판(#TBD) 이 응답 크기와 왕복당 컨텍스트를 크게 줄였다.
+발표 중 3번째 질문부터 429 발생. 압축 판(#52) 이 응답 크기와 왕복당 컨텍스트를 크게 줄였다.
 유료 판단은 **압축 판 배포 후 실측**을 근거로 한다.
 
 **Gemini 3.6 flash 요금** (2026-09-10 · https://ai.google.dev/gemini-api/docs/pricing):
@@ -188,7 +188,7 @@
 - [x] ~~GitHub 설정~~ ✅ 기본 브랜치 `dev`, `protect-main` · `protect-dev` 둘 다 (PR 필수 + `frontend-verify`·`backend-verify`, 09-07).
       **`pull_request` 에서는 `paths` 필터를 쓰지 않는다** — 필터에 걸려 워크플로가 안 돌면
       required check 가 "보고 대기" 로 영원히 멈춘다. backend 만 바꾼 PR 이 그렇게 막혔다(09-07)
-- [x] ~~Supabase 프로젝트 생성~~ ✅ `pitchlog-league-dev` (ap-southeast-1). prod 는 필요 시. Session pooler 5432 사용
+- [x] ~~Supabase 프로젝트 생성~~ ✅ `pitchlog-league-dev` (ap-northeast-2 · 서울). prod 는 필요 시. Session pooler 5432 사용
 - [x] ~~NestJS 스켈레톤~~ ✅ Nest 12 · `/health` · Swagger `/docs` · 환경변수 검증 · PrismaService(adapter-pg)
 - [ ] ~~배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결~~ → **재정의 (09-07 점검).**
       정적 빌드·Deploy Hook·`deployment_requests` 는 Next.js 전제였고 프론트는 09-01 부터 Vite SPA 다
