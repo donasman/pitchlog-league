@@ -34,8 +34,16 @@ for f in $files; do
 done
 
 # API 키가 코드에 박혀 있는지
-if git diff --cached -U0 | grep -nE '^\+.*(x-apisports-key|API_FOOTBALL_KEY)\s*[:=]\s*["\x27][A-Za-z0-9]{20,}' ; then
+# (1) 키 이름 + 값. GEMINI·GOOGLE 추가 (2026-09-11) — 이름 목록에 없으면 안 잡힌다
+if git diff --cached -U0 | grep -nE '^\+.*(x-apisports-key|API_FOOTBALL_KEY|GEMINI_API_KEY|GOOGLE_API_KEY)\s*[:=]\s*["\x27][A-Za-z0-9]{20,}' ; then
   echo "pre-commit: API 키가 하드코딩됐다"; fail=1
+fi
+
+# (2) 키 형식 자체. Google·Gemini 키는 AIza + 35자다 — 변수명이 무엇이든 잡는다.
+# assistant/gemini.service.ts 의 maskSecrets 와 같은 패턴. 로그는 막는데 커밋은 안 막던 비대칭을 없앤다.
+# .env.example 은 제외 — 자리표시자가 들어간다
+if git diff --cached -U0 -- . ':(exclude)*.env.example' | grep -nE '^\+.*AIza[0-9A-Za-z_-]{35}' ; then
+  echo "pre-commit: Google·Gemini API 키 형식(AIza…)이 들어 있다"; fail=1
 fi
 
 [ "$fail" -eq 0 ] || { echo "pre-commit 실패. 위 항목을 고친 뒤 다시 커밋한다."; exit 1; }
