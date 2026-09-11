@@ -98,6 +98,32 @@ for (const seg of segments) {
   }
 }
 
+// ── 3-b. 훅 우회 · 되돌릴 수 없는 git ───────────────────────────
+// --no-verify 는 .githooks/pre-commit(널 바이트·깨진 UTF-8·.env·API 키)을 통째로 건너뛴다.
+// reset --hard · clean -f · push --force 는 커밋 안 된 작업이나 원격 이력을 되돌릴 수 없게 만든다.
+// 사람이 필요하다고 판단하면 직접 친다 — 에이전트가 부를 자리가 아니다. (2026-09-11)
+for (const seg of segments) {
+  const t = tokens(seg);
+  if (t[0] !== "git") continue;
+
+  // `git push -n` 은 --dry-run 이라 무해하다. `-n` 은 commit 에서만 --no-verify 다.
+  const skipsHook =
+    t.includes("--no-verify") || (t[1] === "commit" && t.includes("-n"));
+  if ((t[1] === "commit" || t[1] === "push") && skipsHook) {
+    block(`--no-verify 로 pre-commit 을 건너뛰지 않는다. 훅이 잡는 것(널 바이트 · 깨진 UTF-8 · .env · API 키)은 고쳐서 통과시킨다.`);
+  }
+
+  if (t[1] === "reset" && t.includes("--hard")) {
+    block("git reset --hard 는 커밋 안 된 작업을 되돌릴 수 없이 지운다. 필요하면 사람이 직접 친다.");
+  }
+  if (t[1] === "clean" && t.slice(2).some(a => /^-[a-zA-Z]*f/.test(a))) {
+    block("git clean -f 는 추적되지 않는 파일을 되돌릴 수 없이 지운다. 필요하면 사람이 직접 친다.");
+  }
+  if (t[1] === "push" && (t.includes("--force") || t.includes("-f") || t.some(a => a.startsWith("--force-with-lease")))) {
+    block("강제 push 는 원격 이력을 덮어쓴다. 이 저장소는 PR + squash 라 rebase 후 force 가 필요 없다.");
+  }
+}
+
 // ── 4. 인라인 인터프리터로 파일 쓰기 ────────────────────────────
 // `tools:` 에서 Edit·Write 를 뺀 에이전트(verifier·explorer)도 Bash 는 갖고 있다.
 // python -c · node -e · heredoc 으로 쓰면 3번 규칙을 통째로 지나간다 (2026-09-08 실측).
