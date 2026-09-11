@@ -25,6 +25,7 @@ frontend/.env.*.local
 
 # 발표 산출물 작업 폴더 (로컬 전용, 저장소 미포함)
 output/
+Claude outputs/
 
 # 로컬 백업 아카이브
 _v.tgz
