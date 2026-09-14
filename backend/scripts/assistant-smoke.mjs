@@ -149,11 +149,17 @@ try {
   const registry = app.get(AssistantToolRegistry)
   const toolNames = new Set(registry.getAll().map((t) => t.name))
 
-  /** @type {Array<{id:string, question:string, tool:string, evidenceCount:number, dataCount:number, halluc:string, softWarn:string, snippet:string}>} */
+  /** @type {Array<{id:string, question:string, tool:string, evidenceCount:number, dataCount:number, halluc:string, softWarn:string, snippet:string, req:number|null}>} */
   const rows = []
   let anyFail = false
   // 무료 등급 한도로 못 돈 건은 '실패' 가 아니라 '검증 불가' 다 — 종료 코드를 나눈다
   let quotaFail = 0
+  // E2 계측 — generateContent SDK 호출 총 합계와 계측 성공 여부.
+  // 이 스모크는 HTTP 컨트롤러를 안 타고 GeminiService 를 직접 부르므로 X-Gemini-Requests 헤더 대신
+  // AskResult.geminiRequests 를 그대로 읽는다 (같은 카운터 · 게이트 무관).
+  // 예외(rate_limited 등) 로 result 자체가 없으면 미계측으로 취급 · 총계에 안 셈.
+  let totalRequests = 0
+  let hasMeasurement = false
 
   // 무료 등급은 분당 요청 수가 작고(한 질문이 모델 호출 2~3회를 쓴다), 모델이 혼잡하면 503 이 온다.
   // 간격을 두고 두 번까지 다시 시도한다 — 일시적 혼잡을 실패로 기록하지 않기 위해 (2026-09-09 실측).
@@ -214,10 +220,17 @@ try {
         halluc: 'n/a',
         softWarn: softWarnings.join(' · '),
         snippet: lastErr.message.slice(0, 80),
+        req: null,
       })
       continue
     }
 
+    // 계측 값 수집 — 이 스모크는 서비스 직접 호출이라 result.geminiRequests 가 곧 컨트롤러가 헤더로 낼 값과 같다.
+    const caseRequests = typeof result.geminiRequests === 'number' ? result.geminiRequests : null
+    if (caseRequests !== null) {
+      totalRequests += caseRequests
+      hasMeasurement = true
+    }
     const evidenceCount = result.evidence.length
     const dataCount = result.data.length
     let hallucStatus = 'n/a'
@@ -244,6 +257,7 @@ try {
         halluc: hallucStatus,
         softWarn: '',
         snippet: '(empty)',
+        req: caseRequests,
       })
       continue
     }
@@ -348,15 +362,18 @@ try {
       halluc: hallucStatus,
       softWarn: softWarnings.join(' · '),
       snippet: answer.slice(0, 80).replace(/\n/g, ' '),
+      req: caseRequests,
     })
   }
 
   console.log('\n=== 결과 ===')
   // halluc 컬럼 폭 10 — 'known-fail' 이 가장 길다. pass/FAIL/resolved/soft-warn/n/a 도 여기 들어감.
-  console.log('id     tool                    ev   data   halluc       answer')
+  // req 컬럼 — 이 케이스가 소비한 generateContent 호출 수 (N/A 는 미계측).
+  console.log('id     tool                    ev   data   halluc       req    answer')
   for (const r of rows) {
+    const reqCell = r.req === null || r.req === undefined ? 'N/A' : String(r.req)
     console.log(
-      `${r.id.padEnd(4)} ${r.tool.padEnd(23)} ${String(r.evidenceCount).padStart(2)}   ${String(r.dataCount).padStart(3)}   ${r.halluc.padEnd(10)}   ${r.snippet}`,
+      `${r.id.padEnd(4)} ${r.tool.padEnd(23)} ${String(r.evidenceCount).padStart(2)}   ${String(r.dataCount).padStart(3)}   ${r.halluc.padEnd(10)}   ${reqCell.padStart(4)}   ${r.snippet}`,
     )
     if (r.softWarn) {
       console.log(`     └ soft: ${r.softWarn}`)
@@ -373,6 +390,9 @@ try {
   console.log(
     `\n[smoke] ${passCount}건 통과 · ${softWarnCount}건 soft-warn · ${knownFailCount}건 knownFail · ${resolvedCount}건 resolved · ${hardFailCount}건 hard-fail · ${naCount}건 n/a`,
   )
+  // E2 계측 — 총 Gemini SDK 호출 수. 미계측(모든 케이스가 예외 등) 이면 실패 아님 · 문구만 다르게.
+  const reqStr = hasMeasurement ? `Gemini 요청 ${totalRequests}회` : 'Gemini 요청 미계측'
+  console.log(`[smoke] ${reqStr}`)
 
   if (anyFail) {
     console.error('[smoke] 하나 이상 hard-fail — exit 1')

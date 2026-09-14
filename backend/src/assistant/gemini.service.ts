@@ -103,6 +103,8 @@ export interface AskResult {
   /** evidence 중 가장 오래된 asOf. evidence 가 비면 null.
    *  ISO 8601 문자열은 사전순 = 시간순 정렬이라 min 은 lexicographic min 이다. */
   asOf: string | null;
+  /** 이 ask() 호출 안 generateContent SDK 호출 횟수 (재시도 포함). E2 계측용. */
+  geminiRequests: number;
 }
 
 export interface AskOpts {
@@ -209,6 +211,8 @@ export class GeminiService {
     const data: unknown[] = [];
     let executions = 0;
     let truncated = false;
+    // E2 계측 — generateContent SDK 호출 수. try 안 pre-increment (throw 나도 이미 셈).
+    let geminiRequests = 0;
 
     // 도구 10개를 FunctionDeclaration 으로 변환 — 매 호출마다 같은 배열
     const functionDeclarations = this.registry.getAll().map(toFunctionDeclaration);
@@ -228,6 +232,8 @@ export class GeminiService {
         // 상한 초과: maxToolCalls 회 부른 뒤 한 번 더 재호출해 최종 텍스트를 뽑되, 도구가 또 오면 truncated
         let response: Awaited<ReturnType<GeminiClientLike['models']['generateContent']>>;
         try {
+          // 재시도·에러 시에도 카운트되도록 await 전에 증가한다.
+          geminiRequests++;
           response = await client.models.generateContent({
             model: this.modelName,
             contents,
@@ -239,7 +245,10 @@ export class GeminiService {
             },
           });
         } catch (cause) {
-          throw this.wrapSdkError(cause, controller.signal.aborted);
+          const err = this.wrapSdkError(cause, controller.signal.aborted);
+          // controller catch 에서 (err as any).geminiRequests 로 헤더에 실을 수 있게 attach.
+          (err as { geminiRequests?: number }).geminiRequests = geminiRequests;
+          throw err;
         }
 
         lastAnswer = response.text ?? lastAnswer;
@@ -254,6 +263,7 @@ export class GeminiService {
             truncated,
             model: this.modelName,
             asOf: pickAsOf(evidence),
+            geminiRequests,
           };
         }
 
@@ -267,6 +277,7 @@ export class GeminiService {
             truncated,
             model: this.modelName,
             asOf: pickAsOf(evidence),
+            geminiRequests,
           };
         }
 
@@ -332,7 +343,7 @@ export class GeminiService {
 
       // 이론상 여기 도달 안 함 (루프 안에서 return) — 안전망.
       // MAX_TOOL_EXECUTIONS 발동으로 outer break 를 타면 여기로 온다 — truncated 는 이미 true 로 세팅됨.
-      return { answer: lastAnswer, evidence, data, truncated: true, model: this.modelName, asOf: pickAsOf(evidence) };
+      return { answer: lastAnswer, evidence, data, truncated: true, model: this.modelName, asOf: pickAsOf(evidence), geminiRequests };
     } finally {
       clearTimeout(timeoutHandle);
     }
