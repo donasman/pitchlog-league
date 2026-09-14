@@ -9,6 +9,8 @@
  * Case 5: MockGeminiClient 로 도구 호출 상한 5회 검증 → truncated:true · evidence.length === 5
  * Case 6: MAX_TOOL_EXECUTIONS 8 — step 마다 3개 functionCall 을 반환해도 실행 8회에서 컷
  * Case 7: 최상위 asOf 가 evidence 중 최소값 (사전순 = 시간순 min)
+ * Case 8 (E2): geminiRequests 카운터 — 정상(도구 1회+최종 = 2) · 에러(mock throw 시 = 1) 두 경로
+ * Case 9 (E2): ASSISTANT_DEBUG_HEADERS=true 게이트 ON 시 X-Gemini-Requests 헤더 실림
  */
 import 'dotenv/config';
 import { Test } from '@nestjs/testing';
@@ -197,6 +199,121 @@ describe('POST /api/assistant (e2e)', () => {
       for (const e of result.evidence) {
         expect(e.tool).toBe('list_competitions');
       }
+    });
+
+    // ── Case 8 (E2). geminiRequests 카운터 ─────────────────────
+    // 정상 경로: 첫 응답이 도구 호출 1개 → 두 번째 응답이 최종 텍스트. generateContent 2회.
+    // 에러 경로: 첫 호출부터 throw → wrapSdkError 가 err.geminiRequests = 1 attach.
+    it('Case 8: 정상 흐름에서 result.geminiRequests === 2 (도구 1회 + 최종)', async () => {
+      let callCount = 0;
+      const mock: GeminiClientLike = {
+        models: {
+          async generateContent() {
+            callCount++;
+            if (callCount === 1) {
+              return {
+                text: '도구 호출 중',
+                functionCalls: [{ name: 'list_competitions', args: {} }],
+              };
+            }
+            // 두 번째: 최종 텍스트만
+            return { text: '최종 답변', functionCalls: [] };
+          },
+        },
+      };
+      gemini.setClient(mock);
+
+      const result = await gemini.ask('카운터 정상 경로');
+      expect(result.geminiRequests).toBe(2);
+      expect(callCount).toBe(2);
+      expect(result.answer).toBe('최종 답변');
+    });
+
+    it('Case 8: 첫 SDK 호출에서 throw → err.geminiRequests === 1 attach', async () => {
+      // Gemini SDK 의 429 형태를 흉내낸다 — { status: 429 } · message 는 임의.
+      const sdkError = Object.assign(new Error('{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","message":"quota"}}'), { status: 429 });
+      const mock: GeminiClientLike = {
+        models: {
+          async generateContent() {
+            throw sdkError;
+          },
+        },
+      };
+      gemini.setClient(mock);
+
+      let caught: unknown;
+      try {
+        await gemini.ask('카운터 에러 경로');
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeDefined();
+      // wrapSdkError 가 HttpException 을 만들어 던지고, geminiService 에서 err.geminiRequests = 1 attach 한다.
+      expect((caught as { geminiRequests?: number }).geminiRequests).toBe(1);
+    });
+  });
+
+  // ── Case 9 (E2). ASSISTANT_DEBUG_HEADERS=true → X-Gemini-Requests 헤더 ─
+  //
+  // 왜 ConfigService 를 override 하는가:
+  //   앞선 describe 의 beforeAll 이 앱을 부팅할 때 validateEnv 가 default 'false' 를
+  //   내부에 저장하고 assignVariablesToProcess 로 process.env 에도 'false' 를 세팅한다.
+  //   그 뒤 이 Case 9 beforeAll 에서 process.env='true' 로 다시 덮어도 Nest 의
+  //   ConfigService 초기화 시점 캐시가 남아 'false' 를 그대로 돌려준다 (실측).
+  //   보고를 위해 test 는 ConfigService 를 실측 가능하게 override 해서 게이트 판정 로직
+  //   자체(`ConfigService.get(...) === 'true' ? setHeader : noop`) 를 검증한다.
+  describe('Case 9: ASSISTANT_DEBUG_HEADERS 게이트', () => {
+    let app: INestApplication;
+    let gemini: GeminiService;
+    const originalKey = process.env.GEMINI_API_KEY;
+
+    beforeAll(async () => {
+      process.env.GEMINI_API_KEY = 'test-key-not-used';
+      const fakeConfig = {
+        get<T>(key: string): T | undefined {
+          if (key === 'ASSISTANT_DEBUG_HEADERS') return 'true' as unknown as T;
+          if (key === 'GEMINI_MODEL') return 'gemini-3.5-flash' as unknown as T;
+          if (key === 'GEMINI_API_KEY') return 'test-key-not-used' as unknown as T;
+          return undefined;
+        },
+      };
+      const mod = await Test.createTestingModule({ imports: [AppModule] })
+        .overrideProvider(ConfigService)
+        .useValue(fakeConfig)
+        .compile();
+      app = setupApp(mod.createNestApplication());
+      await app.init();
+      gemini = app.get(GeminiService);
+    });
+
+    afterAll(async () => {
+      await app?.close();
+      if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = originalKey;
+    });
+
+    it('게이트 ON · 정상 응답에 x-gemini-requests 헤더 실림', async () => {
+      // sanity: 우리가 override 한 ConfigService 가 controller 에 주입돼 있는지.
+      expect(app.get(ConfigService).get<string>('ASSISTANT_DEBUG_HEADERS')).toBe('true');
+
+      // 도구 없이 한 번에 최종 답변. generateContent 1회 → 헤더 값 '1'.
+      const mock: GeminiClientLike = {
+        models: {
+          async generateContent() {
+            return { text: '단답', functionCalls: [] };
+          },
+        },
+      };
+      gemini.setClient(mock);
+
+      // Nest POST 기본 응답 코드는 201 (Created).
+      const res = await request(app.getHttpServer())
+        .post('/api/assistant')
+        .send({ question: '헤더 검사' })
+        .expect(201);
+      // supertest 헤더 이름은 소문자.
+      expect(res.headers['x-gemini-requests']).toBe('1');
+      expect(res.body.answer).toBe('단답');
     });
   });
 
