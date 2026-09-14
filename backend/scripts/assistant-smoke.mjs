@@ -265,6 +265,12 @@ try {
         console.warn(`  SOFT: ${msg}`)
         softWarnings.push(msg)
       }
+      // expected 필드는 tool:null 케이스에도 hard — c21 처럼 answerMustNotContain 을 검사한다
+      const expectedFail = checkExpected(c.expected, answer)
+      if (expectedFail) {
+        console.error(`  FAIL: ${expectedFail}`)
+        hasHardFail = true
+      }
       // hard-fail 없으면 pass · soft 만 있으면 soft-warn
       hallucStatus = hasHardFail ? 'FAIL' : softWarnings.length > 0 ? 'soft-warn' : 'pass'
     } else {
