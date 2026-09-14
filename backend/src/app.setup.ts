@@ -22,7 +22,15 @@ export function setupApp(app: INestApplication): INestApplication {
   // 프론트는 다른 출처(Vite 5173 · Cloudflare Pages)에서 뜬다. 목록에 있는 출처만 허용한다
   const origins = corsOrigins();
   if (origins.length > 0) {
-    app.enableCors({ origin: origins, methods: ['GET'], maxAge: 600 });
+    // exposedHeaders — 커스텀 응답 헤더는 여기 명시해야 브라우저 JS 에서 읽을 수 있다
+    // (기본값이면 CORS-safelisted 헤더만 노출). smoke 는 Node fetch 라 무관하지만,
+    // 브라우저 실측에서 X-Gemini-Requests 를 소비하려면 필수. 헤더 자체가 없으면 아무 일도 안 일어남.
+    app.enableCors({
+      origin: origins,
+      methods: ['GET'],
+      exposedHeaders: ['X-Gemini-Requests'],
+      maxAge: 600,
+    });
   }
   // 모든 입력은 ValidationPipe 를 통과한다 (BACKEND_GUIDE)
   app.useGlobalPipes(

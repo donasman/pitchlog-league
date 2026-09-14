@@ -61,6 +61,12 @@ export class EnvironmentVariables {
   @IsString()
   @MinLength(1)
   GEMINI_MODEL: string = 'gemini-3.5-flash';
+
+  /** 어시스턴트 응답에 X-Gemini-* 디버그 헤더를 실을지. 프로덕션 false 유지. E2 계측용.
+   *  boolean 캐스팅 안 함 — 컨트롤러에서 `=== 'true'` 문자열 비교로 사용 (M3 결함 방지) */
+  @IsOptional()
+  @IsString()
+  ASSISTANT_DEBUG_HEADERS: string = 'false';
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
