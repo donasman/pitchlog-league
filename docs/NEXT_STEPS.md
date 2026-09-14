@@ -149,7 +149,7 @@ search 는 3회만 기록됐고 warm 평균은 2회차 기준이다.
 | ~~12~~ | ~~**어시스턴트 근거 카드 (도구별 컴포넌트 재사용) + 실행 상한 8 + 최상위 asOf + 규칙 6**~~ ✅ 09-09 PR #43 — `AssistantPanel` 이 `data[]` 를 tool 별로 매핑해 `StandingsTable`·`MatchCard`·`StatsRanking` 재사용(그 외는 접힘 JSON). `MAX_TOOL_EXECUTIONS=8` (왕복 5·전체 75초와 별개 · 3.x 계열 추론으로 30초→75초 실측 상향). 응답 최상위 `asOf` = evidence 중 사전순 최소. `AssistantContext` 요청 경합 방어(seq · AbortController). SYSTEM_PROMPT 규칙 6 "판정 표현 금지". `GEMINI_MODEL` 기본값 `gemini-3.6-flash` (2.5-flash 는 신규 프로젝트 404) | 8 | 0 | ✅ 어시스턴트 답변에 표가 아니라 카드 |
 | ~~13~~ | ~~**경기 상세 조회 (/api/matches/:ref/detail) + 탭 4종 실 API 연결**~~ ✅ 09-10 PR #47 — `MatchFullDetailDto` (lineups·events·teamStats·playerStats·availability·asOf) · `earliestOf` 헬퍼 · 프론트 `matchDetail` 순수 함수 · `buildEventMapByRef` (playerRef 매칭) · availability 3값(`ok`/`not_provided`/`not_collected`) i18n. check:details 에 테이블 크기·5시즌 추정 (Supabase 500MB 대비 %) | — | 0 | ✅ 라인업 · 통계 · 타임라인 3탭 (H2H 는 데이터 없음, unavailable 유지) |
 | ~~14~~ | ~~**전역 검색 (시연용)**~~ ✅ 09-10 PR #50 — `GET /api/search?q=` (팀·선수·대회 · 정렬 규칙 · pg_trgm GIN + btree lower_prefix) · `localized_names` 90 시드 · SearchPanel debounce+AbortController+3상태 · 손흥민·이강인 한국어 검색 통과 | 9 | 0 | ✅ 헤더 검색으로 팀·선수·대회 이동 |
-| 15 | **어시스턴트 유료 전환 판단 (경비 근거)** — 이번 판(#52 압축) 이 세션당 $0.024 → $0.006 로 4× 절감. 무료 티어 유지 중. 429 실제 감소율 · 트래픽 실측 후 판단 (아래 "어시스턴트 유료 전환 근거" 절) | — | 0 | 유료 전환 시 안정성 확보 |
+| 15 | **어시스턴트 유료 전환 판단 (경비 근거)** — #52 압축이 세션당 $0.024 → $0.006 로 4× 절감. 무료 티어 유지 중. **09-11 판정: 429 는 RPD(하루 요청 20) 제한이라 압축과 무관** (아래 "429 원인 재판정" 절). `GEMINI_MODEL` 을 `gemini-3.5-flash-lite`(RPD 500)로 전환. 유료 전환은 압축·모델 전환 후에도 RPD 부족할 때 판단 | — | 0 | RPD 여유 · 유료 전환은 트래픽 실측 뒤 |
 
 4번의 6일은 손이 아니라 쿼터가 쓰는 시간이다. 그동안 남은 프론트 화면(경기 상세 탭 · CompetitionHub 랭킹) ·
 한국어 팀명 CSV 를 만든다.
@@ -188,6 +188,53 @@ search 는 3회만 기록됐고 warm 평균은 2회차 기준이다.
 - 429 실제로 얼마나 줄었는지 압축 후 재측정 필요
 - 트래픽 (배포처 · AWS/Railway 미정) 가정이 공허 · 실측 후 판단
 - 압축 판이 유료 전환의 선행 가치 — 유료로 가도 10배 절감 (input 만)
+
+---
+
+### 429 원인 재판정 (2026-09-11 · 09-10 절의 전제를 갈아엎는다)
+
+**압축 판(#52) 이후에도 429 가 그대로였다.** 3번째 질문부터 발생, 시연에서 실측.
+PR #54 가 넣은 `parseErrorBody` 로 SDK ApiError 본문이 찍혔다:
+
+```
+quotaId:     GenerateRequestsPerDayPerProjectPerModel-FreeTier
+quotaValue:  20
+model:       gemini-3.6-flash
+retryDelay:  39s
+```
+
+**RPD(하루 요청 수) 20 제한이다. 페이로드 크기와 무관하다.** 09-10 의 가설(응답이 커서
+컨텍스트 왕복이 무겁다 → 압축으로 완화)은 원인을 잘못 짚었다. 코드는 옳게 압축했지만
+429 는 안 줄었다 — 압축은 RPD 에 효과가 없다(요청 횟수 제한이라 페이로드 크기와 무관).
+**압축의 값어치는 남는다** — 세션당 비용 4× 절감(위 절), 그리고 Groq 등 TPD(하루 토큰
+제한) 가 있는 공급자로의 이전 시 하한선을 낮춘다.
+
+#### AI Studio 대시보드 실측 (2026-09-11)
+
+| 모델군 | RPM | RPD | TPM | 판정 |
+|---|---:|---:|---:|---|
+| Flash 3.x 계열(3 · 3.5 · 3.6 · 3.7 · 3.8) | 5 | **20** | — | 이번 원인 |
+| 2.5 Flash · 2.5 Flash Lite | 5 | **20** | — | 마찬가지 |
+| **3.1 Flash Lite · 3.5 Flash Lite** | 15 | **500** | 250K | **채택** |
+| Gemma 4 26B/31B | — | 14,400 | 16K | TPM 16K 라 부적합 |
+| Gemini Embedding 1·2 | 100 | 1,000 | — | 채팅 도구 아님 |
+
+**"최신 모델일수록 무료 한도가 크다" 는 거짓이다.** 3.8-flash 도 RPD 20 이다.
+Flash 무료 한도의 차이는 세대가 아니라 **-lite 변종 유무**에서 온다.
+
+**09-09 기록 "gemini-2.5-flash 는 신규 프로젝트 404" 는 낡았다.** 지금은 한도가
+잡혀 있다(RPM 5 · RPD 20 · Flash 3.x 와 같은 취급). AGENT_RUNS 09-09 판의
+"2.5-flash 404 → 3.6-flash" 근거는 현시점 판단 근거로 쓰지 않는다.
+
+#### 전환 결과 (2026-09-11)
+
+`.env` 의 `GEMINI_MODEL` 을 `gemini-3.5-flash-lite` 로 바꿨다(코드 변경 없음).
+**브라우저 실측 9케이스 통과** — 도구 호출, 한국어, 판정 표현 금지, null 3상태,
+R1 모드 A 유도, 429 0건.
+
+기존 백엔드 규칙(`env.validation.ts` 기본 `gemini-3.5-flash` · `.env.example`
+샘플 `gemini-3.6-flash`)은 이 판에서 손대지 않았다 — 이 판은 문서/설정만.
+코드 기본값을 lite 로 옮기는 것은 별도 판.
 
 ---
 

@@ -96,8 +96,13 @@ cwd 가 `backend/` 이므로 서버 프로세스가 `.env` 를 직접 읽는다 
 `{ tool, args, asOf, data }` — `data` 는 REST API DTO 와 같다. `list_matches` 는 자동으로
 `from/to = today ±7d (KST)`, `limit=50` (max 200) — 잘렸으면 wrapper 에 `truncated:true, total:N`.
 
-`GEMINI_MODEL` 은 3.x flash 계열을 쓴다. `gemini-2.5-flash` 는 신규 프로젝트에 제공되지 않는다
-(404 NOT_FOUND — "no longer available to new users", 2026-09-09 실측). 권장 기본값 `gemini-3.6-flash`.
+`GEMINI_MODEL` 권장 기본값은 **`gemini-3.5-flash-lite`** (2026-09-11). 이유는 무료 티어 RPD.
+Flash 3.x 계열(3·3.5·3.6·3.7·3.8) 과 2.5-Flash 는 전부 RPD 20 이라 시연에서 3번째 질문부터 429.
+Flash Lite 계열(3.1-flash-lite · 3.5-flash-lite) 만 RPD 500(TPM 250K · RPM 15).
+근거: `docs/NEXT_STEPS.md` "429 원인 재판정" 절 (AI Studio 대시보드 실측 표).
+09-09 기록 "gemini-2.5-flash 404 (신규 프로젝트에 제공되지 않는다)" 는 낡았다 — 지금은
+한도가 잡혀 있다(3.x-flash 와 같은 취급 · RPD 20). `env.validation.ts` 코드 기본값은
+여전히 `gemini-3.5-flash` — 별도 판에서 lite 로 옮긴다.
 
 ### 경기 상세 백필 (L3·L5)
 
