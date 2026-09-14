@@ -329,8 +329,13 @@ npm run ingest -- l1            # 스쿼드 스냅샷 + diff
 npm run ingest -- l2            # 라운드·경기·순위 — 화면 6대회 현재 시즌
 npm run ingest -- l2 --all-seasons   # 5시즌 전부 (한 시즌은 --season=2024, 등호 형태다)
 npm run ingest -- l6 --all-seasons   # 시즌 집계 — 선수 통계·랭킹·팀 통계 (--only=players|rankings|teams)
+npm run ingest -- backfill --dry-run # 경기 상세 백필 — 대상 수·예정 콜 수만 (API 안 부름)
+npm run ingest -- backfill --limit=50   # 50경기 시범
+npm run ingest -- backfill      # 오늘 남은 상한(5,700 - used)까지, 현재 시즌 6대회
 npm run ingest -- probe-players --all-seasons   # /players 페이지 수 실측 (쓰기 없음)
 npm run ingest -- logos         # 로고를 받아 frontend/public/logos 에 저장
+
+npm run check:details           # 경기 상세 커버리지 · has_* 분포 · 5시즌 추정
 
 npm run backup -- --check       # 백업 환경 점검 (pg_dump/docker · 마지막 성공)
 npm run backup                  # pg_dump — 홈/PitchLogBackups
