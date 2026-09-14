@@ -94,7 +94,7 @@ description: PitchLog 에서 기능 하나를 역할 분리 파이프라인(탐�
 
 ## 07. 마무리
 
-1. `docs/AGENT_RUNS.md` 에 이번 판을 한 줄 적는다 — 넷 중 무엇이 깨졌나
+1. `docs/AGENT_RUNS.md` 에 이번 판을 한 줄 적는다 — 다섯 중 무엇이 깨졌나. **판 크기·에이전트 토큰·사람 시간을 같이 적는다.** 토큰은 각 서브에이전트 완료 라인("Done (N tool uses · X tokens · Ys)")에서 합산한다.
 2. `pitchlog-pr-flow` 로 커밋 · push · PR (대상 `dev`). **AGENT_RUNS 도 이 커밋에 함께 태운다**
 3. 문서 갱신이 필요하면 **이제** `pitchlog-docs-sync`
 
