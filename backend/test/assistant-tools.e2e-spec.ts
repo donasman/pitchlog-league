@@ -7,7 +7,7 @@
  *   2. 인자 거부 (ajv BadRequest)
  *   3. description 3상태 문구 (`do not conflate` · `not measured` · `API did not provide`) 존재
  *   4. 모드 B 4개 도구에 6-대회 문구 존재
- *   5. golden.json 스모크 — 15건 · null 5 · called 10 · 도구 10개 각 최소 1회 · args 가 argsSchema 통과 (ajv)
+ *   5. golden.json 스모크 — 19건 · null 4 · called 15 · 도구 10개 각 최소 1회 · args 가 argsSchema 통과 (ajv)
  *   6. get_standings 컵(KNOCKOUT) → items[0].rows=[] · unavailableReason='KNOCKOUT'
  *   7. get_player — assists null 시즌 · totals.assists null
  *   8. get_player — primaryTeam 은 validTo IS NULL 인 팀
@@ -618,22 +618,22 @@ describe('assistant tools (e2e)', () => {
   });
 
   // ── Case 5. golden.json 스모크 ────────────────────────────────
-  it('Case 5: golden.json 15건 · null 5 · called 10 · 도구 10개 각 최소 1회 · args argsSchema 통과', () => {
+  it('Case 5: golden.json 19건 · null 4 · called 15 · 도구 10개 각 최소 1회 · args argsSchema 통과', () => {
     const goldenPath = resolve(__dirname, '../src/assistant/golden.json');
     const golden = JSON.parse(readFileSync(goldenPath, 'utf8')) as {
       cases: Array<{ id: string; question: string; tool: string | null; args?: Record<string, unknown>; reason?: string }>;
     };
-    expect(golden.cases).toHaveLength(15);
+    expect(golden.cases).toHaveLength(19);
 
     const nulls = golden.cases.filter((c) => c.tool === null);
-    expect(nulls.length).toBe(5);
+    expect(nulls.length).toBe(4);
     for (const c of nulls) {
       expect(typeof c.reason).toBe('string');
       expect(c.reason!.length).toBeGreaterThan(0);
     }
 
     const called = golden.cases.filter((c) => c.tool !== null);
-    expect(called.length).toBe(10);
+    expect(called.length).toBe(15);
 
     // 도구 10개 각각 최소 1회
     const seen = new Set(called.map((c) => c.tool));

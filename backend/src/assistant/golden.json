@@ -4,13 +4,7 @@
       "id": "c1",
       "question": "손흥민 이번 시즌 기록 알려줘",
       "tool": null,
-      "reason": "선수 검색(이름→ref) 도구가 없다. get_player 는 ref 필요"
-    },
-    {
-      "id": "c2",
-      "question": "리버풀 다음 경기 언제야?",
-      "tool": null,
-      "reason": "팀 검색(이름→ref) 도구가 없다. list_matches 는 team ref 필요"
+      "reason": "선수 검색(이름→ref) 도구가 없다. get_player 는 ref 필요. LLM 이 도구를 헛호출해도 답변만 규칙 준수면 통과 — 헛호출 횟수는 soft 경고로 남긴다 (search 도구 도입 후 재측정 근거)"
     },
     {
       "id": "c3",
@@ -21,8 +15,10 @@
     {
       "id": "c4",
       "question": "챔피언스리그 16강 올라간 팀은?",
-      "tool": null,
-      "reason": "UCL 대진표(bracket) 도구가 없다"
+      "tool": "get_standings",
+      "args": { "competition": "2-uefa-champions-league" },
+      "expected": { "answerMustNotContain": ["진출했", "확정됐"] },
+      "reason": "UCL 16강 미결정(2027-02). 도구를 불러 규칙 2(b) '아직 확정되지 않았습니다' 로 답하는 것이 옳다. '진출했다/확정됐다' 문구가 나오면 없는 결과를 지어낸 것"
     },
     {
       "id": "c5",
@@ -89,6 +85,46 @@
       "question": "다음 시즌 EPL 우승 팀 예측해줘",
       "tool": null,
       "reason": "예측은 결정적 계층 밖 (V2_DESIGN 5-8)"
+    },
+    {
+      "id": "c16",
+      "question": "리버풀 다음 경기 언제야?",
+      "tool": "list_matches",
+      "args": { "team": "40-liverpool" },
+      "expected": { "answerMustNotReferencePastMatch": true },
+      "reason": "G1 · 답변에서 (월,일) 추출, 전부 KST 오늘 과거이면 실패. 30일 초과 격차는 연말/연초로 간주 무시. tool·args 는 문서용 — smoke·e2e 강제 안 함. 미변경 상태 실패 확인이 이 케이스에서는 성립하지 않음 (2026-09-14 실측: 데이터가 9/8 까지 진전돼 남은 경기가 미래뿐이라 옛 프롬프트도 미래 날짜만 답변). G1 은 목록에 과거 경기가 섞였을 때만 드러남 — 다음 라운드 데이터 적재 후 재실측 여지"
+    },
+    {
+      "id": "c17",
+      "question": "EPL 상위 3팀 승점 합계는?",
+      "tool": "get_standings",
+      "args": { "competition": "39-premier-league" },
+      "expected": { "answerMustContain": [" + ", " = "] },
+      "reason": "G2 · 규칙 7 형식 'A 9 + B 9 + C 7 = 25' 공백 포함. 골득실 +15 는 안 걸림"
+    },
+    {
+      "id": "c18",
+      "question": "음바페 통산 도움",
+      "tool": "get_player",
+      "args": { "ref": "278-kylian-mbappe" },
+      "expected": { "answerMustNotContain": ["전체 시즌", "시스템에서 확인이"] },
+      "reason": "G3 · 약한 검사 — 특정 문구만 잡음. 모델이 다른 표현으로 같은 실수하면 통과. 실질 검증은 06 브라우저 실측",
+      "knownFail": "MAX_TOOL_CALLS(5) 상한 도달 후 text part 없이 종료 (empty answer). get_player 는 있는 도구인데 5회 반복 호출 원인 불명 — 규칙 2(c) '필드만 null' 해석과 관련 가능성. 코드 폴백 (상한 도달 시 evidence 요약 강제 생성) 은 다음 판"
+    },
+    {
+      "id": "c20",
+      "question": "챔피언스리그 16강 조 편성 알려줘",
+      "tool": "get_standings",
+      "args": { "competition": "2-uefa-champions-league" },
+      "expected": { "answerMustNotContain": ["A조", "B조", "C조", "D조"] },
+      "reason": "G5·G6 · UCL 은 조별리그가 아니라 리그 페이즈. 없는 조 지어내지 않는지. 09-14 실측 evidence: list_competitions→get_competition→get_standings 3개 순차"
+    },
+    {
+      "id": "c21",
+      "question": "맨유 감독 누구야",
+      "tool": null,
+      "expected": { "answerMustNotContain": ["감독은"] },
+      "reason": "감독 정보는 도구에 없다 (L1 #10 미착수). 규칙 2(a) 도구 목록에 없음 검증. 2026-09-11 브라우저 실측에서 '제공된 데이터에 없습니다' 로 통과. search 도구가 들어와도 이 케이스는 유효하다 (감독 정보 자체가 스키마에 없음)"
     }
   ]
 }
