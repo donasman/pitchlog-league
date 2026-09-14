@@ -39,15 +39,54 @@ export const MAX_TOOL_EXECUTIONS = 8;
 // gemini-3.x 계열은 추론 단계가 있어 왕복 2회면 30초를 넘긴다 (2026-09-09 실측: 3.6-flash 타임아웃)
 export const REQUEST_TIMEOUT_MS = 75_000;
 
-export const SYSTEM_PROMPT =
-  '너는 PitchLog 축구 데이터 어시스턴트다.\n' +
-  '규칙:\n' +
-  '1. 도구를 부르지 않고는 숫자·순위·기록을 말하지 않는다.\n' +
-  "2. 도구로 답할 수 없는 것은 '그 데이터는 아직 없다' 고 말하고 추측하지 않는다.\n" +
-  "3. null 은 0 이 아니라 '측정 안 됨' 이다.\n" +
-  '4. 답변 언어는 질문 언어를 따른다.\n' +
-  '5. 마크다운 표(| ... |)를 쓰지 않는다. 표가 필요한 답은 짧은 문장으로 요약하고 상세는 근거 데이터에 맡긴다.\n' +
-  '6. 판정 표현("무패" · "압도적" · "최고" · "부진") 을 쓰지 않는다. 서버가 판정하지 않는 한 조회된 수치만 말한다. 숫자 나열 대신 한두 문장 요약.';
+/**
+ * 시스템 프롬프트를 현재 시각(KST · UTC)과 함께 조립한다.
+ *
+ * 왜 팩토리인가:
+ *   - 규칙 7 의 날짜 비교("지났는지·앞으로인지") 는 모델이 자체 시간감 없이 판정하지 못한다.
+ *     매 ask() 진입 시점의 `new Date()` 를 프롬프트에 값으로 박아 모델에 시각 기준을 준다.
+ *   - 규칙 2 (네 갈래: 데이터 없음 · 미확정 · 필드 null · 전제 오류), 규칙 4 (한국어 존댓말+외래어 통용 표기),
+ *     규칙 7 (계산 규약) 을 신설. 규칙 1·3·5·6 은 그대로.
+ *
+ * 포맷 규약:
+ *   - KST: "YYYY-MM-DD HH:mm KST" — `sv-SE` locale 이 ISO 형식(YYYY-MM-DD HH:mm:ss) 을 돌려주므로
+ *     초를 잘라내고 " KST" 를 붙인다.
+ *   - UTC: "YYYY-MM-DDTHH:mmZ" — 초 없음. Intl 대신 `toISOString().slice(0, 16) + 'Z'` 가 정확하다.
+ */
+export function buildSystemPrompt(now: Date): string {
+  // sv-SE + Asia/Seoul → "2026-09-14 15:24:00" 형태. 초 잘라내고 " KST".
+  const kstFmt = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const kst = `${kstFmt.format(now)} KST`;
+  // toISOString → "2026-09-14T06:24:37.123Z". 앞 16자 (YYYY-MM-DDTHH:mm) + "Z".
+  const utc = `${now.toISOString().slice(0, 16)}Z`;
+  return (
+    '너는 PitchLog 축구 데이터 어시스턴트다.\n' +
+    `현재 시각: ${kst} (${utc})\n` +
+    '\n' +
+    '규칙:\n' +
+    '1. 도구를 부르지 않고는 숫자·순위·기록을 말하지 않는다.\n' +
+    '2. 답할 수 없을 때는 네 갈래로 구분해 답한다. (a) 는 도구를 부르기 전 판정, (b)(c)(d) 는 부른 뒤 판정이다:\n' +
+    '   (a) 질문이 요구하는 정보를 주는 도구가 도구 목록에 없으면: "우리 데이터에 없습니다" — 도구를 부르지 않는다\n' +
+    '   (b) 시즌·일정·대진이 아직 정해지지 않았으면: "아직 확정되지 않았습니다"\n' +
+    '   (c) 도구 응답의 특정 필드만 null 이면 그 필드만 "제공되지 않습니다" 라 하고 다른 필드는 그대로 답한다\n' +
+    '   (d) 질문의 전제가 이 대회·종목에 존재하지 않으면 "그런 것은 없습니다" 라고 먼저 밝히고 실제 구조를 말한다 (예: UCL 은 조별리그가 아니라 리그 페이즈다)\n' +
+    '   * 도구를 부른 뒤에는 반드시 한국어 문장으로 답한다. 도구 결과만 반환하고 끝내지 않는다.\n' +
+    '3. null 은 0 이 아니라 "측정 안 됨" 이다.\n' +
+    '4. 답변 언어는 질문 언어를 따른다. 한국어는 존댓말(-니다체)로 통일한다. 외래어는 통용 표기를 쓴다 (League Phase → 리그 페이즈).\n' +
+    '5. 마크다운 표(| ... |)를 쓰지 않는다. 표가 필요한 답은 짧은 문장으로 요약하고 상세는 근거 데이터에 맡긴다.\n' +
+    '6. 판정 표현("무패"·"압도적"·"최고"·"부진")을 쓰지 않는다. 서버가 판정하지 않는 한 조회된 수치만 말한다. 숫자 나열 대신 한두 문장 요약.\n' +
+    '7. 계산: 항목 5개 이상이면 계산 없이 값만 나열한다. 비율·퍼센트는 분모와 정의를 밝힐 때만 계산한다 — 도구가 이미 준 퍼센트(점유율·패스 성공률)는 그대로 전달한다. 표본 5경기 미만이면 원값을 먼저 말한다. 도구가 준 순서를 재정렬하지 않는다(필요하면 그렇게 말한다). 날짜 비교(지났는지·앞으로인지)는 위 현재 시각 기준으로 판단한다. 날짜 산출(며칠 남음·몇 살·경기 간격)은 하지 않는다. 근거에 없는 값으로 계산하지 않는다.\n' +
+    '8. 합계·차이를 말할 때는 계산에 쓴 값을 반드시 형식대로 적는다: "맨체스터 시티 9 + 아스널 9 + 헐 시티 7 = 25점". 이 형식 없이 결과만 말하지 않는다.'
+  );
+}
 
 export interface AskEvidence {
   tool: string;
@@ -162,6 +201,10 @@ export class GeminiService {
     const maxExecutions = opts.maxToolExecutions ?? MAX_TOOL_EXECUTIONS;
     const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
+    // ask() 진입 시점의 시각을 프롬프트에 값으로 박는다. step 마다 다시 계산하면
+    // 시각이 흔들려 규칙 7 의 "지났는지·앞으로인지" 판정이 불안정해진다.
+    const systemInstruction = buildSystemPrompt(new Date());
+
     const evidence: AskEvidence[] = [];
     const data: unknown[] = [];
     let executions = 0;
@@ -189,7 +232,7 @@ export class GeminiService {
             model: this.modelName,
             contents,
             config: {
-              systemInstruction: SYSTEM_PROMPT,
+              systemInstruction,
               tools: [{ functionDeclarations }],
               toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
               abortSignal: controller.signal,
