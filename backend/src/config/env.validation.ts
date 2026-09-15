@@ -6,7 +6,7 @@
 // 앱에서는 @nestjs/core 가 불러오지만, 이 모듈만 단독으로 쓰는 단위 테스트에서는 여기서 챙겨야 한다.
 import 'reflect-metadata';
 import { plainToInstance, Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Max, Min, MinLength, validateSync } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUrl, Max, Min, MinLength, validateSync } from 'class-validator';
 
 export enum NodeEnv {
   Development = 'development',
@@ -63,8 +63,10 @@ export class EnvironmentVariables {
   GEMINI_MODEL: string = 'gemini-3.5-flash';
 
   /** 어시스턴트 응답에 X-Gemini-* 디버그 헤더를 실을지. 프로덕션 false 유지. E2 계측용.
-   *  boolean 캐스팅 안 함 — 컨트롤러에서 `=== 'true'` 문자열 비교로 사용 (M3 결함 방지) */
+   *  boolean 캐스팅 안 함 — 컨트롤러에서 `=== 'true'` 문자열 비교로 사용 (M3 결함 방지).
+   *  @IsIn 으로 'true'/'false' 외 오타(예: 'flase')를 부팅 시 잡는다 — fix/debug-header-gate 09-15. */
   @IsOptional()
+  @IsIn(['true', 'false'])
   @IsString()
   ASSISTANT_DEBUG_HEADERS: string = 'false';
 }
