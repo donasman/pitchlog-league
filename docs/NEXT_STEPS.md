@@ -247,6 +247,11 @@ R1 모드 A 유도, 429 0건.
 - **E2 계측 정상 경로 · 429 경로 헤더 실측** — `X-Gemini-Requests` 가 200/429 응답 모두에 실리는지 확인. `ASSISTANT_DEBUG_HEADERS=true` 로 재기동 후 curl + smoke 재실행. 이 판은 RPD 0 이라 검증 못 함.
 - **어시스턴트 코드 기본값 `gemini-3.5-flash-lite` 이관** — `env.validation.ts:63` · `.env.example:30` 여전히 3.5-flash·3.6-flash. `.env` 만 lite 로 바뀐 상태. 별도 판.
 
+### 어시스턴트 후속 판 예약 (2026-09-15 · debug-header-gate 판이 남긴 것)
+
+- **envFilePath override 동작 검증** — 두 가설로 남긴다. (1) `.env.local` 이 `.env` 를 우선 (envFilePath 순서 · 설계대로) — **이 판 grep 실측에서 `.env.local` 파일 부재로 배제**. (2) `@nestjs/config` 가 파일 값으로 process.env 를 덮음 — T3(vitest 내 1회) 관측만 있고 **단독 재현 미실시 · 미검증 · 별도 판**. dotenv 기본은 override:false 인데도 T3 에서 `process.env='true'` 를 세팅한 뒤 파일의 `'flase'` 가 이겼음. `@nestjs/config` 소스 조사 + 단독 재현 스크립트로 확정.
+- **POST /api/assistant 응답 Cache-Control 인터셉터 검토** — 사용자 curl 2026-09-15 실측: 201 응답에 `Cache-Control: public, max-age=60` 이 붙음. CacheHeaderInterceptor 가 HTTP 메서드를 안 가리는 것으로 보임. POST 결과는 캐시하면 안 되므로 인터셉터에 GET-only 가드 필요. 별도 판.
+
 ---
 
 ### 검색 판 착수 근거 (2026-09-10 · 판을 시작하기 전에 이 절을 읽는다)

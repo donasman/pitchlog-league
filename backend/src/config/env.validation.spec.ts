@@ -27,4 +27,26 @@ describe('validateEnv', () => {
     expect(validateEnv({ ...base }).API_FOOTBALL_KEY).toBeUndefined();
     expect(() => validateEnv({ ...base, API_FOOTBALL_KEY: 'short' })).toThrow(/API_FOOTBALL_KEY/);
   });
+
+  // fix/debug-header-gate 05a T1 — 컨트롤러 게이트가 문자열 === 'true' 비교이므로
+  // validateEnv 는 이 필드를 문자열로 유지해야 한다. enableImplicitConversion 이
+  // 'true' 를 boolean 캐스팅하면 게이트가 조용히 꺼진다.
+  describe('ASSISTANT_DEBUG_HEADERS 타입 유지 (M3 결함 재발 방지)', () => {
+    it("입력 'true' 를 문자열 그대로 유지한다", () => {
+      const env = validateEnv({ ...base, ASSISTANT_DEBUG_HEADERS: 'true' });
+      expect(typeof env.ASSISTANT_DEBUG_HEADERS).toBe('string');
+      expect(env.ASSISTANT_DEBUG_HEADERS).toBe('true');
+    });
+    it("기본값도 문자열 'false'", () => {
+      const env = validateEnv({ ...base });
+      expect(typeof env.ASSISTANT_DEBUG_HEADERS).toBe('string');
+      expect(env.ASSISTANT_DEBUG_HEADERS).toBe('false');
+    });
+    it("오타 'flase' 는 부팅을 막는다 — @IsIn 방어", () => {
+      // 실 결함 재발 방지: 2026-09-15 사용자 .env 에 flase 오타가 있었고
+      // @IsString 만으로는 통과해 게이트가 조용히 꺼졌다.
+      expect(() => validateEnv({ ...base, ASSISTANT_DEBUG_HEADERS: 'flase' }))
+        .toThrow(/ASSISTANT_DEBUG_HEADERS/);
+    });
+  });
 });
