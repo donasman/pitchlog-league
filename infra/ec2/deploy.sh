@@ -21,7 +21,8 @@ fi
 
 # 어느 단계 실패(git·npm·prisma·build·restart)든 롤백 안내가 찍히게.
 # health 실패 경로는 아래에서 `trap - ERR` 로 무효화한다 (자체 안내가 있어 중복 방지).
-trap 'echo "✗ 실패 — 롤백: cd $BACKEND_DIR && rm -rf dist && mv dist.prev dist && sudo systemctl restart pitchlog-backend"' ERR
+# dist.prev 없는 첫 배포에서 성립하지 않는 "mv dist.prev dist" 안내가 나오는 결함 정정 (2026-09-15 실측).
+trap 'if [[ -d "$BACKEND_DIR/dist.prev" ]]; then echo "✗ 실패 — 롤백: cd $BACKEND_DIR && rm -rf dist && mv dist.prev dist && sudo systemctl restart pitchlog-backend"; else echo "✗ 실패 — 첫 배포 · 롤백 대상 없음 (dist.prev 없음)"; fi' ERR
 
 echo "▶ 저장소 최신화 ($REF)"
 cd "$REPO_DIR"
@@ -44,7 +45,10 @@ echo "▶ npm ci (devDeps 포함 · nest build 가 필요)"
 npm ci
 
 echo "▶ prisma generate"
-npx prisma generate
+# prisma.config.ts 가 로딩 시 DATABASE_URL 을 요구하지만 generate 자체는 DB 접속을 안 한다.
+# deploy.sh 는 ubuntu 로 돌아 /etc/pitchlog/backend.env (0600 · pitchlog) 를 못 읽으므로 placeholder 를 인라인으로 세팅.
+# 실 DATABASE_URL 이 이미 환경에 있으면 그대로 씀 (${VAR:-default} · 우측은 무해).
+DATABASE_URL="${DATABASE_URL:-postgresql://placeholder:placeholder@localhost:5432/placeholder}" npx prisma generate
 
 echo "▶ nest build"
 npm run build

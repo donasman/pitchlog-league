@@ -83,7 +83,8 @@ sudo systemctl status pitchlog-backend
 3. **Environment Variables**:
    - `VITE_USE_MOCK=false`
    - `VITE_API_BASE_URL` 은 **비워 둔다** (same-origin · `services/http.js:15` 이 빈 값이면 `/api/...` 상대경로로 fetch)
-4. 배포 후 확인:
+4. **Production Branch**: `dev` — 저장소 기본 브랜치가 `dev` 이므로 Vercel Settings → Git → Production Branch 를 `dev` 로 (main 은 뒤처져 있어 `vercel.json` 이 없다)
+5. 배포 후 확인:
    - Vercel URL 접속 → 홈에서 순위표 로딩되면 성공
    - 로딩되면 `vercel.json` 의 rewrite (`/api/:path*` → `http://3.36.159.128:3000/api/:path*`) 가 동작 중
 
@@ -106,6 +107,22 @@ rm -rf dist && mv dist.prev dist
 sudo systemctl restart pitchlog-backend
 curl -sf http://localhost:3000/health
 ```
+
+## 트러블슈팅
+
+### `prisma generate` 실패: `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL`
+
+첫 실 배포 (2026-09-15) 에서 나옴. 원인: `backend/prisma.config.ts` 가 로딩 시 `DATABASE_URL` 을 요구하는데, `deploy.sh` 는 `ubuntu` 로 돌아 `/etc/pitchlog/backend.env` (0600 · `pitchlog` 소유) 를 읽지 못한다. `prisma generate` 는 DB 에 접속하지 않으므로 실 값이 필요 없다.
+
+수정: `deploy.sh` 가 `prisma generate` 앞에 placeholder `DATABASE_URL` 을 인라인으로 세팅 (`fix/deploy-prisma-generate-env` 판). 이후 배포는 그냥 `bash deploy.sh` 로 진행.
+
+### 첫 실 배포 결함이 다시 나오면
+
+첫 실 배포 (2026-09-15) 에서 잡힌 결함 2건이 이 판(`fix/deploy-prisma-generate-env`)으로 정정됨:
+1. 위 `prisma generate` 실패
+2. `dist.prev` 없는 첫 배포에서 실패 시 trap 이 성립하지 않는 "mv dist.prev dist" 롤백 문구를 찍음 → 이제 존재 여부를 조건 분기.
+
+수동 우회로 배포된 상태라면, 다음 재배포에서 자연스럽게 정정 반영됨.
 
 ## 실측 체크리스트 (첫 배포 후)
 
