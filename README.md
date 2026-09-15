@@ -25,7 +25,7 @@ AI는 데이터베이스나 외부 축구 API에 직접 접근하지 않습니�
 backend/    NestJS + TypeScript + Prisma (API·수집·실시간·AI 도구)
 frontend/   React + Vite + Tailwind + shadcn/ui
 design/     Web Foundation 토큰·다크 테마
-infra/      배포 설정 (docker-compose 는 예정)
+infra/      배포 설정 — EC2 bootstrap·systemd·deploy 스크립트 (Vercel 은 frontend/vercel.json)
 docs/       기획·설계 문서
 scripts/    API 실측 조사 스크립트
 .github/    CI (frontend-verify · backend-verify)
