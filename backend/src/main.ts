@@ -1,10 +1,16 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 import { setupApp } from './app.setup.js';
 
 async function bootstrap(): Promise<void> {
-  const app = setupApp(await NestFactory.create(AppModule));
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Vercel rewrite 1홉 뒤. 안 켜면 req.ip 가 Vercel edge IP 하나로 묶여
+  // 어시스턴트 rate limit (10/분·IP · assistant-rate-limit.guard.ts:27) 이 전 사용자를 하나로 집계한다.
+  // 위조 우회는 EC2:3000 직접 호출자에 한해 성립 — docs/DEPLOY.md 알려진 한계 절.
+  app.set('trust proxy', 1);
+  setupApp(app);
 
   // Swagger 스펙이 곧 응답 계약이다 (NEXT_STEPS 6장). 별도 문서를 쓰지 않는다
   const doc = new DocumentBuilder()
