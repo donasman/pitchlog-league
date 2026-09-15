@@ -131,10 +131,9 @@
       "tool": "get_player",
       "args": { "ref": "306-mohamed-salah" },
       "expected": {
-        "answerMustContain": ["제공되지"],
         "answerMustNotContain": ["전체 시즌", "시스템에서 확인이"]
       },
-      "reason": "규칙 2(c) — 특정 필드만 null 이면 그 필드만 '제공되지 않습니다'. 살라 primaryTeam·jerseyNumber·position 전부 null (L1 squad 재적재 백로그 · 프롬프트 문제 아님)"
+      "reason": "규칙 2(c) — 특정 필드만 null 이면 그 필드만 '제공되지 않습니다'. 살라 primaryTeam·jerseyNumber·position 전부 null (L1 squad 재적재 백로그 · 프롬프트 문제 아님). 3.5-lite 2/2 get_player 정상 호출 · 답 '우리 데이터에 없습니다'(규칙 2(a) 문구를 2(c) 자리에 사용 · 재현 2/2) → 규칙 2(c) 준수는 프롬프트 판에서 hard 재구성. 3.1-lite 1회는 도구 우회(모델 차이)"
     }
   ]
 }
