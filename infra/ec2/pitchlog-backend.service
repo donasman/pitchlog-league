@@ -1,0 +1,27 @@
+[Unit]
+Description=PitchLog Backend (Nest)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pitchlog
+Group=pitchlog
+WorkingDirectory=/opt/pitchlog/backend
+EnvironmentFile=/etc/pitchlog/backend.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node dist/main
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+# 보수적 자원 제한 (t3.small · swap 2GB)
+MemoryMax=1500M
+
+# 로그는 journald 로 (deploy.sh 실패 시 journalctl -u pitchlog-backend -n 50 로 본다)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pitchlog-backend
+
+[Install]
+WantedBy=multi-user.target
