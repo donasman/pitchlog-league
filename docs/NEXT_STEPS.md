@@ -21,7 +21,7 @@
 | 프론트엔드 | 🚧 1~8단계 화면 구현 완료. **실 API 연결**(`VITE_USE_MOCK` 전환) — 대회·팀·경기·순위·허브·팀 일정·홈 (09-07) · **시즌 선택기 5시즌 + UCL 조별리그 순위표**(09-08). 단위 테스트 193건. 경기 상세 탭·알림·AI 는 Mock 전용, 컵 화면 · CompetitionHub 랭킹 남음. **선수·통계 실 API**(09-09 PR #36 · 표시 판단 normalize.js 순수 함수로) |
 | **백엔드** | 🚧 Nest 12 · Prisma 29모델 · API 클라이언트 · 배치 upsert · **L0**(17대회 · **83대회시즌** · 팀 1,888) · **조회 API 10개**(대회·팀·경기·순위·**선수·통계 랭킹 09-09 PR #34·#36**) · **L1 스쿼드**(155팀, 관문 테스트 통과) · **L2 5시즌**(라운드 1,070 · 경기 9,787 · 순위 654) · **L6 시즌 집계**(선수 통계 30,925 · 랭킹 2,335 · 팀 통계 489 · 선수 13,591) · `backfill_jobs` 30 DONE |
 | CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, 단위 53 · e2e 10파일 85건) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` |
-| 배포 | ❌ 미착수 — 1장 **4번**. "배포 PoC" 는 재정의됐다(2장): 정적 빌드가 아니라 Railway + Pages + CORS |
+| 배포 | 🚧 착수 — 1장 **4번**. **09-15 결정: 백엔드 AWS EC2**(t3.small · 서울 · 무료 크레딧 · systemd · Docker 안 씀) **+ 프론트 Vercel**(`/api/*` rewrite 프록시 → same-origin · CORS·도메인 불필요). Railway·Cloudflare Pages 는 폐기 (14장) |
 | 백업 | ✅ 백업·복원 리허설 2회 통과 — 09-07 L0 만(10,062행) · **09-08 백필-1 직전(22,049행)**. public 만 · 로컬 · 수동. 자동화와 사본 이중화는 **1장 4번**(서버화) |
 
 ### 확정된 범위
@@ -140,7 +140,7 @@ search 는 3회만 기록됐고 warm 평균은 2회차 기준이다.
 | ~~2~~ | ~~**백필-1 기록**~~ ✅ 09-08 PR #26·#27 — 5시즌 × **화면 6대회** 일정·결과·순위 + 선수 시즌 통계 30,925 · 랭킹 2,335 · 팀 시즌 통계 489 · `backfill_jobs` 30 DONE. `isCurrent` 컷 버그 · UCL 조별리그 구조 변경을 여기서 잡았다. **남은 것: L1 2차 실행 · UCL 예선 전용 팀 정리 · 시즌 선택기 노출(11장)** | 8-b | ~2,000 (1일) | ✅ 5시즌 결과·순위 · 선수 시즌 기록 |
 | ~~—~~ | ~~**선수·통계 화면 실 API 전환**~~ ✅ 09-08~09 PR #34·#36 — 백필-1 이 넣은 3만 행이 화면에 안 나오고 있었다. `PlayerModule`·`StatisticsModule` (`/api/players/:ref`·`/api/stats/{scorers,assisters}`) · 표시 판단을 `normalize.js` 순수 함수(`key`·`playerTotals`·`formatStat`)로 · `dataStatus` 컨셉 폐기 · 이적 케이스 반례 e2e · **반례 픽스처 규약**(`pitchlog-e2e-fixture` 스킬) | 6·11 | 0 | ✅ 선수 상세 · 랭킹 |
 | ~~3~~ | ~~**경기 상세 쓰기 코드 + 현재 시즌만**~~ ✅ 09-10 PR #46 — L3·L5 서비스 4개 + `MatchDetailsBackfillService` + CLI (`npm run ingest -- backfill`). **현재 시즌(2026-27) 6대회 180경기 CONFIRMED** · 588콜 · 실패 0 (has_team/player_stats false 15경기는 정상 · 빈 응답). 초기 예상 2,200경기는 시즌 초라 실측 180. **과거 4시즌(2022~2025)은 미완** — 4번(서버화) + 백필-2 워커 몫 | 8-c·10 | 588 (실측) | ✅ 라인업 · 타임라인 · xG (현재 시즌만) |
-| 4 | **서버화** — 스케줄러 3잡 + 백필 워커(일일 상한)를 한 프로세스에 · Railway + Pages + CORS · 백업 자동화(호스팅 크론 → 객체 저장소) + 리허설 재실행 → **백필-2 나머지 4시즌 무인** | 2·4·8-c | ~35,000 (6일 무인) | 외부 접속 · 5시즌 경기 상세 |
+| 4 | **서버화** — 스케줄러 3잡 + 백필 워커(일일 상한)를 한 프로세스에 · **EC2(systemd) + Vercel(`/api` rewrite)** · 백업 자동화(EC2 cron `pg_dump` → S3) + 리허설 재실행. 세 판으로 쪼갠다: 4-a 배포 → 4-c 백업 자동화(관문) → 4-b 워커 → **백필-2 나머지 4시즌 무인** | 2·4·8-c | ~35,000 (6일 무인) | 외부 접속 · 5시즌 경기 상세 |
 | 5 | **전환** — 워커 대상이 "어제 끝난 경기" 로 바뀐다. 코드 변경 없음 | 8-c | ~50/일 | 라이브만 빼고 **하루 지연으로 완전** |
 | 6 | **L4 실시간** — 폴링 윈도우 · 15초 강등 · `data_version` · FT → L5 | 10 | 경기일 ~4,700 | 홈 LIVE 히어로 · 요약 스트립 |
 | 7 | L6 보정 · 한국어 팀명 110 · L1 #9~#11 · 알림 · AI · L2-b 녹아웃 tie (2027-02) | 8-d·9·11 | | |
@@ -312,7 +312,7 @@ R1 모드 A 유도, 429 0건.
 - [ ] ~~배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결~~ → **재정의 (09-07 점검).**
       정적 빌드·Deploy Hook·`deployment_requests` 는 Next.js 전제였고 프론트는 09-01 부터 Vite SPA 다
       (`PLAN_REVIEW.md` 1-1). 검증할 대상이 없다. 실제 확인 항목은 이것뿐이다:
-      Railway 에 Nest 컨테이너 1개 · Supabase 연결 · `CORS_ORIGIN` · Pages SPA fallback · `/logos` 정적 서빙 · `/health`.
+      EC2 에 Nest systemd 1개(`node dist/main`) · Supabase 연결 · Vercel `/api/:path*` rewrite → `http://<EIP>:3000` (same-origin · `CORS_ORIGIN` 비움) · `trust proxy`(rate limit 가드가 X-Forwarded-For 를 보게) · `/logos` 정적 서빙 · `/health`. (09-15 · Railway/Pages → EC2/Vercel)
       **1장 4번**에서 스케줄러·백업 자동화와 같이 한다. SEO 는 **공개 초기엔 하지 않는다** (`FRONTEND_GUIDE` 7장)
 
 ---
@@ -401,7 +401,7 @@ Docker 쪽이 버전 사고를 막는다. `pg_dump` 가 서버보다 낮으면 �
 
 백필-2 무인 실행 전에는 반드시 자동화해야 한다. **09-07 점검에서 정했다 — 호스팅 쪽에서 받는다.**
 
-1. **호스팅(Railway) 크론에서 `pg_dump` → 객체 저장소(R2 등)** ← 이것. 자동화와 사본 이중화를
+1. **EC2 cron 에서 `pg_dump` → S3** (인스턴스 IAM 역할 · 버킷 수명 주기 30일 · 09-15 결정 · 이전 안은 Railway 크론 → R2) ← 이것. 자동화와 사본 이중화를
    한 번에 풀고, PC 디스크·Docker Desktop 상태와 무관해진다. 1장 4번에서 배포와 같이 한다
 2. 로컬에 PostgreSQL 클라이언트 설치 + 작업 스케줄러 — 1 이 안 될 때의 대안. `pg_dump` 가 PATH 에
    있으면 스크립트가 자동으로 그쪽을 쓴다
@@ -459,7 +459,7 @@ docker run --rm -i postgres:17 pg_restore --list < <덤프 경로>
 - [x] `API_FOOTBALL_KEY` 없이도 앱이 뜬다 — 키는 첫 호출에서만 요구 (CI·조회 서버용, PR #9)
 - [x] ~~로고는 내려받아 자체 저장~~ ✅ 09-07 — `ingest -- logos` 가 받아 96×96 webp 로 줄여
       `frontend/public/logos/` 에 쓴다. 저장소 안이라 배포 인프라(백엔드 호스팅·R2) 결정에
-      묶이지 않고 Cloudflare Pages 가 그대로 서빙한다. 옮기려면 `VITE_LOGO_BASE_URL` 접두사만 바꾼다.
+      묶이지 않고 정적 호스팅(Vercel · 09-15 전까지는 Cloudflare Pages)이 그대로 서빙한다. 옮기려면 `VITE_LOGO_BASE_URL` 접두사만 바꾼다.
       동시 4개 · 재시도 2회 · 이미 있는 파일은 건너뜀(`--force` 로 전체 재수집).
       범위는 화면에 나오는 6대회 현재 시즌 참가팀 — 백필로 팀이 늘면 다시 돌린다.
       **`npm install` 과 첫 실행은 Windows 에서** (1장)
@@ -766,12 +766,12 @@ FT 뒤에 부를 L5 코드가 먼저 있어야 하기 때문이다.
 
 ### L3 · L5 — 경기 상세 쓰기 (1장 3번)
 
-- [ ] 4 엔드포인트 → `match_lineups` · `lineup_entries` · `match_events` · `team_match_stats` · `player_match_stats`.
+- [x] ~~4 엔드포인트 → `match_lineups` · `lineup_entries` · `match_events` · `team_match_stats` · `player_match_stats`~~ ✅ 09-10 PR #46 — L3·L5 서비스 4개 · 현재 시즌 180경기 · 588콜 · 실패 0.
       배치 upsert · `has_*` 3값 갱신 · `detail_checked_at`
-- [ ] `matches.stats_state` — `NONE → RECHECK → CONFIRMED` (`SCHEMA_DESIGN` 3-3, 09-07 결정).
+- [x] ~~`matches.stats_state` — `NONE → RECHECK → CONFIRMED`~~ ✅ 09-10 PR #46 — 180경기 CONFIRMED (`SCHEMA_DESIGN` 3-3, 09-07 결정).
       상세 4개가 다 들어오면 `CONFIRMED`. **프론트 `recheck`/`confirmed` 배지의 유일한 소스**다.
       1장 1번에서 컬럼을 먼저 넣고 L2 는 `NONE` 만 쓴다
-- [ ] 멱등 — 같은 경기를 두 번 처리해도 값이 두 배가 되지 않는다 (`V2_DESIGN` 5-7). 백필-2 가 이걸로 5시즌을 돈다
+- [ ] 멱등 — 같은 경기를 두 번 처리해도 값이 두 배가 되지 않는다 (`V2_DESIGN` 5-7). PR #46 이 upsert 로 구현 · **재처리 실측은 백필-2 첫 재실행 때** (현재 시즌 180경기를 한 번 더 돌려 행 수 불변 확인). 백필-2 가 이걸로 5시즌을 돈다
 - [ ] 녹아웃 tie 확정 — 2차전 FT 후 합산·승자·`win_reason`. 8-d 뒤
 
 ### L4 — 실시간 (1장 5번, 백필-2 뒤)
@@ -906,13 +906,13 @@ Phase 4의 실질 내용은 L6 보정·푸시 알림·예산 실측으로 바뀐
 | 4 | 모바일 필터 바 형태 | 경기 탭 모바일 구현 시 |
 | 6 | 다크 모드 기본값 | 배포 전 |
 | ~~7~~ | ~~팀 엠블럼 없을 때~~ | ✅ 자체 저장 + 이니셜 폴백 (09-07 로고) |
-| ~~—~~ | ~~상시 백엔드 호스팅~~ | ✅ **Railway** (1장 5번). 슬립하는 무료 티어는 스케줄러가 조용히 멈춰 배제 |
+| ~~—~~ | ~~상시 백엔드 호스팅~~ | ✅ ~~Railway~~ → **AWS EC2** (09-15 정정 · 무료 크레딧 · Supabase 와 같은 서울 리전 · 슬립 없음 · systemd). 프론트는 Cloudflare Pages → **Vercel** — `/api` rewrite 프록시로 도메인·CORS·CloudFront 없이 https. 원래 근거(슬립 티어 배제)는 EC2 도 만족 |
 | ~~—~~ | ~~백필을 어느 Phase에~~ | ✅ 1장 2~4번. 기록(2,000콜) 먼저, 상세(43,000콜)는 현재 시즌 → 나머지 |
 | ~~—~~ | ~~백필 Worker — BullMQ/Redis~~ | ✅ **안 쓴다.** `backfill_jobs` DB 체크포인트 + 단일 루프 (8-c) |
 | ~~—~~ | ~~SEO~~ | ✅ **공개 초기엔 안 한다.** 정적 `sitemap.xml`·`robots.txt` 만. 검색 유입이 필요해지면 `FRONTEND_GUIDE` 7장 |
 | ~~—~~ | ~~한국어 이름 범위~~ | ✅ **팀 110개만.** 선수는 영어 (11장) |
 | ~~—~~ | ~~`recheck → confirmed` 모델~~ | ✅ `matches.stats_state` 컬럼 (10장) |
 | — | 팀 최근 경기 질의 — `UNION ALL` vs 보조 테이블 | 백필-2 뒤 실측 후 |
-| — | 백업 사본 위치 — R2 인가 | 1장 5번, 호스팅 크론에서 받아 올릴 곳. 계정·키가 앞선다 |
+| ~~—~~ | ~~백업 사본 위치 — R2 인가~~ | ✅ **S3** (09-15 · EC2 인스턴스 IAM 역할로 키 없이 · 서울 · 수명 주기 30일). 4-c 백업 자동화 판 |
 
 `SCHEMA_DESIGN.md` 12장과 `INGESTION_STRATEGY.md` 8장에 각 문서의 미결정이 따로 있다.
