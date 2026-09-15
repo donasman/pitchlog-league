@@ -94,6 +94,20 @@ export interface AskEvidence {
   asOf: string;
 }
 
+/**
+ * ask() 가 상한(maxToolCalls · maxToolExecutions) 에 걸려 텍스트 없이 종료할 때 만드는 폴백 답변.
+ * 규칙 4(질문 언어 따름)와 불일치하지만 한국어 고정으로 결정적이게 만든다 (Gemini 추가 호출 금지).
+ * evidence 기준 도구별 횟수 집계, 여러 도구는 " · " 로 잇는다. args·ref 는 넣지 않음(내부 문자열 노출 금지).
+ */
+export function buildTruncatedFallback(evidence: AskEvidence[]): string {
+  const base = '요청하신 정보를 찾지 못했습니다.';
+  if (evidence.length === 0) return base;
+  const counts = new Map<string, number>();
+  for (const e of evidence) counts.set(e.tool, (counts.get(e.tool) ?? 0) + 1);
+  const parts = Array.from(counts.entries()).map(([tool, n]) => `${tool} ${n}회`);
+  return `${base} (조회한 도구: ${parts.join(' · ')})`;
+}
+
 export interface AskResult {
   answer: string;
   evidence: AskEvidence[];
@@ -270,8 +284,9 @@ export class GeminiService {
         // 상한을 넘겼으면 마지막 텍스트로 확정하고 truncated
         if (step >= maxToolCalls) {
           truncated = true;
+          const answer = lastAnswer.trim() === '' ? buildTruncatedFallback(evidence) : lastAnswer;
           return {
-            answer: lastAnswer,
+            answer,
             evidence,
             data,
             truncated,
@@ -343,7 +358,8 @@ export class GeminiService {
 
       // 이론상 여기 도달 안 함 (루프 안에서 return) — 안전망.
       // MAX_TOOL_EXECUTIONS 발동으로 outer break 를 타면 여기로 온다 — truncated 는 이미 true 로 세팅됨.
-      return { answer: lastAnswer, evidence, data, truncated: true, model: this.modelName, asOf: pickAsOf(evidence), geminiRequests };
+      const answer = lastAnswer.trim() === '' ? buildTruncatedFallback(evidence) : lastAnswer;
+      return { answer, evidence, data, truncated: true, model: this.modelName, asOf: pickAsOf(evidence), geminiRequests };
     } finally {
       clearTimeout(timeoutHandle);
     }
