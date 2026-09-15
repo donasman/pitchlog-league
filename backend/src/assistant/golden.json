@@ -107,9 +107,8 @@
       "question": "음바페 통산 도움",
       "tool": "get_player",
       "args": { "ref": "278-kylian-mbappe" },
-      "expected": { "answerMustNotContain": ["전체 시즌", "시스템에서 확인이"] },
-      "reason": "G3 · 약한 검사 — 특정 문구만 잡음. 모델이 다른 표현으로 같은 실수하면 통과. 실질 검증은 06 브라우저 실측",
-      "knownFail": "MAX_TOOL_CALLS(5) 상한 도달 후 text part 없이 종료 (empty answer). get_player 는 있는 도구인데 5회 반복 호출 원인 불명 — 규칙 2(c) '필드만 null' 해석과 관련 가능성. 코드 폴백 (상한 도달 시 evidence 요약 강제 생성) 은 다음 판"
+      "expected": { "answerMustContain": ["찾지 못했습니다"] },
+      "reason": "MAX_TOOL_CALLS 소진 시 코드 폴백 검증. 음바페는 데이터에 없음(2026-09-14 실측 · /api/search 라틴·한글 모두 0건 · unaccent+한글 별칭 미적용) → 도구 5회 후 폴백. tool·args 는 문서용"
     },
     {
       "id": "c20",
@@ -125,6 +124,17 @@
       "tool": null,
       "expected": { "answerMustNotContain": ["감독은"] },
       "reason": "감독 정보는 도구에 없다 (L1 #10 미착수). 규칙 2(a) 도구 목록에 없음 검증. 2026-09-11 브라우저 실측에서 '제공된 데이터에 없습니다' 로 통과. search 도구가 들어와도 이 케이스는 유효하다 (감독 정보 자체가 스키마에 없음)"
+    },
+    {
+      "id": "c22",
+      "question": "살라 등번호 알려줘",
+      "tool": "get_player",
+      "args": { "ref": "306-mohamed-salah" },
+      "expected": {
+        "answerMustContain": ["제공되지"],
+        "answerMustNotContain": ["전체 시즌", "시스템에서 확인이"]
+      },
+      "reason": "규칙 2(c) — 특정 필드만 null 이면 그 필드만 '제공되지 않습니다'. 살라 primaryTeam·jerseyNumber·position 전부 null (L1 squad 재적재 백로그 · 프롬프트 문제 아님)"
     }
   ]
 }
