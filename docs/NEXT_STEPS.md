@@ -102,10 +102,12 @@ cold(1회차) total: 166.8 / 134.6 / 73.9 / 106.8 / 321.7 / 180.8
 
 **다음 판 후보 (우선순위)**
 
-1. `/api/standings` 순차 루프 → `Promise.all` 병렬화.
-   참고 구현: `matches/:ref/detail` (같은 저장소 · 병렬도 5.46).
-   기대: 348ms → 60~80ms
-2. (1) 이후 재측정. 그래도 느리면 인메모리 TTL 캐시 검토
+1. ~~`/api/standings` 순차 루프 → `Promise.all` 병렬화.~~ ✅ 2026-09-15 `perf/standings-parallel` —
+   `standing.service.ts:41-45` 모드 B 순차 for 를 `Promise.all(comps.flatMap(...))` 로 교체.
+   실측(사용자 Windows · dev 모드): warm 0.279823s → 평균 ≈0.101s (0.110401 / 0.096224 / 0.096688) ·
+   **3.4× 개선**. body diff `fc.exe` "no differences encountered" (asOf 포함 동일).
+   기대치 60~80ms 는 대회 6개 전부 시즌 있을 때. Promise.all 은 입력 순서 보존 → displayOrder asc 유지.
+2. (1) 이후 재측정. warm ≈100ms 로 인메모리 TTL 캐시 우선순위 강등. 프론트 knock-on 이 있는지가 다음 판단 근거
 
 **계측 방법 (재현용)**
 
