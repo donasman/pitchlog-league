@@ -517,6 +517,61 @@ describe('buildTruncatedFallback', () => {
       '요청하신 정보를 찾지 못했습니다. (조회한 도구: list_competitions 2회 · get_standings 3회)',
     );
   });
+
+  // ── Case 9b: 실 ConfigModule 경로 게이트 배선 일관성 ─
+  // Case 9 는 fakeConfig 로 컨트롤러의 조건문(=== 'true' → setHeader) 단위 판정을 검증한다.
+  // Case 9b 는 그 반대 방향 — 실 ConfigModule 로 부팅한 뒤 ConfigService.get 이
+  // 돌려주는 값과 실제 응답 헤더가 **같은 상태로 배선**됐는지 본다.
+  // 환경값(.env·process.env) 을 고정하지 않는다 — gate 가 'true' 든 그 외든, 두 관측이
+  // 어긋나면(gate='true' 인데 헤더 없음, 또는 gate!='true' 인데 헤더 있음) 결함이다.
+  // 배경: 2026-09-15 사용자 .env 'flase' 오타로 게이트가 조용히 꺼진 결함 — 그때
+  // Case 9(fakeConfig) 는 실 배선 경로를 우회해 이걸 잡지 못했다.
+  describe('Case 9b: 실 ConfigModule 경로 게이트 배선 일관성', () => {
+    let app: INestApplication;
+    let gemini: GeminiService;
+    const originalKey = process.env.GEMINI_API_KEY;
+
+    beforeAll(async () => {
+      process.env.GEMINI_API_KEY = 'test-key-not-used';
+      // ConfigService override 없음 · ASSISTANT_DEBUG_HEADERS 값 조작 없음
+      const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+      app = setupApp(mod.createNestApplication());
+      await app.init();
+      gemini = app.get(GeminiService);
+    });
+
+    afterAll(async () => {
+      await app?.close();
+      if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = originalKey;
+    });
+
+    it("ConfigService.get('ASSISTANT_DEBUG_HEADERS') 와 응답 헤더가 같은 상태", async () => {
+      // 실 ConfigService 가 실제로 돌려주는 값 — 조작 없이 그대로 관측
+      const gate = app.get(ConfigService).get<string>('ASSISTANT_DEBUG_HEADERS');
+
+      const mock: GeminiClientLike = {
+        models: {
+          async generateContent() {
+            return { text: '단답', functionCalls: [] };
+          },
+        },
+      };
+      gemini.setClient(mock);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/assistant')
+        .send({ question: '헤더 배선 검사' })
+        .expect(201);
+
+      if (gate === 'true') {
+        expect(res.headers['x-gemini-requests']).toBe('1');
+      } else {
+        expect(res.headers['x-gemini-requests']).toBeUndefined();
+      }
+      expect(res.body.answer).toBe('단답');
+    });
+  });
 });
 
 /** functionCalls 없는 정적 응답을 주는 Mock — Case 2 에서 컨트롤러가 gemini.ask 를 못 부르는 걸 확인하기 위해 */
