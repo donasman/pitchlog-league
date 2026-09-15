@@ -20,7 +20,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from '../src/app.module.js';
 import { setupApp } from '../src/app.setup.js';
 import { AssistantToolRegistry } from '../src/assistant/assistant-tool.registry.js';
-import { GeminiService, toFunctionDeclaration, type GeminiClientLike } from '../src/assistant/gemini.service.js';
+import { GeminiService, toFunctionDeclaration, buildTruncatedFallback, type GeminiClientLike } from '../src/assistant/gemini.service.js';
 import type { AssistantTool, ToolResult } from '../src/assistant/assistant.types.js';
 
 describe('POST /api/assistant (e2e)', () => {
@@ -199,6 +199,83 @@ describe('POST /api/assistant (e2e)', () => {
       for (const e of result.evidence) {
         expect(e.tool).toBe('list_competitions');
       }
+    });
+
+    // ── Case 10. MAX_TOOL_CALLS 5 · text:undefined → 코드 폴백 ─
+    it('Case 10: text:undefined + MAX_TOOL_CALLS → answer 는 buildTruncatedFallback 로 대체', async () => {
+      // 모든 step 에서 text 없이 functionCall 만 반환 → step 상한 도달 시 lastAnswer 는 ''.
+      // 폴백 조건: truncated===true && lastAnswer.trim()===''.
+      const mock: GeminiClientLike = {
+        models: {
+          async generateContent() {
+            return {
+              text: undefined,
+              functionCalls: [{ name: 'list_competitions', args: {} }],
+              candidates: [
+                {
+                  content: {
+                    role: 'model',
+                    parts: [{ functionCall: { name: 'list_competitions', args: {} } }],
+                  },
+                },
+              ],
+            };
+          },
+        },
+      };
+      gemini.setClient(mock);
+
+      const result = await gemini.ask('폴백 반례 · 빈 텍스트');
+      expect(result.truncated).toBe(true);
+      expect(result.evidence).toHaveLength(5);
+      // buildTruncatedFallback 을 그대로 비교 — 결정적 문안
+      expect(result.answer).toBe(buildTruncatedFallback(result.evidence));
+      expect(result.answer).toContain('찾지 못했습니다');
+      expect(result.answer).toContain('list_competitions 5회');
+    });
+
+    // ── Case 11. MAX_TOOL_EXECUTIONS 8 컷 · text:undefined → 코드 폴백 ─
+    it('Case 11: text:undefined + MAX_TOOL_EXECUTIONS 8 컷 → answer 는 buildTruncatedFallback', async () => {
+      // Case 6 과 같은 구조지만 text 없이 반환. outer break 후 안전망 return 자리에서 폴백 적용.
+      let stepCount = 0;
+      const mock: GeminiClientLike = {
+        models: {
+          async generateContent() {
+            stepCount++;
+            // 안전망: outer break 이후 도달하지 않아야 함. 도달 시 원인 파악용으로 text 없이 종료 유도.
+            if (stepCount >= 4) {
+              return { text: undefined, functionCalls: [] };
+            }
+            return {
+              text: undefined,
+              functionCalls: [
+                { name: 'list_competitions', args: {} },
+                { name: 'list_competitions', args: {} },
+                { name: 'list_competitions', args: {} },
+              ],
+              candidates: [
+                {
+                  content: {
+                    role: 'model',
+                    parts: [
+                      { functionCall: { name: 'list_competitions', args: {} } },
+                      { functionCall: { name: 'list_competitions', args: {} } },
+                      { functionCall: { name: 'list_competitions', args: {} } },
+                    ],
+                  },
+                },
+              ],
+            };
+          },
+        },
+      };
+      gemini.setClient(mock);
+
+      const result = await gemini.ask('실행 상한 · 폴백 반례');
+      expect(result.truncated).toBe(true);
+      expect(result.evidence).toHaveLength(8);
+      expect(result.answer).toBe(buildTruncatedFallback(result.evidence));
+      expect(result.answer).toContain('list_competitions 8회');
     });
 
     // ── Case 8 (E2). geminiRequests 카운터 ─────────────────────
@@ -406,6 +483,39 @@ describe('POST /api/assistant (e2e)', () => {
       expect(result.asOf).toBe('2026-09-01T00:00:00.000Z');
       expect(result.answer).toBe('final answer');
     });
+  });
+});
+
+// ── buildTruncatedFallback 순수 함수 헬퍼 검증 ─────────────
+// ask() 안이 아니라 함수 자체의 결정성 검증. e2e-spec 파일 안에 두는 이유:
+// Case 10·11 이 이 함수의 결과와 answer 를 비교하므로, 문안이 실수로 바뀌면 함께 걸린다.
+describe('buildTruncatedFallback', () => {
+  it('evidence 빈 배열이면 괄호 없이 기본 문구만 반환', () => {
+    expect(buildTruncatedFallback([])).toBe('요청하신 정보를 찾지 못했습니다.');
+  });
+
+  it('도구 1종 5회 → 도구명·횟수 단일 항목', () => {
+    const evidence = Array.from({ length: 5 }, () => ({
+      tool: 'get_player',
+      args: {},
+      asOf: '2026-09-15T00:00:00.000Z',
+    }));
+    expect(buildTruncatedFallback(evidence)).toBe(
+      '요청하신 정보를 찾지 못했습니다. (조회한 도구: get_player 5회)',
+    );
+  });
+
+  it('도구 2종 → 등장 순서대로 " · " 로 잇는다', () => {
+    const evidence = [
+      { tool: 'list_competitions', args: {}, asOf: '2026-09-15T00:00:00.000Z' },
+      { tool: 'list_competitions', args: {}, asOf: '2026-09-15T00:00:00.000Z' },
+      { tool: 'get_standings', args: {}, asOf: '2026-09-15T00:00:00.000Z' },
+      { tool: 'get_standings', args: {}, asOf: '2026-09-15T00:00:00.000Z' },
+      { tool: 'get_standings', args: {}, asOf: '2026-09-15T00:00:00.000Z' },
+    ];
+    expect(buildTruncatedFallback(evidence)).toBe(
+      '요청하신 정보를 찾지 못했습니다. (조회한 도구: list_competitions 2회 · get_standings 3회)',
+    );
   });
 });
 

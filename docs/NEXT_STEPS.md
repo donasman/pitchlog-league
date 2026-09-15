@@ -243,7 +243,6 @@ R1 모드 A 유도, 429 0건.
 이 판(fix/assistant-prompt-rules)에서 RPD 500 소진으로 못 한 검증과 별도 판으로 미룬 코드 폴백:
 
 - **규칙 7 세부 4항 브라우저 실측** — 5개 이상 미계산 · 비율 분모 · 재정렬 금지 · 날짜 산출. golden 자동 회귀 밖 · 사용자 브라우저 · RPD 리셋(KST 16:00) 후. 질문 문안·판정 기준은 사용자 확정본 사용.
-- **MAX_TOOL_CALLS 상한 도달 시 코드 폴백** — c1·c18 empty answer 근본 대응. `gemini.service.ts` 에 상한 도달 시 evidence 요약을 강제 텍스트로 반환. c18 knownFail 해소가 성공 신호.
 - **어시스턴트 검색 도구 (선수·감독 이름 조회)** — c1 헛호출 4회(2026-09-14 실측 기준선) → 1회 감소로 효과 측정. Mbappé/음바페 unaccent + 한글 별칭도 이 판에서 (현재 `/api/search` 라틴·한글 모두 0건).
 - **E2 계측 정상 경로 · 429 경로 헤더 실측** — `X-Gemini-Requests` 가 200/429 응답 모두에 실리는지 확인. `ASSISTANT_DEBUG_HEADERS=true` 로 재기동 후 curl + smoke 재실행. 이 판은 RPD 0 이라 검증 못 함.
 - **어시스턴트 코드 기본값 `gemini-3.5-flash-lite` 이관** — `env.validation.ts:63` · `.env.example:30` 여전히 3.5-flash·3.6-flash. `.env` 만 lite 로 바뀐 상태. 별도 판.
