@@ -38,11 +38,13 @@ export class StandingService {
         include: { seasons: { include: { season: true, backfillJob: true }, orderBy: { season: { year: 'desc' } } }, topFlight: true },
         orderBy: { displayOrder: 'asc' },
       });
-      items = [];
-      for (const comp of comps) {
-        const cs = this.pickSeason(comp, q.season);
-        if (cs) items.push(await this.table(comp, cs));
-      }
+      // Promise.all 은 입력 순서 보존 → displayOrder asc 유지 · 변경 전후 body diff 로 검증(06)
+      items = await Promise.all(
+        comps.flatMap((comp) => {
+          const cs = this.pickSeason(comp, q.season);
+          return cs ? [this.table(comp, cs)] : [];
+        }),
+      );
     }
     return { items, asOf: latestOf(...items.map((t) => new Date(t.asOf))) };
   }
