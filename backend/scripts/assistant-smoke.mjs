@@ -71,14 +71,17 @@ const cases = golden.cases
 // --all: 전체 케이스 · 없으면 기본 5건. 시작 배너에 모드 표기.
 const RUN_ALL = process.argv.includes('--all')
 const PICK_IDS = ['c5', 'c6', 'c3', 'c1', 'c15']
-const picked = RUN_ALL
+// --all 을 제외한 나머지 인자가 있으면 그 id 들을 쓴다 (c18·c22 단건 실행용)
+const explicitIds = process.argv.slice(2).filter((a) => a !== '--all')
+const targetIds = RUN_ALL ? null : explicitIds.length > 0 ? explicitIds : PICK_IDS
+const picked = targetIds === null
   ? cases
-  : PICK_IDS.map((id) => {
+  : targetIds.map((id) => {
       const c = cases.find((x) => x.id === id)
       if (!c) throw new Error(`golden.json 에 ${id} 가 없다`)
       return c
     })
-console.log(`[smoke] 모드 ${RUN_ALL ? '[all]' : '[pick]'} · ${picked.length}건 실행`)
+console.log(`[smoke] 모드 ${RUN_ALL ? '[all]' : explicitIds.length > 0 ? `[ids:${explicitIds.join(',')}]` : '[pick]'} · ${picked.length}건 실행`)
 
 // 숫자 정규식 — 4자리 연도(1900~2099) 와 YYYY-MM-DD 안의 부분은 뽑지 않는다
 /**
