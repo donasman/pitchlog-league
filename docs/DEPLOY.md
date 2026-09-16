@@ -132,6 +132,16 @@ curl -sf http://localhost:3000/health
 
 **한 번만 돌린다** — `deploy.sh` 는 pull 로 자기 자신이 바뀌면 자동 재실행된다 (`fix/deploy-self-update` 판).
 
+### bootstrap: `Package 'awscli' has no installation candidate`
+
+증상 (2026-09-15 실측): `sudo bash bootstrap.sh` 실행 시 `▶ AWS CLI` 단계에서 `E: Package 'awscli' has no installation candidate` 로 중단. 뒤의 백업 디렉터리·systemd 유닛 설치까지 함께 실행되지 않는다.
+
+원인: Ubuntu 23.10+ apt 저장소에서 `awscli` 패키지가 제거됨. 초판 bootstrap 이 apt 기본 v1 을 기대했으나 24.04 에는 없다.
+
+수정 (`infra/bootstrap-awscli-v2` 판): AWS CLI 블록을 공식 v2 zip 설치로 교체 (`awscli-exe-linux-x86_64.zip` → `./aws/install`). 멱등 — `command -v aws` 있으면 버전만 출력하고 건너뜀. 재실행하면 뒤의 백업 디렉터리·유닛 설치까지 이어진다.
+
+이미 수동으로 AWS CLI v2 를 깐 상태라면 bootstrap 재실행에서 그 aws 를 감지하고 건너뜀.
+
 ### deploy.sh 가 세 번 돌아야 새 코드가 반영됐다면 (자기 자신 갱신 결함)
 
 증상 (2026-09-15 실측): `deploy.sh` 를 실행했는데 이전 판의 결함(예: prisma 에러) 이 계속 재현. 두 번째 실행에서도 옛 trap 문구 · 옛 41행. 세 번째 실행에서야 새 코드가 돌았음.
