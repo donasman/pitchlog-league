@@ -80,4 +80,35 @@ describe('validateEnv', () => {
       expect(validateEnv({ ...base }).BACKFILL_WORKER_CRON).toBe('5 * * * *');
     });
   });
+
+  describe('BACKFILL_WORKER_SEASONS (fix/backfill-worker-seasons)', () => {
+    it('기본값은 빈 문자열 (= 현재 시즌만 · 지금 동작 유지)', () => {
+      expect(validateEnv({ ...base }).BACKFILL_WORKER_SEASONS).toBe('');
+    });
+
+    it('빈 문자열 명시도 허용', () => {
+      expect(validateEnv({ ...base, BACKFILL_WORKER_SEASONS: '' }).BACKFILL_WORKER_SEASONS).toBe('');
+    });
+
+    it('허용된 시즌 목록 통과 (백필-2 예시)', () => {
+      expect(validateEnv({ ...base, BACKFILL_WORKER_SEASONS: '2025,2024,2023,2022' }).BACKFILL_WORKER_SEASONS)
+        .toBe('2025,2024,2023,2022');
+    });
+
+    it('SEASON_YEARS 밖의 값은 거부 (예: 2020)', () => {
+      expect(() => validateEnv({ ...base, BACKFILL_WORKER_SEASONS: '2025,2020' })).toThrow(/BACKFILL_WORKER_SEASONS/);
+    });
+
+    it('중복 값은 거부', () => {
+      expect(() => validateEnv({ ...base, BACKFILL_WORKER_SEASONS: '2025,2025' })).toThrow(/BACKFILL_WORKER_SEASONS/);
+    });
+
+    it('빈 항목은 거부 (연속 쉼표)', () => {
+      expect(() => validateEnv({ ...base, BACKFILL_WORKER_SEASONS: '2025,,2024' })).toThrow(/BACKFILL_WORKER_SEASONS/);
+    });
+
+    it('숫자 아닌 항목은 거부', () => {
+      expect(() => validateEnv({ ...base, BACKFILL_WORKER_SEASONS: 'abc' })).toThrow(/BACKFILL_WORKER_SEASONS/);
+    });
+  });
 });

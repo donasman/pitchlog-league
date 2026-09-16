@@ -22,6 +22,9 @@ export class BackfillWorkerStateDto {
 
   @ApiProperty({ nullable: true, type: Number })
   lastProcessed!: number | null;
+
+  @ApiProperty({ nullable: true, type: Number, description: '마지막으로 처리한 시즌 (시즌 목록 순회 시 · 현재 시즌만이면 null)' })
+  currentSeason!: number | null;
 }
 
 export class SchedulerJobsDto {

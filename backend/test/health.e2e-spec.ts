@@ -38,6 +38,7 @@ describe('GET /health (e2e)', () => {
       lastOutcome: null,
       lastError: null,
       lastProcessed: null,
+      currentSeason: null,
     });
   });
 });
