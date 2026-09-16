@@ -35,6 +35,24 @@ const CONTAINER_PASSWORD = 'verify-only-throwaway'
 const TARGET_DB = 'pitchlog_verify'
 const READY_TIMEOUT_MS = 60_000
 
+/**
+ * 복원 전 pitchlog_verify 에 만들어야 하는 확장.
+ * backup.mjs 는 `pg_dump -n public` 이라 CREATE EXTENSION 이 덤프에 포함되지 않는다 —
+ * 확장은 복원 측에서 보장한다 (2026-09-16 실측 · gin_trgm_ops does not exist).
+ *
+ * 근거: prisma/migrations/20260910120000_search_indexes/migration.sql:9 · sql/search-indexes.sql:16
+ * (`pg_trgm` 만 · text_pattern_ops 는 postgres 내장 opclass).
+ * 새 확장 추가 시 이 상수를 갱신한다.
+ *
+ * BACKUP_RESTORE_EXTENSIONS (쉼표 구분) 로 실행 시 오버라이드 가능.
+ */
+const REQUIRED_EXTENSIONS = (
+  process.env.BACKUP_RESTORE_EXTENSIONS
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+) ?? ['pg_trgm']
+
 /** 테이블마다 count(*) 를 한 번의 왕복으로 받는다 */
 const COUNT_SQL = `
 SELECT table_name || ' ' ||
@@ -190,6 +208,20 @@ async function main() {
     await psql(name, 'postgres', `CREATE DATABASE ${TARGET_DB}`)
     await psql(name, TARGET_DB, 'DROP SCHEMA IF EXISTS public CASCADE')
     console.log('   public 비움')
+
+    // 확장은 덤프에 없으므로 여기서 만든다. SCHEMA public 을 명시해 search_path 의존을 제거 —
+    // 실측 에러 "operator class public.gin_trgm_ops does not exist" 가 스키마 한정이라 public 고정.
+    // CREATE SCHEMA IF NOT EXISTS 로 안전 · CREATE EXTENSION 도 IF NOT EXISTS 로 재실행 안전.
+    // 덤프의 CREATE SCHEMA public 과 충돌 가능성은 pg_restore --exit-on-error 로 드러난다 (사람 실측 판정).
+    await psql(name, TARGET_DB, 'CREATE SCHEMA IF NOT EXISTS public')
+    for (const ext of REQUIRED_EXTENSIONS) {
+      try {
+        await psql(name, TARGET_DB, `CREATE EXTENSION IF NOT EXISTS ${ext} SCHEMA public`)
+      } catch (cause) {
+        fail(`확장 생성 실패: ${ext} — ${cause.message}\n  이미지(${PG_IMAGE})에 확장이 없을 수 있다. BACKUP_RESTORE_EXTENSIONS 로 조정하거나 다른 이미지를 쓴다.`)
+      }
+    }
+    console.log(`   확장 생성: ${REQUIRED_EXTENSIONS.join(', ')}`)
 
     console.log('\n3. 복원')
     // --exit-on-error: 조용히 넘어가는 오류가 있으면 리허설의 의미가 없다
