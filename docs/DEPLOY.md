@@ -192,7 +192,7 @@ npm run backup:verify -- <경로>
 
 행 수 일치 출력을 `docs/AGENT_RUNS.md` 판 행에 남긴다.
 
-**확장**: 덤프는 `pg_dump -n public` 라 `CREATE EXTENSION` 이 포함되지 않는다 (`backup.mjs` 결정 · 무건드). 복원 리허설이 시작 전에 필요 확장을 pitchlog_verify 에 만든다 — 현재 `pg_trgm` 하나 (`restore-check.mjs` 의 `REQUIRED_EXTENSIONS` 상수). **새 확장을 스키마에 도입하면 이 상수를 갱신해야 리허설이 통과한다.** `BACKUP_RESTORE_EXTENSIONS` env 로 쉼표 구분 오버라이드 가능.
+**확장**: 덤프는 `pg_dump -n public` 라 `CREATE EXTENSION` 이 포함되지 않는다 (`backup.mjs` 결정 · 무건드). 복원 리허설은 `pg_restore` 를 세 섹션으로 분할해 **pre-data (스키마·테이블) 복원 뒤 · post-data (인덱스·제약) 앞** 에 확장을 만든다 — 현재 `pg_trgm` 하나 (`restore-check.mjs` 의 `REQUIRED_EXTENSIONS` 상수). **새 확장을 스키마에 도입하면 이 상수를 갱신해야 리허설이 통과한다.** `BACKUP_RESTORE_EXTENSIONS` env 로 쉼표 구분 오버라이드 가능.
 
 ### 리허설 실패: `FATAL: the database system is starting up`
 
@@ -212,7 +212,15 @@ Command was: CREATE INDEX competitions_name_trgm_idx ON public.competitions USIN
 
 원인: `backup.mjs` 는 `pg_dump -n public` 이라 `CREATE EXTENSION` 이 덤프에 포함되지 않음. 복원 대상 pitchlog_verify 에 `pg_trgm` 이 없어 trgm 인덱스 생성이 실패.
 
-수정 (`fix/restore-check-extensions` 판): 2단계 "빈 DB 준비" 직후에 `CREATE SCHEMA IF NOT EXISTS public` → `CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA public` 을 실행. 스키마 한정 (`SCHEMA public`) 으로 search_path 의존 제거. 새 확장 추가 시 `REQUIRED_EXTENSIONS` 상수 갱신.
+수정 (`fix/restore-check-sections` 판): 3단계 `pg_restore` 를 `--section=pre-data` → `CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA public` → `--section=data` → `--section=post-data` 로 분할. pre-data 가 `CREATE SCHEMA public` 을 만들고 · 그 뒤 확장이 생기고 · 마지막 post-data 인덱스가 `public.gin_trgm_ops` 를 참조. 새 확장 추가 시 `REQUIRED_EXTENSIONS` 상수 갱신.
+
+### 리허설 실패: `schema "public" already exists`
+
+증상 (2026-09-16 실측 · #75 머지 후): 2단계 "확장 생성: pg_trgm" 통과 후 3단계 `pg_restore` 실패 — `Command was: CREATE SCHEMA public;`.
+
+원인: 덤프 안에 `CREATE SCHEMA public` 이 포함돼 있어 스크립트가 미리 `CREATE SCHEMA IF NOT EXISTS public` 을 만들면 `pg_restore --exit-on-error` 가 already exists 로 실패. #75 판이 두 경로 중 IF NOT EXISTS 를 택했으나 실측이 CREATE SCHEMA 포함 사실을 확정.
+
+수정 (`fix/restore-check-sections` 판): 2단계에서 `CREATE SCHEMA` · 확장 생성 호출을 제거. 3단계 `pg_restore` 를 pre-data → 확장 → data → post-data 3분할 — public 은 pg_restore pre-data 가 만든다.
 
 ### 유닛 문법 검증 (서버에서)
 
