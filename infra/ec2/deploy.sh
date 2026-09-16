@@ -9,6 +9,16 @@
 # 실패 시 롤백 명령을 출력한다. dist.prev 는 이전 성공본.
 set -euo pipefail
 
+# `--no-pull` 은 자기 재실행 재진입 플래그 — 인자 파싱에서 먼저 소진하고 REF 로 넘어간다.
+# 사용:
+#   bash deploy.sh                # main pull · HEAD 바뀌면 자기 재실행
+#   bash deploy.sh dev            # dev pull · HEAD 바뀌면 자기 재실행
+#   bash deploy.sh --no-pull      # 내부용 — 재실행판이 최신화 블록을 건너뛰어 무한 재실행 방지
+NO_PULL=false
+if [[ "${1:-}" == "--no-pull" ]]; then
+  NO_PULL=true
+  shift
+fi
 REF="${1:-main}"
 REPO_DIR="/opt/pitchlog"
 BACKEND_DIR="$REPO_DIR/backend"
@@ -24,12 +34,28 @@ fi
 # dist.prev 없는 첫 배포에서 성립하지 않는 "mv dist.prev dist" 안내가 나오는 결함 정정 (2026-09-15 실측).
 trap 'if [[ -d "$BACKEND_DIR/dist.prev" ]]; then echo "✗ 실패 — 롤백: cd $BACKEND_DIR && rm -rf dist && mv dist.prev dist && sudo systemctl restart pitchlog-backend"; else echo "✗ 실패 — 첫 배포 · 롤백 대상 없음 (dist.prev 없음)"; fi' ERR
 
-echo "▶ 저장소 최신화 ($REF)"
+# cd 는 두 갈래 공유 — --no-pull 재실행판이 cwd 에 의존하지 않게.
 cd "$REPO_DIR"
-git fetch --prune origin
-git checkout "$REF"
-git pull --ff-only origin "$REF"
-echo "  → $(git rev-parse --short HEAD) — $(git log -1 --pretty=%s)"
+
+# bash 는 실행 중 열어둔 파일(옛 inode)을 계속 읽고 git 은 새 inode 로 파일을 교체한다.
+# pull 로 deploy.sh 자기 자신이 바뀌면 이번 실행은 옛 코드로 끝까지 도는 결함(2026-09-15 EC2 실측 · 3회 실행 필요).
+# HEAD 가 바뀌었으면 `exec bash "$0" --no-pull "$REF"` 로 프로세스를 새 파일로 갈아 재실행.
+if [[ "$NO_PULL" == "true" ]]; then
+  echo "▶ 저장소 최신화 건너뜀 (--no-pull · 자기 재실행 중)"
+  echo "  → $(git rev-parse --short HEAD) — $(git log -1 --pretty=%s)"
+else
+  echo "▶ 저장소 최신화 ($REF)"
+  HEAD_BEFORE="$(git rev-parse HEAD)"
+  git fetch --prune origin
+  git checkout "$REF"
+  git pull --ff-only origin "$REF"
+  HEAD_AFTER="$(git rev-parse HEAD)"
+  echo "  → $(git rev-parse --short HEAD) — $(git log -1 --pretty=%s)"
+  if [[ "$HEAD_BEFORE" != "$HEAD_AFTER" ]]; then
+    echo "▶ deploy.sh 갱신됨 → 새 버전으로 재실행"
+    exec bash "$0" --no-pull "$REF"
+  fi
+fi
 
 cd "$BACKEND_DIR"
 
