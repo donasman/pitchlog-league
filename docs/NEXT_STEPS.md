@@ -491,11 +491,14 @@ docker run --rm -i postgres:17 pg_restore --list < <덤프 경로>
 
 - [ ] **대진표** — 슬롯 3상태(`CONFIRMED` / `PENDING_WINNER` / `UNDRAWN`).
       "Round of 32 승자" · "추첨 예정" · "예선 통과" 표기
-- [ ] **컵 경기 상세의 통계 탭 결손** — 오류가 아니라 정상 상태로 구분해 보여준다.
-      `EmptyState`에 `action` prop이 없다 (1단계 감사 #11)
-- [ ] **시즌 선택기** — 백필이 끝나지 않은 시즌은 노출하지 않는다.
-      부분적으로 찬 순위표는 사용자가 최신인 줄 안다
+- [x] ~~**컵 경기 상세의 통계 탭 결손**~~ ✅ 2026-09-16 — `availability=not_provided` 상태로 이미 구현
+      (`normalize.js:971` · i18n `match.unavailable.not_provided.*`). #47 (경기 상세 3탭) 판에서 도입됨.
+- [x] ~~**시즌 선택기** — 백필이 끝나지 않은 시즌은 노출하지 않는다.~~ ✅ 2026-09-16 — `utils/seasons.js:21` `selectableSeasons` 가
+      `dataState=COMPLETE` 만 노출 (현재 30/30 DONE = 5시즌 다 노출) · 상세 백필 중 경기는 `MatchPage.jsx:266~275`
+      `availability=not_collected` "수집 중" 카드로 표시. **시즌 숨김 불필요 판정** (`explore/season-selector-incomplete` 09-16).
 - [ ] **컵 대회 화면** — 순위표가 없다. 리그와 구조가 달라야 한다
+- [ ] **/matches 페이지 초기 로드 15~25초** — 워커 실행 중 관측 (2026-09-16). 유휴 시 재측정 필요
+- [ ] **경기 목록 팀 로고 대부분 빈 placeholder** — 일부 팀만 표시 (2026-09-16 관측)
 - [x] ~~1단계 감사 12건~~ ✅ `c6c43b4`에서 전부 수정됨. 단 #11의 `EmptyState` `action` prop은
       여전히 없다 — 컵 통계 탭 결손 표시에서 필요하다
 

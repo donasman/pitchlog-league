@@ -84,9 +84,11 @@ sudo systemctl status pitchlog-backend
    - `VITE_USE_MOCK=false`
    - `VITE_API_BASE_URL` 은 **비워 둔다** (same-origin · `services/http.js:15` 이 빈 값이면 `/api/...` 상대경로로 fetch)
 4. **Production Branch**: `dev` — 저장소 기본 브랜치가 `dev` 이므로 Vercel Settings → Git → Production Branch 를 `dev` 로 (main 은 뒤처져 있어 `vercel.json` 이 없다)
-5. 배포 후 확인:
+5. **SPA fallback rewrite 필수** — `vercel.json` 에 `/((?!api/|assets/).*)` → `/index.html` 규칙이 있어야 딥링크(주소창 직접 진입·새로고침·북마크) 가 404 안 뜬다. `/api/` 규칙 뒤 순서 유지. `/assets/` 는 Vite 빌드 정적 자산이라 명시 제외 (Vercel filesystem 매치가 rewrite 앞선다지만 안전 보장 위해 · root 정적 favicon 등은 filesystem 우선 매치에 의존).
+6. 배포 후 확인:
    - Vercel URL 접속 → 홈에서 순위표 로딩되면 성공
    - 로딩되면 `vercel.json` 의 rewrite (`/api/:path*` → `http://3.36.159.128:3000/api/:path*`) 가 동작 중
+   - **딥링크 검증**: (a) `/matches/<id>` 직접 진입 200 (b) `/api/health` 는 백엔드 응답 (c) 존재하지 않는 경로 `/없는경로` 는 앱 자체 404 화면 (Vercel 404 아님)
 
 ## 재배포
 
@@ -115,6 +117,14 @@ curl -sf http://localhost:3000/health
 첫 실 배포 (2026-09-15) 에서 나옴. 원인: `backend/prisma.config.ts` 가 로딩 시 `DATABASE_URL` 을 요구하는데, `deploy.sh` 는 `ubuntu` 로 돌아 `/etc/pitchlog/backend.env` (0600 · `pitchlog` 소유) 를 읽지 못한다. `prisma generate` 는 DB 에 접속하지 않으므로 실 값이 필요 없다.
 
 수정: `deploy.sh` 가 `prisma generate` 앞에 placeholder `DATABASE_URL` 을 인라인으로 세팅 (`fix/deploy-prisma-generate-env` 판). **한 번만 돌린다** — `deploy.sh` 는 pull 로 자기 자신이 바뀌면 자동 재실행된다 (`fix/deploy-self-update` 판).
+
+### 직접 URL 진입 시 `404: NOT_FOUND` (클릭 이동은 정상)
+
+증상 (2026-09-16 실측 · Chrome · 재현 2/2): `https://pitchlog-league.vercel.app/matches/1552754` 를 주소창에 직접 열면 Vercel `404: NOT_FOUND`. 홈 → 경기 → 카드 클릭으로 같은 URL 에 도달하면 정상. 새로고침·링크 공유·북마크 전부 404.
+
+원인: `frontend/vercel.json` 에 `/api/:path*` rewrite 만 있고 나머지 경로를 `index.html` 로 보내는 SPA fallback 이 없음. Vercel 은 정적 파일이 없으면 그대로 404.
+
+수정 (`fix/vercel-spa-fallback` 판): rewrites 에 `{ "source": "/((?!api/|assets/).*)", "destination": "/index.html" }` 규칙 추가 · `/api/` 규칙 뒤 순서. `/assets/` 는 Vite 빌드 정적 자산이라 명시 제외.
 
 ### 어시스턴트가 무슨 질문에도 같은 답 (Vercel 엣지 캐시)
 
