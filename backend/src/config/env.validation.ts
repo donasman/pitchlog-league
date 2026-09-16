@@ -130,6 +130,15 @@ export class EnvironmentVariables {
   @IsString()
   @Validate(BackfillWorkerSeasonsConstraint)
   BACKFILL_WORKER_SEASONS: string = '';
+
+  /** 일일 자율 상한 (콜 수 · 하드 한도 7,500 미만). 워커·CLI 백필이 이걸로 자체 중단.
+   *  /status 카운터 약 2분 지연 실측 · 소모 속도 약 160콜/분 → 실제 사용량은 상한보다 최대 ~320콜 많을 수 있다.
+   *  기본 5700 (여유 1,480) · 백필-2 기간 운영값 6800 권장 (여유 380 · 실측 최대 ~7,120). */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(7500)
+  BACKFILL_DAILY_CAP: number = 5700;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
