@@ -116,6 +116,14 @@ curl -sf http://localhost:3000/health
 
 수정: `deploy.sh` 가 `prisma generate` 앞에 placeholder `DATABASE_URL` 을 인라인으로 세팅 (`fix/deploy-prisma-generate-env` 판). 이후 배포는 그냥 `bash deploy.sh` 로 진행.
 
+### 어시스턴트가 무슨 질문에도 같은 답 (Vercel 엣지 캐시)
+
+증상: 두 번째 이후 질문의 응답이 첫 답과 동일. 브라우저 devtools 응답 헤더에 `x-vercel-cache: HIT` · 응답 ~19ms · 같은 ETag.
+
+원인: `CacheHeaderInterceptor` 가 HTTP 메서드를 안 가려 POST `/api/assistant` 응답에도 `Cache-Control: public, max-age=60` 이 붙음. Vercel 엣지가 정직하게 60초 캐시 → 같은 URL 로 오는 후속 POST 에 첫 답 재사용.
+
+수정: 인터셉터가 GET 이외 메서드에 `Cache-Control: no-store` 를 명시 (`fix/cache-header-post` 판). Vercel 엣지가 no-store 를 보고 캐시하지 않음. 재배포 후 자연 해결.
+
 ### 첫 실 배포 결함이 다시 나오면
 
 첫 실 배포 (2026-09-15) 에서 잡힌 결함 2건이 이 판(`fix/deploy-prisma-generate-env`)으로 정정됨:
