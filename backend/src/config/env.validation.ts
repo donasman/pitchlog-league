@@ -6,7 +6,37 @@
 // 앱에서는 @nestjs/core 가 불러오지만, 이 모듈만 단독으로 쓰는 단위 테스트에서는 여기서 챙겨야 한다.
 import 'reflect-metadata';
 import { plainToInstance, Type } from 'class-transformer';
-import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUrl, Matches, Max, Min, MinLength, validateSync } from 'class-validator';
+import {
+  IsEnum, IsIn, IsInt, IsOptional, IsString, IsUrl, Matches, Max, Min, MinLength, Validate,
+  ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface, validateSync,
+} from 'class-validator';
+import { SEASON_YEARS } from '../ingestion/l0/competitions.catalog.js';
+
+/** BACKFILL_WORKER_SEASONS 검증 — 빈 문자열 허용 · 쉼표 구분 · SEASON_YEARS 안 · 중복·빈 항목 거부.
+ *  EnvironmentVariables 클래스보다 먼저 정의해야 @Validate 데코레이터가 참조 가능. */
+@ValidatorConstraint({ name: 'backfillWorkerSeasons', async: false })
+export class BackfillWorkerSeasonsConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string') return false;
+    if (value === '') return true;
+    const parts = value.split(',');
+    if (parts.some((p) => p.length === 0)) return false;
+    const nums = parts.map((p) => Number(p));
+    if (nums.some((n) => !Number.isInteger(n))) return false;
+    if (nums.some((n) => !(SEASON_YEARS as readonly number[]).includes(n))) return false;
+    if (new Set(nums).size !== nums.length) return false;
+    return true;
+  }
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} 는 쉼표 구분 시즌 목록 · 각 항목이 [${SEASON_YEARS.join(', ')}] 에 있어야 하고 중복·빈 항목 금지`;
+  }
+}
+
+/** BACKFILL_WORKER_SEASONS 문자열 → 시즌 정수 배열. 빈 문자열이면 빈 배열. */
+export function parseBackfillWorkerSeasons(value: string): number[] {
+  if (value === '') return [];
+  return value.split(',').map(Number);
+}
 
 export enum NodeEnv {
   Development = 'development',
@@ -94,6 +124,12 @@ export class EnvironmentVariables {
   @Min(1)
   @Max(10000)
   BACKFILL_WORKER_LIMIT: number = 200;
+
+  /** 백필 워커가 순회할 시즌 목록 (쉼표 구분 · 앞에서부터 처리 · 빈 값 = 현재 시즌만).
+   *  예: "2025,2024,2023,2022" (백필-2 나머지 4시즌). 각 항목은 SEASON_YEARS 에 있어야 한다. */
+  @IsString()
+  @Validate(BackfillWorkerSeasonsConstraint)
+  BACKFILL_WORKER_SEASONS: string = '';
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
