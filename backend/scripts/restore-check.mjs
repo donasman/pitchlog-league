@@ -213,36 +213,46 @@ async function main() {
     // pg_dump 는 덤프를 pre-data(스키마·테이블) · data(COPY) · post-data(인덱스·제약) 로 나눈다.
     // 덤프 안에 CREATE SCHEMA public 이 포함돼 있으므로 (2026-09-16 실측 · 직전 판 판정) public 은 pg_restore 가 만든다.
     // 인덱스가 public.gin_trgm_ops 를 참조하므로 확장은 pre-data 뒤 · post-data 앞에 만들어야 한다.
-    // --exit-on-error: 조용히 넘어가는 오류가 있으면 리허설의 의미가 없다
+    // --exit-on-error: 조용히 넘어가는 오류가 있으면 리허설의 의미가 없다.
+    // quiet: true — pg_restore stderr 를 캡처해 실패 시 원인 전문이 catch 로 흘러가게 (2026-09-16 3회 루프 실측: 이 캡처가 없으면 간헐 실패 원인 소실).
     const pgRestore = (section) => run('docker', [
       'exec', '-i', '-e', 'PGPASSWORD=' + CONTAINER_PASSWORD, name,
       'pg_restore', '--no-owner', '--no-privileges', '--exit-on-error',
       '--section', section,
       '-U', 'postgres', '-d', TARGET_DB,
-    ], { stdinFile: dumpPath })
+    ], { stdinFile: dumpPath, quiet: true })
 
+    // 각 단계 개별 try/catch — 어느 섹션이 죽었는지 · 그 섹션의 pg_restore stderr 전문을 함께 노출.
+    // 바깥 감싸는 try/catch 를 두지 않는다 — 그렇게 하면 어느 단계 실패인지 message 에서 사라진다
+    // (직전 판이 그 방식 + 잘못된 이름의 `BackupError` 참조로 실패 경로에서 ReferenceError 를 냈다).
     try {
       await pgRestore('pre-data')
       console.log('   pre-data (스키마·테이블)')
+    } catch (cause) {
+      fail(`복원 실패 (pre-data · pg_restore --section=pre-data):\n${cause.message}`)
+    }
 
-      for (const ext of REQUIRED_EXTENSIONS) {
-        try {
-          await psql(name, TARGET_DB, `CREATE EXTENSION IF NOT EXISTS ${ext} SCHEMA public`)
-        } catch (cause) {
-          fail(`확장 생성 실패: ${ext} — ${cause.message}\n  이미지(${PG_IMAGE})에 확장이 없을 수 있다. BACKUP_RESTORE_EXTENSIONS 로 조정하거나 다른 이미지를 쓴다.`)
-        }
+    for (const ext of REQUIRED_EXTENSIONS) {
+      try {
+        await psql(name, TARGET_DB, `CREATE EXTENSION IF NOT EXISTS ${ext} SCHEMA public`)
+      } catch (cause) {
+        fail(`확장 생성 실패: ${ext} — ${cause.message}\n  이미지(${PG_IMAGE})에 확장이 없을 수 있다. BACKUP_RESTORE_EXTENSIONS 로 조정하거나 다른 이미지를 쓴다.`)
       }
-      console.log(`   확장 생성: ${REQUIRED_EXTENSIONS.join(', ')}`)
+    }
+    console.log(`   확장 생성: ${REQUIRED_EXTENSIONS.join(', ')}`)
 
+    try {
       await pgRestore('data')
       console.log('   data (COPY)')
+    } catch (cause) {
+      fail(`복원 실패 (data · pg_restore --section=data):\n${cause.message}`)
+    }
 
+    try {
       await pgRestore('post-data')
       console.log('   post-data (인덱스·제약)')
     } catch (cause) {
-      // 확장 생성이 던진 BackupError 는 그대로 — "복원이 실패했다" 로 감싸면 확장 실패 안내가 가려짐
-      if (cause instanceof BackupError) throw cause
-      fail(`복원이 실패했다 (위 pg_restore 오류 참조).\n  ${cause.message.split('\n')[0]}`)
+      fail(`복원 실패 (post-data · pg_restore --section=post-data):\n${cause.message}`)
     }
     console.log('   오류 없이 끝남')
 
