@@ -192,6 +192,8 @@ npm run backup:verify -- <경로>
 
 행 수 일치 출력을 `docs/AGENT_RUNS.md` 판 행에 남긴다.
 
+**확장**: 덤프는 `pg_dump -n public` 라 `CREATE EXTENSION` 이 포함되지 않는다 (`backup.mjs` 결정 · 무건드). 복원 리허설이 시작 전에 필요 확장을 pitchlog_verify 에 만든다 — 현재 `pg_trgm` 하나 (`restore-check.mjs` 의 `REQUIRED_EXTENSIONS` 상수). **새 확장을 스키마에 도입하면 이 상수를 갱신해야 리허설이 통과한다.** `BACKUP_RESTORE_EXTENSIONS` env 로 쉼표 구분 오버라이드 가능.
+
 ### 리허설 실패: `FATAL: the database system is starting up`
 
 증상 (2026-09-16 실측 · Windows Docker Desktop · postgres:17): `npm run backup:verify -- <경로>` 1단계 "준비됨" 직후 2단계에서 `psql: error: connection to server on socket ... FATAL: the database system is starting up` → docker 종료 코드 2 → 실패.
@@ -199,6 +201,18 @@ npm run backup:verify -- <경로>
 원인: 공식 postgres 이미지는 첫 기동 시 initdb 후 임시 서버(localhost-only) 를 내리고 본 서버를 재기동한다. 초판 준비 판정(`pg_isready` 1회 성공)이 임시 서버 단계에서도 통과해 재기동 사이에 걸림.
 
 수정 (`fix/restore-check-ready-race` 판): 준비 판정을 `docker exec psql -Atc 'select 1'` **연속 2회 성공** (1초 간격 · 최대 60초) 으로 교체. 임시 서버 → 본 서버 재기동 사이 흔들림을 잡는다.
+
+### 리허설 실패: `operator class "public.gin_trgm_ops" does not exist`
+
+증상 (2026-09-16 실측 · #74 머지 후): 1·2단계 통과 후 3단계 `pg_restore` 실패 —
+```
+ERROR: operator class "public.gin_trgm_ops" does not exist for access method "gin"
+Command was: CREATE INDEX competitions_name_trgm_idx ON public.competitions USING gin (name public.gin_trgm_ops);
+```
+
+원인: `backup.mjs` 는 `pg_dump -n public` 이라 `CREATE EXTENSION` 이 덤프에 포함되지 않음. 복원 대상 pitchlog_verify 에 `pg_trgm` 이 없어 trgm 인덱스 생성이 실패.
+
+수정 (`fix/restore-check-extensions` 판): 2단계 "빈 DB 준비" 직후에 `CREATE SCHEMA IF NOT EXISTS public` → `CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA public` 을 실행. 스키마 한정 (`SCHEMA public`) 으로 search_path 의존 제거. 새 확장 추가 시 `REQUIRED_EXTENSIONS` 상수 갱신.
 
 ### 유닛 문법 검증 (서버에서)
 
