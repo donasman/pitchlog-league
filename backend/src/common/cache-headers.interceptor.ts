@@ -23,6 +23,15 @@ export class CacheHeaderInterceptor implements NestInterceptor {
     if (!req.url.startsWith('/api/')) return next.handle();
 
     const res = ctx.switchToHttp().getResponse<Response>();
+
+    // POST 등 비-GET 은 캐시하지 않는다. Vercel 엣지가 Cache-Control: public 을 보고
+    // POST /api/assistant 응답을 60초 캐시 → 같은 URL 로 오는 다른 질문에 첫 답 재사용
+    // (2026-09-15 실측 · `x-vercel-cache: HIT` · 19ms · 같은 ETag). no-store 로 엣지 캐시 차단.
+    if (req.method !== 'GET') {
+      res.setHeader('Cache-Control', 'no-store');
+      return next.handle();
+    }
+
     return next.handle().pipe(
       map((body: unknown) => {
         const json = JSON.stringify(body);
