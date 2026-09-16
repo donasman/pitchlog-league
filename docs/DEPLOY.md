@@ -88,7 +88,7 @@ sudo systemctl status pitchlog-backend
 6. 배포 후 확인:
    - Vercel URL 접속 → 홈에서 순위표 로딩되면 성공
    - 로딩되면 `vercel.json` 의 rewrite (`/api/:path*` → `http://3.36.159.128:3000/api/:path*`) 가 동작 중
-   - **딥링크 검증**: (a) `/matches/<id>` 직접 진입 200 (b) `/api/health` 는 백엔드 응답 (c) 존재하지 않는 경로 `/없는경로` 는 앱 자체 404 화면 (Vercel 404 아님)
+   - **딥링크 검증**: (a) `/matches/<id>` 직접 진입 200 (b) `/api/competitions` 는 백엔드 응답 (`/api/health` 는 안 됨 — health 는 `/health` 로만 매핑돼 있어 `/api/health` 는 `Cannot GET` 을 돌려준다) (c) 존재하지 않는 경로 `/없는경로` 는 앱 자체 404 화면 (Vercel 404 아님)
 
 ## 재배포
 
@@ -117,6 +117,14 @@ curl -sf http://localhost:3000/health
 첫 실 배포 (2026-09-15) 에서 나옴. 원인: `backend/prisma.config.ts` 가 로딩 시 `DATABASE_URL` 을 요구하는데, `deploy.sh` 는 `ubuntu` 로 돌아 `/etc/pitchlog/backend.env` (0600 · `pitchlog` 소유) 를 읽지 못한다. `prisma generate` 는 DB 에 접속하지 않으므로 실 값이 필요 없다.
 
 수정: `deploy.sh` 가 `prisma generate` 앞에 placeholder `DATABASE_URL` 을 인라인으로 세팅 (`fix/deploy-prisma-generate-env` 판). **한 번만 돌린다** — `deploy.sh` 는 pull 로 자기 자신이 바뀌면 자동 재실행된다 (`fix/deploy-self-update` 판).
+
+### ssh `Connection timed out` (3000 포트는 정상)
+
+증상: `ssh ubuntu@3.36.159.128` 이 timed out · 브라우저·curl 로 `http://3.36.159.128:3000/*` 는 정상 응답.
+
+원인: EC2 보안 그룹 SSH(22) 인바운드 규칙 소스가 "내 IP/32" 로 잡혀 있는데 로컬 공인 IP 가 바뀜 (Wi-Fi 이동·ISP DHCP 갱신 등). 3000 포트는 0.0.0.0/0 이라 무관.
+
+조치: AWS EC2 콘솔 → 보안 그룹 `pitchlog-league-backend-sg` → 인바운드 규칙 편집 → SSH 소스 **"내 IP"** 재선택 → 규칙 저장. 몇 초 뒤 ssh 재시도.
 
 ### 직접 URL 진입 시 `404: NOT_FOUND` (클릭 이동은 정상)
 
