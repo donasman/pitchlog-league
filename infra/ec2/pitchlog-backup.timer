@@ -1,0 +1,12 @@
+[Unit]
+Description=PitchLog Backup Daily (KST 04:00 = UTC 19:00)
+
+[Timer]
+# 서버는 UTC (Ubuntu 24.04 EC2 기본). KST 04:00 = UTC 19:00.
+OnCalendar=*-*-* 19:00:00
+# 서버가 그 시각에 꺼져 있었으면 다음 부팅에서 1회 실행 (백업 결손 방지)
+Persistent=true
+Unit=pitchlog-backup.service
+
+[Install]
+WantedBy=timers.target
