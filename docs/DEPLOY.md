@@ -142,6 +142,59 @@ curl -sf http://localhost:3000/health
 
 이후 배포는 그대로 `bash /opt/pitchlog/infra/ec2/deploy.sh` — 자기 자신이 바뀌면 로그에 "▶ deploy.sh 갱신됨 → 새 버전으로 재실행" 이 한 줄 뜨고 새 코드로 이어진다.
 
+## 백업 자동화 (S3)
+
+`infra/backup-s3` 판 (2026-09-15) — 매일 KST 04:00 (UTC 19:00) 에 `pitchlog-backup.timer` 가 발동해 `backup-to-s3.sh` → `backup.mjs` (로컬 `pg_dump 17`) → `aws s3 cp` 로 `s3://<BUCKET>/dumps/pitchlog-YYYYMMDD-HHMM.dump` 업로드. 로컬 사본은 `/var/backups/pitchlog` 에 backup.mjs 보관 정책(최근 8 + 월별 12) 그대로. S3 는 버킷 수명 주기 30일.
+
+### 준비 (사용자 몫 · 이 판 밖)
+
+- 버킷 생성 · 리전 `ap-northeast-2` · 수명 주기 30일
+- EC2 인스턴스 IAM 역할에 정책 부착 — `s3:PutObject` · `s3:ListBucket` · `s3:GetObject` (버킷 자체와 `arn:aws:s3:::<BUCKET>/dumps/*`)
+- 인스턴스에 역할 attach
+- `sudoedit /etc/pitchlog/backend.env` → `BACKUP_S3_BUCKET=<실 버킷>` 채움
+
+### 확인
+
+```bash
+# 역할 확인 (없으면 curl 실패)
+curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/
+
+# 타이머 확인 — 다음 실행 시각·최근 실행
+systemctl list-timers pitchlog-backup*
+
+# 수동 1회 실행 (첫 성공 확인)
+sudo systemctl start pitchlog-backup
+sudo journalctl -u pitchlog-backup -n 30
+
+# S3 확인
+aws s3 ls s3://<BUCKET>/dumps/ | tail -3
+```
+
+### 복원 리허설 (PC · Docker 필요)
+
+EC2 엔 Docker 를 깔지 않는다. 리허설은 PC 에서:
+
+```bash
+aws s3 cp s3://<BUCKET>/dumps/<최신 파일명> .
+cd backend
+npm run backup:verify -- <경로>
+```
+
+행 수 일치 출력을 `docs/AGENT_RUNS.md` 판 행에 남긴다.
+
+### 유닛 문법 검증 (서버에서)
+
+```bash
+sudo systemd-analyze verify /etc/systemd/system/pitchlog-backup.service
+sudo systemd-analyze verify /etc/systemd/system/pitchlog-backup.timer
+```
+
+### 이 판이 하지 않은 것 (별도 판)
+
+- **리허설 자동화** — EC2 네이티브 `postgresql-17` + 주간 타이머 · `restore-check.mjs` 에 로컬 러너 추가. 4-b 워커 뒤 별도 판 (`docs/NEXT_STEPS.md` 4장 예약).
+- **실패 알림** — journald 감시·통지는 4-b 스케줄러 판에서 (지금은 실패도 journald 에만 남음).
+- **S3 버전 관리** — 스코프 밖.
+
 ## 실측 체크리스트 (첫 배포 후)
 
 - [ ] **(a) 백엔드 직결**: `curl -i http://3.36.159.128:3000/health` — 200 · `db:true`
