@@ -32,7 +32,8 @@ describe('경기·순위표 API (e2e)', () => {
     const league = await prisma.competition.create({
       data: {
         apiCompetitionId: API + 1, name: 'Stand League', country: 'Testland', countryCode: 'TL', type: CompetitionType.LEAGUE,
-        format: CompetitionFormat.ROUND_ROBIN, isTracked: true, displayOrder: 99,
+        // feat/scope-expansion (2026-09-17): competitionVisibleWhere 임계 displayOrder<=60 하에서 통과해야 순위표 조회
+        format: CompetitionFormat.ROUND_ROBIN, isTracked: true, displayOrder: 55,
       },
     });
     const cup = await prisma.competition.create({

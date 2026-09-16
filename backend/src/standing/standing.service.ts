@@ -8,7 +8,7 @@ import { latestOf } from '../common/as-of.js';
 import { CompetitionService } from '../competition/competition.service.js';
 import { competitionRef } from '../match/match.dto.js';
 import { TeamService } from '../team/team.service.js';
-import { screenCompetitionWhere } from '../ingestion/screen-scope.js';
+import { competitionVisibleWhere } from '../ingestion/screen-scope.js';
 import { CompetitionFormat, type Standing, type Team } from '../generated/prisma/client.js';
 import type { StandingRowDto, StandingsListDto, StandingsQueryDto, StandingsTableDto } from './standing.dto.js';
 
@@ -34,7 +34,7 @@ export class StandingService {
     } else {
       // 화면 6대회 전부. 시즌이 없는 대회(등록 전 컵)는 표를 내지 않는다 — 실패가 아니다
       const comps = await this.prisma.competition.findMany({
-        where: screenCompetitionWhere,
+        where: competitionVisibleWhere,
         include: { seasons: { include: { season: true, backfillJob: true }, orderBy: { season: { year: 'desc' } } }, topFlight: true },
         orderBy: { displayOrder: 'asc' },
       });

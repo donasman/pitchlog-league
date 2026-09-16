@@ -22,7 +22,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiFootballClient } from '../api-football/api-football.client.js';
 import { IngestionRunService } from '../ingestion-run.service.js';
 import { batchUpsert } from '../../prisma/batch-upsert.js';
-import { screenCompetitionWhere } from '../screen-scope.js';
+import { squadScopeWhere } from '../screen-scope.js';
 import { BackfillPhase, IngestionLayer, Prisma } from '../../generated/prisma/client.js';
 import type { ApiSquad } from '../api-football/api-football.types.js';
 import { diffSquads, type OpenEntry, type TeamSnapshot } from './squad-diff.js';
@@ -200,7 +200,7 @@ export class L1Service {
    */
   private async currentSeasonYear(): Promise<number> {
     const rows = await this.prisma.competitionSeason.findMany({
-      where: { isCurrent: true, competition: screenCompetitionWhere },
+      where: { isCurrent: true, competition: squadScopeWhere },
       select: { season: { select: { year: true } } },
     });
     if (rows.length === 0) throw new Error('현재 시즌인 화면 대회가 없다 — L0 를 먼저 돌린다');
@@ -210,7 +210,7 @@ export class L1Service {
   /** 화면에 나오는 대회의 현재 시즌 참가팀. 대회가 겹쳐도 팀은 하나로 */
   private async targetTeams(): Promise<{ teamId: number; apiTeamId: number; name: string; competitionSeasonIds: number[] }[]> {
     const entries = await this.prisma.competitionEntry.findMany({
-      where: { competitionSeason: { isCurrent: true, competition: screenCompetitionWhere } },
+      where: { competitionSeason: { isCurrent: true, competition: squadScopeWhere } },
       select: { competitionSeasonId: true, team: { select: { id: true, apiTeamId: true, name: true } } },
     });
     const byTeam = new Map<number, { teamId: number; apiTeamId: number; name: string; competitionSeasonIds: number[] }>();

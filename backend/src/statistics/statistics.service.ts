@@ -13,7 +13,7 @@ import { seasonLabel } from '../common/season-label.js';
 import { CompetitionService } from '../competition/competition.service.js';
 import { TeamService } from '../team/team.service.js';
 import { competitionRef } from '../match/match.dto.js';
-import { screenCompetitionWhere } from '../ingestion/screen-scope.js';
+import { competitionVisibleWhere } from '../ingestion/screen-scope.js';
 import { RankingCategory, type Competition, type CompetitionSeason, type Player, type Season, type Team, type TopRanking } from '../generated/prisma/client.js';
 import { playerRef } from '../player/player.dto.js';
 import type { BreakdownEntryDto, RankRowDto, RankingListDto, RankingsQueryDto } from './statistics.dto.js';
@@ -69,7 +69,7 @@ export class StatisticsService {
 
     // ── 모드 B — 화면 6대회 합산 ──
     const comps = (await this.prisma.competition.findMany({
-      where: screenCompetitionWhere,
+      where: competitionVisibleWhere,
       include: {
         seasons: { include: { season: true }, orderBy: { season: { year: 'desc' } } },
       },
