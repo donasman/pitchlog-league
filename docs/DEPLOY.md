@@ -237,6 +237,54 @@ sudo systemd-analyze verify /etc/systemd/system/pitchlog-backup.timer
 - **실패 알림** — journald 감시·통지는 4-b 스케줄러 판에서 (지금은 실패도 journald 에만 남음).
 - **S3 버전 관리** — 스코프 밖.
 
+## 백필 워커 (4-b-1)
+
+`MatchDetailsBackfillService` 를 `@Cron` 트리거로 반복 호출해 백필-2 나머지 4시즌을 무인 실행한다. 종료 사유 3분류 (`cap_reached`/`no_targets`/`error`) 로 상태 갱신 · 겹침 방지 · 커서 재개.
+
+### 켜기 (재시작이 곧 스위치)
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# SCHEDULER_ENABLED=true
+# BACKFILL_WORKER_ENABLED=true
+sudo systemctl restart pitchlog-backend
+sudo journalctl -u pitchlog-backend -f
+# 부팅 로그: "scheduler: enabled · jobs=[QuotaSnapshotJob, BackfillWorkerJob]"
+# 각 트리거: "backfill-worker cap_reached · processed=..."
+```
+
+### 상태 확인
+
+```bash
+curl -s http://localhost:3000/health | jq .scheduler
+```
+
+`scheduler.jobs.backfillWorker.lastOutcome` 가 `cap_reached` / `no_targets` / `error` 중 하나로 갱신됨. `running=true` 면 진행 중.
+
+### 끄기
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# SCHEDULER_ENABLED=false   (마스터 · 모든 잡 중지)
+# 또는 BACKFILL_WORKER_ENABLED=false (백필만 중지 · quota-snapshot 은 유지)
+sudo systemctl restart pitchlog-backend
+```
+
+### env (4개)
+
+- `SCHEDULER_ENABLED` (true/false · 기본 false) — 마스터. false 면 어떤 잡도 등록되지 않는다 (부팅 로그 "scheduler: disabled").
+- `BACKFILL_WORKER_ENABLED` (true/false · 기본 false) — 백필 잡 개별.
+- `BACKFILL_WORKER_CRON` (기본 `5 * * * *` · 매시 5분) — 5 필드 cron. 유효성은 부팅 시 `CronJob` 생성자가 검사 (잘못된 값이면 부팅 실패).
+- `BACKFILL_WORKER_LIMIT` (정수 · 기본 200) — 1회 실행당 경기 수 상한 (4콜/경기 · 200 = 800콜).
+
+### 안전장치
+
+- **API_FOOTBALL_KEY 없음** — `SCHEDULER_ENABLED=true` 여도 잡 등록 안 됨 (부팅 경고 · 부팅 성공).
+- **겹침 방지** — 이전 실행 중이면 다음 트리거 skip (in-memory 플래그 · 재시작 시 초기화).
+- **에러 재시도** — `error` 는 다음 트리거에서 재시도 · 커서 (`backfill_jobs.cursor_match_id`) 가 재개 보장.
+- **DAILY_CAP** — 워커가 매 경기 앞에서 `/status` 로 확인 · 5,700 초과 시 자연 중단 (`cap_reached`).
+- **`/status` 스냅숏** — `SCHEDULER_ENABLED=true` 면 매일 UTC 23:50 자동 (개별 스위치 없음).
+
 ## 실측 체크리스트 (첫 배포 후)
 
 - [ ] **(a) 백엔드 직결**: `curl -i http://3.36.159.128:3000/health` — 200 · `db:true`

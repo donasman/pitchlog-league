@@ -5,12 +5,16 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SchedulerStateService } from '../scheduler/scheduler-state.service.js';
 import { HealthResponseDto } from './health.dto.js';
 
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scheduler: SchedulerStateService,
+  ) {}
 
   @Get()
   @ApiOkResponse({ type: HealthResponseDto })
@@ -21,6 +25,12 @@ export class HealthController {
       status: db ? 'ok' : 'degraded',
       db,
       asOf: new Date().toISOString(),
+      scheduler: {
+        enabled: process.env.SCHEDULER_ENABLED === 'true',
+        jobs: {
+          backfillWorker: this.scheduler.getBackfillWorkerState(),
+        },
+      },
     };
     if (!db) throw new ServiceUnavailableException(body);
     return body;
