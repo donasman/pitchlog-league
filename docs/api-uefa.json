@@ -1,0 +1,1089 @@
+{
+  "meta": {
+    "probedAt": "2026-09-16T16:18:19.213Z",
+    "calls": 15,
+    "statusBefore": {
+      "used": 6800,
+      "limit": 7500,
+      "remaining": 700
+    }
+  },
+  "perSeason": {
+    "3": {
+      "2022": {
+        "total": 175,
+        "rounds": [
+          {
+            "name": "3rd Qualifying Round",
+            "count": 14,
+            "finished": 13,
+            "teams": 14,
+            "sampleFixtureId": 923170
+          },
+          {
+            "name": "Play-offs",
+            "count": 20,
+            "finished": 17,
+            "teams": 20,
+            "sampleFixtureId": 933556
+          },
+          {
+            "name": "Group Stage - 1",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946760
+          },
+          {
+            "name": "Group Stage - 2",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946776
+          },
+          {
+            "name": "Group Stage - 3",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946792
+          },
+          {
+            "name": "Group Stage - 4",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946807
+          },
+          {
+            "name": "Group Stage - 5",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946824
+          },
+          {
+            "name": "Group Stage - 6",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946840
+          },
+          {
+            "name": "Knockout Round Play-offs",
+            "count": 16,
+            "finished": 14,
+            "teams": 16,
+            "sampleFixtureId": 971765
+          },
+          {
+            "name": "Round of 16",
+            "count": 16,
+            "finished": 15,
+            "teams": 16,
+            "sampleFixtureId": 1010824
+          },
+          {
+            "name": "Quarter-finals",
+            "count": 8,
+            "finished": 7,
+            "teams": 8,
+            "sampleFixtureId": 1016039
+          },
+          {
+            "name": "Semi-finals",
+            "count": 4,
+            "finished": 3,
+            "teams": 4,
+            "sampleFixtureId": 1022970
+          },
+          {
+            "name": "Final",
+            "count": 1,
+            "finished": 0,
+            "teams": 2,
+            "sampleFixtureId": 1027580
+          }
+        ],
+        "uniqueTeams": 57
+      },
+      "2023": {
+        "total": 175,
+        "rounds": [
+          {
+            "name": "3rd Qualifying Round",
+            "count": 14,
+            "finished": 14,
+            "teams": 14,
+            "sampleFixtureId": 1104954
+          },
+          {
+            "name": "Play-offs",
+            "count": 20,
+            "finished": 20,
+            "teams": 20,
+            "sampleFixtureId": 1119758
+          },
+          {
+            "name": "Group Stage - 1",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126339
+          },
+          {
+            "name": "Group Stage - 2",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126354
+          },
+          {
+            "name": "Group Stage - 3",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126370
+          },
+          {
+            "name": "Group Stage - 4",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126387
+          },
+          {
+            "name": "Group Stage - 5",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126400
+          },
+          {
+            "name": "Group Stage - 6",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126418
+          },
+          {
+            "name": "Knockout Round Play-offs",
+            "count": 16,
+            "finished": 13,
+            "teams": 16,
+            "sampleFixtureId": 1149542
+          },
+          {
+            "name": "Round of 16",
+            "count": 16,
+            "finished": 16,
+            "teams": 16,
+            "sampleFixtureId": 1175845
+          },
+          {
+            "name": "Quarter-finals",
+            "count": 8,
+            "finished": 7,
+            "teams": 8,
+            "sampleFixtureId": 1184826
+          },
+          {
+            "name": "Semi-finals",
+            "count": 4,
+            "finished": 4,
+            "teams": 4,
+            "sampleFixtureId": 1196783
+          },
+          {
+            "name": "Final",
+            "count": 1,
+            "finished": 1,
+            "teams": 2,
+            "sampleFixtureId": 1199589
+          }
+        ],
+        "uniqueTeams": 57
+      },
+      "2024": {
+        "total": 269,
+        "rounds": [
+          {
+            "name": "1st Qualifying Round",
+            "count": 12,
+            "finished": 11,
+            "teams": 12,
+            "sampleFixtureId": 1208484
+          },
+          {
+            "name": "2nd Qualifying Round",
+            "count": 18,
+            "finished": 18,
+            "teams": 18,
+            "sampleFixtureId": 1251000
+          },
+          {
+            "name": "3rd Qualifying Round",
+            "count": 26,
+            "finished": 22,
+            "teams": 26,
+            "sampleFixtureId": 1274773
+          },
+          {
+            "name": "Play-offs",
+            "count": 24,
+            "finished": 21,
+            "teams": 24,
+            "sampleFixtureId": 1287610
+          },
+          {
+            "name": "League Stage - 1",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299128
+          },
+          {
+            "name": "League Stage - 2",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299154
+          },
+          {
+            "name": "League Stage - 3",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299165
+          },
+          {
+            "name": "League Stage - 4",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299182
+          },
+          {
+            "name": "League Stage - 5",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299201
+          },
+          {
+            "name": "League Stage - 6",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299218
+          },
+          {
+            "name": "League Stage - 7",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299236
+          },
+          {
+            "name": "League Stage - 8",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299271
+          },
+          {
+            "name": "Knockout Round Play-offs",
+            "count": 16,
+            "finished": 14,
+            "teams": 16,
+            "sampleFixtureId": 1345755
+          },
+          {
+            "name": "Round of 16",
+            "count": 16,
+            "finished": 15,
+            "teams": 16,
+            "sampleFixtureId": 1353186
+          },
+          {
+            "name": "Quarter-finals",
+            "count": 8,
+            "finished": 6,
+            "teams": 8,
+            "sampleFixtureId": 1361276
+          },
+          {
+            "name": "Semi-finals",
+            "count": 4,
+            "finished": 4,
+            "teams": 4,
+            "sampleFixtureId": 1371990
+          },
+          {
+            "name": "Final",
+            "count": 1,
+            "finished": 1,
+            "teams": 2,
+            "sampleFixtureId": 1374897
+          }
+        ],
+        "uniqueTeams": 76
+      },
+      "2025": {
+        "total": 271,
+        "rounds": [
+          {
+            "name": "1st Qualifying Round",
+            "count": 16,
+            "finished": 13,
+            "teams": 16,
+            "sampleFixtureId": 1383540
+          },
+          {
+            "name": "2nd Qualifying Round",
+            "count": 16,
+            "finished": 12,
+            "teams": 16,
+            "sampleFixtureId": 1410068
+          },
+          {
+            "name": "3rd Qualifying Round",
+            "count": 26,
+            "finished": 23,
+            "teams": 26,
+            "sampleFixtureId": 1421215
+          },
+          {
+            "name": "Play-offs",
+            "count": 24,
+            "finished": 23,
+            "teams": 24,
+            "sampleFixtureId": 1437226
+          },
+          {
+            "name": "League Stage - 1",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451164
+          },
+          {
+            "name": "League Stage - 2",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451180
+          },
+          {
+            "name": "League Stage - 3",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451203
+          },
+          {
+            "name": "League Stage - 4",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451214
+          },
+          {
+            "name": "League Stage - 5",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451239
+          },
+          {
+            "name": "League Stage - 6",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451257
+          },
+          {
+            "name": "League Stage - 7",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451274
+          },
+          {
+            "name": "League Stage - 8",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451299
+          },
+          {
+            "name": "Round of 32",
+            "count": 16,
+            "finished": 13,
+            "teams": 16,
+            "sampleFixtureId": 1515530
+          },
+          {
+            "name": "Round of 16",
+            "count": 16,
+            "finished": 14,
+            "teams": 16,
+            "sampleFixtureId": 1528334
+          },
+          {
+            "name": "Quarter-finals",
+            "count": 8,
+            "finished": 8,
+            "teams": 8,
+            "sampleFixtureId": 1535334
+          },
+          {
+            "name": "Semi-finals",
+            "count": 4,
+            "finished": 4,
+            "teams": 4,
+            "sampleFixtureId": 1540872
+          },
+          {
+            "name": "Final",
+            "count": 1,
+            "finished": 1,
+            "teams": 2,
+            "sampleFixtureId": 1544596
+          }
+        ],
+        "uniqueTeams": 77
+      },
+      "2026": {
+        "total": 224,
+        "rounds": [
+          {
+            "name": "1st Qualifying Round",
+            "count": 12,
+            "finished": 11,
+            "teams": 12,
+            "sampleFixtureId": 1554444
+          },
+          {
+            "name": "2nd Qualifying Round",
+            "count": 18,
+            "finished": 16,
+            "teams": 18,
+            "sampleFixtureId": 1593521
+          },
+          {
+            "name": "3rd Qualifying Round",
+            "count": 26,
+            "finished": 25,
+            "teams": 26,
+            "sampleFixtureId": 1606352
+          },
+          {
+            "name": "Play-offs",
+            "count": 24,
+            "finished": 22,
+            "teams": 24,
+            "sampleFixtureId": 1623435
+          },
+          {
+            "name": "League Stage - 1",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636312
+          },
+          {
+            "name": "League Stage - 2",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636293
+          },
+          {
+            "name": "League Stage - 3",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636280
+          },
+          {
+            "name": "League Stage - 4",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636254
+          },
+          {
+            "name": "League Stage - 5",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636298
+          },
+          {
+            "name": "League Stage - 6",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636297
+          },
+          {
+            "name": "League Stage - 7",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636290
+          },
+          {
+            "name": "League Stage - 8",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636238
+          }
+        ],
+        "uniqueTeams": 76
+      }
+    },
+    "848": {
+      "2022": {
+        "total": 415,
+        "rounds": [
+          {
+            "name": "1st Qualifying Round",
+            "count": 60,
+            "finished": 53,
+            "teams": 60,
+            "sampleFixtureId": 867303
+          },
+          {
+            "name": "2nd Qualifying Round",
+            "count": 106,
+            "finished": 100,
+            "teams": 106,
+            "sampleFixtureId": 896991
+          },
+          {
+            "name": "3rd Qualifying Round",
+            "count": 64,
+            "finished": 58,
+            "teams": 64,
+            "sampleFixtureId": 924423
+          },
+          {
+            "name": "Play-offs",
+            "count": 44,
+            "finished": 38,
+            "teams": 44,
+            "sampleFixtureId": 933591
+          },
+          {
+            "name": "Group Stage - 1",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946663
+          },
+          {
+            "name": "Group Stage - 2",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946674
+          },
+          {
+            "name": "Group Stage - 3",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946694
+          },
+          {
+            "name": "Group Stage - 4",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946710
+          },
+          {
+            "name": "Group Stage - 5",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946726
+          },
+          {
+            "name": "Group Stage - 6",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 946738
+          },
+          {
+            "name": "Knockout Round Play-offs",
+            "count": 16,
+            "finished": 14,
+            "teams": 16,
+            "sampleFixtureId": 971785
+          },
+          {
+            "name": "Round of 16",
+            "count": 16,
+            "finished": 15,
+            "teams": 16,
+            "sampleFixtureId": 1010842
+          },
+          {
+            "name": "Quarter-finals",
+            "count": 8,
+            "finished": 6,
+            "teams": 8,
+            "sampleFixtureId": 1016047
+          },
+          {
+            "name": "Semi-finals",
+            "count": 4,
+            "finished": 3,
+            "teams": 4,
+            "sampleFixtureId": 1022976
+          },
+          {
+            "name": "Final",
+            "count": 1,
+            "finished": 1,
+            "teams": 2,
+            "sampleFixtureId": 1027571
+          }
+        ],
+        "uniqueTeams": 177
+      },
+      "2023": {
+        "total": 417,
+        "rounds": [
+          {
+            "name": "1st Qualifying Round",
+            "count": 62,
+            "finished": 56,
+            "teams": 62,
+            "sampleFixtureId": 1036939
+          },
+          {
+            "name": "2nd Qualifying Round",
+            "count": 106,
+            "finished": 97,
+            "teams": 106,
+            "sampleFixtureId": 1074574
+          },
+          {
+            "name": "3rd Qualifying Round",
+            "count": 64,
+            "finished": 61,
+            "teams": 64,
+            "sampleFixtureId": 1105037
+          },
+          {
+            "name": "Play-offs",
+            "count": 44,
+            "finished": 38,
+            "teams": 44,
+            "sampleFixtureId": 1119770
+          },
+          {
+            "name": "Group Stage - 1",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126240
+          },
+          {
+            "name": "Group Stage - 2",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126256
+          },
+          {
+            "name": "Group Stage - 3",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126272
+          },
+          {
+            "name": "Group Stage - 4",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126288
+          },
+          {
+            "name": "Group Stage - 5",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126313
+          },
+          {
+            "name": "Group Stage - 6",
+            "count": 16,
+            "finished": 16,
+            "teams": 32,
+            "sampleFixtureId": 1126325
+          },
+          {
+            "name": "Knockout Round Play-offs",
+            "count": 16,
+            "finished": 15,
+            "teams": 16,
+            "sampleFixtureId": 1149532
+          },
+          {
+            "name": "Round of 16",
+            "count": 16,
+            "finished": 14,
+            "teams": 16,
+            "sampleFixtureId": 1175861
+          },
+          {
+            "name": "Quarter-finals",
+            "count": 8,
+            "finished": 5,
+            "teams": 8,
+            "sampleFixtureId": 1184818
+          },
+          {
+            "name": "Semi-finals",
+            "count": 4,
+            "finished": 4,
+            "teams": 4,
+            "sampleFixtureId": 1196787
+          },
+          {
+            "name": "Final",
+            "count": 1,
+            "finished": 0,
+            "teams": 2,
+            "sampleFixtureId": 1199596
+          }
+        ],
+        "uniqueTeams": 178
+      },
+      "2024": {
+        "total": 409,
+        "rounds": [
+          {
+            "name": "1st Qualifying Round",
+            "count": 50,
+            "finished": 45,
+            "teams": 50,
+            "sampleFixtureId": 1208446
+          },
+          {
+            "name": "2nd Qualifying Round",
+            "count": 98,
+            "finished": 91,
+            "teams": 98,
+            "sampleFixtureId": 1251920
+          },
+          {
+            "name": "3rd Qualifying Round",
+            "count": 60,
+            "finished": 51,
+            "teams": 60,
+            "sampleFixtureId": 1274823
+          },
+          {
+            "name": "Play-offs",
+            "count": 48,
+            "finished": 46,
+            "teams": 48,
+            "sampleFixtureId": 1287592
+          },
+          {
+            "name": "League Stage - 1",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299294
+          },
+          {
+            "name": "League Stage - 2",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299328
+          },
+          {
+            "name": "League Stage - 3",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299336
+          },
+          {
+            "name": "League Stage - 4",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299347
+          },
+          {
+            "name": "League Stage - 5",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299382
+          },
+          {
+            "name": "League Stage - 6",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1299386
+          },
+          {
+            "name": "Knockout Round Play-offs",
+            "count": 16,
+            "finished": 14,
+            "teams": 16,
+            "sampleFixtureId": 1325908
+          },
+          {
+            "name": "Round of 16",
+            "count": 16,
+            "finished": 13,
+            "teams": 16,
+            "sampleFixtureId": 1353206
+          },
+          {
+            "name": "Quarter-finals",
+            "count": 8,
+            "finished": 7,
+            "teams": 8,
+            "sampleFixtureId": 1361288
+          },
+          {
+            "name": "Semi-finals",
+            "count": 4,
+            "finished": 3,
+            "teams": 4,
+            "sampleFixtureId": 1371998
+          },
+          {
+            "name": "Final",
+            "count": 1,
+            "finished": 1,
+            "teams": 2,
+            "sampleFixtureId": 1374899
+          }
+        ],
+        "uniqueTeams": 164
+      },
+      "2025": {
+        "total": 409,
+        "rounds": [
+          {
+            "name": "1st Qualifying Round",
+            "count": 48,
+            "finished": 44,
+            "teams": 48,
+            "sampleFixtureId": 1383458
+          },
+          {
+            "name": "2nd Qualifying Round",
+            "count": 100,
+            "finished": 90,
+            "teams": 100,
+            "sampleFixtureId": 1410004
+          },
+          {
+            "name": "3rd Qualifying Round",
+            "count": 60,
+            "finished": 52,
+            "teams": 60,
+            "sampleFixtureId": 1421174
+          },
+          {
+            "name": "Playoff round",
+            "count": 48,
+            "finished": 45,
+            "teams": 48,
+            "sampleFixtureId": 1438686
+          },
+          {
+            "name": "League Stage - 1",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451357
+          },
+          {
+            "name": "League Stage - 2",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451373
+          },
+          {
+            "name": "League Stage - 3",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451394
+          },
+          {
+            "name": "League Stage - 4",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451405
+          },
+          {
+            "name": "League Stage - 5",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451422
+          },
+          {
+            "name": "League Stage - 6",
+            "count": 18,
+            "finished": 18,
+            "teams": 36,
+            "sampleFixtureId": 1451447
+          },
+          {
+            "name": "Round of 32",
+            "count": 16,
+            "finished": 15,
+            "teams": 16,
+            "sampleFixtureId": 1508938
+          },
+          {
+            "name": "Round of 16",
+            "count": 16,
+            "finished": 15,
+            "teams": 16,
+            "sampleFixtureId": 1528352
+          },
+          {
+            "name": "Quarter-finals",
+            "count": 8,
+            "finished": 8,
+            "teams": 8,
+            "sampleFixtureId": 1535344
+          },
+          {
+            "name": "Semi-finals",
+            "count": 4,
+            "finished": 4,
+            "teams": 4,
+            "sampleFixtureId": 1540880
+          },
+          {
+            "name": "Final",
+            "count": 1,
+            "finished": 1,
+            "teams": 2,
+            "sampleFixtureId": 1544608
+          }
+        ],
+        "uniqueTeams": 164
+      },
+      "2026": {
+        "total": 366,
+        "rounds": [
+          {
+            "name": "1st Qualifying Round",
+            "count": 52,
+            "finished": 47,
+            "teams": 52,
+            "sampleFixtureId": 1554410
+          },
+          {
+            "name": "2nd Qualifying Round",
+            "count": 98,
+            "finished": 87,
+            "teams": 98,
+            "sampleFixtureId": 1593486
+          },
+          {
+            "name": "3rd Qualifying Round",
+            "count": 60,
+            "finished": 56,
+            "teams": 60,
+            "sampleFixtureId": 1607573
+          },
+          {
+            "name": "Playoff round",
+            "count": 48,
+            "finished": 40,
+            "teams": 48,
+            "sampleFixtureId": 1623396
+          },
+          {
+            "name": "League Stage - 1",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636445
+          },
+          {
+            "name": "League Stage - 2",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636434
+          },
+          {
+            "name": "League Stage - 3",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636448
+          },
+          {
+            "name": "League Stage - 4",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636435
+          },
+          {
+            "name": "League Stage - 5",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636433
+          },
+          {
+            "name": "League Stage - 6",
+            "count": 18,
+            "finished": 0,
+            "teams": 36,
+            "sampleFixtureId": 1636455
+          }
+        ],
+        "uniqueTeams": 165
+      }
+    }
+  },
+  "samples": [
+    {
+      "comp": "UEL",
+      "season": 2026,
+      "round": "1st Qualifying Round",
+      "fixtureId": 1554444,
+      "lineups": 2,
+      "stats_fixture": 2
+    },
+    {
+      "comp": "UECL",
+      "season": 2026,
+      "round": "1st Qualifying Round",
+      "fixtureId": 1554410,
+      "lineups": 2,
+      "stats_fixture": 0
+    }
+  ]
+}
