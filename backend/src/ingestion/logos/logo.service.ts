@@ -20,7 +20,7 @@ import { mkdir, writeFile, access } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { SCREEN_DISPLAY_ORDER_MAX } from '../screen-scope.js';
+import { matchVisibleWhere } from '../screen-scope.js';
 
 /** 배지 최대 표시 크기가 56px 이므로 2배수. contain 이라 원본 비율은 유지된다 */
 const SIZE_PX = 96;
@@ -63,7 +63,7 @@ export class LogoService {
     const outputDir = this.outputDir();
 
     const competitions = await this.prisma.competition.findMany({
-      where: { isTracked: true, displayOrder: { lte: SCREEN_DISPLAY_ORDER_MAX } },
+      where: matchVisibleWhere,
       orderBy: { displayOrder: 'asc' },
     });
 
@@ -71,12 +71,13 @@ export class LogoService {
       .filter((c) => c.logoUrl)
       .map((c) => ({ kind: 'competitions', apiId: c.apiCompetitionId, name: c.name, url: c.logoUrl! }));
 
-    // 화면에 나오는 대회의 "현재 시즌" 참가팀만. 백필로 팀이 늘면 다시 실행한다
+    // 화면에 나오는 대회(matchVisibleWhere · 19개)의 "현재 시즌" 참가팀만.
+    // 백필로 팀이 늘면 다시 실행한다.
     const entries = await this.prisma.competitionEntry.findMany({
       where: {
         competitionSeason: {
           isCurrent: true,
-          competition: { isTracked: true, displayOrder: { lte: SCREEN_DISPLAY_ORDER_MAX } },
+          competition: matchVisibleWhere,
         },
       },
       include: { team: true },

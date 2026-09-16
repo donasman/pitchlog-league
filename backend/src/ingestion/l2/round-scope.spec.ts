@@ -151,3 +151,118 @@ describe('라운드 컷 판정', () => {
     expect(r.rounds[0].teamCount).toBe(4);
   });
 });
+
+// feat/scope-expansion 판 (2026-09-17) — 본선 판정 (isMainStage) · 팀 수 연속 3 이상
+describe('본선 판정 (isMainStage)', () => {
+  // 리그페이즈 8라운드에 36팀이 다 참가하되 3개 라운드만 시뮬 (연속 3 임계에 걸리게)
+  // 5대리그 팀은 TOP(1)~TOP(15) · 나머지 21팀은 LOW · 이 3라운드 중 첫 두 라운드는 비5대리그 맞대결만
+  const LEAGUE_STAGE_TEAMS = Array.from({ length: 36 }, (_, i) => (i < 15 ? TOP(i) : LOW(i - 15)));
+
+  it('UCL 리그페이즈 비5대리그 맞대결이 (신규) 상세 대상에 포함된다', () => {
+    // League Stage 1~3: 36팀 유지 → 연속 3 → isMainStage=true → detailEligible=true
+    // 비5대리그 팀만 붙는 경기여도 hasTopFlight=false 인데 isMainStage=true 로 잡힘
+    const r = resolveRoundScope({
+      roundNames: ['League Stage - 1', 'League Stage - 2', 'League Stage - 3'],
+      fixtures: [
+        ...roundOf('League Stage - 1', LEAGUE_STAGE_TEAMS),
+        ...roundOf('League Stage - 2', LEAGUE_STAGE_TEAMS),
+        ...roundOf('League Stage - 3', LEAGUE_STAGE_TEAMS),
+      ],
+      topFlightApiTeamIds: topFlight(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
+    });
+    const byName = Object.fromEntries(r.rounds.map((rr) => [rr.name, rr]));
+    // 세 라운드 다 팀 수 36 · 연속 3 → 본선
+    expect(byName['League Stage - 1'].isMainStage).toBe(true);
+    expect(byName['League Stage - 2'].isMainStage).toBe(true);
+    expect(byName['League Stage - 3'].isMainStage).toBe(true);
+    // 세 라운드 다 hasTopFlight=true (5대리그 팀 15명 포함) 이므로 detailEligible 은 무관 확정
+    // 비5대리그 맞대결도 라운드 수준에서 잡힘 (라운드 = 대상 최소 단위)
+    expect(byName['League Stage - 1'].detailEligible).toBe(true);
+  });
+
+  it('UEFA 예선 라운드는 여전히 제외된다 (연속 1)', () => {
+    // Q1(14팀) · Q2(18팀) · Q3(26팀) — 팀 수 다 다름 · 연속 1 · isMainStage=false
+    // 5대리그 팀 없으므로 hasTopFlight=false · isLateStage 도 false (팀 수 > 16)
+    const Q1_TEAMS = Array.from({ length: 14 }, (_, i) => LOW(i));
+    const Q2_TEAMS = Array.from({ length: 18 }, (_, i) => LOW(20 + i));
+    const Q3_TEAMS = Array.from({ length: 26 }, (_, i) => LOW(40 + i));
+    const r = resolveRoundScope({
+      roundNames: ['1st Qualifying Round', '2nd Qualifying Round', '3rd Qualifying Round'],
+      fixtures: [
+        ...roundOf('1st Qualifying Round', Q1_TEAMS),
+        ...roundOf('2nd Qualifying Round', Q2_TEAMS),
+        ...roundOf('3rd Qualifying Round', Q3_TEAMS),
+      ],
+      topFlightApiTeamIds: topFlight(1),
+    });
+    for (const rr of r.rounds) {
+      expect(rr.isMainStage).toBe(false);
+      expect(rr.detailEligible).toBe(false);
+    }
+    // 5대리그 팀 하나도 없으므로 cutOrdinal=null → included 도 다 false
+    expect(r.cutOrdinal).toBeNull();
+  });
+
+  it('국내 컵 (팀 수 계속 감소) 판정은 바뀌지 않는다', () => {
+    // Round of 64(64팀) → Round of 32(32) → Round of 16(16) → QF(8) → SF(4) → F(2)
+    // 팀 수 계속 감소 · 연속 1 · isMainStage=false · isLateStage 는 R16 부터
+    const round = (size: number) => Array.from({ length: size }, (_, i) => (i < 4 ? TOP(i) : LOW(i)));
+    const r = resolveRoundScope({
+      roundNames: ['Round of 64', 'Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Final'],
+      fixtures: [
+        ...roundOf('Round of 64', round(64)),
+        ...roundOf('Round of 32', round(32)),
+        ...roundOf('Round of 16', round(16)),
+        ...roundOf('Quarter-finals', round(8)),
+        ...roundOf('Semi-finals', round(4)),
+        ...roundOf('Final', round(2)),
+      ],
+      topFlightApiTeamIds: topFlight(0, 1, 2, 3),
+    });
+    for (const rr of r.rounds) {
+      expect(rr.isMainStage).toBe(false); // 컵은 본선 개념 없음
+    }
+    // detailEligible 은 기존 규칙(hasTopFlight OR isLateStage) 대로
+    const byName = Object.fromEntries(r.rounds.map((rr) => [rr.name, rr]));
+    expect(byName['Round of 64'].detailEligible).toBe(true);  // hasTopFlight
+    expect(byName['Round of 16'].detailEligible).toBe(true);  // isLateStage
+  });
+
+  it('2022·2023 구 조별리그(32팀 유지)에서도 본선으로 잡힌다', () => {
+    const GROUP_TEAMS = Array.from({ length: 32 }, (_, i) => (i < 10 ? TOP(i) : LOW(i - 10)));
+    const r = resolveRoundScope({
+      roundNames: ['Group Stage - 1', 'Group Stage - 2', 'Group Stage - 3'],
+      fixtures: [
+        ...roundOf('Group Stage - 1', GROUP_TEAMS),
+        ...roundOf('Group Stage - 2', GROUP_TEAMS),
+        ...roundOf('Group Stage - 3', GROUP_TEAMS),
+      ],
+      topFlightApiTeamIds: topFlight(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+    });
+    for (const rr of r.rounds) {
+      expect(rr.isMainStage).toBe(true);
+    }
+  });
+
+  it('경기 없는 라운드(추첨 전 · 팀 수 0)는 판정 유예 · 연속을 끊는다', () => {
+    // League Stage - 1(36팀) · League Stage - 2(0 · 추첨 전) · League Stage - 3(36팀)
+    // 팀 수 0 은 판정에서 빠지고 연속도 리셋 → 1,3 은 연속 1 · isMainStage=false
+    const TEAMS = Array.from({ length: 36 }, (_, i) => TOP(i));
+    const r = resolveRoundScope({
+      roundNames: ['League Stage - 1', 'League Stage - 2', 'League Stage - 3'],
+      fixtures: [
+        ...roundOf('League Stage - 1', TEAMS),
+        // League Stage - 2 는 경기 0
+        ...roundOf('League Stage - 3', TEAMS),
+      ],
+      topFlightApiTeamIds: topFlight(0),
+    });
+    const byName = Object.fromEntries(r.rounds.map((rr) => [rr.name, rr]));
+    expect(byName['League Stage - 2'].isMainStage).toBe(false); // 팀 수 0
+    // 1·3 도 연속이 끊겨 각각 길이 1 → isMainStage=false
+    expect(byName['League Stage - 1'].isMainStage).toBe(false);
+    expect(byName['League Stage - 3'].isMainStage).toBe(false);
+    // 다만 hasTopFlight=true 라 detailEligible 은 그대로 true
+    expect(byName['League Stage - 1'].detailEligible).toBe(true);
+  });
+});

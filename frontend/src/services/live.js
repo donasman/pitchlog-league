@@ -14,7 +14,7 @@
 import i18n from '@/i18n'
 import { apiGet, apiPost, NotImplementedError } from './http'
 import {
-  VISIBLE_COMPETITION_API_IDS,
+  COMPETITION_LIST_API_IDS,
   competitionRefFromSlug,
   deriveStage,
   groupCountOf,
@@ -132,7 +132,7 @@ export function __resetCache() {
 function loadCompetitions() {
   return _cachedGet('/api/competitions').then(res =>
     res.items
-      .filter(c => VISIBLE_COMPETITION_API_IDS.includes(c.apiId))
+      .filter(c => COMPETITION_LIST_API_IDS.includes(c.apiId))
       .map(normalizeCompetition),
   )
 }
