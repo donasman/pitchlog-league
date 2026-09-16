@@ -111,4 +111,26 @@ describe('validateEnv', () => {
       expect(() => validateEnv({ ...base, BACKFILL_WORKER_SEASONS: 'abc' })).toThrow(/BACKFILL_WORKER_SEASONS/);
     });
   });
+
+  describe('BACKFILL_DAILY_CAP (feat/backfill-daily-cap-env)', () => {
+    it('기본값은 5700 (미설정 시 현행 동작 유지)', () => {
+      expect(validateEnv({ ...base }).BACKFILL_DAILY_CAP).toBe(5700);
+    });
+
+    it('운영 예시 6800 통과', () => {
+      expect(validateEnv({ ...base, BACKFILL_DAILY_CAP: '6800' }).BACKFILL_DAILY_CAP).toBe(6800);
+    });
+
+    it('0 은 거부 (Min 1)', () => {
+      expect(() => validateEnv({ ...base, BACKFILL_DAILY_CAP: '0' })).toThrow(/BACKFILL_DAILY_CAP/);
+    });
+
+    it('7501 은 거부 (Max 7500 = 하드 한도)', () => {
+      expect(() => validateEnv({ ...base, BACKFILL_DAILY_CAP: '7501' })).toThrow(/BACKFILL_DAILY_CAP/);
+    });
+
+    it('비정수 "abc" 는 거부', () => {
+      expect(() => validateEnv({ ...base, BACKFILL_DAILY_CAP: 'abc' })).toThrow(/BACKFILL_DAILY_CAP/);
+    });
+  });
 });

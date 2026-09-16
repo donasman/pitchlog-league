@@ -288,13 +288,14 @@ sudoedit /etc/pitchlog/backend.env
 sudo systemctl restart pitchlog-backend
 ```
 
-### env (5개)
+### env (6개)
 
 - `SCHEDULER_ENABLED` (true/false · 기본 false) — 마스터. false 면 어떤 잡도 등록되지 않는다 (부팅 로그 "scheduler: disabled").
 - `BACKFILL_WORKER_ENABLED` (true/false · 기본 false) — 백필 잡 개별.
 - `BACKFILL_WORKER_CRON` (기본 `5 * * * *` · 매시 5분) — 5 필드 cron. 유효성은 부팅 시 `CronJob` 생성자가 검사 (잘못된 값이면 부팅 실패).
 - `BACKFILL_WORKER_LIMIT` (정수 · 기본 200) — 1회 실행당 경기 수 상한 (4콜/경기 · 200 = 800콜).
 - `BACKFILL_WORKER_SEASONS` (쉼표 구분 · 기본 빈 값) — 순회할 시즌 목록. 빈 값이면 현재 시즌만 순회 (초판 동작). 각 항목은 `SEASON_YEARS` (2022~2026) 안 · 중복·빈 항목 금지 · 부팅 시 거부.
+- `BACKFILL_DAILY_CAP` (정수 · 1~7500 · **기본 5700**) — 일일 자율 상한. 하드 한도 7,500 미만으로 지킨다. `/status` 카운터 약 2분 지연 · 실제 사용량은 상한보다 최대 ~320콜 많을 수 있음. **백필-2 기간 운영값 6800** 권장 (여유 380). 변경 절차: `sudoedit /etc/pitchlog/backend.env` → `sudo systemctl restart pitchlog-backend` → 시작 로그 `일일 상한 <N>콜` 확인. 하드 한도 7,500 초과 시 429 로 error 종료하지만 커서(`backfill_jobs.cursor_match_id`)로 재개된다 (손실·중복 없음).
 
 ### 백필-2 켜기 (나머지 4시즌 무인)
 
