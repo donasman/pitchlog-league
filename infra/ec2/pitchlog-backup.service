@@ -1,0 +1,18 @@
+[Unit]
+Description=PitchLog Backup (pg_dump → S3)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pitchlog
+Group=pitchlog
+EnvironmentFile=/etc/pitchlog/backend.env
+Environment=BACKUP_DIR=/var/backups/pitchlog
+Environment=AWS_DEFAULT_REGION=ap-northeast-2
+ExecStart=/bin/bash /opt/pitchlog/infra/ec2/backup-to-s3.sh
+
+# 로그는 journald 로 (journalctl -u pitchlog-backup)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pitchlog-backup
