@@ -209,28 +209,39 @@ async function main() {
     await psql(name, TARGET_DB, 'DROP SCHEMA IF EXISTS public CASCADE')
     console.log('   public 비움')
 
-    // 확장은 덤프에 없으므로 여기서 만든다. SCHEMA public 을 명시해 search_path 의존을 제거 —
-    // 실측 에러 "operator class public.gin_trgm_ops does not exist" 가 스키마 한정이라 public 고정.
-    // CREATE SCHEMA IF NOT EXISTS 로 안전 · CREATE EXTENSION 도 IF NOT EXISTS 로 재실행 안전.
-    // 덤프의 CREATE SCHEMA public 과 충돌 가능성은 pg_restore --exit-on-error 로 드러난다 (사람 실측 판정).
-    await psql(name, TARGET_DB, 'CREATE SCHEMA IF NOT EXISTS public')
-    for (const ext of REQUIRED_EXTENSIONS) {
-      try {
-        await psql(name, TARGET_DB, `CREATE EXTENSION IF NOT EXISTS ${ext} SCHEMA public`)
-      } catch (cause) {
-        fail(`확장 생성 실패: ${ext} — ${cause.message}\n  이미지(${PG_IMAGE})에 확장이 없을 수 있다. BACKUP_RESTORE_EXTENSIONS 로 조정하거나 다른 이미지를 쓴다.`)
-      }
-    }
-    console.log(`   확장 생성: ${REQUIRED_EXTENSIONS.join(', ')}`)
-
-    console.log('\n3. 복원')
+    console.log('\n3. 복원 (pg_restore 3분할 — pre-data → 확장 → data → post-data)')
+    // pg_dump 는 덤프를 pre-data(스키마·테이블) · data(COPY) · post-data(인덱스·제약) 로 나눈다.
+    // 덤프 안에 CREATE SCHEMA public 이 포함돼 있으므로 (2026-09-16 실측 · 직전 판 판정) public 은 pg_restore 가 만든다.
+    // 인덱스가 public.gin_trgm_ops 를 참조하므로 확장은 pre-data 뒤 · post-data 앞에 만들어야 한다.
     // --exit-on-error: 조용히 넘어가는 오류가 있으면 리허설의 의미가 없다
+    const pgRestore = (section) => run('docker', [
+      'exec', '-i', '-e', 'PGPASSWORD=' + CONTAINER_PASSWORD, name,
+      'pg_restore', '--no-owner', '--no-privileges', '--exit-on-error',
+      '--section', section,
+      '-U', 'postgres', '-d', TARGET_DB,
+    ], { stdinFile: dumpPath })
+
     try {
-      await run('docker', [
-        'exec', '-i', '-e', 'PGPASSWORD=' + CONTAINER_PASSWORD, name,
-        'pg_restore', '--no-owner', '--no-privileges', '--exit-on-error', '-U', 'postgres', '-d', TARGET_DB,
-      ], { stdinFile: dumpPath })
+      await pgRestore('pre-data')
+      console.log('   pre-data (스키마·테이블)')
+
+      for (const ext of REQUIRED_EXTENSIONS) {
+        try {
+          await psql(name, TARGET_DB, `CREATE EXTENSION IF NOT EXISTS ${ext} SCHEMA public`)
+        } catch (cause) {
+          fail(`확장 생성 실패: ${ext} — ${cause.message}\n  이미지(${PG_IMAGE})에 확장이 없을 수 있다. BACKUP_RESTORE_EXTENSIONS 로 조정하거나 다른 이미지를 쓴다.`)
+        }
+      }
+      console.log(`   확장 생성: ${REQUIRED_EXTENSIONS.join(', ')}`)
+
+      await pgRestore('data')
+      console.log('   data (COPY)')
+
+      await pgRestore('post-data')
+      console.log('   post-data (인덱스·제약)')
     } catch (cause) {
+      // 확장 생성이 던진 BackupError 는 그대로 — "복원이 실패했다" 로 감싸면 확장 실패 안내가 가려짐
+      if (cause instanceof BackupError) throw cause
       fail(`복원이 실패했다 (위 pg_restore 오류 참조).\n  ${cause.message.split('\n')[0]}`)
     }
     console.log('   오류 없이 끝남')
