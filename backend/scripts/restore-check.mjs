@@ -159,14 +159,30 @@ async function main() {
     ], { quiet: true })
     started = true
 
+    // postgres 이미지는 initdb 후 임시 서버(localhost-only)로 초기 SQL 실행 → 임시 서버 down → 본 서버 up 순서다.
+    // pg_isready 는 임시 서버 단계에서도 성공을 리턴해 "준비" 로 판정한 뒤 2단계에서 재기동 사이에 걸리면
+    // `FATAL: the database system is starting up` 으로 실패한다 (2026-09-16 Windows Docker Desktop 실측).
+    // psql `select 1` 이 **연속 2회 성공** 해야 준비 완료로 본다 — 임시 서버 → 재기동 사이 흔들림에 안 걸린다.
     const deadline = Date.now() + READY_TIMEOUT_MS
+    let consecutiveOk = 0
     for (;;) {
-      const r = spawnSync('docker', ['exec', name, 'pg_isready', '-U', 'postgres'], { encoding: 'utf8' })
-      if (r.status === 0) break
-      if (Date.now() > deadline) fail(`컨테이너가 ${READY_TIMEOUT_MS / 1000}초 안에 준비되지 않았다`)
-      await sleep(500)
+      const r = spawnSync(
+        'docker',
+        ['exec', name, 'psql', '-U', 'postgres', '-d', 'postgres', '-Atc', 'select 1'],
+        { encoding: 'utf8' },
+      )
+      if (r.status === 0 && (r.stdout ?? '').trim() === '1') {
+        consecutiveOk += 1
+        if (consecutiveOk >= 2) break
+      } else {
+        consecutiveOk = 0
+      }
+      if (Date.now() > deadline) {
+        fail(`컨테이너가 ${READY_TIMEOUT_MS / 1000}초 안에 준비되지 않았다 (psql \`select 1\` 연속 2회 성공 대기 · postgres 초기 재기동 레이스)`)
+      }
+      await sleep(1000)
     }
-    console.log('   준비됨')
+    console.log('   준비됨 (psql 연속 2회)')
 
     console.log(`\n2. 빈 DB 준비 (${TARGET_DB})`)
     // --schema=public 으로 뜬 덤프는 CREATE SCHEMA public 을 들고 있다.

@@ -192,6 +192,14 @@ npm run backup:verify -- <경로>
 
 행 수 일치 출력을 `docs/AGENT_RUNS.md` 판 행에 남긴다.
 
+### 리허설 실패: `FATAL: the database system is starting up`
+
+증상 (2026-09-16 실측 · Windows Docker Desktop · postgres:17): `npm run backup:verify -- <경로>` 1단계 "준비됨" 직후 2단계에서 `psql: error: connection to server on socket ... FATAL: the database system is starting up` → docker 종료 코드 2 → 실패.
+
+원인: 공식 postgres 이미지는 첫 기동 시 initdb 후 임시 서버(localhost-only) 를 내리고 본 서버를 재기동한다. 초판 준비 판정(`pg_isready` 1회 성공)이 임시 서버 단계에서도 통과해 재기동 사이에 걸림.
+
+수정 (`fix/restore-check-ready-race` 판): 준비 판정을 `docker exec psql -Atc 'select 1'` **연속 2회 성공** (1초 간격 · 최대 60초) 으로 교체. 임시 서버 → 본 서버 재기동 사이 흔들림을 잡는다.
+
 ### 유닛 문법 검증 (서버에서)
 
 ```bash
