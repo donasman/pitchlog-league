@@ -49,4 +49,35 @@ describe('validateEnv', () => {
         .toThrow(/ASSISTANT_DEBUG_HEADERS/);
     });
   });
+
+  describe('스케줄러 env (4-b-1)', () => {
+    it('SCHEDULER_ENABLED 기본값은 문자열 "false"', () => {
+      const env = validateEnv({ ...base });
+      expect(env.SCHEDULER_ENABLED).toBe('false');
+      expect(env.BACKFILL_WORKER_ENABLED).toBe('false');
+    });
+
+    it("SCHEDULER_ENABLED='yes' 는 거부 (true/false 만)", () => {
+      expect(() => validateEnv({ ...base, SCHEDULER_ENABLED: 'yes' })).toThrow(/SCHEDULER_ENABLED/);
+    });
+
+    it("BACKFILL_WORKER_ENABLED='yes' 는 거부", () => {
+      expect(() => validateEnv({ ...base, BACKFILL_WORKER_ENABLED: 'yes' })).toThrow(/BACKFILL_WORKER_ENABLED/);
+    });
+
+    it('BACKFILL_WORKER_LIMIT 기본은 200 · 음수 거부', () => {
+      expect(validateEnv({ ...base }).BACKFILL_WORKER_LIMIT).toBe(200);
+      expect(() => validateEnv({ ...base, BACKFILL_WORKER_LIMIT: '-1' })).toThrow(/BACKFILL_WORKER_LIMIT/);
+      expect(() => validateEnv({ ...base, BACKFILL_WORKER_LIMIT: '0' })).toThrow(/BACKFILL_WORKER_LIMIT/);
+    });
+
+    it('BACKFILL_WORKER_CRON 은 5 필드 · 잘못된 형식 거부', () => {
+      expect(validateEnv({ ...base, BACKFILL_WORKER_CRON: '5 * * * *' }).BACKFILL_WORKER_CRON).toBe('5 * * * *');
+      expect(() => validateEnv({ ...base, BACKFILL_WORKER_CRON: '5 * *' })).toThrow(/BACKFILL_WORKER_CRON/);
+    });
+
+    it('기본 BACKFILL_WORKER_CRON 은 "5 * * * *" (매시 5분)', () => {
+      expect(validateEnv({ ...base }).BACKFILL_WORKER_CRON).toBe('5 * * * *');
+    });
+  });
 });

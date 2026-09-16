@@ -22,6 +22,7 @@ import { PlayerModule } from './player/player.module.js';
 import { StatisticsModule } from './statistics/statistics.module.js';
 import { SearchModule } from './search/search.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
+import { SchedulerModule } from './scheduler/scheduler.module.js';
 
 /**
  * 모듈 경계 (BACKEND_GUIDE):
@@ -39,6 +40,7 @@ import { AssistantModule } from './assistant/assistant.module.js';
       envFilePath: ['.env.local', '.env'],
     }),
     ScheduleModule.forRoot(),
+    SchedulerModule.forRoot(),
     PrismaModule,
     HealthModule,
     ApiFootballModule,
