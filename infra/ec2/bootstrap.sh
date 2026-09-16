@@ -56,11 +56,20 @@ if [[ ! -f /swapfile ]]; then
 fi
 swapon --show
 
-echo "▶ AWS CLI (apt 기본 v1 — s3 cp/ls · IAM 역할 인증 지원 · 이 판 스코프 충분)"
-if ! command -v aws >/dev/null 2>&1; then
-  apt-get install -yqq awscli
+echo "▶ AWS CLI (공식 v2 zip — Ubuntu 24.04 apt 에 awscli 패키지 없음 · 2026-09-15 실측)"
+if command -v aws >/dev/null 2>&1; then
+  aws --version
+else
+  apt-get install -yqq unzip
+  AWSCLI_TMP="$(mktemp -d)"
+  trap 'rm -rf "$AWSCLI_TMP"' RETURN
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "$AWSCLI_TMP/awscliv2.zip"
+  unzip -q "$AWSCLI_TMP/awscliv2.zip" -d "$AWSCLI_TMP"
+  "$AWSCLI_TMP/aws/install"
+  aws --version
+  rm -rf "$AWSCLI_TMP"
+  trap - RETURN
 fi
-aws --version
 
 echo "▶ 실행 사용자 pitchlog (systemd User · nologin)"
 if ! id -u pitchlog >/dev/null 2>&1; then
