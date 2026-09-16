@@ -9,6 +9,7 @@
  *   5. GET /api/matches?limit=1 → items.length === 1 · total === 3 · hasMore === true
  *   6. GET /api/matches?limit=501 → 400 (Max 500)
  *   7. GET /api/matches?limit=abc → 400 (IsInt)
+ *   8. POST /api/assistant → Cache-Control: no-store (Vercel 엣지 캐시 차단) · Express 자동 ETag 허용
  */
 import 'dotenv/config';
 import { Test } from '@nestjs/testing';
@@ -228,5 +229,27 @@ describe('CacheHeaderInterceptor + matches limit (e2e)', () => {
   // Case 7 — limit 문자열 → 400
   it('Case 7: GET /api/matches?limit=abc → 400', async () => {
     await get(`/api/matches?competition=${COMP_LEAGUE}&season=2026&from=2026-08-01&to=2026-08-31&limit=abc`).expect(400);
+  });
+
+  // Case 8 — POST /api/assistant → Cache-Control: no-store (Vercel 엣지 캐시 차단)
+  // body {} 는 ValidationPipe 400 (question 필드 필수). 파이프 400 은 의도 —
+  // 인터셉터는 next.handle() 전에 no-store 를 세팅하므로 헤더 검증은 성립.
+  // 실제 값 '테스트' 로 보내면 GEMINI_API_KEY 있는 환경에서 실 Gemini 호출이 된다 —
+  // assistant.e2e-spec Case 1 의 setClient(null) 이유. 이 스펙은 헤더 계약만 확인.
+  //
+  // ETag: 단언하지 않는다. Express 자동 ETag (W/"길이-hash" · dash 포함) 가 400 body 에도
+  // 붙지만 Cache-Control: no-store 가 Vercel 엣지 캐시를 차단하므로 무관 (실측 결함의 근본 원인).
+  // 인터셉터가 붙이는 형식 W/"base64 27자" 는 GET 에만 대상. 형식 부정 단언은 Case 3 정규식 재사용.
+  it('Case 8: POST /api/assistant → Cache-Control: no-store · 인터셉터 ETag 형식 아님 (400 대상)', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/assistant')
+      .send({})
+      .expect(400);
+    expect(res.headers['cache-control']).toBe('no-store');
+    // 있으면 Express 자동(dash 포함)이어야 한다 — 인터셉터 base64 27자 형식이면 결함
+    const etag = res.headers.etag as string | undefined;
+    if (etag !== undefined) {
+      expect(etag).toMatch(/^W\/"[^"]*-[^"]*"$/);
+    }
   });
 });
