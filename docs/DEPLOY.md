@@ -114,7 +114,7 @@ curl -sf http://localhost:3000/health
 
 첫 실 배포 (2026-09-15) 에서 나옴. 원인: `backend/prisma.config.ts` 가 로딩 시 `DATABASE_URL` 을 요구하는데, `deploy.sh` 는 `ubuntu` 로 돌아 `/etc/pitchlog/backend.env` (0600 · `pitchlog` 소유) 를 읽지 못한다. `prisma generate` 는 DB 에 접속하지 않으므로 실 값이 필요 없다.
 
-수정: `deploy.sh` 가 `prisma generate` 앞에 placeholder `DATABASE_URL` 을 인라인으로 세팅 (`fix/deploy-prisma-generate-env` 판). 이후 배포는 그냥 `bash deploy.sh` 로 진행.
+수정: `deploy.sh` 가 `prisma generate` 앞에 placeholder `DATABASE_URL` 을 인라인으로 세팅 (`fix/deploy-prisma-generate-env` 판). **한 번만 돌린다** — `deploy.sh` 는 pull 로 자기 자신이 바뀌면 자동 재실행된다 (`fix/deploy-self-update` 판).
 
 ### 어시스턴트가 무슨 질문에도 같은 답 (Vercel 엣지 캐시)
 
@@ -122,7 +122,7 @@ curl -sf http://localhost:3000/health
 
 원인: `CacheHeaderInterceptor` 가 HTTP 메서드를 안 가려 POST `/api/assistant` 응답에도 `Cache-Control: public, max-age=60` 이 붙음. Vercel 엣지가 정직하게 60초 캐시 → 같은 URL 로 오는 후속 POST 에 첫 답 재사용.
 
-수정: 인터셉터가 GET 이외 메서드에 `Cache-Control: no-store` 를 명시 (`fix/cache-header-post` 판). Vercel 엣지가 no-store 를 보고 캐시하지 않음. 재배포 후 자연 해결.
+수정: 인터셉터가 GET 이외 메서드에 `Cache-Control: no-store` 를 명시 (`fix/cache-header-post` 판). Vercel 엣지가 no-store 를 보고 캐시하지 않음. **한 번만 돌린다** — `deploy.sh` 는 pull 로 자기 자신이 바뀌면 자동 재실행된다 (`fix/deploy-self-update` 판).
 
 ### 첫 실 배포 결함이 다시 나오면
 
@@ -130,7 +130,17 @@ curl -sf http://localhost:3000/health
 1. 위 `prisma generate` 실패
 2. `dist.prev` 없는 첫 배포에서 실패 시 trap 이 성립하지 않는 "mv dist.prev dist" 롤백 문구를 찍음 → 이제 존재 여부를 조건 분기.
 
-수동 우회로 배포된 상태라면, 다음 재배포에서 자연스럽게 정정 반영됨.
+**한 번만 돌린다** — `deploy.sh` 는 pull 로 자기 자신이 바뀌면 자동 재실행된다 (`fix/deploy-self-update` 판).
+
+### deploy.sh 가 세 번 돌아야 새 코드가 반영됐다면 (자기 자신 갱신 결함)
+
+증상 (2026-09-15 실측): `deploy.sh` 를 실행했는데 이전 판의 결함(예: prisma 에러) 이 계속 재현. 두 번째 실행에서도 옛 trap 문구 · 옛 41행. 세 번째 실행에서야 새 코드가 돌았음.
+
+원인: bash 는 실행 중 열어둔 파일(옛 inode)을 계속 읽고 `git pull` 은 새 inode 로 파일을 교체한다. `deploy.sh` 자기 자신이 pull 로 바뀌어도 이번 실행은 옛 코드로 끝까지 돈다.
+
+수정 (`fix/deploy-self-update` 판): 인자 파싱에 `--no-pull` 재진입 플래그 추가. pull 후 HEAD 가 바뀌었으면 `exec bash "$0" --no-pull "$REF"` 로 프로세스를 새 파일로 갈아 재실행. `--no-pull` 이면 최신화 단계를 건너뛰어 무한 재실행 방지.
+
+이후 배포는 그대로 `bash /opt/pitchlog/infra/ec2/deploy.sh` — 자기 자신이 바뀌면 로그에 "▶ deploy.sh 갱신됨 → 새 버전으로 재실행" 이 한 줄 뜨고 새 코드로 이어진다.
 
 ## 실측 체크리스트 (첫 배포 후)
 
