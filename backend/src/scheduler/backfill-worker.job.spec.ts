@@ -85,17 +85,31 @@ describe('BackfillWorkerJob.tick', () => {
   let config: Partial<ConfigService>;
   let registry: Partial<SchedulerRegistry>;
 
-  beforeEach(() => {
-    state = new SchedulerStateService();
-    backfill = { run: vi.fn() };
-    config = { get: vi.fn((key: string) => (key === 'BACKFILL_WORKER_LIMIT' ? 200 : '5 * * * *')) };
-    registry = { addCronJob: vi.fn() };
-    job = new BackfillWorkerJob(
-      config as unknown as ConfigService<EnvironmentVariables, true>,
+  function makeConfig(seasons = '', limit = 200): Partial<ConfigService> {
+    return {
+      get: vi.fn((key: string) => {
+        if (key === 'BACKFILL_WORKER_LIMIT') return limit;
+        if (key === 'BACKFILL_WORKER_SEASONS') return seasons;
+        return '5 * * * *';
+      }),
+    };
+  }
+
+  function makeJob(cfg: Partial<ConfigService> = makeConfig()): BackfillWorkerJob {
+    return new BackfillWorkerJob(
+      cfg as unknown as ConfigService<EnvironmentVariables, true>,
       registry as SchedulerRegistry,
       backfill as unknown as MatchDetailsBackfillService,
       state,
     );
+  }
+
+  beforeEach(() => {
+    state = new SchedulerStateService();
+    backfill = { run: vi.fn() };
+    config = makeConfig();
+    registry = { addCronJob: vi.fn() };
+    job = makeJob(config);
   });
 
   it('(b) 겹침 방지 — running=true 면 backfill.run 미호출', async () => {
@@ -137,5 +151,97 @@ describe('BackfillWorkerJob.tick', () => {
     expect(s.lastOutcome).toBe('error');
     expect(s.lastError).toBe('boom');
     expect(s.running).toBe(false);
+  });
+});
+
+describe('BackfillWorkerJob.tick — 시즌 목록 순회 (fix/backfill-worker-seasons)', () => {
+  let state: SchedulerStateService;
+  let backfill: { run: ReturnType<typeof vi.fn> };
+  let registry: Partial<SchedulerRegistry>;
+
+  function makeConfig(seasons = '', limit = 200): Partial<ConfigService> {
+    return {
+      get: vi.fn((key: string) => {
+        if (key === 'BACKFILL_WORKER_LIMIT') return limit;
+        if (key === 'BACKFILL_WORKER_SEASONS') return seasons;
+        return '5 * * * *';
+      }),
+    };
+  }
+
+  function makeJob(cfg: Partial<ConfigService>): BackfillWorkerJob {
+    return new BackfillWorkerJob(
+      cfg as unknown as ConfigService<EnvironmentVariables, true>,
+      registry as SchedulerRegistry,
+      backfill as unknown as MatchDetailsBackfillService,
+      state,
+    );
+  }
+
+  beforeEach(() => {
+    state = new SchedulerStateService();
+    backfill = { run: vi.fn() };
+    registry = { addCronJob: vi.fn() };
+  });
+
+  it('(a) 빈 목록 → 현행 run({limit}) 1회 (season 없음)', async () => {
+    backfill.run.mockResolvedValue(makeResult('no_targets', 0));
+    const job = makeJob(makeConfig(''));
+    await job.tick();
+    expect(backfill.run).toHaveBeenCalledTimes(1);
+    expect(backfill.run).toHaveBeenCalledWith({ limit: 200 });
+    // currentSeason 은 null 유지 (시즌 순회 안 함)
+    expect(state.getBackfillWorkerState().currentSeason).toBeNull();
+  });
+
+  it('(b) [2024,2025] · 2024 no_targets → 2025 호출', async () => {
+    backfill.run
+      .mockResolvedValueOnce(makeResult('no_targets', 0))
+      .mockResolvedValueOnce(makeResult('done', 10));
+    const job = makeJob(makeConfig('2024,2025'));
+    await job.tick();
+    expect(backfill.run).toHaveBeenCalledTimes(2);
+    expect(backfill.run).toHaveBeenNthCalledWith(1, { season: 2024, limit: 200 });
+    expect(backfill.run).toHaveBeenNthCalledWith(2, { season: 2025, limit: 200 });
+    expect(state.getBackfillWorkerState().currentSeason).toBe(2025);
+  });
+
+  it('(c) [2024,2025] · 2024 cap_reached → 2025 미호출', async () => {
+    backfill.run.mockResolvedValueOnce(makeResult('daily_cap', 50));
+    const job = makeJob(makeConfig('2024,2025'));
+    await job.tick();
+    expect(backfill.run).toHaveBeenCalledTimes(1);
+    expect(backfill.run).toHaveBeenCalledWith({ season: 2024, limit: 200 });
+    const s = state.getBackfillWorkerState();
+    expect(s.lastOutcome).toBe('cap_reached');
+    expect(s.lastProcessed).toBe(50);
+    expect(s.currentSeason).toBe(2024);
+  });
+
+  it('(d) [2024,2025] · limit 200 · 2024 processed 150 → 2025 는 limit 50 으로 호출', async () => {
+    backfill.run
+      .mockResolvedValueOnce(makeResult('no_targets', 150))
+      .mockResolvedValueOnce(makeResult('no_targets', 40));
+    const job = makeJob(makeConfig('2024,2025', 200));
+    await job.tick();
+    expect(backfill.run).toHaveBeenCalledTimes(2);
+    expect(backfill.run).toHaveBeenNthCalledWith(1, { season: 2024, limit: 200 });
+    expect(backfill.run).toHaveBeenNthCalledWith(2, { season: 2025, limit: 50 });
+    expect(state.getBackfillWorkerState().lastProcessed).toBe(190);
+  });
+
+  it('(e) [2024,2025] 모두 no_targets · processed=0 → 최종 no_targets + "all seasons done" 로그', async () => {
+    backfill.run
+      .mockResolvedValueOnce(makeResult('no_targets', 0))
+      .mockResolvedValueOnce(makeResult('no_targets', 0));
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const job = makeJob(makeConfig('2024,2025'));
+    await job.tick();
+    logSpy.mockRestore();
+    expect(backfill.run).toHaveBeenCalledTimes(2);
+    const s = state.getBackfillWorkerState();
+    expect(s.lastOutcome).toBe('no_targets');
+    expect(s.lastProcessed).toBe(0);
+    // "all seasons done" 로그는 Nest Logger 로 나감 · spy 로 검증 어렵고 state 로 대체 검증 충분
   });
 });

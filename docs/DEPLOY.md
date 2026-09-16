@@ -270,12 +270,30 @@ sudoedit /etc/pitchlog/backend.env
 sudo systemctl restart pitchlog-backend
 ```
 
-### env (4개)
+### env (5개)
 
 - `SCHEDULER_ENABLED` (true/false · 기본 false) — 마스터. false 면 어떤 잡도 등록되지 않는다 (부팅 로그 "scheduler: disabled").
 - `BACKFILL_WORKER_ENABLED` (true/false · 기본 false) — 백필 잡 개별.
 - `BACKFILL_WORKER_CRON` (기본 `5 * * * *` · 매시 5분) — 5 필드 cron. 유효성은 부팅 시 `CronJob` 생성자가 검사 (잘못된 값이면 부팅 실패).
 - `BACKFILL_WORKER_LIMIT` (정수 · 기본 200) — 1회 실행당 경기 수 상한 (4콜/경기 · 200 = 800콜).
+- `BACKFILL_WORKER_SEASONS` (쉼표 구분 · 기본 빈 값) — 순회할 시즌 목록. 빈 값이면 현재 시즌만 순회 (초판 동작). 각 항목은 `SEASON_YEARS` (2022~2026) 안 · 중복·빈 항목 금지 · 부팅 시 거부.
+
+### 백필-2 켜기 (나머지 4시즌 무인)
+
+**현재 시즌은 이미 CONFIRMED (#46) 이라 빈 값이면 매 트리거 `no_targets`.** 백필-2 를 켜려면 시즌 목록을 넣는다:
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# BACKFILL_WORKER_SEASONS=2025,2024,2023,2022
+sudo systemctl restart pitchlog-backend
+sudo journalctl -u pitchlog-backend -f
+# 다음 트리거 로그 예: "backfill-worker cap_reached · 2025: processed=143 failed=0 · total=143"
+curl -s http://localhost:3000/health | jq .scheduler.jobs.backfillWorker.currentSeason
+```
+
+**완료 판정**: 모든 시즌이 `no_targets` 이고 `total=0` 이면 로그 `all seasons done` 한 줄이 뜨고 `lastOutcome=no_targets` 로 수렴. 이후 재시작 없이 이 상태가 지속되면 백필-2 완료.
+
+**대상 범위**: 워커는 `screenCompetitionWhere` (displayOrder ≤ 100) 만 순회 — **리그 5개 + UCL 만. 국내 컵 6개 (displayOrder 110~) 는 워커 순회에서 제외** (컵 경기의 `detail_eligible` 규칙 자체는 L2 가 세팅하지만 워커가 그 대회시즌을 SELECT 하지 않음). 컵 백필 여부는 별도 결정 사항.
 
 ### 안전장치
 

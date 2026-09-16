@@ -17,6 +17,8 @@ export interface BackfillWorkerState {
   lastOutcome: BackfillOutcome | null;
   lastError: string | null;
   lastProcessed: number | null;
+  /** 마지막으로 처리를 시도한 시즌 (시즌 목록 순회 시 · 현재 시즌만이면 null) */
+  currentSeason: number | null;
 }
 
 @Injectable()
@@ -29,6 +31,7 @@ export class SchedulerStateService {
     lastOutcome: null,
     lastError: null,
     lastProcessed: null,
+    currentSeason: null,
   };
 
   markBackfillEnabled(): void {
@@ -43,6 +46,11 @@ export class SchedulerStateService {
     this.backfillWorker.running = true;
     this.backfillWorker.lastStartedAt = new Date().toISOString();
     this.backfillWorker.lastFinishedAt = null;
+    this.backfillWorker.currentSeason = null;
+  }
+
+  markBackfillCurrentSeason(season: number | null): void {
+    this.backfillWorker.currentSeason = season;
   }
 
   markBackfillFinish(outcome: BackfillOutcome, processed: number, error?: string): void {

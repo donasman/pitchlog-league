@@ -16,7 +16,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
-import type { EnvironmentVariables } from '../config/env.validation.js';
+import { parseBackfillWorkerSeasons, type EnvironmentVariables } from '../config/env.validation.js';
 import {
   MatchDetailsBackfillService,
   type BackfillStopReason,
@@ -66,13 +66,57 @@ export class BackfillWorkerJob implements OnModuleInit {
       return;
     }
     this.state.markBackfillStart();
-    const limit = this.config.get('BACKFILL_WORKER_LIMIT', { infer: true });
+    const totalLimit = this.config.get('BACKFILL_WORKER_LIMIT', { infer: true });
+    const seasonsStr = this.config.get('BACKFILL_WORKER_SEASONS', { infer: true });
+    const seasons = parseBackfillWorkerSeasons(seasonsStr);
+
     try {
-      const result = await this.backfill.run({ limit });
-      const outcome = classifyReason(result.overallStopped);
-      this.state.markBackfillFinish(outcome, result.totalProcessed);
+      if (seasons.length === 0) {
+        // 시즌 목록 미지정 — 현행 동작 (현재 시즌만)
+        const result = await this.backfill.run({ limit: totalLimit });
+        const outcome = classifyReason(result.overallStopped);
+        this.state.markBackfillFinish(outcome, result.totalProcessed);
+        this.logger.log(
+          `backfill-worker ${outcome} · processed=${result.totalProcessed} · failed=${result.totalFailed} · stop=${result.overallStopped}`,
+        );
+        return;
+      }
+
+      // 시즌 목록 순회 — 앞에서부터 · no_targets 는 다음 시즌 · cap/error 는 즉시 중단.
+      // 각 시즌 limit 은 남은 예산(totalLimit - totalProcessed).
+      let totalProcessed = 0;
+      let totalFailed = 0;
+      let finalOutcome: BackfillOutcome = 'no_targets';
+      const perSeasonLog: string[] = [];
+
+      for (const season of seasons) {
+        this.state.markBackfillCurrentSeason(season);
+        const remaining = totalLimit - totalProcessed;
+        if (remaining <= 0) {
+          finalOutcome = 'cap_reached';
+          break;
+        }
+        const result = await this.backfill.run({ season, limit: remaining });
+        const outcome = classifyReason(result.overallStopped);
+        totalProcessed += result.totalProcessed;
+        totalFailed += result.totalFailed;
+        perSeasonLog.push(`${season}: processed=${result.totalProcessed} failed=${result.totalFailed}`);
+
+        if (outcome === 'no_targets') continue;
+        if (outcome === 'cap_reached' || outcome === 'error') {
+          finalOutcome = outcome;
+          break;
+        }
+      }
+
+      // 모든 시즌이 no_targets 이고 processed=0 → 백필-2 완료 신호
+      if (finalOutcome === 'no_targets' && totalProcessed === 0) {
+        this.logger.log('all seasons done');
+      }
+
+      this.state.markBackfillFinish(finalOutcome, totalProcessed);
       this.logger.log(
-        `backfill-worker ${outcome} · processed=${result.totalProcessed} · failed=${result.totalFailed} · stop=${result.overallStopped}`,
+        `backfill-worker ${finalOutcome} · ${perSeasonLog.join(' · ')} · total=${totalProcessed} failed=${totalFailed}`,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
