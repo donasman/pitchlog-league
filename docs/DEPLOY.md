@@ -194,6 +194,8 @@ npm run backup:verify -- <경로>
 
 **확장**: 덤프는 `pg_dump -n public` 라 `CREATE EXTENSION` 이 포함되지 않는다 (`backup.mjs` 결정 · 무건드). 복원 리허설은 `pg_restore` 를 세 섹션으로 분할해 **pre-data (스키마·테이블) 복원 뒤 · post-data (인덱스·제약) 앞** 에 확장을 만든다 — 현재 `pg_trgm` 하나 (`restore-check.mjs` 의 `REQUIRED_EXTENSIONS` 상수). **새 확장을 스키마에 도입하면 이 상수를 갱신해야 리허설이 통과한다.** `BACKUP_RESTORE_EXTENSIONS` env 로 쉼표 구분 오버라이드 가능.
 
+**정적 검사 한계**: `node --check` 는 문법만 검사한다 · 정의되지 않은 식별자(no-undef) 는 잡지 못한다. `restore-check.mjs` 같은 스크립트의 실패 경로(pg_restore 오류 처리 등)는 사람이 3회 루프에서 재현해야 검증된다. `backend/` 에 eslint 도입은 별도 판 (현재 `oxlint` 는 `src/ test/` 만 대상 · `scripts/` 밖).
+
 ### 리허설 실패: `FATAL: the database system is starting up`
 
 증상 (2026-09-16 실측 · Windows Docker Desktop · postgres:17): `npm run backup:verify -- <경로>` 1단계 "준비됨" 직후 2단계에서 `psql: error: connection to server on socket ... FATAL: the database system is starting up` → docker 종료 코드 2 → 실패.
