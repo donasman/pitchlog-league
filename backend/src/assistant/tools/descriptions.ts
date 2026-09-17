@@ -20,7 +20,9 @@ export const NUMERIC_SEMANTICS =
 
 export const MODE_B_NOTE =
   'If `competition` is omitted, results are aggregated across the 6 display competitions\n' +
-  '(Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UEFA Champions League).';
+  '(Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UEFA Champions League).\n' +
+  'Domestic cups, super cups, UEFA Europa League, and UEFA Europa Conference League are NOT included\n' +
+  'in this aggregate — query them individually with a `competition` ref.';
 
 export const REF_HINT =
   'Ref hint: obtain competition/team/player refs via `list_competitions` / `list_teams` first — do not guess ids.';
@@ -28,7 +30,8 @@ export const REF_HINT =
 /** 각 도구의 특이 문구. 3상태 · 모드 B · ref hint 는 여기 안에 넣지 않는다 — composeDescription 이 붙인다. */
 export const TOOL_NOTES = {
   list_competitions:
-    'Returns the 17 tracked competitions (6 leagues + 6 domestic cups + 5 super cups), sorted by displayOrder. ' +
+    'Returns all tracked competitions (5 major leagues + UCL + UEFA Europa League + UEFA Europa Conference League + 6 domestic cups + 5 super cups), sorted by displayOrder. ' +
+    'This tool is the source of truth for what competitions the service covers — do not hardcode the list or count elsewhere. ' +
     'Each item includes currentSeason (may be null for unregistered cups) and dataState (NONE/PARTIAL/COMPLETE) — ' +
     'the UI season selector shows COMPLETE only.',
 
@@ -51,6 +54,7 @@ export const TOOL_NOTES = {
     'KST date filter: from/to are YYYY-MM-DD (inclusive, treated as KST 00:00 to 23:59:59). ' +
     'team is a team ref (home or away). ' +
     'Auto-defaults when no team/from/to: from = today-7d, to = today+7d (KST). ' +
+    'When `competition` is omitted, aggregates across ALL tracked competitions (leagues, cups, super cups, UCL, UEL, UECL) — not just the 6 display leagues. ' +
     'Result is truncated to limit (default 10, max 200); wrapper carries {truncated, total} when applied. ' +
     'hasEvents / hasLineups / hasTeamStats / hasPlayerStats are 3-valued: ' +
     'null=not yet checked, false=checked and API had none, true=present.',
@@ -68,13 +72,14 @@ export const TOOL_NOTES = {
     'Rows are ordered by groupName then rank. ' +
     'Values (points/played/W/D/L/goalsFor/etc.) are integers; form is a raw string like "WWDLW". ' +
     'USAGE: for a question about ONE competition, competition MUST be provided. ' +
-    'Omit competition (Mode B, all 6 display leagues aggregated) ONLY when the user explicitly asks for a cross-league comparison. ' +
-    'Mode B returns 6× the payload (~27 KB compressed) — do not use it for single-league questions.',
+    'Omit competition (Mode B, all 6 display leagues = leagues5+UCL aggregated) ONLY when the user explicitly asks for a cross-league comparison. ' +
+    'Mode B returns 6× the payload (~27 KB compressed) — do not use it for single-league questions. ' +
+    'Cups, super cups, UEFA Europa League, and UEFA Europa Conference League have no standings (KNOCKOUT format or excluded from Mode B) — query them individually only if standings apply.',
 
   get_top_scorers:
     "TWO MODES. Mode A (competition given): items are that competition/season's TopRanking rows in rank order, " +
     'items[].value = raw goals. ' +
-    "Mode B (competition omitted): items are player totals aggregated across the 6 display competitions' top{limit}, " +
+    "Mode B (competition omitted): items are player totals aggregated across the 6 display competitions' top{limit} (leagues5+UCL only — cups, super cups, UEL, UECL excluded), " +
     'items[].breakdown[] carries per-competition value + season, competition/season at the top level are null.',
 
   get_top_assisters:
