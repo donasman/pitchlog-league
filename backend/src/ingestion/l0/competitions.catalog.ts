@@ -34,6 +34,16 @@ export const COMPETITIONS: readonly CatalogEntry[] = [
   // (NEXT_STEPS 11장). format enum 은 현재 시즌 기준이라 그대로 둔다
   { apiId: 2,   name: 'UEFA Champions League', shortName: 'UCL',               type: CompetitionType.CUP,    format: CompetitionFormat.LEAGUE_PHASE_KNOCKOUT, displayOrder: 60 },
 
+  // ── UEFA 대항전 2 — feat/scope-expansion 판 (2026-09-17 · PR #84 실측)
+  // topFlightApiId 없음 → UCL 과 같은 경로: 추적 5대 리그 참가팀 합집합을 1부 팀 집합으로.
+  // 2024-25 부터 리그페이즈(단일 36팀 · UEL 8라운드·UECL 6라운드) · 그 이전 2022·2023 은 조별리그.
+  // UCL 과 마찬가지로 format enum 은 현재 시즌 기준.
+  // UEL(3): stats_players 미제공(api-inventory.json:2543,15340 실측) → 상세 4콜 중 playerStats 는 빈 응답.
+  // 화면 노출 범위(competitionVisibleWhere · displayOrder<=60)에서 제외되므로 대회 탭·순위표에는 안 뜨고,
+  // 경기 노출 범위(matchVisibleWhere)에서만 잡혀 홈·경기 목록·팀 일정·어시스턴트에 나온다.
+  { apiId: 3,   name: 'UEFA Europa League',            shortName: 'UEL',  type: CompetitionType.CUP, format: CompetitionFormat.LEAGUE_PHASE_KNOCKOUT, displayOrder: 70 },
+  { apiId: 848, name: 'UEFA Europa Conference League', shortName: 'UECL', type: CompetitionType.CUP, format: CompetitionFormat.LEAGUE_PHASE_KNOCKOUT, displayOrder: 80 },
+
   // ── 국내 컵 6 — 컷오프 대상 ──
   { apiId: 45,  name: 'FA Cup',                shortName: 'FA Cup',            type: CompetitionType.CUP, format: CompetitionFormat.KNOCKOUT, topFlightApiId: 39,  displayOrder: 110 },
   { apiId: 48,  name: 'League Cup',            shortName: 'EFL Cup',           type: CompetitionType.CUP, format: CompetitionFormat.KNOCKOUT, topFlightApiId: 39,  displayOrder: 120 },

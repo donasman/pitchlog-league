@@ -93,9 +93,9 @@ describe('L1 스쿼드 diff (e2e, 가짜 API)', () => {
       where: { apiCompetitionId: FIXTURE_COMPETITION_API_ID },
       create: {
         apiCompetitionId: FIXTURE_COMPETITION_API_ID, name: 'L1 Fixture League', country: 'Testland',
-        type: CompetitionType.LEAGUE, format: CompetitionFormat.ROUND_ROBIN, isTracked: true, displayOrder: 90,
+        type: CompetitionType.LEAGUE, format: CompetitionFormat.ROUND_ROBIN, isTracked: true, displayOrder: 55,
       },
-      update: { isTracked: true, displayOrder: 90 },
+      update: { isTracked: true, displayOrder: 55 },
     });
     const cs = await prisma.competitionSeason.upsert({
       where: { competitionId_seasonId: { competitionId: competition.id, seasonId: season.id } },

@@ -5,7 +5,18 @@
  * `Regular Season - 12`) 손으로 매핑표를 관리해야 한다. 경기 목록에서 계산한다.
  *
  *   경기 목록 수집 = 1부 팀이 처음 등장하는 라운드부터
- *   상세 수집      = (1부 팀 참가) OR (16강 이상)
+ *   상세 수집      = (1부 팀 참가) OR (16강 이상) OR (본선 = 팀 수 연속 3라운드 이상 같은 구간)
+ *
+ * "본선" 판정 (feat/scope-expansion 판 · 2026-09-17):
+ *   팀 수가 자기 자신 포함 앞뒤로 같은 연속 구간의 길이가 3 이상인 라운드.
+ *   실측 근거 (docs/UEFA_INVENTORY.md):
+ *     · UCL·UEL League Stage 1~8(36팀) · UECL 1~6(36팀) · 조별리그 6R(32팀) → 연속 6~8 → 본선 잡힘
+ *     · Playoff round/Play-offs(24 or 48팀 단일) → 연속 1 → 예선 유지
+ *     · KO Round of 16/8/4/2/1 → 연속 1 → isLateStage 로 이미 잡힘
+ *     · 컵 라운드 (팀 수 감소만) → 연속 1 → 본선 개념 없음 (판정 안 바뀜)
+ *     · 리그 5개 (팀 수 유지) → 연속 38 → 어차피 hasTopFlight=true 라 무영향
+ *   목적: UCL/UEL/UECL 리그페이즈의 비5대리그 맞대결(포르투 vs 브라가 등) 을 상세 대상으로 포함.
+ *   지시서 "라운드 이름으로 자르지 않는다"(파일 상단 원칙) 그대로.
  *
  * **1부 팀 집합**은 대회마다 다르다:
  *   리그  → 자기 참가팀 (모든 라운드가 1부다)
@@ -44,9 +55,11 @@ export interface RoundScope {
   firstKickoffAt: string | null;
   hasTopFlight: boolean;
   isLateStage: boolean;
+  /** 리그페이즈·조별리그의 본선 라운드 (팀 수 연속 3 이상 같음). feat/scope-expansion 판. */
+  isMainStage: boolean;
   /** 이 라운드의 경기를 저장하는가 */
   included: boolean;
-  /** 상세 4콜을 부를 대상인가 — (1부 팀 참가) OR (16강 이상) */
+  /** 상세 4콜을 부를 대상인가 — (1부 팀 참가) OR (16강 이상) OR (본선) */
   detailEligible: boolean;
 }
 
@@ -60,6 +73,10 @@ export interface ScopeResult {
 
 /** 16강 이상 판정 기준. 팀 수만 보면 예선이 16강으로 잡힌다 (2-2) */
 const LATE_STAGE_MAX_TEAMS = 16;
+
+/** 본선(리그페이즈·조별리그) 판정 — 같은 팀 수가 연속되는 최소 라운드 수.
+ *  실측 (UEFA_INVENTORY.md): UEL 8·UECL 6·조별리그 6·리그 5개 38. Playoff·KO·예선은 다 1. */
+const MAIN_STAGE_MIN_CONSECUTIVE = 3;
 
 export function resolveRoundScope(input: ScopeInput): ScopeResult {
   const { roundNames, fixtures, topFlightApiTeamIds } = input;
@@ -96,6 +113,18 @@ export function resolveRoundScope(input: ScopeInput): ScopeResult {
     isLateStage[i] = true;
   }
 
+  // 본선: 팀 수가 자기 자신 포함 앞뒤로 같은 연속 구간이 MAIN_STAGE_MIN_CONSECUTIVE 이상.
+  // 리그페이즈(36팀 유지)·조별리그(32팀 유지)를 잡되 Playoff·KO·예선은 안 잡힌다 (연속 1).
+  // 경기 없는 라운드(추첨 전)는 팀 수 0 — 판정에서 빼고 연속 계산도 리셋한다.
+  const teamCounts = teams.map((t) => t.size);
+  const isMainStage = teamCounts.map((count, i) => {
+    if (count === 0) return false;
+    let len = 1;
+    for (let j = i - 1; j >= 0 && teamCounts[j] === count; j--) len++;
+    for (let j = i + 1; j < teamCounts.length && teamCounts[j] === count; j++) len++;
+    return len >= MAIN_STAGE_MIN_CONSECUTIVE;
+  });
+
   const cutIndex = hasTopFlight.findIndex(Boolean);
   const cutOrdinal = cutIndex === -1 ? null : cutIndex;
 
@@ -107,8 +136,9 @@ export function resolveRoundScope(input: ScopeInput): ScopeResult {
     firstKickoffAt: firstKickoff[i],
     hasTopFlight: hasTopFlight[i],
     isLateStage: isLateStage[i],
+    isMainStage: isMainStage[i],
     included: cutOrdinal !== null && i >= cutOrdinal,
-    detailEligible: hasTopFlight[i] || isLateStage[i],
+    detailEligible: hasTopFlight[i] || isLateStage[i] || isMainStage[i],
   }));
 
   return { rounds, cutOrdinal, unknownRounds: [...unknown].sort() };

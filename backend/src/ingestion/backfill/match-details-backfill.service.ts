@@ -48,7 +48,7 @@ import { L3LineupsService } from '../l3/lineups.service.js';
 import { L3EventsService } from '../l3/events.service.js';
 import { L5TeamStatsService } from '../l5/team-stats.service.js';
 import { L5PlayerStatsService } from '../l5/player-stats.service.js';
-import { screenCompetitionWhere } from '../screen-scope.js';
+import { ingestScopeWhere } from '../screen-scope.js';
 import { IngestionLayer } from '../../generated/prisma/client.js';
 
 export interface BackfillDetailsOptions {
@@ -126,8 +126,8 @@ export class MatchDetailsBackfillService {
       let overallStopped: BackfillStopReason = 'done';
 
       const where = opts.season !== undefined
-        ? { competition: screenCompetitionWhere, season: { year: opts.season } }
-        : { isCurrent: true, competition: screenCompetitionWhere };
+        ? { competition: ingestScopeWhere, season: { year: opts.season } }
+        : { isCurrent: true, competition: ingestScopeWhere };
 
       const seasons = await this.prisma.competitionSeason.findMany({
         where,

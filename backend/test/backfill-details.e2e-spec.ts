@@ -245,8 +245,9 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     });
     competitionSeasonId = cs.id;
 
-    // 다른 대회시즌 — case 10 (season 미지정) 이 이걸 안 건드리는지 검증할 때 필요
-    // isCurrent=false 로 만들어 case 10 에서 제외되게 한다
+    // 다른 대회시즌 — case 10 (season 미지정) · case 7 (한 시즌 skip) 격리에 필요.
+    // feat/scope-expansion (2026-09-17): ingestScopeWhere 가 isTracked 만이라 displayOrder 로는 격리 안 됨.
+    // isTracked=false 로 격리 (case 7 은 이걸로 다른 시즌 순회 방지 · case 10 은 isCurrent=false 로도 격리).
     const otherComp = await prisma.competition.upsert({
       where: { apiCompetitionId: COMP_API_ID + 1 },
       create: {
@@ -255,11 +256,10 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
         country: 'Testland',
         type: CompetitionType.LEAGUE,
         format: CompetitionFormat.ROUND_ROBIN,
-        isTracked: true,
-        // displayOrder > 100 (screenCompetitionWhere 밖) — season 필터에도 안 잡히게. Case 10 은 isCurrent=false 로 자연 격리.
+        isTracked: false,
         displayOrder: 200,
       },
-      update: { isTracked: true, displayOrder: 200 },
+      update: { isTracked: false, displayOrder: 200 },
     });
     const otherCs = await prisma.competitionSeason.upsert({
       where: { competitionId_seasonId: { competitionId: otherComp.id, seasonId: season.id } },
