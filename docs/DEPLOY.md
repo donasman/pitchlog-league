@@ -364,7 +364,7 @@ curl -s http://localhost:3000/health | jq .scheduler.jobs.backfillWorker.current
 
 **Vercel rewrite** 는 `/api/:path*` 만 프록시하므로 **Vercel 도메인 (`<앱>.vercel.app`) 에서는 노출되지 않는다.** EC2:3000 직결자에게만 보인다.
 
-12대회 조회 API 스펙이라 노출이 큰 문제는 아니지만 명시. prod 에서 끄고 싶으면 별도 판 (`main.ts` 에 `if (process.env.NODE_ENV !== 'production')` 로 SwaggerModule.setup 을 감쌈).
+~~12대회~~ → **19대회** (2026-09-17 · feat/scope-expansion) 조회 API 스펙이라 노출이 큰 문제는 아니지만 명시. prod 에서 끄고 싶으면 별도 판 (`main.ts` 에 `if (process.env.NODE_ENV !== 'production')` 로 SwaggerModule.setup 을 감쌈).
 
 ### 이 판이 하지 않은 것
 
