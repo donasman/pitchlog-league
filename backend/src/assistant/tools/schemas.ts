@@ -76,7 +76,7 @@ export const listMatchesSchema: JsonSchema = {
     competition: {
       type: 'string',
       pattern: REF_PATTERN,
-      description: 'Competition ref. Omit → aggregate across the 6 display competitions.',
+      description: 'Competition ref. Omit → aggregate across all tracked competitions (leagues, cups, super cups, UCL, UEL, UECL). For "European competitions" questions without a specific comp, call this tool three times with the UCL, UEL, and UECL refs.',
     },
     season: SEASON,
     from: {
@@ -127,7 +127,7 @@ export const getStandingsSchema: JsonSchema = {
     competition: {
       type: 'string',
       pattern: REF_PATTERN,
-      description: 'Competition ref. Omit → all 6 display competitions.',
+      description: 'Competition ref. Omit → all 6 display competitions (5 major leagues + UCL). Cups, super cups, UEL, UECL are NOT included in Mode B — query them individually.',
     },
     season: SEASON,
   },
@@ -140,7 +140,7 @@ export const getTopScorersSchema: JsonSchema = {
     competition: {
       type: 'string',
       pattern: REF_PATTERN,
-      description: 'Competition ref. Omit → aggregate across the 6 display competitions (Mode B).',
+      description: 'Competition ref. Omit → aggregate across the 6 display competitions (Mode B · 5 major leagues + UCL). Cups, super cups, UEL, UECL are NOT included in Mode B — query them individually.',
     },
     season: SEASON,
     limit: {
@@ -160,7 +160,7 @@ export const getTopAssistersSchema: JsonSchema = {
     competition: {
       type: 'string',
       pattern: REF_PATTERN,
-      description: 'Competition ref. Omit → aggregate across the 6 display competitions (Mode B).',
+      description: 'Competition ref. Omit → aggregate across the 6 display competitions (Mode B · 5 major leagues + UCL). Cups, super cups, UEL, UECL are NOT included in Mode B — query them individually.',
     },
     season: SEASON,
     limit: {
