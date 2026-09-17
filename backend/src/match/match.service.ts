@@ -7,7 +7,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { earliestOf, latestOf } from '../common/as-of.js';
 import { kstDayRange } from '../common/kst-date.js';
+import { NameLookup } from '../common/name-lookup.js';
 import { parseRef, toRef } from '../common/ref.js';
+import { DEFAULT_LOCALE, type Locale } from '../common/locale.js';
 import { seasonLabel } from '../common/season-label.js';
 import { CompetitionService } from '../competition/competition.service.js';
 import { TeamService } from '../team/team.service.js';
@@ -54,7 +56,7 @@ export class MatchService {
     private readonly teams: TeamService,
   ) {}
 
-  async list(q: MatchListQueryDto): Promise<MatchListDto> {
+  async list(q: MatchListQueryDto, locale: Locale = DEFAULT_LOCALE): Promise<MatchListDto> {
     const where: Prisma.MatchWhereInput = {};
     let season: MatchListDto['season'] = null;
 
@@ -99,7 +101,12 @@ export class MatchService {
         take: limit,
       }),
     ]);
-    const items = rows.map((m) => this.toDto(m));
+    const lookup = new NameLookup(this.prisma, locale);
+    await lookup.loadFor({
+      teams: rows.flatMap((r) => [r.homeTeamId, r.awayTeamId]),
+      competitions: rows.map((r) => r.competitionSeason.competition.id),
+    });
+    const items = rows.map((m) => this.toDto(m, lookup));
     return {
       items,
       total,
@@ -109,11 +116,16 @@ export class MatchService {
     };
   }
 
-  async detail(ref: string): Promise<MatchDto> {
+  async detail(ref: string, locale: Locale = DEFAULT_LOCALE): Promise<MatchDto> {
     const apiFixtureId = parseRef(ref, '경기 ref');
     const row = await this.prisma.match.findUnique({ where: { apiFixtureId }, include: MATCH_INCLUDE });
     if (!row) throw new NotFoundException(`경기가 없다: ${ref}`);
-    return this.toDto(row);
+    const lookup = new NameLookup(this.prisma, locale);
+    await lookup.loadFor({
+      teams: [row.homeTeamId, row.awayTeamId],
+      competitions: [row.competitionSeason.competition.id],
+    });
+    return this.toDto(row, lookup);
   }
 
   /**
@@ -129,7 +141,7 @@ export class MatchService {
    * 이벤트는 seq asc 로 (unique(match_id, seq) 는 이미 있고 include.orderBy 로 보장).
    * 선발/벤치 구분: LineupEntry.isStarter · jerseyNumber asc.
    */
-  async fullDetail(ref: string): Promise<MatchFullDetailDto> {
+  async fullDetail(ref: string, locale: Locale = DEFAULT_LOCALE): Promise<MatchFullDetailDto> {
     const apiFixtureId = parseRef(ref, '경기 ref');
     const row = await this.prisma.match.findUnique({
       where: { apiFixtureId },
@@ -144,9 +156,17 @@ export class MatchService {
     });
     if (!row) throw new NotFoundException(`경기가 없다: ${ref}`);
 
-    const base = this.toDto(row);
-    const home = this.teams.summary(row.homeTeam);
-    const away = this.teams.summary(row.awayTeam);
+    // 홈·원정 팀 + 대회만 로컬화. 라인업/이벤트/통계 안의 자유 텍스트 name(playerName·teamName)은
+    // 다음 판 (feat/localized-names-api 2단계 · 계약 4 "홈·원정·대회" 로 한정).
+    const lookup = new NameLookup(this.prisma, locale);
+    await lookup.loadFor({
+      teams: [row.homeTeamId, row.awayTeamId],
+      competitions: [row.competitionSeason.competition.id],
+    });
+
+    const base = this.toDto(row, lookup);
+    const home = this.teams.summary(row.homeTeam, lookup);
+    const away = this.teams.summary(row.awayTeam, lookup);
     const teamRefById = new Map<number, { ref: string; name: string }>([
       [row.homeTeamId, { ref: home.ref, name: row.homeTeam.name }],
       [row.awayTeamId, { ref: away.ref, name: row.awayTeam.name }],
@@ -303,9 +323,9 @@ export class MatchService {
     return { ...base, availability, lineups, events, teamStats, playerStats, asOf };
   }
 
-  toDto(m: MatchRow): MatchDto {
-    const home = this.teams.summary(m.homeTeam);
-    const away = this.teams.summary(m.awayTeam);
+  toDto(m: MatchRow, lookup?: NameLookup): MatchDto {
+    const home = this.teams.summary(m.homeTeam, lookup);
+    const away = this.teams.summary(m.awayTeam, lookup);
     const winnerTeamRef =
       m.winnerTeamId === null ? null : m.winnerTeamId === m.homeTeamId ? home.ref : m.winnerTeamId === m.awayTeamId ? away.ref : null;
     return {
@@ -325,7 +345,7 @@ export class MatchService {
       winnerTeamRef,
       home,
       away,
-      competition: competitionRef(m.competitionSeason.competition),
+      competition: competitionRef(m.competitionSeason.competition, lookup),
       season: { year: m.competitionSeason.season.year, label: seasonLabel(m.competitionSeason.season.year) },
       round: { name: m.round.name, ordinal: m.round.ordinal, matchCount: m.round.matchCount, isLateStage: m.round.isLateStage },
       venue: m.venue ? { name: m.venue.name, city: m.venue.city } : null,

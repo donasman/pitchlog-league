@@ -6,6 +6,7 @@
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { NamesDto, names } from '../common/names.dto.js';
+import type { NameLookup } from '../common/name-lookup.js';
 import { toRef } from '../common/ref.js';
 import type { Player } from '../generated/prisma/client.js';
 import { CompetitionRefDto, SeasonRefDto } from '../match/match.dto.js';
@@ -22,12 +23,15 @@ export class PlayerRefDto extends NamesDto {
   photoUrl!: string | null;
 }
 
-/** 선수 행 → 참조 조각. names() 는 shortName 이 없으니 원본 이름 하나로 3종을 채운다 */
-export function playerRef(p: Player): PlayerRefDto {
+/**
+ * 선수 행 → 참조 조각. names() 는 shortName 이 없으니 원본 이름 하나로 3종을 채운다.
+ * `lookup` 을 넘기면 로케일 이름을 적용한다 — 넘기지 않으면 종전 동작 (원본).
+ */
+export function playerRef(p: Player, lookup?: NameLookup): PlayerRefDto {
   return {
     ref: toRef(p.apiPlayerId, p.name),
     apiId: p.apiPlayerId,
-    ...names(p.name),
+    ...names(p.name, null, lookup?.player(p.id)),
     photoUrl: p.photoUrl,
   };
 }

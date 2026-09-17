@@ -31,6 +31,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toRef } from '../common/ref.js';
+import { NameLookup } from '../common/name-lookup.js';
+import { DEFAULT_LOCALE, type Locale } from '../common/locale.js';
 import { names } from '../common/names.dto.js';
 import type {
   SearchCompetitionDto,
@@ -42,6 +44,7 @@ import type {
 
 /** 팀 검색 raw row */
 interface TeamRow {
+  id: number;
   api_id: number;
   name: string;
   short_name: string | null;
@@ -50,6 +53,7 @@ interface TeamRow {
 }
 
 interface PlayerRow {
+  id: number;
   api_id: number;
   name: string;
   firstname: string | null;
@@ -59,6 +63,7 @@ interface PlayerRow {
 }
 
 interface CompetitionRow {
+  id: number;
   api_id: number;
   name: string;
   country: string | null;
@@ -71,7 +76,7 @@ const MIN_Q_LEN = 2;
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async search(q: SearchQueryDto): Promise<SearchResultsDto> {
+  async search(q: SearchQueryDto, locale: Locale = DEFAULT_LOCALE): Promise<SearchResultsDto> {
     const query = q.q ?? '';
     const limit = q.limit ?? DEFAULT_LIMIT;
     const asOf = new Date().toISOString();
@@ -80,20 +85,33 @@ export class SearchService {
       return { q: query, teams: [], players: [], competitions: [], asOf };
     }
 
-    const [teams, players, competitions] = await Promise.all([
+    const [teamRows, playerRows, compRows] = await Promise.all([
       this.searchTeams(query, limit),
       this.searchPlayers(query, limit),
       this.searchCompetitions(query, limit),
     ]);
 
-    return { q: query, teams, players, competitions, asOf };
+    const lookup = new NameLookup(this.prisma, locale);
+    await lookup.loadFor({
+      teams: teamRows.map((r) => r.id),
+      players: playerRows.map((r) => r.id),
+      competitions: compRows.map((r) => r.id),
+    });
+
+    return {
+      q: query,
+      teams: teamRows.map((r) => this.teamRow(r, lookup)),
+      players: playerRows.map((r) => this.playerRow(r, lookup)),
+      competitions: compRows.map((r) => this.competitionRow(r, lookup)),
+      asOf,
+    };
   }
 
   /**
    * 팀 검색. 매칭 컬럼: teams.name · teams.short_name · localized_names(TEAM).name/short_name.
    * 정렬: prefix > partial > 이름 길이 짧은 순 > tracked 참가팀 우선.
    */
-  private async searchTeams(q: string, limit: number): Promise<SearchTeamDto[]> {
+  private async searchTeams(q: string, limit: number): Promise<TeamRow[]> {
     // 팀 6대회 판정: has_top_flight=true 라운드 실 경기에서 뛴 팀만. UCL 예선만 뛴 하부 팀 제외.
     const rows =
       q.length >= 3
@@ -129,6 +147,7 @@ export class SearchService {
             ),
             ranked AS (
               SELECT
+                t.id AS id,
                 t.api_team_id AS api_id,
                 t.name,
                 t.short_name,
@@ -151,7 +170,7 @@ export class SearchService {
               LEFT JOIN screen_six_teams st ON st.team_id = t.id
               WHERE t.id IN (SELECT id FROM matches_q)
             )
-            SELECT api_id, name, short_name, country, logo_url
+            SELECT id, api_id, name, short_name, country, logo_url
             FROM ranked
             ORDER BY screen_six_bit DESC, prefix_rank ASC, name_len ASC, name ASC
             LIMIT ${limit}
@@ -202,14 +221,14 @@ export class SearchService {
             LIMIT ${limit}
           `;
 
-    return rows.map((r) => this.teamRow(r));
+    return rows;
   }
 
-  private teamRow(r: TeamRow): SearchTeamDto {
+  private teamRow(r: TeamRow, lookup?: NameLookup): SearchTeamDto {
     return {
       ref: toRef(r.api_id, r.name),
       apiId: r.api_id,
-      ...names(r.name, r.short_name),
+      ...names(r.name, r.short_name, lookup?.team(r.id)),
       country: r.country,
       logoUrl: r.logo_url,
     };
@@ -219,7 +238,7 @@ export class SearchService {
    * 선수 검색. 매칭 컬럼: players.name · firstname · lastname · localized_names(PLAYER).name/short_name.
    * teamName: 가장 최신 seasonYear 의 validTo IS NULL 인 squad_entries → teams.name (LATERAL join).
    */
-  private async searchPlayers(q: string, limit: number): Promise<SearchPlayerDto[]> {
+  private async searchPlayers(q: string, limit: number): Promise<PlayerRow[]> {
     // 선수 6대회 판정: player_match_stats (minutes > 0) + competition_rounds.has_top_flight.
     // 실 출전 기준 — 스냅샷(squad_entries)이 놓친 선수가 데이터에 있으면 정확 (규칙 위임).
     // 예: Bodo/Glimt UCL 리그페이즈 뛴 노르웨이 선수 s6=1 · UCL 예선만 뛴 선수 s6=0.
@@ -286,7 +305,7 @@ export class SearchService {
               LEFT JOIN screen_six_players sp ON sp.player_id = p.id
               WHERE p.id IN (SELECT id FROM matches_q)
             )
-            SELECT api_id, name, firstname, lastname, photo_url, team_name
+            SELECT id, api_id, name, firstname, lastname, photo_url, team_name
             FROM ranked
             ORDER BY screen_six_bit DESC, prefix_rank ASC, name_len ASC, name ASC
             LIMIT ${limit}
@@ -316,6 +335,7 @@ export class SearchService {
                 AND cr.has_top_flight = true
             )
             SELECT
+              p.id AS id,
               p.api_player_id AS api_id,
               p.name,
               p.firstname,
@@ -342,14 +362,14 @@ export class SearchService {
             LIMIT ${limit}
           `;
 
-    return rows.map((r) => this.playerRow(r));
+    return rows;
   }
 
-  private playerRow(r: PlayerRow): SearchPlayerDto {
+  private playerRow(r: PlayerRow, lookup?: NameLookup): SearchPlayerDto {
     return {
       ref: toRef(r.api_id, r.name),
       apiId: r.api_id,
-      ...names(r.name),
+      ...names(r.name, null, lookup?.player(r.id)),
       photoUrl: r.photo_url,
       teamName: r.team_name,
     };
@@ -360,7 +380,7 @@ export class SearchService {
    * competitions.short_name 컬럼 자체가 없다 (schema.prisma 확인). is_tracked 필터는 넣지 않는다 —
    * 검색은 추적 여부와 무관하게 이름이 맞으면 보여준다 (프론트가 필요하면 걸러낸다).
    */
-  private async searchCompetitions(q: string, limit: number): Promise<SearchCompetitionDto[]> {
+  private async searchCompetitions(q: string, limit: number): Promise<CompetitionRow[]> {
     const rows =
       q.length >= 3
         ? await this.prisma.$queryRaw<CompetitionRow[]>`
@@ -377,6 +397,7 @@ export class SearchService {
             ),
             ranked AS (
               SELECT
+                c.id AS id,
                 c.api_competition_id AS api_id,
                 c.name,
                 c.country,
@@ -394,7 +415,7 @@ export class SearchService {
               FROM competitions c
               WHERE c.id IN (SELECT id FROM matches)
             )
-            SELECT api_id, name, country
+            SELECT id, api_id, name, country
             FROM ranked
             ORDER BY prefix_rank ASC, name_len ASC, name ASC
             LIMIT ${limit}
@@ -412,6 +433,7 @@ export class SearchService {
                      OR (ln.short_name IS NOT NULL AND LOWER(ln.short_name) LIKE LOWER(${q}) || '%'))
             )
             SELECT
+              c.id AS id,
               c.api_competition_id AS api_id,
               c.name,
               c.country
@@ -421,14 +443,14 @@ export class SearchService {
             LIMIT ${limit}
           `;
 
-    return rows.map((r) => this.competitionRow(r));
+    return rows;
   }
 
-  private competitionRow(r: CompetitionRow): SearchCompetitionDto {
+  private competitionRow(r: CompetitionRow, lookup?: NameLookup): SearchCompetitionDto {
     return {
       ref: toRef(r.api_id, r.name),
       apiId: r.api_id,
-      ...names(r.name),
+      ...names(r.name, null, lookup?.competition(r.id)),
       country: r.country,
     };
   }

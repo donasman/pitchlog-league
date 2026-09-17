@@ -5,7 +5,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { latestOf } from '../common/as-of.js';
+import { NameLookup } from '../common/name-lookup.js';
 import { parseRef } from '../common/ref.js';
+import { DEFAULT_LOCALE, type Locale } from '../common/locale.js';
 import { seasonLabel } from '../common/season-label.js';
 import { TeamService } from '../team/team.service.js';
 import { competitionRef } from '../match/match.dto.js';
@@ -36,7 +38,7 @@ export class PlayerService {
     private readonly teams: TeamService,
   ) {}
 
-  async detail(ref: string): Promise<PlayerDetailDto> {
+  async detail(ref: string, locale: Locale = DEFAULT_LOCALE): Promise<PlayerDetailDto> {
     const apiId = parseRef(ref, '선수 ref');
     const player = (await this.prisma.player.findUnique({
       where: { apiPlayerId: apiId },
@@ -59,9 +61,18 @@ export class PlayerService {
     if (!player) throw new NotFoundException(`선수가 없다: ${ref}`);
 
     const current = player.squadEntries[0] ?? null;
-    const seasonStats = player.seasonStats.map((s) => this.seasonStat(s));
+    const lookup = new NameLookup(this.prisma, locale);
+    await lookup.loadFor({
+      players: [player.id],
+      teams: [
+        ...(current ? [current.team.id] : []),
+        ...player.seasonStats.map((s) => s.team.id),
+      ],
+      competitions: player.seasonStats.map((s) => s.competitionSeason.competition.id),
+    });
+    const seasonStats = player.seasonStats.map((s) => this.seasonStat(s, lookup));
     return {
-      ...playerRef(player),
+      ...playerRef(player, lookup),
       firstname: player.firstname,
       lastname: player.lastname,
       nationality: player.nationality,
@@ -70,7 +81,7 @@ export class PlayerService {
       birthCountry: player.birthCountry,
       heightCm: player.heightCm,
       weightKg: player.weightKg,
-      primaryTeam: current ? this.teams.summary(current.team) : null,
+      primaryTeam: current ? this.teams.summary(current.team, lookup) : null,
       jerseyNumber: current?.jerseyNumber ?? null,
       position: current?.position ?? null,
       seasonStats,
@@ -79,11 +90,11 @@ export class PlayerService {
     };
   }
 
-  private seasonStat(s: SeasonStatRow): PlayerSeasonStatDto {
+  private seasonStat(s: SeasonStatRow, lookup?: NameLookup): PlayerSeasonStatDto {
     return {
-      competition: competitionRef(s.competitionSeason.competition),
+      competition: competitionRef(s.competitionSeason.competition, lookup),
       season: { year: s.competitionSeason.season.year, label: seasonLabel(s.competitionSeason.season.year) },
-      team: this.teams.summary(s.team),
+      team: this.teams.summary(s.team, lookup),
       appearances: s.appearances,
       starts: s.lineupsCount,
       minutes: s.minutes,
