@@ -2,6 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { StandingService } from './standing.service.js';
 import { StandingsListDto, StandingsQueryDto } from './standing.dto.js';
+import { parseLocale } from '../common/locale.js';
 
 @ApiTags('standings')
 @Controller('standings')
@@ -14,6 +15,6 @@ export class StandingController {
   @ApiBadRequestResponse({ description: 'ref 형식 오류 · season 범위 밖 · 모르는 파라미터' })
   @ApiNotFoundResponse({ description: '추적 대회가 아니거나 그 시즌이 없다' })
   list(@Query() q: StandingsQueryDto): Promise<StandingsListDto> {
-    return this.standings.list(q);
+    return this.standings.list(q, parseLocale(q.locale));
   }
 }

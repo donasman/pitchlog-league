@@ -268,7 +268,17 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 - 경로는 `/api/...`. `/health` 만 접두사 없이 둔다 (인프라 감시용).
 - `asOf` 를 **반드시 포함**한다 — 목록은 행들의 갱신 시각 중 최신, 단건은 그 행. 프론트 `DataTimestamp`가 이미 기대 중이다.
 - 팀·선수·대회 이름은 `displayName` / `shortDisplayName` / `originalName` 3종을 준다.
-  `localized_names` 적재 전까지 셋 다 원본. 대회의 short 는 카탈로그 상수(`competitions.catalog.ts`).
+  대회의 short 는 카탈로그 상수(`competitions.catalog.ts`).
+- **로케일** (2026-09-17 · feat/localized-names-api 1단계) — 쿼리 `?locale=ko|en`.
+  기본은 `ko`. 유효하지 않은 값은 조용히 `ko` 로 폴백 (400 안 냄).
+  - `displayName` = 요청 로케일의 `localized_names.name` → 없으면 영어 원본.
+  - `shortDisplayName` = 로케일 `short_name` → 원본 `short/code` → `displayName`.
+  - `originalName` = 항상 원본 (변경 금지).
+  - 헤더(Accept-Language)는 쓰지 않는다 — `Cache-Control: public, max-age=60` 이라 CDN 이 언어를 섞어 캐시할 위험이 있고, 쿼리는 캐시 키에 자연히 포함된다. `Vary` 헤더 추가하지 않는다.
+  - **적용 범위**: team · competition · player · match(홈·원정·대회) · standing · statistics · search 결과.
+    라인업/이벤트/통계 안 자유 텍스트 name (`MatchLineupDto.teamName` · `PlayerStatDto.playerName` 등) 은 다음 판. 어시스턴트 도구는 이 서비스들을 그대로 쓰므로 자동 반영.
+  - 배치 조회 필수 — `NameLookup` (`common/name-lookup.ts`) 이 (entityType, entityId[], locale) 로 한 번의 `IN` 쿼리로 로드. 목록 응답의 N+1 방지.
+  - **실측 (2026-09-17 · `/api/matches?competition=39-premier-league&limit=500` · 로컬 → Supabase 서울)**: warm ko 142ms · en 141ms · default 217ms. 응답 512KB (ko) vs 503KB (en · 원본만).
 - **식별자 `ref` = `<apiId>-<slug>`** (`39-premier-league` · `33-manchester-united`). 숫자가 기준이고 slug 는 읽기용이라
   `33` 만 보내도, slug 가 틀려도 같은 것을 돌려준다. 위 표의 `:slug` 는 전부 이 `ref` 다.
   이유: 스키마에 slug 컬럼이 없고, 팀 1,888개엔 같은 이름(Arsenal 잉글랜드·아르헨티나)이 있어 이름만으론 유일하지 않다.

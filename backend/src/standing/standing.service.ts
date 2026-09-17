@@ -5,6 +5,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { latestOf } from '../common/as-of.js';
+import { NameLookup } from '../common/name-lookup.js';
+import { DEFAULT_LOCALE, type Locale } from '../common/locale.js';
 import { CompetitionService } from '../competition/competition.service.js';
 import { competitionRef } from '../match/match.dto.js';
 import { TeamService } from '../team/team.service.js';
@@ -24,13 +26,14 @@ export class StandingService {
     private readonly teams: TeamService,
   ) {}
 
-  async list(q: StandingsQueryDto): Promise<StandingsListDto> {
+  async list(q: StandingsQueryDto, locale: Locale = DEFAULT_LOCALE): Promise<StandingsListDto> {
     let items: StandingsTableDto[];
+    const lookup = new NameLookup(this.prisma, locale);
     if (q.competition !== undefined) {
       const comp = await this.competitions.resolve(q.competition);
       const cs = this.pickSeason(comp, q.season);
       if (!cs) throw new NotFoundException(`${q.competition} 에 ${q.season ?? '현재'} 시즌이 없다`);
-      items = [await this.table(comp, cs)];
+      items = [await this.table(comp, cs, lookup)];
     } else {
       // 화면 6대회 전부. 시즌이 없는 대회(등록 전 컵)는 표를 내지 않는다 — 실패가 아니다
       const comps = await this.prisma.competition.findMany({
@@ -38,11 +41,12 @@ export class StandingService {
         include: { seasons: { include: { season: true, backfillJob: true }, orderBy: { season: { year: 'desc' } } }, topFlight: true },
         orderBy: { displayOrder: 'asc' },
       });
+      await lookup.loadFor({ competitions: comps.map((c) => c.id) });
       // Promise.all 은 입력 순서 보존 → displayOrder asc 유지 · 변경 전후 body diff 로 검증(06)
       items = await Promise.all(
         comps.flatMap((comp) => {
           const cs = this.pickSeason(comp, q.season);
-          return cs ? [this.table(comp, cs)] : [];
+          return cs ? [this.table(comp, cs, lookup)] : [];
         }),
       );
     }
@@ -54,8 +58,12 @@ export class StandingService {
     return year !== undefined ? comp.seasons.find((s) => s.season.year === year) : (comp.seasons.find((s) => s.isCurrent) ?? comp.seasons[0]);
   }
 
-  private async table(comp: CompetitionRow, cs: SeasonRow): Promise<StandingsTableDto> {
-    const base = { competition: competitionRef(comp), season: this.competitions.season(cs) };
+  private async table(comp: CompetitionRow, cs: SeasonRow, lookup: NameLookup): Promise<StandingsTableDto> {
+    // 대회 지정 모드에서는 competitions 를 여기서 로드. 화면 6대회 모드는 list() 가 이미 로드.
+    if (lookup.competition(comp.id) === undefined && lookup.locale !== 'en') {
+      await lookup.loadFor({ competitions: [comp.id] });
+    }
+    const base = { competition: competitionRef(comp, lookup), season: this.competitions.season(cs) };
     // 컵은 순위표가 없다 — 정상 (DATA_RULES 5-3). DB 를 보지 않는다
     if (comp.format === CompetitionFormat.KNOCKOUT) {
       return { ...base, unavailableReason: 'KNOCKOUT', rows: [], asOf: latestOf(cs.asOf) };
@@ -65,17 +73,19 @@ export class StandingService {
       include: { team: true },
       orderBy: [{ groupName: 'asc' }, { rank: 'asc' }],
     });
+    // 이 표의 팀들을 추가 로드 (경쟁 없이 안전 — Map.set 은 멱등)
+    await lookup.loadFor({ teams: rows.map((r) => r.team.id) });
     return {
       ...base,
       unavailableReason: rows.length === 0 ? 'EMPTY' : null,
-      rows: rows.map((r) => this.row(r)),
+      rows: rows.map((r) => this.row(r, lookup)),
       asOf: latestOf(...rows.map((r) => r.asOf), cs.asOf),
     };
   }
 
-  private row(r: StandingRow): StandingRowDto {
+  private row(r: StandingRow, lookup: NameLookup): StandingRowDto {
     return {
-      team: this.teams.summary(r.team),
+      team: this.teams.summary(r.team, lookup),
       groupName: r.groupName,
       rank: r.rank,
       points: r.points,
