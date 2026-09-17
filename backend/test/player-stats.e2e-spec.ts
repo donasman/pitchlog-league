@@ -497,39 +497,22 @@ describe('player · stats API (e2e)', () => {
     });
   });
 
-  describe('GET /api/stats/scorers (모드 B: competition 생략)', () => {
-    it('competition·season null · items[].breakdown 필수 · 합산 정렬', async () => {
-      const res = await get('/api/stats/scorers?limit=3').expect(200);
-      const body = res.body;
-      expect(body.competition).toBeNull();
-      expect(body.season).toBeNull();
+  describe('GET /api/stats/scorers — competition 필수 (2차 개정 · 전 대회 통합 랭킹 폐기)', () => {
+    it('competition 생략 → 400', async () => {
+      await get('/api/stats/scorers?limit=3').expect(400);
+    });
 
-      // 우리 픽스처 6대회 중 A·B 만 실제 데이터 · 다른 실 데이터가 함께 있을 수 있으니 P1·P2·P3 존재만 확인
-      const byPlayer = new Map<number, { rank: number; value: number; breakdown: Array<{ competition: { apiId: number }; season: { year: number }; value: number }> }>();
-      for (const item of body.items) {
-        byPlayer.set(item.player.apiId, item);
+    it('items[].breakdown 필드 없음 (단일 대회이므로 의미 없음)', async () => {
+      const res = await get(`/api/stats/scorers?competition=${COMP_A}&limit=2`).expect(200);
+      for (const item of res.body.items) {
+        expect(item.breakdown).toBeUndefined();
       }
+    });
 
-      // limit=3 이라 실 데이터가 없으면 우리 P1·P2·P3 순서. 실 데이터가 있어도 P1 은 반드시 breakdown 을 갖고 나온다면 검증
-      // 안전을 위해 P1 이 items 에 없으면 스킵 대신 실패시켜 데이터 오염 여부를 드러낸다
-      const item1 = body.items.find((r: { player: { apiId: number } }) => r.player.apiId === P1);
-      if (item1) {
-        expect(Array.isArray(item1.breakdown)).toBe(true);
-        // P1 은 A(8) · B(6) = 14
-        expect(item1.value).toBe(14);
-        // breakdown 원소에 competition · season · value 세팅
-        for (const b of item1.breakdown) {
-          expect(b).toHaveProperty('competition.apiId');
-          expect(b).toHaveProperty('season.year');
-          expect(typeof b.value).toBe('number');
-        }
-        // 두 대회 다 들어갔다
-        const apis = item1.breakdown.map((b: { competition: { apiId: number } }) => b.competition.apiId).sort();
-        expect(apis).toEqual([COMP_A, COMP_B].sort());
-      }
-
-      expect(byPlayer.size).toBeGreaterThan(0);
-      expect(new Date(body.asOf).toString()).not.toBe('Invalid Date');
+    it('items[].minutes · items[].assists 노출 (결정적 정렬 키)', async () => {
+      const res = await get(`/api/stats/scorers?competition=${COMP_A}&limit=1`).expect(200);
+      expect(typeof res.body.items[0].minutes).toBe('number');
+      expect(typeof res.body.items[0].assists).toBe('number');
     });
   });
 
