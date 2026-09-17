@@ -81,7 +81,7 @@ describe('player · stats API (e2e)', () => {
         type: CompetitionType.LEAGUE,
         format: CompetitionFormat.ROUND_ROBIN,
         isTracked: true,
-        displayOrder: 71, // 100 이하여야 화면 대회 스코프에 잡힌다
+        displayOrder: 55, // feat/scope-expansion (2026-09-17): competitionVisibleWhere<=60 여야 랭킹 응답에 잡힌다
       },
     });
     const compB = await prisma.competition.create({
@@ -92,7 +92,7 @@ describe('player · stats API (e2e)', () => {
         type: CompetitionType.LEAGUE,
         format: CompetitionFormat.ROUND_ROBIN,
         isTracked: true,
-        displayOrder: 72, // A 보다 뒤
+        displayOrder: 56, // A 보다 뒤 · feat/scope-expansion: competitionVisibleWhere<=60
       },
     });
 
