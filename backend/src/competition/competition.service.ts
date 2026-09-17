@@ -6,8 +6,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { latestOf } from '../common/as-of.js';
 import { dataStateOf } from '../common/data-state.js';
+import { NameLookup } from '../common/name-lookup.js';
 import { names } from '../common/names.dto.js';
 import { parseRef, toRef } from '../common/ref.js';
+import { DEFAULT_LOCALE, type Locale } from '../common/locale.js';
 import { seasonLabel } from '../common/season-label.js';
 import { COMPETITION_BY_API_ID } from '../ingestion/l0/competitions.catalog.js';
 import type { Competition, CompetitionSeason, Season, BackfillJob } from '../generated/prisma/client.js';
@@ -25,24 +27,28 @@ const SEASON_INCLUDE = {
 export class CompetitionService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(): Promise<CompetitionListDto> {
+  async list(locale: Locale = DEFAULT_LOCALE): Promise<CompetitionListDto> {
     const rows = await this.prisma.competition.findMany({
       where: { isTracked: true },
       include: SEASON_INCLUDE,
       orderBy: { displayOrder: 'asc' },
     });
+    const lookup = new NameLookup(this.prisma, locale);
+    await lookup.loadFor({ competitions: rows.map((r) => r.id) });
     return {
-      items: rows.map((r) => this.summary(r)),
+      items: rows.map((r) => this.summary(r, lookup)),
       asOf: latestOf(...rows.map((r) => r.updatedAt), ...rows.flatMap((r) => r.seasons.map((s) => s.asOf))),
     };
   }
 
-  async detail(ref: string): Promise<CompetitionDetailDto> {
+  async detail(ref: string, locale: Locale = DEFAULT_LOCALE): Promise<CompetitionDetailDto> {
     const apiId = parseRef(ref, '대회 ref');
     const row = await this.prisma.competition.findFirst({ where: { apiCompetitionId: apiId, isTracked: true }, include: SEASON_INCLUDE });
     if (!row) throw new NotFoundException(`대회가 없다: ${ref}`);
+    const lookup = new NameLookup(this.prisma, locale);
+    await lookup.loadFor({ competitions: [row.id] });
     return {
-      ...this.summary(row),
+      ...this.summary(row, lookup),
       seasons: row.seasons.map((s) => this.season(s)),
       topFlightRef: row.topFlight ? toRef(row.topFlight.apiCompetitionId, row.topFlight.name) : null,
       asOf: latestOf(row.updatedAt, ...row.seasons.map((s) => s.asOf)),
@@ -57,12 +63,12 @@ export class CompetitionService {
     return row;
   }
 
-  summary(r: CompetitionRow): CompetitionSummaryDto {
+  summary(r: CompetitionRow, lookup?: NameLookup): CompetitionSummaryDto {
     const current = r.seasons.find((s) => s.isCurrent) ?? null;
     return {
       ref: toRef(r.apiCompetitionId, r.name),
       apiId: r.apiCompetitionId,
-      ...names(r.name, COMPETITION_BY_API_ID.get(r.apiCompetitionId)?.shortName),
+      ...names(r.name, COMPETITION_BY_API_ID.get(r.apiCompetitionId)?.shortName, lookup?.competition(r.id)),
       country: r.country,
       countryCode: r.countryCode,
       type: r.type,

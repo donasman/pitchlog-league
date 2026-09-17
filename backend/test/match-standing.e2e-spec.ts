@@ -268,4 +268,85 @@ describe('경기·순위표 API (e2e)', () => {
       await get(`/api/standings?competition=${LEAGUE}&bogus=1`).expect(400);
     });
   });
+
+  // feat/localized-names-api (2026-09-17) — 응답이 로케일별 이름을 싣는지.
+  // 시드 팀 · 대회에 LocalizedName(ko) 를 넣고 각 컨트롤러가 규칙을 따르는지 검증.
+  describe('로케일 응답 (localized_names)', () => {
+    let teamAId = 0;
+    let leagueId = 0;
+
+    beforeAll(async () => {
+      teamAId = (await prisma.team.findUnique({ where: { apiTeamId: API + 1 }, select: { id: true } }))!.id;
+      leagueId = (await prisma.competition.findUnique({ where: { apiCompetitionId: API + 1 }, select: { id: true } }))!.id;
+      await prisma.localizedName.upsert({
+        where: { entityType_entityId_locale: { entityType: 'TEAM', entityId: teamAId, locale: 'ko' } },
+        create: { entityType: 'TEAM', entityId: teamAId, locale: 'ko', name: '스탠드 유나이티드', shortName: '스탠유' },
+        update: { name: '스탠드 유나이티드', shortName: '스탠유' },
+      });
+      await prisma.localizedName.upsert({
+        where: { entityType_entityId_locale: { entityType: 'COMPETITION', entityId: leagueId, locale: 'ko' } },
+        create: { entityType: 'COMPETITION', entityId: leagueId, locale: 'ko', name: '스탠드 리그', shortName: null },
+        update: { name: '스탠드 리그', shortName: null },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.localizedName.deleteMany({
+        where: {
+          OR: [
+            { entityType: 'TEAM', entityId: teamAId },
+            { entityType: 'COMPETITION', entityId: leagueId },
+          ],
+        },
+      });
+    });
+
+    it('GET /api/teams/:ref — 기본 (ko) 은 한국어 · ?locale=en 은 원본 · originalName 은 항상 원본', async () => {
+      const ko = (await get(`/api/teams/${API + 1}`).expect(200)).body;
+      expect(ko).toMatchObject({
+        displayName: '스탠드 유나이티드',
+        shortDisplayName: '스탠유',
+        originalName: 'Stand United',
+      });
+
+      const en = (await get(`/api/teams/${API + 1}?locale=en`).expect(200)).body;
+      expect(en).toMatchObject({
+        displayName: 'Stand United',
+        shortDisplayName: 'STU',
+        originalName: 'Stand United',
+      });
+
+      // 유효하지 않은 값 → 조용히 기본 ko (계약 1: 400 안 냄)
+      const bogus = (await get(`/api/teams/${API + 1}?locale=fr`).expect(200)).body;
+      expect(bogus.displayName).toBe('스탠드 유나이티드');
+    });
+
+    it('GET /api/competitions/:ref — 대회 응답도 로케일 반영', async () => {
+      const ko = (await get(`/api/competitions/${API + 1}`).expect(200)).body;
+      expect(ko).toMatchObject({ displayName: '스탠드 리그', originalName: 'Stand League' });
+
+      const en = (await get(`/api/competitions/${API + 1}?locale=en`).expect(200)).body;
+      expect(en).toMatchObject({ displayName: 'Stand League', originalName: 'Stand League' });
+    });
+
+    it('GET /api/matches — 홈·원정·competition 이 로케일을 따른다 (계약 4: 홈·원정·대회)', async () => {
+      const ko = (await get(`/api/matches?competition=${LEAGUE}&season=2026&locale=ko`).expect(200)).body;
+      const ft = ko.items.find((m: { id: number }) => m.id === API + 1);
+      expect(ft.home.displayName).toBe('스탠드 유나이티드');
+      expect(ft.home.originalName).toBe('Stand United');
+      expect(ft.competition.displayName).toBe('스탠드 리그');
+
+      const en = (await get(`/api/matches?competition=${LEAGUE}&season=2026&locale=en`).expect(200)).body;
+      const ftEn = en.items.find((m: { id: number }) => m.id === API + 1);
+      expect(ftEn.home.displayName).toBe('Stand United');
+      expect(ftEn.competition.displayName).toBe('Stand League');
+    });
+
+    it('GET /api/standings — team 조각도 로케일을 따른다', async () => {
+      const ko = (await get(`/api/standings?competition=${LEAGUE}&locale=ko`).expect(200)).body;
+      const row = ko.items[0].rows.find((r: { rank: number }) => r.rank === 1);
+      expect(row.team.displayName).toBe('스탠드 유나이티드');
+      expect(row.team.originalName).toBe('Stand United');
+    });
+  });
 });

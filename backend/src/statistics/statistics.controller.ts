@@ -2,6 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { StatisticsService } from './statistics.service.js';
 import { RankingListDto, RankingsQueryDto } from './statistics.dto.js';
+import { parseLocale } from '../common/locale.js';
 
 @ApiTags('stats')
 @Controller('stats')
@@ -14,7 +15,7 @@ export class StatisticsController {
   @ApiBadRequestResponse({ description: 'ref 형식 오류 · season/limit 범위 밖 · 모르는 파라미터' })
   @ApiNotFoundResponse({ description: '추적 대회가 아니거나 그 시즌이 없다' })
   scorers(@Query() q: RankingsQueryDto): Promise<RankingListDto> {
-    return this.stats.scorers(q);
+    return this.stats.scorers(q, parseLocale(q.locale));
   }
 
   @Get('assisters')
@@ -23,6 +24,6 @@ export class StatisticsController {
   @ApiBadRequestResponse({ description: 'ref 형식 오류 · season/limit 범위 밖 · 모르는 파라미터' })
   @ApiNotFoundResponse({ description: '추적 대회가 아니거나 그 시즌이 없다' })
   assisters(@Query() q: RankingsQueryDto): Promise<RankingListDto> {
-    return this.stats.assisters(q);
+    return this.stats.assisters(q, parseLocale(q.locale));
   }
 }
