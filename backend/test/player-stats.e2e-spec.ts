@@ -244,8 +244,79 @@ describe('player · stats API (e2e)', () => {
       ],
     });
 
-    // TopRanking — 대회 A · B × SCORERS · ASSISTS × top3
-    // A SCORERS: P1(8) rank1, P2(5) rank2, P3(3) rank3
+    // player_match_stats — 새 소스 (2026-09-17 · feat/statistics-self-aggregation).
+    // /api/stats/* 는 이 테이블을 SUM 한다. match·round 를 세워 pms 를 붙인다.
+    // 값 시나리오 (기존 e2e 판정과 정합):
+    //   A 2026 · SCORERS: P1(8) · P2(5) · P3(3) — P1 은 T1 매치 3개(3+3+2) + T4 매치 1개(0)
+    //     → team 최다 출전 T1 (3 > 1). appearances=4.
+    //   A 2026 · ASSISTS: P2(4) · P3(2). P1 은 T4 매치에서 assists=1 (rank 밖).
+    //   B 2026 · SCORERS: P1(6) · P2(2) · P3(1).
+    //   → 모드 B P1: A(8) + B(6) = 14 골, breakdown 2대회.
+    const roundA2026 = await prisma.competitionRound.create({
+      data: { competitionSeasonId: csA2026.id, name: 'PS Round 1', ordinal: 1 },
+    });
+    const roundB2026 = await prisma.competitionRound.create({
+      data: { competitionSeasonId: csB2026.id, name: 'PS Round 1', ordinal: 1 },
+    });
+    const roundA2025 = await prisma.competitionRound.create({
+      data: { competitionSeasonId: csA2025.id, name: 'PS Round 1', ordinal: 1 },
+    });
+    const mkMatch = (apiFixtureId: number, csId: number, roundId: number, kickoff: string, homeId: number, awayId: number) =>
+      prisma.match.create({
+        data: {
+          apiFixtureId, competitionSeasonId: csId, roundId,
+          kickoffAt: new Date(kickoff), statusShort: 'FT',
+          homeTeamId: homeId, awayTeamId: awayId,
+          detailEligible: true, detailCheckedAt: new Date(kickoff), asOf: new Date(kickoff),
+        },
+      });
+    // A 2026 : 매치 4개 (m1·m2·m3 T1 vs T2 · m4 T4 vs T2)
+    const mA1 = await mkMatch(API + 31, csA2026.id, roundA2026.id, '2026-08-01T15:00:00Z', team1.id, team2.id);
+    const mA2 = await mkMatch(API + 32, csA2026.id, roundA2026.id, '2026-08-08T15:00:00Z', team1.id, team2.id);
+    const mA3 = await mkMatch(API + 33, csA2026.id, roundA2026.id, '2026-08-15T15:00:00Z', team1.id, team2.id);
+    const mA4 = await mkMatch(API + 34, csA2026.id, roundA2026.id, '2026-08-22T15:00:00Z', team4.id, team2.id);
+    // B 2026 : 매치 1개 (P1·P2·P3 다 참여)
+    const mB1 = await mkMatch(API + 35, csB2026.id, roundB2026.id, '2026-08-05T15:00:00Z', team1.id, team2.id);
+    // A 2025 : 매치 1개 (P1 만)
+    const mA5 = await mkMatch(API + 36, csA2025.id, roundA2025.id, '2025-10-01T15:00:00Z', team1.id, team2.id);
+
+    const pms = (data: {
+      matchId: number; playerId: number; teamId: number; csId: number;
+      minutes?: number; goals?: number; assists?: number; yellow?: number; red?: number;
+    }) => ({
+      matchId: data.matchId, playerId: data.playerId, teamId: data.teamId,
+      competitionSeasonId: data.csId,
+      minutes: data.minutes ?? 90,
+      goalsTotal: data.goals ?? 0,
+      assists: data.assists ?? 0,
+      yellowCards: data.yellow ?? 0,
+      redCards: data.red ?? 0,
+    });
+    await prisma.playerMatchStat.createMany({
+      data: [
+        // A 2026 · P1 (T1 매치 3개 goals 3+3+2=8 · T4 매치 1개 goals=0 assists=1)
+        pms({ matchId: mA1.id, playerId: player1.id, teamId: team1.id, csId: csA2026.id, goals: 3 }),
+        pms({ matchId: mA2.id, playerId: player1.id, teamId: team1.id, csId: csA2026.id, goals: 3 }),
+        pms({ matchId: mA3.id, playerId: player1.id, teamId: team1.id, csId: csA2026.id, goals: 2 }),
+        pms({ matchId: mA4.id, playerId: player1.id, teamId: team4.id, csId: csA2026.id, goals: 0, assists: 1 }),
+        // A 2026 · P2 (m1: goals=5 assists=4)
+        pms({ matchId: mA1.id, playerId: player2.id, teamId: team2.id, csId: csA2026.id, goals: 5, assists: 4 }),
+        // A 2026 · P3 (m1: goals=3 assists=2)
+        pms({ matchId: mA1.id, playerId: player3.id, teamId: team3.id, csId: csA2026.id, goals: 3, assists: 2 }),
+        // B 2026 · P1 (goals=6 assists=3)
+        pms({ matchId: mB1.id, playerId: player1.id, teamId: team1.id, csId: csB2026.id, goals: 6, assists: 3 }),
+        // B 2026 · P2 (goals=2 assists=1)
+        pms({ matchId: mB1.id, playerId: player2.id, teamId: team2.id, csId: csB2026.id, goals: 2, assists: 1 }),
+        // B 2026 · P3 (goals=1 assists=1)
+        pms({ matchId: mB1.id, playerId: player3.id, teamId: team3.id, csId: csB2026.id, goals: 1, assists: 1 }),
+        // A 2025 · P1 (goals=12 assists=5)
+        pms({ matchId: mA5.id, playerId: player1.id, teamId: team1.id, csId: csA2025.id, goals: 12, assists: 5 }),
+      ],
+    });
+    // 미사용 참조 경고 방지
+    void mA2; void mA3;
+
+    // TopRanking — 다음 판에서 제거 예정 (SCHEMA_DESIGN 9장). 남겨두지만 응답에는 안 쓰인다.
     await prisma.topRanking.createMany({
       data: [
         // 대회 A · 2026 · SCORERS
@@ -302,6 +373,10 @@ describe('player · stats API (e2e)', () => {
     if (csIds.length > 0) {
       await prisma.topRanking.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
       await prisma.playerSeasonStat.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
+      // player_match_stats → match → round 순 (Restrict)
+      await prisma.playerMatchStat.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
+      await prisma.match.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
+      await prisma.competitionRound.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
       await prisma.competitionEntry.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
       await prisma.competitionSeason.deleteMany({ where: { id: { in: csIds } } });
     }
@@ -406,9 +481,9 @@ describe('player · stats API (e2e)', () => {
       expect(body.items[1]).toMatchObject({ rank: 2, value: 5 });
     });
 
-    it('assisters — category ASSISTS 데이터로 채워짐', async () => {
-      const res = await get(`/api/stats/assisters?competition=${COMP_A}`).expect(200);
-      // A · ASSISTS: P2 rank1 value 4, P3 rank2 value 2
+    it('assisters — category ASSISTS 데이터로 채워짐 (P1 은 T4 매치 assists=1 로 rank 3 · limit=2 로 좁힌다)', async () => {
+      const res = await get(`/api/stats/assisters?competition=${COMP_A}&limit=2`).expect(200);
+      // A · ASSISTS: P2 rank1 value 4, P3 rank2 value 2 (P1 T4=1 은 rank 3 · limit=2 로 제외)
       expect(res.body.items.map((r: { rank: number; value: number }) => [r.rank, r.value])).toEqual([[1, 4], [2, 2]]);
       expect(res.body.items[0].player.apiId).toBe(P2);
     });

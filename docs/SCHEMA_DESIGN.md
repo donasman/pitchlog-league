@@ -546,8 +546,13 @@ UNIQUE(competition_season_id, category, rank)
 ```
 
 `category`: `SCORERS | ASSISTS | YELLOW_CARDS | RED_CARDS`.
-전용 엔드포인트가 대회당 1콜이므로 `player_season_stats`에서 뽑지 않고 따로 저장한다
-(원칙 ①의 예외 — API 공식 순위가 우리 집계보다 권위 있다).
+
+> ⚠️ **더 이상 조회 경로가 아니다 (2026-09-17 · feat/statistics-self-aggregation).**
+> `/api/stats/*` 는 `player_match_stats` 를 자체 집계하는 방식으로 전환됐다 (DATA_RULES 8장).
+> 이 테이블 · `TopRanking` 모델 · `RankingCategory` enum · `L6.rankings` 브랜치는 **다음 판에서 제거 예정**이다 —
+> 자체 집계가 화면에서 안정 통과한 후 삭제한다. 그 전까지 L6 가 계속 채우지만 아무도 읽지 않는다.
+>
+> **왜 자체 집계로 갔나**: (1) TopRanking 은 대회당 1콜의 상위 N 만 주므로 컵·유럽 대항전 등 순위표 없는 대회에서는 랭킹이 없다. (2) 대회별 상위 N 을 자른 뒤 SUM 하면 합산값이 실제와 다르다. (3) 우리는 이미 `player_match_stats` 를 다 갖고 있다 — 원본에서 뽑는 게 정합.
 
 ### 3-6. 운영
 
@@ -614,7 +619,7 @@ INDEX(entity_type, locale)
 | 경기 상세 — 선수 평점 | `player_match_stats WHERE match_id = ?` | `player_match_stats(match_id)` | **FK 없으면 여기가 36만 행 풀스캔** |
 | 대회 허브 | `competition_seasons` + `competition_rounds` | `competition_seasons(competition_id) WHERE is_current` | |
 | 녹아웃 대진표 | `bracket_slots WHERE competition_season_id = ? ORDER BY round, slot_index` | UNIQUE(cs_id, round_id, slot_index) | 슬롯이 없으면 골격만 그린다 |
-| 통계 랭킹 `/stats` | `top_rankings WHERE competition_season_id = ? AND category = ? ORDER BY rank` | UNIQUE(cs_id, category, rank) | 사전 계산돼 있어 조인 없음 |
+| 통계 랭킹 `/stats` | `player_match_stats` GROUP BY player_id (2026-09-17 자체 집계 · DATA_RULES 8장). `top_rankings` 는 더 이상 조회 경로가 아니다 | `player_match_stats(player_id, competition_season_id)` | |
 | 팀 상세 — 요약 | `team_season_stats WHERE competition_season_id = ? AND team_id = ?` | UNIQUE | |
 | 팀 상세 — 최근 경기 | `matches WHERE (home_team_id = ? OR away_team_id = ?) ORDER BY kickoff_at DESC LIMIT 5` | `matches(home_team_id, kickoff_at)` + `(away_team_id, kickoff_at)` | **OR는 두 인덱스를 각각 타야 한다.** UNION ALL로 쓰는 편이 안전 |
 | 팀 상세 — 스쿼드 | `squad_entries WHERE team_id = ? AND season_year = ? AND valid_to IS NULL` | `squad_entries(team_id, season_year)` | |
