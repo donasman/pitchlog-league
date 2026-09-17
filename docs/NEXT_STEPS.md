@@ -287,7 +287,7 @@ R1 모드 A 유도, 429 0건.
 | Mock ↔ 실 API | `VITE_USE_MOCK` 로 **통째로** 전환. 한 화면에 섞지 않는다 |
 | 미구현 화면 | `NotImplementedError` 로 드러낸다. 빈 목록으로 위장하면 "없음"과 "아직 없음"을 구분 못 한다 |
 | 팀 배지 | 우리 정적 파일(`/logos/teams/<apiId>.webp`) 우선, 없으면 404 즉시 → 이니셜 폴백. media URL 직링크는 실측에서 못 쓴다는 게 확인됐다 |
-| 대회 노출 | 백엔드 17개 중 화면은 6개 — `normalize.js` 의 `VISIBLE_COMPETITION_API_IDS` |
+| 대회 노출 | **19개** (feat/scope-expansion · 2026-09-17) · 4층 범위 분리: 대회 탭·순위표는 6개(displayOrder≤60 · `COMPETITION_LIST_API_IDS`) · 경기 노출·로고·어시스턴트는 19개(`MATCH_VISIBLE_COMPETITION_API_IDS`). 백엔드는 `screen-scope.ts` 의 4상수 (`ingestScopeWhere`/`matchVisibleWhere`/`competitionVisibleWhere`/`squadScopeWhere`). **8장의 "화면 6대회로 한정" 결정을 이 판이 대체함** — 노출 6개는 유지하되 수집·경기 노출은 19개로 확장 |
 | 라우팅 | 기존 slug 유지. 대회 6개는 별칭 표로 `ref`→기존 slug·id 로 옮긴다 |
 | 팀 한국어 이름 | 없다. `entityNames` 는 Mock id 키라 1,888팀에 못 붙인다 — 11단계 `localized_names` 적재로 해결 |
 | 선수 검색 | 실 API 모드에서는 인덱스에서 뺀다 (9단계 L1 전까지 조회 API 없음) |

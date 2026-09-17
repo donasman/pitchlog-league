@@ -15,10 +15,26 @@ import { getDisplayState, isFinished, isLive } from '../utils/matchStatus.js'
 import { now } from './clock.js'
 
 /**
- * 화면에 노출하는 대회 — 백엔드는 17개(컵·슈퍼컵 포함)를 주지만 화면은 아직 6개 전제다.
- * 백엔드 `LogoService.SCREEN_DISPLAY_ORDER_MAX` 와 같은 범위다 — 한쪽만 바뀌면 로고가 빈다.
+ * 화면에 노출하는 대회 — 백엔드 4층 범위(`backend/src/ingestion/screen-scope.ts` 표) 와 동기.
+ * feat/scope-expansion 판 (2026-09-17) 에서 둘로 나눔.
+ *
+ * - `MATCH_VISIBLE_COMPETITION_API_IDS` (19개) — 경기 노출 · 로고 · 어시스턴트.
+ *   백엔드 `matchVisibleWhere` (isTracked 전부) 와 짝. 5대리그+UCL+국내컵6+슈퍼컵5+UEL+UECL.
+ * - `COMPETITION_LIST_API_IDS` (6개) — 대회 목록·순위표·시즌 선택기.
+ *   백엔드 `competitionVisibleWhere` (displayOrder<=60) 와 짝. 5대리그+UCL.
+ *
+ * 한쪽만 바꾸면 로고가 비거나 (매치 노출 범위만 넓힘) · 대회 페이지가 뜨는데 화면이 없거나 (목록 범위 넓힘).
  */
-export const VISIBLE_COMPETITION_API_IDS = [39, 140, 78, 135, 61, 2]
+export const MATCH_VISIBLE_COMPETITION_API_IDS = [
+  39, 140, 78, 135, 61, 2,         // 5대리그 + UCL
+  45, 48, 143, 81, 137, 66,         // 국내 컵 6
+  528, 556, 529, 547, 526,          // 슈퍼컵 5
+  3, 848,                           // UEFA Europa League · Conference League
+]
+export const COMPETITION_LIST_API_IDS = [39, 140, 78, 135, 61, 2]
+
+/** @deprecated feat/scope-expansion — 소비처가 남았을 때 호환용. 새 코드는 위 두 상수 중 하나를 명시. */
+export const VISIBLE_COMPETITION_API_IDS = COMPETITION_LIST_API_IDS
 
 /**
  * 로고는 우리가 받아서 줄여 둔 정적 파일을 쓴다 (NEXT_STEPS 5장).

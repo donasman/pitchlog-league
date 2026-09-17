@@ -11,7 +11,7 @@ import { parseRef, toRef } from '../common/ref.js';
 import { seasonLabel } from '../common/season-label.js';
 import { CompetitionService } from '../competition/competition.service.js';
 import { TeamService } from '../team/team.service.js';
-import { screenCompetitionWhere } from '../ingestion/screen-scope.js';
+import { matchVisibleWhere } from '../ingestion/screen-scope.js';
 import type { Competition, CompetitionRound, CompetitionSeason, Match, Prisma, Season, Team, Venue } from '../generated/prisma/client.js';
 import {
   competitionRef,
@@ -71,7 +71,7 @@ export class MatchService {
     } else {
       // 생략 → 화면 6대회. season 생략이면 각 대회의 현재 시즌
       where.competitionSeason = {
-        competition: screenCompetitionWhere,
+        competition: matchVisibleWhere,
         ...(q.season !== undefined ? { season: { year: q.season } } : { isCurrent: true }),
       };
     }

@@ -32,7 +32,8 @@ describe('경기·순위표 API (e2e)', () => {
     const league = await prisma.competition.create({
       data: {
         apiCompetitionId: API + 1, name: 'Stand League', country: 'Testland', countryCode: 'TL', type: CompetitionType.LEAGUE,
-        format: CompetitionFormat.ROUND_ROBIN, isTracked: true, displayOrder: 99,
+        // feat/scope-expansion (2026-09-17): competitionVisibleWhere 임계 displayOrder<=60 하에서 통과해야 순위표 조회
+        format: CompetitionFormat.ROUND_ROBIN, isTracked: true, displayOrder: 55,
       },
     });
     const cup = await prisma.competition.create({
@@ -131,14 +132,14 @@ describe('경기·순위표 API (e2e)', () => {
   type Item = { id: number; kickoffAt: string; season: { year: number } };
 
   describe('GET /api/matches', () => {
-    it('기본 — 화면 대회의 현재 시즌 경기. 리그 포함 · 컵 미포함 · 킥오프 오름차순 · asOf', async () => {
+    it('기본 — 화면 대회의 현재 시즌 경기. 리그 · 컵 다 포함(matchVisibleWhere) · 킥오프 오름차순 · asOf', async () => {
       // 기본 limit=100 계약(feature/perf-and-assistant-limits) 도입 후, 실 DB 매치가 앞 100건을 점유해 시드 3개가 이 응답에 반드시 들어오리라 보장할 수 없다.
-      // 이 케이스는 default 호출 규격(현재 시즌만·컵 제외·kickoff asc·season null·asOf 유효) 만 본다. 시드 3개 존재는 아래 `competition + season` 케이스가 잠근다.
+      // 이 케이스는 default 호출 규격(현재 시즌만·kickoff asc·season null·asOf 유효) 만 본다. 시드 3개 존재는 아래 `competition + season` 케이스가 잠근다.
+      // feat/scope-expansion (2026-09-17): matchVisibleWhere 가 isTracked 만이라 컵도 이제 노출. `not.toContain(API+5)` 삭제.
       const res = await get('/api/matches').expect(200);
       const items: Item[] = res.body.items;
       const ids = items.map((i) => i.id);
       expect(ids).not.toContain(API + 4); // 2025 시즌 (default 는 현재 시즌만)
-      expect(ids).not.toContain(API + 5); // 컵 — displayOrder 9,102 는 화면 범위 밖
       for (let i = 1; i < items.length; i++) expect(items[i].kickoffAt >= items[i - 1].kickoffAt).toBe(true);
       expect(res.body.season).toBeNull();
       expect(new Date(res.body.asOf).toString()).not.toBe('Invalid Date');

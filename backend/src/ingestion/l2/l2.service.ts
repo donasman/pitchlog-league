@@ -27,7 +27,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiFootballClient } from '../api-football/api-football.client.js';
 import { IngestionRunService } from '../ingestion-run.service.js';
 import { batchUpsert } from '../../prisma/batch-upsert.js';
-import { screenCompetitionWhere } from '../screen-scope.js';
+import { ingestScopeWhere } from '../screen-scope.js';
 import { SEASON_YEARS } from '../l0/competitions.catalog.js';
 import { ApiQuotaExhaustedError } from '../api-football/api-football.errors.js';
 import { CompetitionFormat, IngestionLayer } from '../../generated/prisma/client.js';
@@ -95,10 +95,10 @@ export class L2Service {
       const scoped = opts.seasonYear !== undefined || opts.allSeasons === true;
       const where =
         opts.seasonYear !== undefined
-          ? { competition: screenCompetitionWhere, season: { year: opts.seasonYear } }
+          ? { competition: ingestScopeWhere, season: { year: opts.seasonYear } }
           : opts.allSeasons === true
-            ? { competition: screenCompetitionWhere, season: { year: { in: [...SEASON_YEARS] } } }
-            : { isCurrent: true, competition: screenCompetitionWhere };
+            ? { competition: ingestScopeWhere, season: { year: { in: [...SEASON_YEARS] } } }
+            : { isCurrent: true, competition: ingestScopeWhere };
 
       const seasons = await this.prisma.competitionSeason.findMany({
         where,
@@ -186,7 +186,7 @@ export class L2Service {
     return this.entryApiTeamIds({
       competitionSeason: {
         seasonId: cs.seasonId,
-        competition: { ...screenCompetitionWhere, format: CompetitionFormat.ROUND_ROBIN },
+        competition: { ...ingestScopeWhere, format: CompetitionFormat.ROUND_ROBIN },
       },
     });
   }
