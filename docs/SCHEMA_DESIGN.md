@@ -16,8 +16,8 @@
 | **외래키** | **사용하지 않음.** Prisma `relationMode = "prisma"`. 무결성은 백엔드 책임 | 2026-09-06 |
 | **기본키** | 내부 서로게이트 ID + `external_ids` 매핑 | 2026-09-06 |
 | **이력 모델** | SCD Type 2는 **스쿼드·감독만** | 2026-09-06 |
-| 범위 | 12대회(리그 6 + 컵 6) × 최근 5시즌 | 2026-09-04 |
-| 저장소 | Supabase 무료 500MB (추정 사용 ~270MB) | 2026-09-04 |
+| 범위 | ~~12대회~~ → **19대회** (리그5 + UCL + 국내 컵 6 + 슈퍼컵 5 + 유로파 + 컨퍼런스) × 최근 5시즌 | ~~2026-09-04~~ → **2026-09-17 (feat/scope-expansion)** |
+| 저장소 | Supabase 무료 500MB (~~추정 사용 ~270MB~~ → **09-16 실측 79MB · 완성 시 약 262MB**) | 2026-09-17 실측 |
 | DB | PostgreSQL + Prisma | ADR-001 |
 
 명명 규칙: **DB는 snake_case, Prisma 모델은 PascalCase + `@@map`.**
@@ -184,14 +184,14 @@ competitions(
   type,            -- LEAGUE | CUP | SUPER_CUP
   format,          -- ROUND_ROBIN | LEAGUE_PHASE_KNOCKOUT | KNOCKOUT
   top_flight_competition_id NULL,   -- 컵 → 그 나라 1부 리그. 컷오프 판정에 쓴다
-  is_tracked,      -- 우리가 수집하는 12개
+  is_tracked,      -- 우리가 수집하는 ~~12개~~ → 19개 (2026-09-17)
   display_order
 )
 INDEX(top_flight_competition_id)
 ```
 
 `top_flight_competition_id`가 컵 컷오프의 근거다. FA Cup(45) → Premier League(39).
-전체 800개 대회 카탈로그를 다 넣지 않고 **`is_tracked = true`인 12개 + 슈퍼컵 5개만** 넣는다.
+전체 800개 대회 카탈로그를 다 넣지 않고 **`is_tracked = true`인 ~~12개 + 슈퍼컵 5개~~ → 19개** (리그5 + UCL + 국내 컵 6 + 슈퍼컵 5 + 유로파 + 컨퍼런스 · 2026-09-17) 만 넣는다.
 
 ```
 seasons(id, year UNIQUE)
@@ -598,7 +598,7 @@ INDEX(entity_type, locale)
 
 | 화면 (PRD) | 질의 | 사용 인덱스 | 비고 |
 |---|---|---|---|
-| 홈 — 오늘의 경기 | `matches WHERE kickoff_at BETWEEN … AND competition_season_id IN (…)` | `matches(kickoff_at)` | 실측 `/fixtures?date=`가 451건. 12대회로 좁힌다 |
+| 홈 — 오늘의 경기 | `matches WHERE kickoff_at BETWEEN … AND competition_season_id IN (…)` | `matches(kickoff_at)` | 실측 `/fixtures?date=`가 451건. ~~12대회~~ → 19대회 (2026-09-17) 로 좁힌다 |
 | 홈 — 순위 사이드바 | `standings WHERE competition_season_id = ? ORDER BY rank LIMIT 6` | `standings(competition_season_id, rank)` | |
 | 순위 `/standings` | 위와 같음, LIMIT 없음 | 같음 | 20행 |
 | 경기 목록 `/matches` | `matches WHERE competition_season_id = ? AND kickoff_at … ORDER BY kickoff_at` | `matches(competition_season_id, kickoff_at)` | 필터가 대회+날짜라 복합 인덱스가 정확히 맞는다 |
@@ -738,7 +738,7 @@ partial unique index가 막아주지만 그건 **에러로 막는 것**이라 di
 
 ## 7. 검토 ④ 볼륨·카디널리티
 
-5시즌 · 12대회 · 컵 컷오프 적용 기준. 경기 상세는 리그 1,941 + 컵 222 = **2,163경기/시즌**.
+5시즌 · ~~12대회~~ → **19대회** · 컵 컷오프 적용 기준 (2026-09-17). 경기 상세: 리그 1,941 + 컵 ~~222~~ → **541** (실측) + UEL 213 + UECL 201 = 대략 **2,900경기/시즌** (실측 기반 · 종전 2,163 은 컵 222 기준).
 
 | 테이블 | 행 수 | 추정 크기 | 증가 요인 |
 |---|---|---|---|
@@ -755,7 +755,7 @@ partial unique index가 막아주지만 그건 **에러로 막는 것**이라 di
 | `standings` | 600 | 0.1 MB | 리그만 |
 | 나머지 | ~5,000 | 1 MB | |
 | **데이터 합계** | | **~166 MB** | |
-| **+ 인덱스 60%** | | **~266 MB** | 500MB의 **53%** |
+| **+ 인덱스 60%** | | ~~**~266 MB** (500MB의 **53%**)~~ → **완성 시 약 262 MB (실측 기반 · 09-17)** | 종전 266 은 완성 추정치 · 실측 79MB + 잔여 183MB ≈ 262 |
 
 **FK를 안 쓰면 인덱스가 줄어들 것 같지만 그렇지 않다.** 2-2에서 관계 컬럼마다
 인덱스를 명시하기로 했으므로 총량은 비슷하다. 다만 제약 검사 비용이 없어
@@ -932,7 +932,7 @@ Prisma migration을 이 순서로 쪼갠다. 각 단계가 독립적으로 배�
 | 멱등성 키 정리 | 5-1 | 테이블별 재실행 규칙 |
 | SCD2 · 이중 시간 모델 | 6장 | `squad_entries`를 집계 근거로 쓰면 안 되는 구조적 이유 |
 | 원본/파생 분리 | 1·9장 | `standings`를 자체 계산하지 않는 결정 |
-| 볼륨·카디널리티 | 7장 | 266MB(53%). `player_match_stats`가 절반 |
+| 볼륨·카디널리티 | 7장 | ~~266MB(53%)~~ → **262MB (실측 기반 · 09-17)**. `player_match_stats`가 절반 |
 | 널 가능성 매트릭스 | 8장 | `et_*`·`pen_*`을 0으로 채우면 `win_reason`이 틀림 |
 | 비정규화 정당화표 | 9장 | 컬럼 7개, 갱신 책임자 명시 |
 | 삭제·보관 시나리오 | 10장 | FK 없는 환경의 삭제 순서 |
