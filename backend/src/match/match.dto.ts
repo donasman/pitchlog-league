@@ -8,6 +8,7 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { CompetitionFormat, CompetitionType, MatchLeg, StatsState, type Competition } from '../generated/prisma/client.js';
 import { NamesDto, names } from '../common/names.dto.js';
+import type { NameLookup } from '../common/name-lookup.js';
 import { toRef } from '../common/ref.js';
 import { COMPETITION_BY_API_ID } from '../ingestion/l0/competitions.catalog.js';
 import { SeasonSummaryDto } from '../competition/competition.dto.js';
@@ -48,6 +49,11 @@ export class MatchListQueryDto {
   @Min(1)
   @Max(500)
   limit?: number;
+
+  @ApiPropertyOptional({ description: '응답 로케일. `ko`|`en`. 유효하지 않으면 조용히 기본 `ko` 로 폴백', example: 'ko' })
+  @IsOptional()
+  @IsString()
+  locale?: string;
 }
 
 export class CompetitionRefDto extends NamesDto {
@@ -64,12 +70,15 @@ export class CompetitionRefDto extends NamesDto {
   format!: CompetitionFormat;
 }
 
-/** 대회 행 → 참조 조각. shortDisplayName 은 카탈로그 상수(competition.service 와 같은 방식) */
-export function competitionRef(c: Competition): CompetitionRefDto {
+/**
+ * 대회 행 → 참조 조각. shortDisplayName 은 카탈로그 상수(competition.service 와 같은 방식).
+ * `lookup` 을 넘기면 로케일 이름을 적용한다 — 넘기지 않으면 종전 동작 (원본).
+ */
+export function competitionRef(c: Competition, lookup?: NameLookup): CompetitionRefDto {
   return {
     ref: toRef(c.apiCompetitionId, c.name),
     apiId: c.apiCompetitionId,
-    ...names(c.name, COMPETITION_BY_API_ID.get(c.apiCompetitionId)?.shortName),
+    ...names(c.name, COMPETITION_BY_API_ID.get(c.apiCompetitionId)?.shortName, lookup?.competition(c.id)),
     type: c.type,
     format: c.format,
   };

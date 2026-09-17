@@ -582,12 +582,17 @@ UNIQUE(entity_type, entity_id, locale)
 INDEX(entity_type, locale)
 ```
 
-`entity_type`: `TEAM | PLAYER | COMPETITION | ROUND | VENUE`
+`entity_type`: `TEAM | PLAYER | COMPETITION | COACH | ROUND | VENUE` (schema.prisma:114 · `COACH` 추가됨)
 
 **`ROUND`가 새로 들어간다.** `1/128-finals`·`Extra Preliminary Round`를 한국어로 옮겨야 하고,
 대회마다 체계가 다르다. 지금 프론트의 `PLAYER_NAMES` 하드코딩을 이 테이블로 옮긴다.
 
 컵 컷오프를 목록 단계에서 자른 덕에 팀은 700개가 아니라 **64개 규모**로 유지된다.
+
+**연결 (2026-09-17 · feat/localized-names-api 1단계 · `~~미구현~~` 해소).** 읽기 API 가 `?locale=ko|en`
+으로 이 테이블을 조회해 `displayName` 을 만든다. 헬퍼는 `common/name-lookup.ts` (배치 IN 조회 · locale=en 은 no-op).
+`common/names.dto.ts` 의 `names(original, short, override?)` 가 override 를 받으면 로케일 이름을,
+아니면 원본을 채운다. `originalName` 은 항상 원본. 상세 규칙은 `BACKEND_FEATURES.md` 응답 공통 규칙 참조.
 
 ---
 

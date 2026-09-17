@@ -9,6 +9,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { latestOf } from '../common/as-of.js';
+import { NameLookup } from '../common/name-lookup.js';
+import { DEFAULT_LOCALE, type Locale } from '../common/locale.js';
 import { seasonLabel } from '../common/season-label.js';
 import { CompetitionService } from '../competition/competition.service.js';
 import { TeamService } from '../team/team.service.js';
@@ -35,16 +37,17 @@ export class StatisticsService {
     private readonly teams: TeamService,
   ) {}
 
-  scorers(q: RankingsQueryDto): Promise<RankingListDto> {
-    return this.ranking(RankingCategory.SCORERS, q);
+  scorers(q: RankingsQueryDto, locale: Locale = DEFAULT_LOCALE): Promise<RankingListDto> {
+    return this.ranking(RankingCategory.SCORERS, q, locale);
   }
 
-  assisters(q: RankingsQueryDto): Promise<RankingListDto> {
-    return this.ranking(RankingCategory.ASSISTS, q);
+  assisters(q: RankingsQueryDto, locale: Locale = DEFAULT_LOCALE): Promise<RankingListDto> {
+    return this.ranking(RankingCategory.ASSISTS, q, locale);
   }
 
-  private async ranking(category: RankingCategory, q: RankingsQueryDto): Promise<RankingListDto> {
+  private async ranking(category: RankingCategory, q: RankingsQueryDto, locale: Locale): Promise<RankingListDto> {
     const limit = q.limit ?? 10;
+    const lookup = new NameLookup(this.prisma, locale);
 
     if (q.competition !== undefined) {
       // ── 모드 A ──
@@ -59,10 +62,16 @@ export class StatisticsService {
         take: limit,
       })) as TopRankingRow[];
 
+      await lookup.loadFor({
+        competitions: [comp.id],
+        teams: rows.map((r) => r.team.id),
+        players: rows.map((r) => r.player.id),
+      });
+
       return {
-        competition: competitionRef(comp),
+        competition: competitionRef(comp, lookup),
         season: { year: cs.season.year, label: seasonLabel(cs.season.year) },
-        items: rows.map((r) => this.rowFromDb(r)),
+        items: rows.map((r) => this.rowFromDb(r, lookup)),
         asOf: latestOf(...rows.map((r) => r.asOf), cs.asOf),
       };
     }
@@ -101,6 +110,13 @@ export class StatisticsService {
       ),
     );
 
+    // 모드 B — 팀·선수·대회 lookup 전체 로드
+    await lookup.loadFor({
+      competitions: targets.map(({ comp }) => comp.id),
+      teams: perComp.flatMap(({ rows }) => rows.map((r) => r.team.id)),
+      players: perComp.flatMap(({ rows }) => rows.map((r) => r.player.id)),
+    });
+
     // 선수별 합산. latestTeam 은 최상위 rank 대회의 team 으로 정한다
     type Aggregate = {
       player: Player;
@@ -123,7 +139,7 @@ export class StatisticsService {
         }
         entry.total += r.value;
         entry.breakdown.push({
-          competition: competitionRef(comp),
+          competition: competitionRef(comp, lookup),
           season: { year: cs.season.year, label: seasonLabel(cs.season.year) },
           value: r.value,
         });
@@ -136,8 +152,8 @@ export class StatisticsService {
       .map<RankRowDto>((entry, i) => ({
         rank: i + 1,
         value: entry.total,
-        player: playerRef(entry.player),
-        team: this.teams.summary(entry.team),
+        player: playerRef(entry.player, lookup),
+        team: this.teams.summary(entry.team, lookup),
         breakdown: entry.breakdown,
       }));
 
@@ -150,12 +166,12 @@ export class StatisticsService {
     };
   }
 
-  private rowFromDb(r: TopRankingRow): RankRowDto {
+  private rowFromDb(r: TopRankingRow, lookup?: NameLookup): RankRowDto {
     return {
       rank: r.rank,
       value: r.value,
-      player: playerRef(r.player),
-      team: this.teams.summary(r.team),
+      player: playerRef(r.player, lookup),
+      team: this.teams.summary(r.team, lookup),
     };
   }
 

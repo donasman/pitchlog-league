@@ -36,6 +36,11 @@ export class RankingsQueryDto {
   @Min(1)
   @Max(100)
   limit?: number = 10;
+
+  @ApiPropertyOptional({ description: '응답 로케일. `ko`|`en`. 유효하지 않으면 조용히 기본 `ko` 로 폴백', example: 'ko' })
+  @IsOptional()
+  @IsString()
+  locale?: string;
 }
 
 /** 모드 B — items[].breakdown 한 조각. 각 대회의 실제 시즌을 같이 보낸다 (R4) */

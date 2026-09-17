@@ -32,6 +32,11 @@ export class SearchQueryDto {
   @Min(1)
   @Max(20)
   limit?: number;
+
+  @ApiPropertyOptional({ description: '응답 로케일. `ko`|`en`. 유효하지 않으면 조용히 기본 `ko` 로 폴백', example: 'ko' })
+  @IsOptional()
+  @IsString()
+  locale?: string;
 }
 
 /** 팀 검색 결과 — TeamSummaryDto 축약본 (founded · code 제외 · logoUrl 유지) */

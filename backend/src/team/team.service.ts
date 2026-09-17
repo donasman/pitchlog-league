@@ -5,8 +5,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { latestOf } from '../common/as-of.js';
+import { NameLookup } from '../common/name-lookup.js';
 import { names } from '../common/names.dto.js';
 import { parseRef, toRef } from '../common/ref.js';
+import { DEFAULT_LOCALE, type Locale } from '../common/locale.js';
 import { CompetitionService } from '../competition/competition.service.js';
 import type { Team } from '../generated/prisma/client.js';
 import type { TeamDetailDto, TeamListDto, TeamListQueryDto, TeamSummaryDto } from './team.dto.js';
@@ -18,7 +20,7 @@ export class TeamService {
     private readonly competitions: CompetitionService,
   ) {}
 
-  async list(q: TeamListQueryDto): Promise<TeamListDto> {
+  async list(q: TeamListQueryDto, locale: Locale = DEFAULT_LOCALE): Promise<TeamListDto> {
     const comp = await this.competitions.resolve(q.competition);
     const season =
       q.season !== undefined
@@ -31,15 +33,17 @@ export class TeamService {
       include: { team: true },
       orderBy: { team: { name: 'asc' } },
     });
+    const lookup = new NameLookup(this.prisma, locale);
+    await lookup.loadFor({ teams: entries.map((e) => e.team.id) });
     return {
       competitionRef: toRef(comp.apiCompetitionId, comp.name),
       season: this.competitions.season(season),
-      items: entries.map((e) => this.summary(e.team)),
+      items: entries.map((e) => this.summary(e.team, lookup)),
       asOf: latestOf(season.asOf, ...entries.map((e) => e.team.updatedAt)),
     };
   }
 
-  async detail(ref: string): Promise<TeamDetailDto> {
+  async detail(ref: string, locale: Locale = DEFAULT_LOCALE): Promise<TeamDetailDto> {
     const apiId = parseRef(ref, '팀 ref');
     const team = await this.prisma.team.findUnique({
       where: { apiTeamId: apiId },
@@ -53,11 +57,22 @@ export class TeamService {
     });
     if (!team) throw new NotFoundException(`팀이 없다: ${ref}`);
 
+    const lookup = new NameLookup(this.prisma, locale);
+    await lookup.loadFor({
+      teams: [team.id],
+      competitions: team.entries.map((e) => e.competitionSeason.competition.id),
+    });
+
     // 참가 이력: 대회별로 시즌을 모아 displayOrder 순 · 시즌 최신 먼저
     const byComp = new Map<number, { order: number; ref: string; name: string; seasons: number[] }>();
     for (const e of team.entries) {
       const c = e.competitionSeason.competition;
-      const p = byComp.get(c.id) ?? { order: c.displayOrder, ref: toRef(c.apiCompetitionId, c.name), name: c.name, seasons: [] };
+      const p = byComp.get(c.id) ?? {
+        order: c.displayOrder,
+        ref: toRef(c.apiCompetitionId, c.name),
+        name: lookup.competition(c.id)?.name ?? c.name,
+        seasons: [],
+      };
       p.seasons.push(e.competitionSeason.season.year);
       byComp.set(c.id, p);
     }
@@ -66,7 +81,7 @@ export class TeamService {
       .map((p) => ({ competitionRef: p.ref, competitionName: p.name, seasons: p.seasons.sort((a, b) => b - a) }));
 
     return {
-      ...this.summary(team),
+      ...this.summary(team, lookup),
       venue: team.venue
         ? { name: team.venue.name, city: team.venue.city, capacity: team.venue.capacity, surface: team.venue.surface, imageUrl: team.venue.imageUrl }
         : null,
@@ -75,11 +90,11 @@ export class TeamService {
     };
   }
 
-  summary(t: Team): TeamSummaryDto {
+  summary(t: Team, lookup?: NameLookup): TeamSummaryDto {
     return {
       ref: toRef(t.apiTeamId, t.name),
       apiId: t.apiTeamId,
-      ...names(t.name, t.shortName ?? t.code),
+      ...names(t.name, t.shortName ?? t.code, lookup?.team(t.id)),
       code: t.code,
       country: t.country,
       founded: t.founded,

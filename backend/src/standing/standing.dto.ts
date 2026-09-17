@@ -21,6 +21,11 @@ export class StandingsQueryDto {
   @Min(2000)
   @Max(2100)
   season?: number;
+
+  @ApiPropertyOptional({ description: '응답 로케일. `ko`|`en`. 유효하지 않으면 조용히 기본 `ko` 로 폴백', example: 'ko' })
+  @IsOptional()
+  @IsString()
+  locale?: string;
 }
 
 export const UNAVAILABLE_REASONS = ['KNOCKOUT', 'EMPTY'] as const;

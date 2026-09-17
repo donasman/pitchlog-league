@@ -2,6 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SearchService } from './search.service.js';
 import { SearchQueryDto, SearchResultsDto } from './search.dto.js';
+import { parseLocale } from '../common/locale.js';
 
 @ApiTags('search')
 @Controller('search')
@@ -15,6 +16,6 @@ export class SearchController {
   @ApiOkResponse({ type: SearchResultsDto })
   @ApiBadRequestResponse({ description: 'q 누락 · 100자 초과 · limit 범위 밖 · 알 수 없는 필드' })
   query(@Query() q: SearchQueryDto): Promise<SearchResultsDto> {
-    return this.search.search(q);
+    return this.search.search(q, parseLocale(q.locale));
   }
 }
