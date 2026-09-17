@@ -112,7 +112,9 @@ export function buildAssistantTools(services: AssistantServices): AssistantTool[
 
   const listMatchesTool: AssistantTool<MatchListQueryDto & { limit?: number }, MatchListDto> = {
     name: 'list_matches',
-    description: composeDescription(TOOL_NOTES.list_matches, { modeB: true, refHint: true }),
+    // modeB=false: list_matches 는 competition 생략 시 matchVisibleWhere (all 19 tracked competitions) 로 집계된다.
+    // MODE_B_NOTE 의 "6 display competitions" 는 get_standings·get_top_scorers·get_top_assisters 만 해당한다.
+    description: composeDescription(TOOL_NOTES.list_matches, { refHint: true }),
     argsSchema: listMatchesSchema,
     handler: (args) => {
       // registry 에서 list_matches 특수 처리 시 채워진 인자를 넘기지만,
