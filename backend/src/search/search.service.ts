@@ -206,6 +206,7 @@ export class SearchService {
               ) x
             )
             SELECT
+              t.id AS id,
               t.api_team_id AS api_id,
               t.name,
               t.short_name,
@@ -270,6 +271,7 @@ export class SearchService {
             ),
             ranked AS (
               SELECT
+                p.id AS id,
                 p.api_player_id AS api_id,
                 p.name,
                 p.firstname,

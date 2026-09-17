@@ -25,9 +25,9 @@ export interface NameOverride {
 }
 
 interface LoadTargets {
-  teams?: number[];
-  competitions?: number[];
-  players?: number[];
+  teams?: (number | undefined | null)[];
+  competitions?: (number | undefined | null)[];
+  players?: (number | undefined | null)[];
 }
 
 export class NameLookup {
@@ -76,7 +76,8 @@ export class NameLookup {
   }
 }
 
-function uniq(xs: number[] | undefined): number[] {
+function uniq(xs: (number | undefined | null)[] | undefined): number[] {
   if (!xs || xs.length === 0) return [];
-  return [...new Set(xs)];
+  const clean = xs.filter((x): x is number => typeof x === 'number' && Number.isFinite(x));
+  return [...new Set(clean)];
 }
