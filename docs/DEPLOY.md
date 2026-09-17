@@ -313,12 +313,20 @@ sudo systemctl restart pitchlog-backend
 
 ```bash
 sudoedit /etc/pitchlog/backend.env
-# BACKFILL_WORKER_SEASONS=2025,2024,2023,2022
+# BACKFILL_WORKER_SEASONS=2026,2025,2024,2023,2022
+# 현재 시즌(2026) 을 맨 앞에 두는 이유: 진행 중 시즌 경기가 사이트에서 가장 많이 조회되므로
+# 새 경기가 CONFIRMED 로 승격되는 것을 최우선. 서버 실제 값도 이 순서.
 sudo systemctl restart pitchlog-backend
 sudo journalctl -u pitchlog-backend -f
-# 다음 트리거 로그 예: "backfill-worker cap_reached · 2025: processed=143 failed=0 · total=143"
+# 다음 트리거 로그 예: "backfill-worker cap_reached · 2026: processed=143 failed=0 · total=143"
 curl -s http://localhost:3000/health | jq .scheduler.jobs.backfillWorker.currentSeason
 ```
+
+**CRON 값 따옴표 필수**:
+```
+BACKFILL_WORKER_CRON="*/10 * * * *"
+```
+따옴표 없으면 `bash source` 로 env 를 읽을 때 `*/10` 까지만 값으로 잡히고 뒤의 `* * * *` 가 **글로브 확장**되어 현재 디렉터리의 첫 파일을 명령으로 실행하려 한다 (2026-09-17 실측: `/opt/pitchlog` 에서 `CLAUDE.md: command not found` · `backend` 에서 `README.md: command not found`). systemd 는 따옴표를 벗겨 읽으므로 서비스 동작에는 영향 없다 — CLI 를 `sudo bash -c 'set -a; . env; ...'` 로 돌릴 때만 문제.
 
 **완료 판정**: 모든 시즌이 `no_targets` 이고 `total=0` 이면 로그 `all seasons done` 한 줄이 뜨고 `lastOutcome=no_targets` 로 수렴. 이후 재시작 없이 이 상태가 지속되면 백필-2 완료.
 
