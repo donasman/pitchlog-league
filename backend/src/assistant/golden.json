@@ -134,6 +134,37 @@
         "answerMustNotContain": ["전체 시즌", "시스템에서 확인이"]
       },
       "reason": "규칙 2(c) — 특정 필드만 null 이면 그 필드만 '제공되지 않습니다'. 살라 primaryTeam·jerseyNumber·position 전부 null (L1 squad 재적재 백로그 · 프롬프트 문제 아님). 3.5-lite 2/2 get_player 정상 호출 · 답 '우리 데이터에 없습니다'(규칙 2(a) 문구를 2(c) 자리에 사용 · 재현 2/2) → 규칙 2(c) 준수는 프롬프트 판에서 hard 재구성. 3.1-lite 1회는 도구 우회(모델 차이)"
+    },
+    {
+      "id": "c23",
+      "question": "맨체스터 시티 다음 경기 언제야?",
+      "tool": "list_matches",
+      "args": { "team": "50-manchester-city" },
+      "expected": { "answerMustNotReferencePastMatch": true },
+      "reason": "fix/assistant-scope-19 실측 4번 · c16 리버풀 짝. 컵/리그 아무 대회든 다음 경기 정답 (실측에서 '노리치와의 리그 컵' 통과). 대회명이 답에 들어가면 좋으나 hard 는 미래 경기 참조만"
+    },
+    {
+      "id": "c24",
+      "question": "이번 주 유럽 대항전 경기 알려줘",
+      "tool": "list_matches",
+      "expected": { "answerMustNotContain": ["아직 확정되지 않았습니다", "일정이 아직"] },
+      "reason": "fix/assistant-scope-19 실측 3번 · 규칙 10. '유럽 대항전' 은 UCL·UEL·UECL 셋. 옛 프롬프트는 UCL 만 조회하고 '확정되지 않았습니다' 답변. 도구 호출 검증(UEL 3·UECL 848 각 조회 여부)은 evidence 를 사람이 확인 (smoke 는 evidence.tool 만 hard, args.competition 은 sofrt)"
+    },
+    {
+      "id": "c25",
+      "question": "유로파리그와 컨퍼런스리그도 다루니?",
+      "tool": "list_competitions",
+      "args": {},
+      "expected": { "answerMustContain": ["Europa League", "Europa Conference"] },
+      "reason": "fix/assistant-scope-19 실측 1번 · 규칙 9. list_competitions 결과에 UEL(3)·UECL(848) 이 들어 있음에도 프롬프트가 옛 17 을 믿고 답했었다. Gemini 는 대회명을 영어 정식명(UEFA Europa League · UEFA Europa Conference League) 으로 유지하는 경향이라 needle 은 영어 표기 (한국어 답변 표기도 이 substring 을 포함)"
+    },
+    {
+      "id": "c26",
+      "question": "유로파리그에 어떤 팀들이 있어?",
+      "tool": "list_teams",
+      "args": { "competition": "3-uefa-europa-league" },
+      "expected": { "answerMustNotContain": ["우리 데이터에 없습니다"] },
+      "reason": "fix/assistant-scope-19 실측 2번 · 규칙 9 후반. 옛 프롬프트는 도구 호출 0회로 '우리 데이터에 없습니다' 즉답. list_teams 를 부르면 유로파리그 참가팀이 나온다"
     }
   ]
 }

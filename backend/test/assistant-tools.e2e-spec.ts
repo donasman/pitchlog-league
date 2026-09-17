@@ -608,22 +608,26 @@ describe('assistant tools (e2e)', () => {
     }
   });
 
-  // ── Case 4. 모드 B 4개 도구 6-대회 문구 ────────────────────────
-  it('Case 4: 모드 B 4개 도구 description 에 "6 display competitions" 존재', () => {
-    for (const name of ['list_matches', 'get_standings', 'get_top_scorers', 'get_top_assisters']) {
+  // ── Case 4. 모드 B 3개 도구 6-대회 문구 · list_matches 는 19개 대상 ────────────────────────
+  it('Case 4: Mode B 3개 도구 description 에 "6 display competitions" 존재 · list_matches 는 "all tracked competitions"', () => {
+    for (const name of ['get_standings', 'get_top_scorers', 'get_top_assisters']) {
       const t = registry.get(name);
       expect(t).toBeDefined();
       expect(t!.description).toContain('6 display competitions');
     }
+    const listMatches = registry.get('list_matches');
+    expect(listMatches).toBeDefined();
+    expect(listMatches!.description).toContain('ALL tracked competitions');
+    expect(listMatches!.description).not.toContain('6 display competitions');
   });
 
   // ── Case 5. golden.json 스모크 ────────────────────────────────
-  it('Case 5: golden.json 20건 · null 4 · called 16 · 도구 10개 각 최소 1회 · args argsSchema 통과', () => {
+  it('Case 5: golden.json 24건 · null 4 · called 20 · 도구 10개 각 최소 1회 · args argsSchema 통과', () => {
     const goldenPath = resolve(__dirname, '../src/assistant/golden.json');
     const golden = JSON.parse(readFileSync(goldenPath, 'utf8')) as {
       cases: Array<{ id: string; question: string; tool: string | null; args?: Record<string, unknown>; reason?: string }>;
     };
-    expect(golden.cases).toHaveLength(20);
+    expect(golden.cases).toHaveLength(24);
 
     const nulls = golden.cases.filter((c) => c.tool === null);
     expect(nulls.length).toBe(4);
@@ -633,7 +637,7 @@ describe('assistant tools (e2e)', () => {
     }
 
     const called = golden.cases.filter((c) => c.tool !== null);
-    expect(called.length).toBe(16);
+    expect(called.length).toBe(20);
 
     // 도구 10개 각각 최소 1회
     const seen = new Set(called.map((c) => c.tool));
