@@ -88,7 +88,7 @@ sudo systemctl status pitchlog-backend
 6. 배포 후 확인:
    - Vercel URL 접속 → 홈에서 순위표 로딩되면 성공
    - 로딩되면 `vercel.json` 의 rewrite (`/api/:path*` → `http://3.36.159.128:3000/api/:path*`) 가 동작 중
-   - **딥링크 검증**: (a) `/matches/<id>` 직접 진입 200 (b) `/api/competitions` 는 백엔드 응답 (`/api/health` 는 안 됨 — health 는 `/health` 로만 매핑돼 있어 `/api/health` 는 `Cannot GET` 을 돌려준다) (c) 존재하지 않는 경로 `/없는경로` 는 앱 자체 404 화면 (Vercel 404 아님)
+   - **딥링크 검증**: (a) `/matches/<id>` 직접 진입 200 (b) `/api/competitions` 는 백엔드 응답 (`/api/health` 는 안 됨 — health 는 `/health` 로만 매핑돼 있어 `/api/health` 는 `Cannot GET` 을 돌려준다) (c) 존재하지 않는 경로 `/없는경로` 는 앱 자체 404 화면 (Vercel 404 아님) · **없는 정적 파일은 진짜 404**: `curl -sI https://<앱>.vercel.app/logos/teams/999999.webp` 가 `HTTP/2 404` · content-type 이 `image/webp` 나 `text/html` 이 아니어야 한다 (fix/logos-and-spa-fallback 판)
 
 ## 재배포
 
@@ -125,6 +125,16 @@ curl -sf http://localhost:3000/health
 원인: EC2 보안 그룹 SSH(22) 인바운드 규칙 소스가 "내 IP/32" 로 잡혀 있는데 로컬 공인 IP 가 바뀜 (Wi-Fi 이동·ISP DHCP 갱신 등). 3000 포트는 0.0.0.0/0 이라 무관.
 
 조치: AWS EC2 콘솔 → 보안 그룹 `pitchlog-league-backend-sg` → 인바운드 규칙 편집 → SSH 소스 **"내 IP"** 재선택 → 규칙 저장. 몇 초 뒤 ssh 재시도.
+
+### 없는 정적 파일이 `200` + HTML 로 응답 (로고 폴백 안 뜸)
+
+증상 (2026-09-17 실측 · Cowork Chrome): `curl -sI https://<앱>/logos/teams/999999.webp` 가 `HTTP/2 200 · content-type: text/html · 989 B` (index.html). 브라우저 `<img onError>` 폴백이 안 걸려 배지 자리가 빈 채로.
+
+원인: `vercel.json` SPA fallback `/((?!api/).*)` 가 **점 포함 경로까지 삼킴** — 존재하지 않는 정적 파일도 index.html 로 되돌림. 따라서 이미지 요청이 200 + HTML 로 성공하고, `<img>` 는 파싱 실패로 조용히 실패.
+
+수정 (`fix/logos-and-spa-fallback` 판): fallback regex 를 `/((?!api/)[^.]*)` 로 변경 — **점이 없는 경로만** index.html 로. 정적 자산은 확장자로 판정되어 filesystem 매치가 우선. SPA 라우트는 점 없음(팀·경기 ref 는 숫자·하이픈).
+
+**검증**: `curl -sI .../logos/teams/999999.webp | grep -i content-type` 이 `text/html` 이면 잘못된 상태 · 정상은 `HTTP/2 404`.
 
 ### 직접 URL 진입 시 `404: NOT_FOUND` (클릭 이동은 정상)
 
