@@ -171,7 +171,7 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 세 개를 `npm run ingest -- l6` 한 명령이 묶는다 (`--all-seasons` · `--season=` · `--only=`).
 대회시즌 하나가 세 갈래를 다 끝내면 `backfill_jobs.phase = DONE` 을 세운다.
 
-**#36 랭킹은 전용 엔드포인트를 쓴다 (2026-09-03 확인 · 09-08 네 종으로 확정).**
+**#36 랭킹 소스 (수집 시점).** 전용 엔드포인트로 `top_rankings` 를 채운다.
 
 | 엔드포인트 | 콜 | `top_rankings.category` |
 |---|---|---|
@@ -182,6 +182,9 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 
 6대회 × 4종 = **24콜/시즌** (5시즌 120콜). 원래 계획(`/players` 전수 = ~400콜/시즌)을
 **94% 줄인다.** 전체 선수 통계(#36-1)는 선수 상세 화면용으로 따로 받는다.
+
+> ⚠️ **`top_rankings` 는 더 이상 조회 경로가 아니다 (2026-09-17 · feat/statistics-self-aggregation).**
+> `/api/stats/*` 는 `player_match_stats` 를 자체 집계한다 (DATA_RULES 8장). 이 테이블·`TopRanking` 모델·`RankingCategory` enum·`L6.rankings` 브랜치는 **다음 판에서 제거 예정**. 그 전까지 수집은 계속되지만 아무도 읽지 않는다.
 
 **`rank` 는 응답 배열의 인덱스 + 1 이다 — 필터 전에 매긴다 (09-08).** DB 에 없는 팀의
 선수를 버린 *뒤에* 번호를 매기면 2위 득점자가 1위로 저장된다. e2e 가 이걸 지킨다.
@@ -225,7 +228,7 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 | ~~`GET /competitions?includeStage=true`~~ | 홈, 대회 목록 | **없다** — `forbidNonWhitelisted` 라 보내면 400. 진행 상태(stage)는 프론트가 경기 목록에서 계산한다(`deriveStage`) |
 | `GET /competitions/:slug` | 대회 상세 | |
 | ~~`GET /competitions/:slug/hub`~~ | 대회 허브 | **만들지 않는다 (09-07)** — 프론트 `live.js` 가 `/matches` · `/standings` · `/teams` 를 조합한다. 홈도 같다 |
-| `GET /competitions/:slug/stats` | 통계 | 득점·도움·카드 랭킹 |
+| `GET /stats/scorers?competition=&season=&limit=&locale=` · `/stats/assisters` | 통계 랭킹 (득점·도움) | 소스 `player_match_stats` **자체 집계** (2026-09-17 · feat/statistics-self-aggregation · DATA_RULES 8장). 모드 A(competition 지정): 그 대회시즌의 선수별 SUM → 값 내림차순 → rank. 모드 B(생략): 그 시즌의 추적 대회 19개 전부에서 선수별 SUM → 값 내림차순 → 한 번만 자름 (대회별 상위 N 을 자른 뒤 SUM 하지 않는다). `items[].team` = 그 범위 최다 출전 팀. 동점은 (값→출전 수 적은 순→player id) 결정적. 응답에 `coverage: {finished, collected, ratio}` 포함 — 이 통계가 몇 %의 경기를 근거로 하는지 |
 | `GET /competitions/champions-league/knockout` | UCL 녹아웃 | 대진·합산·진출 |
 
 ### 경기
