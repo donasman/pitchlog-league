@@ -35,6 +35,14 @@ export async function fetchCompetitions() {
 }
 
 /**
+ * 통계 페이지 전용 대회 목록. Mock 은 6대회만 시드하므로 결과는 fetchCompetitions 와 같다 —
+ * 드롭다운 원소가 없어도 chip 6개로 정상 (mock 회귀 검사 대상 아님). live 와 시그니처만 맞춘다.
+ */
+export async function fetchCompetitionsForStats() {
+  return COMPETITIONS
+}
+
+/**
  * 시즌 목록. 실 API 와 시그니처를 맞춘다 — 호출부(AppHeader)가 대회를 넘긴다.
  * Mock 은 대회별 시즌 데이터가 없어 어느 대회든 같은 목록을 준다.
  * @param {string} [_slugOrRef]
