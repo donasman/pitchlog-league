@@ -217,7 +217,9 @@
     "team": "소속팀",
     "captain": "(주장)",
     "age": "만 {{age}}세",
-    "errorTitle": "선수 정보를 불러오지 못했습니다"
+    "errorTitle": "선수 정보를 불러오지 못했습니다",
+    "thisSeasonSection": "이번 시즌",
+    "thisSeasonNoData": "이번 시즌 통계가 아직 없습니다"
   },
   "team": {
     "stadium": "홈 구장",
@@ -326,7 +328,7 @@
     "statsLabel": "통계",
     "teamsLabel": "팀",
     "epl3Label": "EPL Top 3",
-    "allScorerLabel": "전체 득점",
+    "leagueScorers": "리그별 득점 순위",
     "topTeamsLabel": "선두 팀",
     "dataSource": "데이터 출처 API-Football",
     "openAll": "전체 보기",
@@ -380,9 +382,10 @@
     "errorTitle": "통계 데이터를 불러오지 못했습니다",
     "noData": "데이터 없음",
     "noDataDesc": "선택한 대회의 통계 데이터가 없습니다.",
-    "allLeagues": "전체 합산",
-    "allDesc": "전체 합산에서는 대회별 분해를 함께 표기합니다",
-    "breakdown": "대회별 분해",
+    "filterCompLabel": "대회",
+    "coverageLabel": "집계 근거",
+    "appearances": "출전",
+    "minutes": "분",
     "rank": "#",
     "player": "선수",
     "team": "팀",
