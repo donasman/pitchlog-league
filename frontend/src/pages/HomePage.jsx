@@ -19,7 +19,7 @@ import TeamBadge from '@/components/ui/TeamBadge'
 import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
-import NotImplementedState from '@/components/ui/NotImplementedState'
+import EmptyState from '@/components/ui/EmptyState'
 import AskBar from '@/components/home/AskBar'
 import MyTeamsSection from '@/components/home/MyTeamsSection'
 import { toKSTTime } from '@/utils/dateFormat'
@@ -433,18 +433,14 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
 
 /* ─────────────────────────────────────────────────────────────
    ShortcutsSection — 3열 바로 가기
+   두 번째 카드(원래 "Top Scorers")를 /stats 로 가는 CTA 로 교체.
+   실제 리그별 득점 순위는 아래 LeagueScorersSection 이 담당.
 ───────────────────────────────────────────────────────────── */
-function ShortcutsSection({ eplTop3, topScorers, topScorersError, competitions, t }) {
+function ShortcutsSection({ eplTop3, competitions, t }) {
   const standingsRows = (eplTop3 ?? []).map(e => ({
     rank: e.rank,
     label: e.teamName,
     value: t('home.ptsUnit', { pts: e.points }),
-  }))
-
-  const scorerRows = (topScorers ?? []).map(s => ({
-    rank: s.rank,
-    label: `${s.playerName} · ${s.teamName}`,
-    value: t('home.goalsCountUnit', { goals: s.value }),
   }))
 
   const leaderRows = (competitions ?? []).slice(0, 3).map(c => ({
@@ -470,27 +466,14 @@ function ShortcutsSection({ eplTop3, topScorers, topScorersError, competitions, 
           zoneFirst
           t={t}
         />
-        {/* 세 상태로 갈린다 — 에러(호출 실패) · 미구현(하드코딩 null) · 성공(빈 배열 포함).
-            빈 배열은 "득점자 0명" 이므로 ShortcutCard 껍데기가 뜨는 게 맞다. 에러를 null 로 뭉개면
-            "기능 없음" 으로 위장돼 회고 4-6 이 막으려던 자리가 된다. */}
-        {topScorersError ? (
-          <div className="pl-card">
-            <ErrorState description={topScorersError} />
-          </div>
-        ) : topScorers === null ? (
-          <div className="pl-card">
-            <NotImplementedState featureKey="errors.feature.top_scorers" />
-          </div>
-        ) : (
-          <ShortcutCard
-            title={t('home.statsLabel')}
-            sub={t('home.allScorerLabel')}
-            head={t('home.allScorerLabel')}
-            rows={scorerRows}
-            to="/stats"
-            t={t}
-          />
-        )}
+        <ShortcutCard
+          title={t('home.statsLabel')}
+          sub={t('home.leagueScorers')}
+          head={t('home.leagueScorers')}
+          rows={[]}
+          to="/stats"
+          t={t}
+        />
         <ShortcutCard
           title={t('home.teamsLabel')}
           sub={t('home.topTeamsLabel')}
@@ -499,6 +482,78 @@ function ShortcutsSection({ eplTop3, topScorers, topScorersError, competitions, 
           to="/teams"
           t={t}
         />
+      </div>
+    </section>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   LeagueScorersSection — 리그별 득점 순위 3열 (EPL·라리가·분데스)
+   fetchOverview 응답의 leagueScorers 를 소비. 각 리그 카드에 상위 5명.
+───────────────────────────────────────────────────────────── */
+function LeagueScorersSection({ leagueScorers, t }) {
+  const cols = leagueScorers ?? []
+  if (cols.length === 0) return null
+
+  return (
+    <section style={{ display: 'grid', gap: 16 }}>
+      <h2 className="t-sec" style={{ margin: 0, fontSize: 22 }}>{t('home.leagueScorers')}</h2>
+      <div
+        className="league-scorers-grid"
+        style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}
+      >
+        <style>{`@media(min-width:768px){.league-scorers-grid{grid-template-columns:repeat(3,1fr)!important}}`}</style>
+        {cols.map(col => (
+          <div key={col.competitionSlug} className="pl-card" style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--pl-line)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="t-sec" style={{ fontSize: 16, flex: 1 }}>{col.competitionName}</span>
+              <Link
+                to={`/stats?competition=${col.competitionSlug}`}
+                className="pl-link"
+                style={{ fontSize: 12 }}
+              >
+                {t('home.openAll')}
+              </Link>
+            </div>
+            {col.error ? (
+              <div style={{ padding: 12 }}>
+                <ErrorState description={col.error} />
+              </div>
+            ) : !col.entries || col.entries.length === 0 ? (
+              <div style={{ padding: 12 }}>
+                <EmptyState />
+              </div>
+            ) : (
+              col.entries.map((s, i) => (
+                <div
+                  key={s.playerSlug ?? i}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '24px 1fr auto',
+                    gap: 10,
+                    alignItems: 'center',
+                    padding: '10px 16px',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--pl-line)',
+                  }}
+                >
+                  <span className="num t-sub" style={{ fontWeight: 700 }}>{s.rank ?? i + 1}</span>
+                  <span
+                    className="t-body tname"
+                    style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {s.playerName}
+                    <span className="t-cap" style={{ marginLeft: 6, color: 'var(--pl-sub)' }}>
+                      {s.teamName}
+                    </span>
+                  </span>
+                  <span className="num t-body" style={{ fontWeight: 700, flexShrink: 0 }}>
+                    {t('home.goalsCountUnit', { goals: s.value })}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        ))}
       </div>
     </section>
   )
@@ -651,7 +706,7 @@ export default function HomePage() {
     )
   }
 
-  const { competitions, livePulse, nextKickoff, dataAsOf, topScorers, topScorersError, eplTop3 } = overview ?? {}
+  const { competitions, livePulse, nextKickoff, dataAsOf, leagueScorers, eplTop3 } = overview ?? {}
   /** 시즌 라벨은 응답에서 — 실 API 대회 객체의 currentSeason. Mock 오버뷰에는 없어 표기가 빠진다 */
   const season = (competitions ?? []).find(c => c.currentSeason)?.currentSeason ?? null
 
@@ -684,11 +739,12 @@ export default function HomePage() {
         {/* ③ 바로 가기 */}
         <ShortcutsSection
           eplTop3={eplTop3}
-          topScorers={topScorers}
-          topScorersError={topScorersError}
           competitions={competitions}
           t={t}
         />
+
+        {/* ③ + ½ 리그별 득점 순위 */}
+        <LeagueScorersSection leagueScorers={leagueScorers} t={t} />
 
         {/* ④ 차별점 3개 */}
         <DiffsSection t={t} />

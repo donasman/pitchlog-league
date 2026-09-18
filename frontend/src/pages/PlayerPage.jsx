@@ -67,7 +67,7 @@ export default function PlayerPage() {
 
   if (!data) return null
 
-  const { player, allStats, team, totals } = data
+  const { player, allStats, team, seasonTotals } = data
   const age = calcAge(player.dateOfBirth)
 
   // row.key 로 필터·목록 key 를 통일한다 — 조합 문자열을 컴포넌트에서 만들지 않는다
@@ -83,8 +83,8 @@ export default function PlayerPage() {
     })),
   ]
 
-  // 전체 = 백엔드 dto.totals 신뢰. 부분 = playerTotals(filtered).
-  const displayTotals = filterComp === 'all' ? totals : playerTotals(filtered)
+  // 필터 시 표 아래에 부분 합계를 남긴다 (표의 일부, 종합 요약 아님).
+  const filteredTotals = filterComp === 'all' ? null : playerTotals(filtered)
 
   const teamName = getLocalizedName({ id: team?.id, name: team?.name }, locale) || team?.name
 
@@ -141,14 +141,16 @@ export default function PlayerPage() {
         </p>
       )}
 
-      {/* 통계 그리드 — 전체(dto.totals) 또는 필터(playerTotals(filtered)) */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Stat label={t('player.appearances')} value={formatStat(displayTotals.appearances)} />
-        <Stat label={t('player.goals')}       value={formatStat(displayTotals.goals)} />
-        <Stat label={t('player.assists')}     value={formatStat(displayTotals.assists)} />
-        <Stat label={t('player.yellowCards')} value={formatStat(displayTotals.yellowCards)} />
-        <Stat label={t('player.redCards')}    value={formatStat(displayTotals.redCards)} />
-      </div>
+      {/* 필터 부분합계 — "종합 요약" 이 아니라 표의 일부 */}
+      {filteredTotals && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <Stat label={t('player.appearances')} value={formatStat(filteredTotals.appearances)} />
+          <Stat label={t('player.goals')}       value={formatStat(filteredTotals.goals)} />
+          <Stat label={t('player.assists')}     value={formatStat(filteredTotals.assists)} />
+          <Stat label={t('player.yellowCards')} value={formatStat(filteredTotals.yellowCards)} />
+          <Stat label={t('player.redCards')}    value={formatStat(filteredTotals.redCards)} />
+        </div>
+      )}
 
       {allStats.length === 0 && (
         <EmptyState description={t('player.noStats2627')} />
@@ -185,6 +187,58 @@ export default function PlayerPage() {
           </table>
         </section>
       )}
+
+      {/* 이번 시즌 — seasonTotals.breakdown 를 대회별로 분해해 표기 */}
+      <ThisSeasonSection seasonTotals={seasonTotals} t={t} />
     </div></div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ThisSeasonSection — 이번 시즌 (대회별 breakdown)
+   normalizePlayerDetail 이 넣은 seasonTotals 를 소비. 없으면 안내 텍스트.
+───────────────────────────────────────────────────────────── */
+function ThisSeasonSection({ seasonTotals, t }) {
+  return (
+    <section className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+        <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider flex-1">
+          {t('player.thisSeasonSection')}
+        </h2>
+        {seasonTotals?.season?.label && (
+          <span className="text-xs text-muted-foreground">{seasonTotals.season.label}</span>
+        )}
+      </div>
+      {!seasonTotals ? (
+        <div className="p-4">
+          <EmptyState description={t('player.thisSeasonNoData')} />
+        </div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-muted-foreground text-xs border-b border-border">
+              <th className="text-left px-4 py-3">{t('matches.filterComp')}</th>
+              <th className="text-center px-3 py-3">{t('player.appearances')}</th>
+              <th className="text-center px-3 py-3">{t('player.goals')}</th>
+              <th className="text-center px-3 py-3">{t('player.assists')}</th>
+              <th className="text-center px-3 py-3">{t('stats.minutes')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(seasonTotals.breakdown ?? []).map(b => (
+              <tr key={b.competitionRef ?? b.competitionApiId} className="border-b border-border/50">
+                <td className="px-4 py-3 font-medium text-foreground">
+                  {b.competitionShortName ?? b.competitionName}
+                </td>
+                <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(b.apps)}</td>
+                <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(b.goals)}</td>
+                <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(b.assists)}</td>
+                <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(b.minutes)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   )
 }

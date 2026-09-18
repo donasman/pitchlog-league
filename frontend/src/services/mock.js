@@ -21,7 +21,6 @@ import {
   calcTotalStats,
   TOP_SCORERS,
   TOP_ASSISTERS,
-  TOP_SCORERS_ALL,
   getCompetitionScorers,
   getCompetitionAssisters,
 } from '@/mocks/players'
@@ -241,6 +240,23 @@ export async function fetchPlayerDetail(slug) {
   // dto.totals 는 백엔드가 계산해 준 값의 자리다. Mock 은 원본 rawStats 로 같은 규약(assists 하나라도
   // null 이면 null)을 재현하려 했지만, mock PLAYER_STATS 는 assists 가 전부 정수라 갈림 없음.
   const totals = calcTotalStats(rawStats)
+  const totalMinutes = seasonStats.reduce((a, s) => a + s.minutes, 0)
+
+  // feat/stats-frontend-redesign — `seasonTotals` 새 필드. player_match_stats 자체집계 소스라
+  // assists 는 number 로 채운다 (null 안 만듦). breakdown 은 rawStats 의 대회별 항목을 그대로 옮긴다.
+  const seasonTotalsBreakdown = rawStats.map(s => ({
+    competition: {
+      apiId:            apiIdFromAlias(s.competitionId) ?? undefined,
+      ref:              s.competitionId,
+      displayName:      s.competitionName,
+      shortDisplayName: s.competitionName,
+    },
+    goals:   s.goals,
+    assists: s.assists ?? 0,
+    apps:    s.appearances,
+    minutes: s.minutesPlayed,
+  }))
+
   const dto = {
     apiId:            player.id,
     ref:              `${player.id}-${slug}`,
@@ -269,28 +285,25 @@ export async function fetchPlayerDetail(slug) {
     seasonStats,
     totals: {
       appearances: totals.appearances,
-      minutes:     seasonStats.reduce((a, s) => a + s.minutes, 0),
+      minutes:     totalMinutes,
       goals:       totals.goals,
       assists:     totals.assists,
       yellowCards: totals.yellowCards,
       redCards:    totals.redCards,
     },
+    seasonTotals: rawStats.length > 0 ? {
+      season:      { year: 2026, label: '2026-27' },
+      goals:       totals.goals,
+      assists:     totals.assists ?? 0,
+      apps:        totals.appearances,
+      minutes:     totalMinutes,
+      yellowCards: totals.yellowCards,
+      redCards:    totals.redCards,
+      breakdown:   seasonTotalsBreakdown,
+    } : null,
     asOf: new Date().toISOString(),
   }
   return normalizePlayerDetail(dto)
-}
-
-// ─── 통계 ─────────────────────────────────────────────────────
-
-/**
- * 통계 — 전체 대회 합산 + 대회별 분해
- * stats 페이지의 "전체 합산" 탭용
- */
-export async function fetchAllStats() {
-  return {
-    topScorers: TOP_SCORERS_ALL,
-    topAssisters: TOP_ASSISTERS,
-  }
 }
 
 // ─── UCL ───────────────────────────────────────────────────────
@@ -303,6 +316,10 @@ export async function fetchUCLKnockout() { return UCL_KNOCKOUT_TIES }
 /**
  * 홈 오버뷰 — 제품 앞장에 필요한 데이터를 한 번에 반환
  * 백엔드 연결 시 GET /api/overview 로 교체
+ *
+ * feat/stats-frontend-redesign — 실 API 와 같은 shape 을 만들기 위해 `leagueScorers` 3개
+ * (EPL · La Liga · Bundesliga) 를 조립한다. 각 카드는 `{competitionSlug, competitionName, entries, error}` 형태다.
+ * Mock 은 오류를 시뮬레이션하지 않으므로 error 는 항상 null.
  */
 export async function fetchOverview() {
   const eplStandings = getStandings('premier-league')?.entries?.slice(0, 3) ?? []
@@ -311,12 +328,25 @@ export async function fetchOverview() {
     ...o,
     currentSeason: COMPETITIONS.find(c => c.slug === o.slug)?.currentSeason ?? null,
   }))
+  // 리그별 득점 카드 3개 — mock 의 대회별 득점 순위에서 상위 5명씩 slice.
+  // getCompetitionScorers 가 비면 TOP_SCORERS(EPL 상위) 로 폴백해 shape 이 항상 채워지게 한다.
+  const HOME_SLUGS = ['premier-league', 'la-liga', 'bundesliga']
+  const leagueScorers = HOME_SLUGS.map(slug => {
+    const list = getCompetitionScorers(slug)
+    const entries = (list.length > 0 ? list : TOP_SCORERS).slice(0, 5)
+    return {
+      competitionSlug: slug,
+      competitionName: COMPETITIONS.find(c => c.slug === slug)?.name ?? slug,
+      entries,
+      error: null,
+    }
+  })
   return {
     competitions,
     livePulse:    LIVE_PULSE,
     nextKickoff:  NEXT_KICKOFF,
     dataAsOf:     DATA_AS_OF,
-    topScorers:   TOP_SCORERS_ALL.slice(0, 3),
+    leagueScorers,
     eplTop3:      eplStandings,
   }
 }
@@ -324,6 +354,9 @@ export async function fetchOverview() {
 /**
  * 통계 페이지 — 대회별 득점·도움 순위
  * 백엔드 연결 시 GET /api/stats?competition= 으로 대체
+ *
+ * feat/stats-frontend-redesign — 실 API 는 `coverage`·`asOf` 를 최상단에 붙인다.
+ * Mock 은 결정론적이어야 하므로 고정 값을 실어 준다 (값은 임의 · shape 만 정확히 맞춘다).
  * @param {string} slug  대회 slug
  */
 export async function fetchCompetitionStats(slug) {
@@ -333,6 +366,8 @@ export async function fetchCompetitionStats(slug) {
     comp,
     topScorers:   getCompetitionScorers(slug),
     topAssisters: getCompetitionAssisters(slug),
+    coverage: { finished: 0, collected: 0, ratio: 1.0 },
+    asOf:     new Date(0).toISOString(),
   }
 }
 

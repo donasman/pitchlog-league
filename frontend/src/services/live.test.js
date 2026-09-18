@@ -134,8 +134,8 @@ describe('live.js — TTL cache', () => {
   })
 
   it('T5b: fetchOverview keeps the rest of the home page alive when /api/stats/scorers fails (retro 4-6)', async () => {
-    // 5xx makes apiGet throw · the 4th Promise.all branch catches it and returns a sentinel so the UI can render ErrorState.
-    // The other three (comps · matches · standings) succeed → the home page cards must stay alive.
+    // feat/stats-frontend-redesign: 랭킹 API 가 competition 필수라 홈은 리그별 3개(EPL·라리가·분데스) 를 병렬로 부른다.
+    // 세 개가 다 실패해도 comps·matches·standings 는 살아 있어야 하고, leagueScorers 각 원소는 entries=null·error=문자열로 갈린다.
     const compsBody = { items: [{ apiId: 39, ref: '39-premier-league', slug: 'premier-league',
       displayName: 'Premier League', shortDisplayName: 'EPL', type: 'LEAGUE', format: 'ROUND_ROBIN',
       currentSeason: { year: 2026, label: '2026-27', isCurrent: true } }] }
@@ -160,21 +160,25 @@ describe('live.js — TTL cache', () => {
     const { fetchOverview } = await import('./live')
     const out = await fetchOverview()
 
-    // 실패 자리 — 세 상태로 갈라짐 (배열 · null 이 아니라 error)
-    expect(out.topScorers).toBeNull()
-    expect(out.topScorersError).toEqual(expect.stringContaining('500'))
+    // 실패 자리 — 리그별 3장 각각 entries=null · error=문자열 (셋 갈래 중 "실패")
+    expect(out.leagueScorers).toHaveLength(3)
+    expect(out.leagueScorers.map(l => l.competitionSlug)).toEqual(['premier-league', 'la-liga', 'bundesliga'])
+    for (const league of out.leagueScorers) {
+      expect(league.entries).toBeNull()
+      expect(league.error).toEqual(expect.stringContaining('500'))
+    }
     // 홈 전체는 살아 있음 — 다른 필드는 정상 계약대로
     expect(out.competitions).toBeInstanceOf(Array)
     expect(out.livePulse).toEqual([])       // matches:[] 니까 라이브 없음
     expect(out.nextKickoff).toBeNull()
-    // console.error 는 반드시 남는다 (무음 catch 금지)
+    // console.error 는 반드시 남는다 (무음 catch 금지) · 세 리그 각각 한 번씩
     expect(errSpy).toHaveBeenCalled()
 
     errSpy.mockRestore()
   })
 
   it('T5c: fetchOverview treats items=[] as a success (0 scorers) — must NOT collapse to null', async () => {
-    // 0 scorers = ShortcutCard shell (empty rank list) · null = NotImplementedState (hard-coded "not built yet") — two distinct UIs
+    // 0 scorers = 카드 껍데기(빈 리스트) · null = 실패 (T5b) — 두 UI 갈래 구분
     const compsBody = { items: [{ apiId: 39, ref: '39-premier-league', slug: 'premier-league',
       displayName: 'Premier League', shortDisplayName: 'EPL', type: 'LEAGUE', format: 'ROUND_ROBIN',
       currentSeason: { year: 2026, label: '2026-27', isCurrent: true } }] }
@@ -182,7 +186,8 @@ describe('live.js — TTL cache', () => {
       const url = String(input)
       const body = url.includes('/api/matches') ? { items: [], asOf: null }
                  : url.includes('/api/standings') ? { items: [], asOf: null }
-                 : url.includes('/api/stats/scorers') ? { competition: null, season: null, items: [], asOf: '2026-11-23T15:00:00.000Z' }
+                 : url.includes('/api/stats/scorers')
+                     ? { competition: { displayName: 'Premier League' }, season: null, items: [], asOf: '2026-11-23T15:00:00.000Z' }
                  : compsBody
       return { ok: true, status: 200,
         headers: new Headers({ 'content-type': 'application/json' }), json: async () => body }
@@ -192,8 +197,12 @@ describe('live.js — TTL cache', () => {
     const { fetchOverview } = await import('./live')
     const out = await fetchOverview()
 
-    expect(out.topScorers).toEqual([])      // 배열(빈) · null 아님
-    expect(out.topScorersError).toBeNull()
+    // 리그별 3장 각각 entries=[] · error=null (셋 갈래 중 "빈 성공")
+    expect(out.leagueScorers).toHaveLength(3)
+    for (const league of out.leagueScorers) {
+      expect(league.entries).toEqual([])
+      expect(league.error).toBeNull()
+    }
   })
 
   it('T5: invalidateCompetitions clears /api/competitions and /api/teams but keeps /api/matches', async () => {
