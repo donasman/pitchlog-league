@@ -13,7 +13,7 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
 import { useData } from '@/hooks/useData'
-import { fetchCompetitionStats, fetchCompetitions } from '@/services/api'
+import { fetchCompetitionStats, fetchCompetitionsForStats } from '@/services/api'
 import { getLocalizedCompetitionName, getLocalizedName } from '@/utils/localization'
 
 /* ── coverage 뱃지 ── */
@@ -128,8 +128,8 @@ function CompStatsPanel({ data, comp, t, locale }) {
 
 /* ── 대회 필터 (chip 6 + 드롭다운) ── */
 function CompetitionFilter({ competitions, slug, onChange, t, locale }) {
-  const top = (competitions ?? []).filter(c => (c.displayOrder ?? 999) <= 60)
-  const rest = (competitions ?? []).filter(c => (c.displayOrder ?? 999) > 60)
+  const top = (competitions ?? []).filter(c => (c.displayOrder ?? 0) <= 60)
+  const rest = (competitions ?? []).filter(c => (c.displayOrder ?? 0) > 60)
 
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--pl-line)', paddingBottom: 14, marginBottom: 14 }}>
@@ -179,7 +179,7 @@ export default function StatsPage() {
     }
   }, [slug, setSearchParams])
 
-  const { data: competitions } = useData(fetchCompetitions, [])
+  const { data: competitions } = useData(fetchCompetitionsForStats, [])
 
   const { data: compData, loading, error } = useData(
     () => slug ? fetchCompetitionStats(slug) : Promise.resolve(null),

@@ -15,6 +15,7 @@ import i18n from '@/i18n'
 import { apiGet, apiPost, NotImplementedError } from './http'
 import {
   COMPETITION_LIST_API_IDS,
+  MATCH_VISIBLE_COMPETITION_API_IDS,
   competitionRefFromSlug,
   deriveStage,
   groupCountOf,
@@ -134,6 +135,22 @@ function loadCompetitions() {
       .filter(c => COMPETITION_LIST_API_IDS.includes(c.apiId))
       .map(normalizeCompetition),
   )
+}
+
+/**
+ * 통계 페이지 전용 대회 목록 (19개).
+ *
+ * `loadCompetitions` 은 대회 탭·순위표·시즌 선택기가 5대리그+UCL 6개 전제라 좁혀서 준다.
+ * 그런데 랭킹 API 는 `isTracked=true` 19대회 전부를 지원 (컵·슈퍼컵·UEL·UECL 포함) —
+ * StatsPage 의 드롭다운이 컵/유럽 대항전을 진입 경로로 열려면 19개가 통째로 필요하다.
+ * 별도 함수를 두는 이유: `loadCompetitions` 을 넓히면 대회 탭·순위표가 컵 6대회를 삼키는데
+ * 그쪽은 아직 화면이 없다 (백엔드 competitionVisibleWhere 도 6개로 좁힘). 회귀 방지.
+ */
+export async function fetchCompetitionsForStats() {
+  const res = await _cachedGet('/api/competitions')
+  return res.items
+    .filter(c => MATCH_VISIBLE_COMPETITION_API_IDS.includes(c.apiId))
+    .map(normalizeCompetition)
 }
 
 /**
