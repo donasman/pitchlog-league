@@ -46,7 +46,6 @@ export const fetchStandings            = (...a) => impl.fetchStandings(...a)
 
 // 선수·통계
 export const fetchPlayerDetail         = (...a) => impl.fetchPlayerDetail(...a)
-export const fetchAllStats             = (...a) => impl.fetchAllStats(...a)
 export const fetchCompetitionStats     = (...a) => impl.fetchCompetitionStats(...a)
 
 // 그 밖
