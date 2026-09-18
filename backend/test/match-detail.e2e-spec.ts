@@ -378,8 +378,7 @@ describe('GET /api/matches/:ref/detail (e2e, 997_6xx)', () => {
   const get = (path: string) => request(app.getHttpServer()).get(path);
 
   // ================================================================================================
-  it('1. MATCH_A — 4갈래 모두 ok · lineups(startXI/bench) · events seq asc · teamStats · playerStats', async () => {
-    if (skipIfRemote()) return;
+  it.skipIf(skipIfRemote())('1. MATCH_A — 4갈래 모두 ok · lineups(startXI/bench) · events seq asc · teamStats · playerStats', async () => {
     const res = await get(`/api/matches/${FX_A}/detail`).expect(200);
     const body = res.body as {
       id: number;
@@ -421,8 +420,7 @@ describe('GET /api/matches/:ref/detail (e2e, 997_6xx)', () => {
   });
 
   // ================================================================================================
-  it('2. MATCH_B — availability.teamStats=not_provided · teamStats 배열 빈 · 다른 3갈래 ok', async () => {
-    if (skipIfRemote()) return;
+  it.skipIf(skipIfRemote())('2. MATCH_B — availability.teamStats=not_provided · teamStats 배열 빈 · 다른 3갈래 ok', async () => {
     const res = await get(`/api/matches/${FX_B}/detail`).expect(200);
     const body = res.body as {
       availability: { lineups: string; events: string; teamStats: string; playerStats: string };
@@ -439,8 +437,7 @@ describe('GET /api/matches/:ref/detail (e2e, 997_6xx)', () => {
   });
 
   // ================================================================================================
-  it('3. MATCH_C — 4갈래 모두 not_collected · 4갈래 배열 다 빈', async () => {
-    if (skipIfRemote()) return;
+  it.skipIf(skipIfRemote())('3. MATCH_C — 4갈래 모두 not_collected · 4갈래 배열 다 빈', async () => {
     const res = await get(`/api/matches/${FX_C}/detail`).expect(200);
     const body = res.body as {
       availability: { lineups: string; events: string; teamStats: string; playerStats: string };
@@ -462,8 +459,7 @@ describe('GET /api/matches/:ref/detail (e2e, 997_6xx)', () => {
   });
 
   // ================================================================================================
-  it('4. MATCH_D — events 는 seq asc 로 정렬 (역순 시드 반례)', async () => {
-    if (skipIfRemote()) return;
+  it.skipIf(skipIfRemote())('4. MATCH_D — events 는 seq asc 로 정렬 (역순 시드 반례)', async () => {
     const res = await get(`/api/matches/${FX_D}/detail`).expect(200);
     const body = res.body as { events: Array<{ seq: number; minute: number; type: string }> };
     // 역순으로 시드했지만 응답은 asc
@@ -474,8 +470,7 @@ describe('GET /api/matches/:ref/detail (e2e, 997_6xx)', () => {
   });
 
   // ================================================================================================
-  it('5. MATCH_E — teamStats[0].expectedGoals === null (0 아님) · playerStats 안 rating null 유지', async () => {
-    if (skipIfRemote()) return;
+  it.skipIf(skipIfRemote())('5. MATCH_E — teamStats[0].expectedGoals === null (0 아님) · playerStats 안 rating null 유지', async () => {
     const res = await get(`/api/matches/${FX_E}/detail`).expect(200);
     const body = res.body as {
       teamStats: Array<{ teamRef: string; expectedGoals: number | null; goalsPrevented: number | null }>;
@@ -501,20 +496,17 @@ describe('GET /api/matches/:ref/detail (e2e, 997_6xx)', () => {
   });
 
   // ================================================================================================
-  it('6. 없는 경기 → 404', async () => {
-    if (skipIfRemote()) return;
+  it.skipIf(skipIfRemote())('6. 없는 경기 → 404', async () => {
     await get('/api/matches/997699/detail').expect(404);
   });
 
   // ================================================================================================
-  it('7. 잘못된 ref → 400', async () => {
-    if (skipIfRemote()) return;
+  it.skipIf(skipIfRemote())('7. 잘못된 ref → 400', async () => {
     await get('/api/matches/abc/detail').expect(400);
   });
 
   // ================================================================================================
-  it('8. asOf 는 유효한 ISO 8601 (4갈래 채워진 MATCH_A · 4갈래 빈 MATCH_C 모두)', async () => {
-    if (skipIfRemote()) return;
+  it.skipIf(skipIfRemote())('8. asOf 는 유효한 ISO 8601 (4갈래 채워진 MATCH_A · 4갈래 빈 MATCH_C 모두)', async () => {
     const a = (await get(`/api/matches/${FX_A}/detail`).expect(200)).body as { asOf: string };
     expect(new Date(a.asOf).toString()).not.toBe('Invalid Date');
     // MATCH_C 도 asOf 는 유효 (전부 빈 케이스도 기준 시각을 준다 — earliestOf 규약)

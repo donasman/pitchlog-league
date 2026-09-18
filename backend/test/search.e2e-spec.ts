@@ -52,14 +52,12 @@ describe('/api/search (e2e)', () => {
     playerAlonso: 0,
     playerAlphaSon: 0,
   };
-  let willSkip = false;
 
   beforeAll(async () => {
     if (skipIfRemote()) {
       console.warn(
         `[search e2e] 원격 DB(${new URL(process.env.DATABASE_URL ?? 'postgresql://x/').hostname}) — 스킵`,
       );
-      willSkip = true;
       return;
     }
 
@@ -223,7 +221,7 @@ describe('/api/search (e2e)', () => {
   }, 60_000);
 
   afterAll(async () => {
-    if (willSkip) return;
+    if (skipIfRemote()) return;
     await cleanup();
     await app.close();
   });
@@ -266,37 +264,31 @@ describe('/api/search (e2e)', () => {
 
   const get = (path: string) => request(app.getHttpServer()).get(path);
 
-  it('q 누락 → 400', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('q 누락 → 400', async () => {
     await get('/api/search').expect(400);
   });
 
-  it('q 길이 1 → 200, 빈 items · asOf 존재', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('q 길이 1 → 200, 빈 items · asOf 존재', async () => {
     const res = await get('/api/search?q=A').expect(200);
     expect(res.body).toMatchObject({ q: 'A', teams: [], players: [], competitions: [] });
     expect(new Date(res.body.asOf).toString()).not.toBe('Invalid Date');
   });
 
-  it('limit 범위 밖 → 400', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('limit 범위 밖 → 400', async () => {
     await get('/api/search?q=Alpha&limit=0').expect(400);
     await get('/api/search?q=Alpha&limit=21').expect(400);
   });
 
-  it('q 100자 초과 → 400', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('q 100자 초과 → 400', async () => {
     const long = 'a'.repeat(101);
     await get(`/api/search?q=${long}`).expect(400);
   });
 
-  it('알 수 없는 필드 → 400 (forbidNonWhitelisted)', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('알 수 없는 필드 → 400 (forbidNonWhitelisted)', async () => {
     await get('/api/search?q=Alpha&bogus=1').expect(400);
   });
 
-  it('q=Al (2자 접두) → 접두 매칭만 (팀 3개 · Aztecs 는 안 나옴)', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('q=Al (2자 접두) → 접두 매칭만 (팀 3개 · Aztecs 는 안 나옴)', async () => {
     const res = await get('/api/search?q=Al').expect(200);
     const refs = res.body.teams.map((t: { ref: string }) => t.ref);
     expect(refs).toEqual(
@@ -308,8 +300,7 @@ describe('/api/search (e2e)', () => {
     expect(compRefs).toEqual(expect.arrayContaining([`${API + 1}-alpha-league`, `${API + 2}-alphabet-cup`]));
   });
 
-  it('q=Alpha (3자+ 부분매칭) → Aztecs 는 매칭 안 됨, tracked 팀이 Untracked Alpha Shorts 보다 앞', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('q=Alpha (3자+ 부분매칭) → Aztecs 는 매칭 안 됨, tracked 팀이 Untracked Alpha Shorts 보다 앞', async () => {
     const res = await get('/api/search?q=Alpha').expect(200);
     const refs = res.body.teams.map((t: { ref: string }) => t.ref);
     // Alpha (짧고 접두 · tracked) 가 첫번째. Alpha Beta 도 앞. Alpha Shorts (untracked) 는 뒤
@@ -321,8 +312,7 @@ describe('/api/search (e2e)', () => {
     expect(idxAlphaShorts).toBeGreaterThan(idxAlphaBeta);
   });
 
-  it('선수 검색: q=Alv 3자+ → Alvarez 매칭, teamName=Alpha', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('선수 검색: q=Alv 3자+ → Alvarez 매칭, teamName=Alpha', async () => {
     const res = await get('/api/search?q=Alv').expect(200);
     const alvarez = res.body.players.find((p: { apiId: number }) => p.apiId === API + 20);
     expect(alvarez).toBeDefined();
@@ -330,15 +320,13 @@ describe('/api/search (e2e)', () => {
     expect(alvarez.ref).toBe(`${API + 20}-julian-alvarez`);
   });
 
-  it('한국어 매칭: q=알바 → Alvarez 잡힘 (localized_names 통해)', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('한국어 매칭: q=알바 → Alvarez 잡힘 (localized_names 통해)', async () => {
     const res = await get('/api/search?q=%EC%95%8C%EB%B0%94').expect(200); // "알바"
     const found = res.body.players.find((p: { apiId: number }) => p.apiId === API + 20);
     expect(found).toBeDefined();
   });
 
-  it('lastname 매칭: q=Alonso 3자+ → Xabi Alonso 잡힘', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('lastname 매칭: q=Alonso 3자+ → Xabi Alonso 잡힘', async () => {
     const res = await get('/api/search?q=Alonso').expect(200);
     const found = res.body.players.find((p: { apiId: number }) => p.apiId === API + 21);
     expect(found).toBeDefined();
@@ -346,8 +334,7 @@ describe('/api/search (e2e)', () => {
     expect(found.teamName).toBeNull();
   });
 
-  it('limit 반영: q=Al&limit=2 → teams 최대 2개', async () => {
-    if (willSkip) return;
+  it.skipIf(skipIfRemote())('limit 반영: q=Al&limit=2 → teams 최대 2개', async () => {
     const res = await get('/api/search?q=Al&limit=2').expect(200);
     expect(res.body.teams.length).toBeLessThanOrEqual(2);
   });
