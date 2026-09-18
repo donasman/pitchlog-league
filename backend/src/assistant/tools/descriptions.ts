@@ -78,14 +78,16 @@ export const TOOL_NOTES = {
 
   get_top_scorers:
     "Self-aggregated from player_match_stats.goals_total (2026-09-17 · DATA_RULES 8장). " +
-    "TWO MODES. Mode A (competition given): SUM per player within that competition/season, ordered by value desc; items[].value = goals. " +
-    "Mode B (competition omitted): SUM per player across all 19 tracked competitions for that season, then take top{limit}. Do NOT pre-cut each competition. " +
-    "items[].breakdown[] lists per-competition value + season only where the player actually scored. " +
-    "items[].team is the team the player played most matches for in the range (tiebreak: most recent match). " +
-    "Response includes coverage: {finished, collected, ratio} — collected/finished ratio of matches this ranking is based on (backfill in progress → lower).",
+    "PER-COMPETITION ONLY (2차 개정 2026-09-17): `competition` is REQUIRED. Any tracked competition works (leagues, cups, super cups, UCL, UEL, UECL — 19 total). " +
+    "Cross-competition aggregate ranking was discontinued because league matches and cup 1st-round matches have different opponent levels — combining them mispresents the ranking. " +
+    "items[].value = goals · items[].minutes = total minutes played · items[].assists exposed for tiebreak transparency. " +
+    "Ordering (deterministic): goals DESC → assists DESC → minutes ASC → player_id ASC. " +
+    "items[].team = team the player played most matches for in this competition (tiebreak: most recent match). " +
+    "For a player's season-wide totals across all competitions, call get_player and read `seasonTotals`.",
 
   get_top_assisters:
-    'Same structure as get_top_scorers but source column = player_match_stats.assists. ' +
+    "Same structure as get_top_scorers but source column = player_match_stats.assists · `competition` REQUIRED. " +
+    "Ordering: assists DESC → goals DESC → minutes ASC → player_id ASC. " +
     'Note: some seasons/competitions do not provide assists data — those players will simply be absent ' +
     '(items shorter than limit), not filled with zeros.',
 
