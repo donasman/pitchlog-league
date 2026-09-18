@@ -577,8 +577,13 @@ export function scorerRowsFromRanking(dto) {
 }
 
 /**
- * 선수 상세 (PlayerDetailDto) → PlayerPage 가 소비하는 { player, allStats, team, totals } 묶음.
+ * 선수 상세 (PlayerDetailDto) → PlayerPage 가 소비하는 { player, allStats, team, totals, seasonTotals } 묶음.
  * player.slug 는 백엔드 ref 를 그대로 쓴다 — 라우팅과 상세 조회 경로가 같은 식별자를 공유한다.
+ *
+ * `seasonTotals` (feat/stats-frontend-redesign) — 이번 시즌 6필드 합계 + 대회별 breakdown.
+ * `player_match_stats` 자체집계라 `assists` 는 number 로 실려 온다 (null 아님 · 기존 `totals.assists`
+ * 3상태와 소스가 다름). breakdown 은 출전한 모든 대회 (goals=0 포함) · 백엔드가 displayOrder ASC
+ * 로 이미 정렬해 준 순서를 그대로 유지한다. 데이터가 없으면 dto 에서 통째로 null.
  * @param {object} dto  PlayerDetailDto
  */
 export function normalizePlayerDetail(dto) {
@@ -609,39 +614,74 @@ export function normalizePlayerDetail(dto) {
       yellowCards: dto.totals?.yellowCards ?? 0,
       redCards:    dto.totals?.redCards ?? 0,
     },
+    seasonTotals: dto.seasonTotals
+      ? {
+          season: {
+            year:  dto.seasonTotals.season?.year ?? null,
+            label: dto.seasonTotals.season?.label ?? null,
+          },
+          goals:       dto.seasonTotals.goals,
+          assists:     dto.seasonTotals.assists,
+          apps:        dto.seasonTotals.apps,
+          minutes:     dto.seasonTotals.minutes,
+          yellowCards: dto.seasonTotals.yellowCards,
+          redCards:    dto.seasonTotals.redCards,
+          // ★ 백엔드가 displayOrder ASC 로 이미 정렬 — map 만 하고 다시 정렬하지 않는다
+          breakdown: (dto.seasonTotals.breakdown ?? []).map(b => ({
+            competitionRef:       b.competition?.ref ?? null,
+            competitionApiId:     b.competition?.apiId ?? null,
+            competitionName:      b.competition?.displayName ?? '',
+            competitionShortName: b.competition?.shortDisplayName ?? '',
+            goals:   b.goals,
+            assists: b.assists,
+            apps:    b.apps,
+            minutes: b.minutes,
+          })),
+        }
+      : null,
     asOf: dto.asOf,
   }
 }
 
 /**
  * 통계 순위 한 행(RankingItemDto) → StatsPage 가 소비하는 RankRow.
- * `breakdown` 은 전체 합산 모드(competition/season 이 null 일 때)에만 딸려 온다 —
- * 대회별 모드에서는 undefined → null 로 넘긴다(StatsPage 는 falsy 판정으로 안 그린다).
- * breakdown 항목의 필드명은 `goals` 로 통일한다 — StatsPage:90 이 `b.goals` 로 접근한다.
+ *
+ * feat/stats-frontend-redesign — `breakdown` 필드가 랭킹 응답에서 사라졌다.
+ * 대신 `appearances`·`minutes`·`assists` 가 항상 실려 온다 (SCORERS 응답도 assists 포함).
+ * 대회별 breakdown 은 선수 상세의 `seasonTotals.breakdown` 으로 옮겨졌다 — 랭킹은 랭킹만 그린다.
+ *
+ * player 표시 정보(displayName·shortDisplayName·photoUrl 등)와 team 표시 정보를 함께 실어
+ * StatsPage 가 사이드 데이터 없이 한 행만으로도 카드 렌더링을 할 수 있게 한다.
  * @param {object} dto  RankingItemDto
  */
 export function normalizeStatsRow(dto) {
   const t = dto.team
+  const p = dto.player
+  const teamName = t?.shortDisplayName || t?.displayName || ''
   return {
     rank:         dto.rank,
-    playerId:     String(dto.player?.apiId ?? ''),
-    playerSlug:   dto.player?.ref ?? null,
-    playerName:   dto.player?.displayName ?? '',
-    teamName:     t?.shortDisplayName || t?.displayName || '',
-    teamInitials: t?.code || deriveInitials(t?.shortDisplayName || t?.displayName || ''),
-    teamColor:    teamColor(t?.apiId),
-    // 로고 파생 — 순위 카드가 손으로 localLogo 를 만들지 않도록 (StandingsTable · StatsRanking 대칭)
-    teamLogoUrl:  localLogo('teams', t?.apiId, t?.logoUrl),
     value:        dto.value,
-    breakdown:    Array.isArray(dto.breakdown)
-      ? dto.breakdown.map(b => ({
-          competition: COMPETITION_ALIAS[b.competition?.apiId]?.initials
-                        ?? b.competition?.shortDisplayName
-                        ?? '?',
-          // ★ 필드명 'goals' — 도움 순위도 같은 형태다(StatsPage 는 breakdown 을 득점에서만 그린다)
-          goals:       b.value,
-        }))
-      : null,
+    // ★ 새 계약 — 랭킹 응답이 항상 실어 준다 (SCORERS 는 assists 도 함께)
+    appearances:  dto.appearances ?? null,
+    minutes:      dto.minutes ?? null,
+    assists:      dto.assists ?? null,
+
+    // player 표시 3종 — 상세 조회 없이도 카드가 이름·사진을 그릴 수 있게
+    playerRef:    p?.ref ?? null,
+    playerApiId:  p?.apiId ?? null,
+    playerId:     String(p?.apiId ?? ''),
+    playerSlug:   p?.ref ?? null,
+    playerName:   p?.displayName ?? '',
+    playerShortName: p?.shortDisplayName ?? '',
+    photoUrl:     p?.photoUrl ?? null,
+
+    // team 표시 — 로고·색·이니셜은 파생 (StandingsTable · StatsRanking 대칭)
+    teamRef:      t?.ref ?? null,
+    teamApiId:    t?.apiId ?? null,
+    teamName,
+    teamInitials: t?.code || deriveInitials(teamName),
+    teamColor:    teamColor(t?.apiId),
+    teamLogoUrl:  localLogo('teams', t?.apiId, t?.logoUrl),
   }
 }
 

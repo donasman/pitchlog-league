@@ -217,7 +217,9 @@
     "team": "Club",
     "captain": "(C)",
     "age": "Age {{age}}",
-    "errorTitle": "Could not load player"
+    "errorTitle": "Could not load player",
+    "thisSeasonSection": "This season",
+    "thisSeasonNoData": "No stats for this season yet"
   },
   "team": {
     "stadium": "Stadium",
@@ -326,7 +328,7 @@
     "statsLabel": "Stats",
     "teamsLabel": "Teams",
     "epl3Label": "EPL Top 3",
-    "allScorerLabel": "All competitions",
+    "leagueScorers": "Top scorers by league",
     "topTeamsLabel": "Leaders",
     "dataSource": "Data by API-Football",
     "openAll": "View all",
@@ -380,9 +382,10 @@
     "errorTitle": "Could not load stats",
     "noData": "No data",
     "noDataDesc": "No stats available for this competition.",
-    "allLeagues": "All competitions",
-    "allDesc": "Combined totals include breakdown by competition",
-    "breakdown": "By competition",
+    "filterCompLabel": "Competition",
+    "coverageLabel": "Coverage",
+    "appearances": "Apps",
+    "minutes": "Min",
     "rank": "#",
     "player": "Player",
     "team": "Team",

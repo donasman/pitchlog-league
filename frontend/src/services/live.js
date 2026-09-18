@@ -29,7 +29,6 @@ import {
   normalizeStatsRow,
   normalizeTeam,
   normalizeTeamDetail,
-  scorerRowsFromRanking,
 } from './normalize'
 import { now, todayKstKey } from './clock'
 import { isPastSeason } from '../utils/seasons'
@@ -380,8 +379,13 @@ export async function fetchStandings(slugOrRef, season) {
 // ─── 대회 허브 ─────────────────────────────────────────────────
 
 /**
- * 대회 허브 — 경기(공통 창)·순위·참가팀. 득점·도움 순위는 아직 백엔드에 없어 null 이다
- * (빈 배열이 아니다 — 화면이 "아직 없음" 과 "0명" 을 구분한다).
+ * 대회 허브 — 경기(공통 창)·순위·참가팀·득점/도움 순위.
+ *
+ * 득점·도움 순위 자리는 이전에 하드코딩 `null` 이었으나 (백엔드 미배선) 이번 판에서
+ * `/api/stats/scorers?competition=…` · `/api/stats/assisters?competition=…` 를 실 호출로 연결한다.
+ * 개별 랭킹이 실패하면 그 자리만 null (CompetitionPage 가 null → NotImplementedState 로 그린다).
+ * 성공 배열은 normalizeStatsRow 로 변환 · limit=10 (탭 상단 표시 상수).
+ *
  * @param {string} slugOrRef
  * @param {number} [season]  연도. 없으면 백엔드가 현재 시즌으로 폴백한다
  */
@@ -389,19 +393,36 @@ export async function fetchCompetitionHub(slugOrRef, season) {
   const comp = await fetchCompetition(slugOrRef)
   // 대회 상세가 시즌 목록을 같이 주므로 isCurrent 로 직접 가린다 — 과거 시즌엔 공통 창이 0건을 만든다
   const range = isPastSeason(season, comp.seasons) ? {} : matchWindow()
-  const [{ items: matches }, table, teamsRes] = await Promise.all([
+  const [
+    { items: matches },
+    table,
+    teamsRes,
+    scorersRes,
+    assistersRes,
+  ] = await Promise.all([
     // 과거 시즌엔 창이 걷혀 대회 시즌 전체(≈380경기)가 온다. 안전판으로 limit 명시
     loadMatches({ competition: comp.ref, season, limit: 500, ...range }),
     loadStandingsTable(comp.ref, slugOrRef, season),
     _cachedGet('/api/teams', { competition: comp.ref, season }),
+    _cachedGet('/api/stats/scorers',   { competition: comp.ref, season, limit: 10 })
+      .catch(err => {
+        console.error('[fetchCompetitionHub] /api/stats/scorers failed', comp.ref, err)
+        return null
+      }),
+    _cachedGet('/api/stats/assisters', { competition: comp.ref, season, limit: 10 })
+      .catch(err => {
+        console.error('[fetchCompetitionHub] /api/stats/assisters failed', comp.ref, err)
+        return null
+      }),
   ])
   return {
     comp,
     matches,
     standings: table.unavailableReason ? null : normalizeStandings(table, matches),
     teams: (teamsRes.items ?? []).map(normalizeTeam),
-    topScorers:   null,
-    topAssisters: null,
+    // 실패는 null (NotImplementedState) · 성공 배열은 normalizeStatsRow 결과
+    topScorers:   scorersRes   ? (scorersRes.items   ?? []).map(normalizeStatsRow) : null,
+    topAssisters: assistersRes ? (assistersRes.items ?? []).map(normalizeStatsRow) : null,
   }
 }
 
@@ -443,31 +464,41 @@ function byKickoff(a, b) {
   return String(a.date).localeCompare(String(b.date))
 }
 
+// 홈 리그별 득점 순위 대상 — API-Football 대회 ID 는 normalize.js COMPETITION_ALIAS 와 정합
+const HOME_LEAGUE_SCORERS = [
+  { competitionSlug: 'premier-league', ref: '39-premier-league' },
+  { competitionSlug: 'la-liga',        ref: '140-la-liga' },
+  { competitionSlug: 'bundesliga',     ref: '78-bundesliga' },
+]
+
 /**
- * 홈 오버뷰 — 대회 6개 × (경기 공통 창 + 순위표 + 득점 순위) 를 네 번의 호출로 받아 Mock `overview.js` 형태로 묶는다.
+ * 홈 오버뷰 — 대회 6개 × (경기 공통 창 + 순위표) + 리그별 득점 순위 3개를 묶어 반환.
  *
- * 득점 순위(모드 B · 6대회 합산)는 4번째 병렬. 이 하나가 실패해도 대회 카드·순위·라이브 티커는
- * 살아 있어야 하지만, 실패를 "기능 없음" 으로 위장하면 안 된다 (회고 4-6). 그래서 catch 는 삼키지
- * 않는다 — console.error 로 로깅하고 에러 sentinel 을 돌려주어 셋 다 다른 UI 로 갈리게 한다:
- *   - 성공(items 있음) → `topScorers: [...]`,  `topScorersError: null`  → ShortcutCard
- *   - 성공(items=[]  ) → `topScorers: []`,     `topScorersError: null`  → ShortcutCard(껍데기, 0명)
- *   - 미구현(하드코딩) → `topScorers: null`,   `topScorersError: null`  → NotImplementedState
- *   - 실패            → `topScorers: null`,   `topScorersError: msg`   → ErrorState
+ * feat/stats-frontend-redesign — 랭킹 API 가 `competition` 을 필수로 받게 되어 "전체 합산 득점 순위"
+ * 는 사라졌다. 대신 홈은 리그별 카드 3개(EPL · La Liga · Bundesliga) 를 각각 병렬로 부른다.
+ * 하나가 실패해도 나머지 리그·대회 카드·순위·라이브 티커는 살아 있어야 한다 (회고 4-6) —
+ * 각 카드마다 error 문자열을 실어 UI 가 정상·빈·에러 셋 갈래로 그리게 한다:
+ *   - 성공(items 있음) → `entries: [<row...>]`, `error: null`  → 카드
+ *   - 성공(items=[]  ) → `entries: []`,          `error: null`  → 껍데기(0명)
+ *   - 실패            → `entries: null`,        `error: msg`   → 에러
  *
  * @returns {Promise<{competitions:Array, livePulse:Array, nextKickoff:object|null, dataAsOf:string|null,
- *   eplTop3:Array, topScorers:Array|null, topScorersError:string|null}>}
+ *   eplTop3:Array, leagueScorers:Array<{competitionSlug:string, competitionName:string, entries:Array|null, error:string|null}>}>}
  */
 export async function fetchOverview() {
-  const [comps, matchesRes, standingsRes, scorersRes] = await Promise.all([
+  const scorersCalls = HOME_LEAGUE_SCORERS.map(({ ref }) =>
+    _cachedGet('/api/stats/scorers', { competition: ref, limit: 5 }).catch(err => {
+      // 무음 catch 금지 — 실패 사실을 콘솔에 남기고 sentinel 로 반환해 UI 가 에러 카드로 갈리게 한다
+      console.error('[fetchOverview] /api/stats/scorers failed', ref, err)
+      return { __error: true, message: String(err?.message ?? err) }
+    }),
+  )
+  const [comps, matchesRes, standingsRes, ...leagueScorersRes] = await Promise.all([
     loadCompetitions(),
     // 공통 창(−14~+21일) 안이라도 6대회 합치면 수백 건이 나올 수 있어 안전판으로 limit 명시
     loadMatches({ ...matchWindow(), limit: 500 }),
     _cachedGet('/api/standings'),
-    _cachedGet('/api/stats/scorers', { limit: 5 }).catch(err => {
-      // 무음 catch 금지 — 실패 사실을 콘솔에 남기고 sentinel 로 반환해 UI 가 에러 상태로 갈리게 한다
-      console.error('[fetchOverview] /api/stats/scorers failed', err)
-      return { __error: true, message: String(err?.message ?? err) }
-    }),
+    ...scorersCalls,
   ])
   const allMatches = matchesRes.items
   const tables     = standingsRes.items ?? []
@@ -539,16 +570,29 @@ export async function fetchOverview() {
   const epl = comps.find(c => c.slug === 'premier-league')
   const eplTop3 = epl ? rowsFor(epl).slice(0, 3) : []
 
-  // sentinel 을 여기서 걸러 낸다 — scorerRowsFromRanking 이 에러 객체를 items 로 오해하지 않도록
-  const scorersFailed = scorersRes !== null && typeof scorersRes === 'object' && scorersRes.__error === true
+  // 리그별 득점 카드 — 성공은 normalizeStatsRow 배열, 실패는 error 문자열 (competitionName 은
+  // 응답이 주는 displayName; 실패 시 slug 를 폴백 라벨로)
+  const leagueScorers = HOME_LEAGUE_SCORERS.map(({ competitionSlug }, i) => {
+    const res = leagueScorersRes[i]
+    const failed = res !== null && typeof res === 'object' && res.__error === true
+    if (failed) {
+      return { competitionSlug, competitionName: competitionSlug, entries: null, error: res.message }
+    }
+    return {
+      competitionSlug,
+      competitionName: res?.competition?.displayName ?? competitionSlug,
+      entries: (res?.items ?? []).map(normalizeStatsRow),
+      error: null,
+    }
+  })
+
   return {
     competitions,
     livePulse,
     nextKickoff,
     dataAsOf:        maxIso([matchesRes.asOf, standingsRes.asOf, ...allMatches.map(m => m.asOf)]),
     eplTop3,
-    topScorers:      scorersFailed ? null : scorerRowsFromRanking(scorersRes),
-    topScorersError: scorersFailed ? scorersRes.message : null,
+    leagueScorers,
   }
 }
 
@@ -680,22 +724,12 @@ export async function fetchPlayerDetail(slug) {
 }
 
 /**
- * 전체 합산 통계 — 대회 파라미터 없이 부르면 백엔드가 대회별 breakdown 을 붙여 준다
- * (모드 B). StatsPage 의 `AllStatsPanel` 이 이 breakdown 을 소비한다.
- */
-export async function fetchAllStats() {
-  const [scorers, assisters] = await Promise.all([
-    _cachedGet('/api/stats/scorers'),
-    _cachedGet('/api/stats/assisters'),
-  ])
-  return {
-    topScorers:   (scorers.items   ?? []).map(normalizeStatsRow),
-    topAssisters: (assisters.items ?? []).map(normalizeStatsRow),
-  }
-}
-
-/**
- * 대회별 통계 — 대회 참조를 파라미터로 실어 부른다(모드 A). breakdown 은 오지 않는다.
+ * 대회별 통계 — 대회 참조를 파라미터로 실어 부른다.
+ *
+ * feat/stats-frontend-redesign — 랭킹 API 가 `competition` 필수화 · `breakdown` 필드는 사라지고
+ * `coverage`·`asOf` 가 응답 최상단에 붙는다. 두 값은 화면 상단에 "집계 근거 40/40 · <시각>" 을 그린다.
+ * `coverage`·`asOf` 는 득점·도움 응답이 각자 실어 주지만, 화면은 하나만 그리므로 득점 쪽을 대표로 쓴다.
+ *
  * @param {string} slug  화면 slug (`premier-league` · `champions-league` 등)
  */
 export async function fetchCompetitionStats(slug) {
@@ -709,6 +743,8 @@ export async function fetchCompetitionStats(slug) {
     comp,
     topScorers:   (scorers.items   ?? []).map(normalizeStatsRow),
     topAssisters: (assisters.items ?? []).map(normalizeStatsRow),
+    coverage: scorers.coverage ?? null,
+    asOf:     scorers.asOf ?? null,
   }
 }
 
