@@ -552,8 +552,13 @@ describe('assistant tools (e2e)', () => {
       const direct = await stats.scorers(args);
       const via = await registry.call('get_top_scorers', args);
       expect(via.tool).toBe('get_top_scorers');
-      expect(via.data).toEqual(direct);
-      expect(via.asOf).toBe(direct.asOf);
+      // asOf 는 매치 시드가 없으면 latestOf() 폴백으로 매 호출마다 현재 시각이라 두 호출 사이 값이 다를 수 있다.
+      // wrapper 통과 검증만 하고 asOf 는 배제한다 (feat/statistics-self-aggregation 이후).
+      const { asOf: _a1, ...directNoAsOf } = direct as { asOf: string };
+      const { asOf: _a2, ...viaNoAsOf } = via.data as { asOf: string };
+      void _a1; void _a2;
+      expect(viaNoAsOf).toEqual(directNoAsOf);
+      expect(typeof via.asOf).toBe('string');
     });
 
     it('get_top_assisters', async () => {
@@ -561,8 +566,11 @@ describe('assistant tools (e2e)', () => {
       const direct = await stats.assisters(args);
       const via = await registry.call('get_top_assisters', args);
       expect(via.tool).toBe('get_top_assisters');
-      expect(via.data).toEqual(direct);
-      expect(via.asOf).toBe(direct.asOf);
+      const { asOf: _a1, ...directNoAsOf } = direct as { asOf: string };
+      const { asOf: _a2, ...viaNoAsOf } = via.data as { asOf: string };
+      void _a1; void _a2;
+      expect(viaNoAsOf).toEqual(directNoAsOf);
+      expect(typeof via.asOf).toBe('string');
     });
 
     it('get_player', async () => {

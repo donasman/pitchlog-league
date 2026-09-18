@@ -77,14 +77,16 @@ export const TOOL_NOTES = {
     'Cups, super cups, UEFA Europa League, and UEFA Europa Conference League have no standings (KNOCKOUT format or excluded from Mode B) — query them individually only if standings apply.',
 
   get_top_scorers:
-    "TWO MODES. Mode A (competition given): items are that competition/season's TopRanking rows in rank order, " +
-    'items[].value = raw goals. ' +
-    "Mode B (competition omitted): items are player totals aggregated across the 6 display competitions' top{limit} (leagues5+UCL only — cups, super cups, UEL, UECL excluded), " +
-    'items[].breakdown[] carries per-competition value + season, competition/season at the top level are null.',
+    "Self-aggregated from player_match_stats.goals_total (2026-09-17 · DATA_RULES 8장). " +
+    "TWO MODES. Mode A (competition given): SUM per player within that competition/season, ordered by value desc; items[].value = goals. " +
+    "Mode B (competition omitted): SUM per player across all 19 tracked competitions for that season, then take top{limit}. Do NOT pre-cut each competition. " +
+    "items[].breakdown[] lists per-competition value + season only where the player actually scored. " +
+    "items[].team is the team the player played most matches for in the range (tiebreak: most recent match). " +
+    "Response includes coverage: {finished, collected, ratio} — collected/finished ratio of matches this ranking is based on (backfill in progress → lower).",
 
   get_top_assisters:
-    'Same structure as get_top_scorers but category=ASSISTS. ' +
-    'Note: some seasons/competitions do not provide assists data — those rankings will simply be absent ' +
+    'Same structure as get_top_scorers but source column = player_match_stats.assists. ' +
+    'Note: some seasons/competitions do not provide assists data — those players will simply be absent ' +
     '(items shorter than limit), not filled with zeros.',
 
   get_player:

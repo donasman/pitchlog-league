@@ -31,6 +31,7 @@ API_FOOTBALL_KEY=키 node scripts/probe-cups.mjs            # 약 60콜
 | 경기 · 순위 · 라인업 · 선수 기본 통계 | API-Football |
 | 팀 xG · goals_prevented | API-Football |
 | 선수 xG · xA | (도입 시) 2차 소스 |
+| **통계 랭킹 (득점·도움·경고·퇴장·출전)** | **`player_match_stats` 자체 집계** (2026-09-17 확정 · feat/statistics-self-aggregation) |
 
 ### 1-2. 지금은 단일 소스, 구조는 열어둔다
 
@@ -248,3 +249,39 @@ L0 가 99콜을 보낸 직후 `/status` 의 `requests.current` 는 22 만큼(1�
 "많이 쐈지만 좋은 기회는 아니었다"가 읽힌다 — 일반 사이트에 흔치 않다.
 
 컵 경기 상세는 **통계 탭이 비는 것이 정상 상태**다. 오류와 구분해 보여준다 (3장 세 번째 상태).
+
+---
+
+## 8. 통계 랭킹의 소스와 집계 (2026-09-17 확정 · feat/statistics-self-aggregation)
+
+### 8-1. 소스는 `player_match_stats`
+
+`GET /api/stats/scorers`·`/api/stats/assisters`(및 후속 카테고리) 는 **`player_match_stats` 를 선수·대회시즌 축으로 SUM 해서 만든다.** `top_rankings` (API 공식 순위표) 를 읽지 않는다.
+
+`match_events` 는 소스가 아니다. 이유:
+- `player_match_stats` 에 `competition_season_id` 가 이미 있어 조인 한 단이 줄어든다
+- **자책골이 섞이지 않는다** — `player_match_stats.goals_total` 은 그 선수의 순수 득점만, `match_events` 의 `Goal` 이벤트는 종류(정규·자책·PK) 를 detail 로 구분해야 걸러진다
+
+사용 컬럼: `goals_total` · `assists` · `yellow_cards` · `red_cards` · `minutes`.
+
+### 8-2. 집계 범위는 `ingestScopeWhere` (19대회 전부)
+
+`competitionVisibleWhere` (리그5+UCL 6개) 가 아니다. 우리가 추적하는 대회 전부(리그5 + UCL + UEL + UECL + 국내 컵 6 + 슈퍼컵 5 = 19)의 경기를 합산한다.
+
+컵·유럽 대항전 팀도 랭킹에 등장할 수 있다. 화면 필터가 필요하면 프론트가 담당한다 — 백엔드는 데이터를 자르지 않는다.
+
+### 8-3. 공식 수치와 갈리면 우리 집계가 기준이다
+
+API 공식 순위(`top_rankings`) 와 자체 집계가 어긋날 수 있다 — 예: API 는 상위 N 만 주므로 그 밖의 선수는 없다, API 응답 시점과 최신 경기 사이 지연. 화면·어시스턴트 답변은 **자체 집계 기준**을 쓴다.
+
+`top_rankings` 테이블은 다음 판에서 제거 예정이다 (조회 경로에서 이미 빠졌다 · SCHEMA_DESIGN 9장).
+
+### 8-4. 수집률 표기 (`coverage`)
+
+랭킹 응답은 `coverage: { finished, collected, ratio }` 를 함께 낸다.
+
+- `finished` = 그 범위(대회시즌 or 시즌 전체 · status_short ∈ {FT, AET, PEN})의 종료 경기 수
+- `collected` = 그중 `detail_checked_at IS NOT NULL` — 즉 상세를 이미 받아 통계 반영 가능한 경기 수
+- `ratio` = `collected / finished` (finished=0 이면 0). 소수점 셋째 자리 반올림
+
+프론트는 "이 통계가 몇 %의 경기를 근거로 하는지" 를 이 값으로 표시한다. **백필-2 진행 중이거나 새 시즌 초기에는 낮게 나오는 것이 정상.**
