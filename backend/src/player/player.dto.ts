@@ -110,6 +110,55 @@ export class PlayerTotalsDto {
   redCards!: number;
 }
 
+/** 그 선수가 시즌에 뛴 대회 하나의 요약 (feat/statistics-per-competition · 2026-09-17) */
+export class SeasonBreakdownDto {
+  @ApiProperty({ type: CompetitionRefDto })
+  competition!: CompetitionRefDto;
+
+  @ApiProperty({ example: 4 })
+  goals!: number;
+
+  @ApiProperty({ example: 0 })
+  assists!: number;
+
+  @ApiProperty({ description: '출전 경기 수', example: 4 })
+  apps!: number;
+
+  @ApiProperty({ description: '출전시간 SUM (분)', example: 360 })
+  minutes!: number;
+}
+
+/**
+ * 그 시즌 · 그 선수가 뛴 추적 대회 전부에서 pms 합산 (feat/statistics-per-competition · 2026-09-17).
+ * 랭킹 API 는 대회별로 갈렸으므로 시즌 통합 수치는 여기서만 볼 수 있다.
+ * `breakdown` 은 **출전한 모든 대회**를 넣는다 — 득점 0인 대회도 포함 (출전 사실이 정보다).
+ */
+export class SeasonTotalsDto {
+  @ApiProperty({ type: SeasonRefDto })
+  season!: SeasonRefDto;
+
+  @ApiProperty({ example: 6 })
+  goals!: number;
+
+  @ApiProperty({ example: 0 })
+  assists!: number;
+
+  @ApiProperty({ example: 6 })
+  apps!: number;
+
+  @ApiProperty({ example: 503 })
+  minutes!: number;
+
+  @ApiProperty({ example: 1 })
+  yellowCards!: number;
+
+  @ApiProperty({ example: 0 })
+  redCards!: number;
+
+  @ApiProperty({ type: [SeasonBreakdownDto], description: '출전한 모든 대회 (goals=0 대회도 포함) · displayOrder 오름차순' })
+  breakdown!: SeasonBreakdownDto[];
+}
+
 export class PlayerDetailDto extends PlayerSummaryDto {
   @ApiPropertyOptional({ type: String, nullable: true, description: 'ISO 8601 날짜 `YYYY-MM-DD`', example: '1987-06-24' })
   birthDate!: string | null;
@@ -140,6 +189,9 @@ export class PlayerDetailDto extends PlayerSummaryDto {
 
   @ApiProperty({ type: PlayerTotalsDto })
   totals!: PlayerTotalsDto;
+
+  @ApiPropertyOptional({ type: SeasonTotalsDto, nullable: true, description: '현재 시즌의 추적 대회 통합 (feat/statistics-per-competition 2026-09-17). 현재 시즌 pms 가 하나도 없으면 null' })
+  seasonTotals!: SeasonTotalsDto | null;
 
   @ApiProperty({ description: '데이터 기준 시각 (ISO 8601)' })
   asOf!: string;
