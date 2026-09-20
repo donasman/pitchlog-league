@@ -72,3 +72,29 @@ export function isPastSeason(year, seasons) {
   const hit = seasons.find(s => Number(s?.year) === n)
   return hit ? hit.current !== true : false
 }
+
+/**
+ * URL `?season=` 값을 이번 렌더에서 어떻게 만질 것인가.
+ *
+ * `useSeasonParam` 훅이 매 렌더에서 이걸 물어 URL 을 정규화한다:
+ *   - 라벨(`2025-26`) 이 남아 있으면 연도로 바꾼다 (`{ action: 'set', value: '2025' }`)
+ *   - 현재 시즌이면 파라미터 자체를 뺀다 (`{ action: 'delete' }`) — 기본 뷰는 URL 이 비어 있는 상태
+ *   - 이미 정규화된 상태거나, 시즌 목록이 아직 없어 판단 불가면 아무 것도 안 한다 (`null`)
+ *
+ * `useEffect` 안에서 setSearchParams 를 무조건 부르면 검색 파라미터의 참조가 매 렌더 바뀌어
+ * 훅이 다시 실행되고 URL 이 계속 다시 쓰인다. 훅은 반환값이 null 일 때 setSearchParams 를
+ * 건너뛰어 이 루프를 끊는다.
+ *
+ * @param {string|null} currentParam  URL 의 `?season=` 원본 값 (없으면 null)
+ * @param {Season[]}    seasons       `selectableSeasons` 결과 (COMPLETE 만, 최신순)
+ * @returns {null | { action: 'delete' } | { action: 'set', value: string }}
+ */
+export function nextSeasonParamAction(currentParam, seasons) {
+  if (currentParam === null) return null
+  if (!Array.isArray(seasons) || seasons.length === 0) return null
+  const resolved = seasonYearFromParam(currentParam, seasons)
+  if (resolved === null) return { action: 'delete' }
+  if (!isPastSeason(resolved, seasons)) return { action: 'delete' }
+  if (String(resolved) === currentParam) return null
+  return { action: 'set', value: String(resolved) }
+}

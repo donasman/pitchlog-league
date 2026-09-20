@@ -33,9 +33,6 @@ export const MATCH_VISIBLE_COMPETITION_API_IDS = [
 ]
 export const COMPETITION_LIST_API_IDS = [39, 140, 78, 135, 61, 2]
 
-/** @deprecated feat/scope-expansion — 소비처가 남았을 때 호환용. 새 코드는 위 두 상수 중 하나를 명시. */
-export const VISIBLE_COMPETITION_API_IDS = COMPETITION_LIST_API_IDS
-
 /**
  * 로고는 우리가 받아서 줄여 둔 정적 파일을 쓴다 (NEXT_STEPS 5장).
  * API-Football media URL 직링크는 09-07 실측에서 한 화면 96개가 11초 뒤에도

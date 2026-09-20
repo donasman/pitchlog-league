@@ -51,15 +51,6 @@ export async function fetchSeasons(_slugOrRef) {
   return SEASONS
 }
 
-/** 대회 목록 (스테이지 정보 포함) */
-export async function fetchCompetitionsOverview() {
-  // 백엔드 연결 시 GET /api/competitions?includeStage=true 로 교체
-  return COMPETITIONS.map(comp => ({
-    ...comp,
-    stage: STANDINGS[comp.slug]?.stage ?? null,
-  }))
-}
-
 /** 대회 상세 */
 export async function fetchCompetition(slug) {
   const comp = getCompetitionBySlug(slug)
