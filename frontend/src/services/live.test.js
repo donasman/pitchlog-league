@@ -380,3 +380,102 @@ describe('live.js — competition list two scopes (fix/stats-frontend-followup)'
     await expect(fetchCompetitionStats('no-such-slug')).rejects.toThrow(/no-such-slug/)
   })
 })
+
+describe('live.js — fetchCompetitionHub cup window (fix/cup-page-window)', () => {
+  // T7 — 컵 대회 진입 시 fetchCompetitionHub 가 loadMatches 를 부를 때 매치 창(from/to) 을 통째로 뺀다.
+  // 실측 2026-09-21: DFB Pokal 48경기·Coupe de France 201경기가 공통 창(-14~+21일) 에 잡혀 대개 0건 반환 → 컵 화면이 빈 상태.
+  // 리그·UCL(groups_knockout) 는 기존대로 창 유지. 이 잠금이 되돌리면 컵 페이지가 다시 빈 화면.
+  it('T7: isCup competition — /api/matches request has no from/to query params', async () => {
+    // 컵 대회 상세 · 매치 · 스탠딩(KNOCKOUT) · 랭킹 · 팀(스킵되지만 URL 매칭용) 응답을 URL 로 갈래
+    const fetchMock = vi.fn(async (url) => {
+      const u = String(url)
+      let body
+      if (u.includes('/api/competitions/45-fa-cup')) {
+        body = {
+          apiId: 45, ref: '45-fa-cup', slug: 'fa-cup',
+          displayName: 'FA Cup', shortDisplayName: 'FA', displayOrder: 110,
+          format: 'KNOCKOUT',
+          seasons: [
+            { year: 2026, label: '2026-27', current: true,  dataState: 'NONE' },
+            { year: 2025, label: '2025-26', current: false, dataState: 'NONE' },
+          ],
+        }
+      } else if (u.includes('/api/competitions')) {
+        // toCompetitionRef 폴백(fetchCompetitionsForStats) 이 여기를 부른다 — 최소 항목만
+        body = { items: [
+          { apiId: 45, ref: '45-fa-cup', slug: 'fa-cup', displayName: 'FA Cup', shortDisplayName: 'FA', displayOrder: 110 },
+        ]}
+      } else if (u.includes('/api/matches')) {
+        body = { items: [], asOf: null }
+      } else if (u.includes('/api/standings')) {
+        body = { items: [{ unavailableReason: 'KNOCKOUT', rows: [] }] }
+      } else if (u.includes('/api/stats/')) {
+        body = { items: [], coverage: null, asOf: null }
+      } else {
+        body = { items: [] }
+      }
+      return {
+        ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => body,
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchCompetitionHub } = await import('./live')
+    await fetchCompetitionHub('fa-cup', 2025)
+
+    const matchesCall = fetchMock.mock.calls.find(c => String(c[0]).includes('/api/matches'))
+    expect(matchesCall).toBeDefined()
+    const url = String(matchesCall[0])
+    // 컵 분기에서는 매치 창을 빼므로 from/to 가 URL 에 없어야 한다
+    expect(url).not.toMatch(/[?&]from=/)
+    expect(url).not.toMatch(/[?&]to=/)
+    // 대회·시즌·limit 은 그대로 실려 있다 (limit=500 유지는 이 판에서 확정)
+    expect(url).toMatch(/[?&]competition=45-fa-cup/)
+    expect(url).toMatch(/[?&]season=2025/)
+    expect(url).toMatch(/[?&]limit=500/)
+  })
+
+  it('T7b: league competition — /api/matches request keeps from/to (current season window)', async () => {
+    // 리그·UCL 은 기존 동작 유지 — 컵 정정이 리그에 영향 없음을 잠근다
+    const fetchMock = vi.fn(async (url) => {
+      const u = String(url)
+      let body
+      if (u.includes('/api/competitions/39-premier-league')) {
+        body = {
+          apiId: 39, ref: '39-premier-league', slug: 'premier-league',
+          displayName: 'Premier League', shortDisplayName: 'EPL', displayOrder: 10,
+          format: 'ROUND_ROBIN',
+          seasons: [{ year: 2026, label: '2026-27', current: true, dataState: 'COMPLETE' }],
+        }
+      } else if (u.includes('/api/competitions')) {
+        body = { items: [
+          { apiId: 39, ref: '39-premier-league', slug: 'premier-league', displayName: 'Premier League', shortDisplayName: 'EPL', displayOrder: 10 },
+        ]}
+      } else if (u.includes('/api/matches')) {
+        body = { items: [], asOf: null }
+      } else if (u.includes('/api/standings')) {
+        body = { items: [{ unavailableReason: null, rows: [] }] }
+      } else if (u.includes('/api/stats/')) {
+        body = { items: [], coverage: null, asOf: null }
+      } else {
+        body = { items: [] }
+      }
+      return {
+        ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => body,
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchCompetitionHub } = await import('./live')
+    await fetchCompetitionHub('premier-league')   // 현재 시즌 — 창이 걸린다
+
+    const matchesCall = fetchMock.mock.calls.find(c => String(c[0]).includes('/api/matches'))
+    const url = String(matchesCall[0])
+    expect(url).toMatch(/[?&]from=/)
+    expect(url).toMatch(/[?&]to=/)
+  })
+})
