@@ -318,4 +318,65 @@ describe('live.js — competition list two scopes (fix/stats-frontend-followup)'
       .filter(c => String(c[0]).includes(pat)).length
     expect(countPath('/api/competitions')).toBe(1)
   })
+
+  // T6d·T6e — toCompetitionRef 폴백이 좁은 스코프(6개) 에 갇혀 있으면
+  // 컵·슈퍼컵·UEL·UECL slug 로 진입한 화면이 `errors.competitionNotFound` 로 죽는다.
+  // 2026-09-18 프리뷰 실측: /stats 드롭다운의 FA Cup 등 13대회가 여기서 막혔다.
+  // 폴백을 fetchCompetitionsForStats(19) 로 바꿔 컵/UEL 통과, 미지 slug 는 여전히 던짐.
+  it('T6d: fetchCompetitionStats(fa-cup) resolves and calls /api/stats/scorers?competition=45-fa-cup', async () => {
+    // 세 종류 응답을 URL 로 갈라준다 — 목록·대회 상세·랭킹
+    const fetchMock = vi.fn(async (url) => {
+      const u = String(url)
+      let body
+      if (u.includes('/api/competitions/45-fa-cup')) {
+        body = {
+          apiId: 45, ref: '45-fa-cup', slug: 'fa-cup',
+          displayName: 'FA Cup', shortDisplayName: 'FA', displayOrder: 110,
+          seasons: [],
+        }
+      } else if (u.includes('/api/competitions')) {
+        body = { items: NINETEEN_ITEMS }
+      } else if (u.includes('/api/stats/')) {
+        body = { items: [], coverage: null, asOf: null }
+      } else {
+        body = {}
+      }
+      return {
+        ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => body,
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchCompetitionStats } = await import('./live')
+    // 던지지 않는다 — 이 브랜치가 픽스의 핵심 (수정 전에는 여기서 competitionNotFound 로 throw)
+    await expect(fetchCompetitionStats('fa-cup')).resolves.toBeTruthy()
+
+    const scorerCalled = fetchMock.mock.calls.some(c => {
+      const u = String(c[0])
+      return u.includes('/api/stats/scorers') && u.includes('competition=45-fa-cup')
+    })
+    expect(scorerCalled).toBe(true)
+  })
+
+  it('T6e: fetchCompetitionStats(no-such-slug) still throws — unknown slug is not silently accepted', async () => {
+    const fetchMock = vi.fn(async (url) => {
+      const u = String(url)
+      // 알 수 없는 slug 라도 목록·랭킹 요청은 URL 이 어떻게 되든 응답을 준다. 실패는 toCompetitionRef 안에서만.
+      const body = u.includes('/api/competitions') && !u.includes('/api/competitions/')
+        ? { items: NINETEEN_ITEMS }
+        : { items: [], coverage: null, asOf: null }
+      return {
+        ok: true, status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => body,
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchCompetitionStats } = await import('./live')
+    // slug 가 목록에도 없으면 여전히 던진다 — 폴백 확장이 미지 slug 를 통과시키지 않는다
+    await expect(fetchCompetitionStats('no-such-slug')).rejects.toThrow(/no-such-slug/)
+  })
 })
