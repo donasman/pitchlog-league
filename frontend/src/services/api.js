@@ -21,6 +21,7 @@ const impl = USE_MOCK ? mock : live
 
 // 대회
 export const fetchCompetitions         = (...a) => impl.fetchCompetitions(...a)
+export const fetchCompetitionsForStats = (...a) => impl.fetchCompetitionsForStats(...a)
 export const fetchCompetitionsOverview = (...a) => impl.fetchCompetitionsOverview(...a)
 export const fetchCompetition          = (...a) => impl.fetchCompetition(...a)
 export const fetchCompetitionHub       = (...a) => impl.fetchCompetitionHub(...a)
