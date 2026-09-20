@@ -219,7 +219,10 @@
     "age": "만 {{age}}세",
     "errorTitle": "선수 정보를 불러오지 못했습니다",
     "thisSeasonSection": "이번 시즌",
-    "thisSeasonNoData": "이번 시즌 통계가 아직 없습니다"
+    "thisSeasonNoData": "이번 시즌 통계가 아직 없습니다",
+    "sourceOfficial": "공식 집계",
+    "sourceMatchRecords": "경기 기록 집계",
+    "totalRow": "합계"
   },
   "team": {
     "stadium": "홈 구장",
@@ -329,6 +332,7 @@
     "teamsLabel": "팀",
     "epl3Label": "EPL Top 3",
     "leagueScorers": "리그별 득점 순위",
+    "eplScorersLabel": "EPL 득점 Top 3",
     "topTeamsLabel": "선두 팀",
     "dataSource": "데이터 출처 API-Football",
     "openAll": "전체 보기",

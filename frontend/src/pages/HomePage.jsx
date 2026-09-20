@@ -436,7 +436,7 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
    두 번째 카드(원래 "Top Scorers")를 /stats 로 가는 CTA 로 교체.
    실제 리그별 득점 순위는 아래 LeagueScorersSection 이 담당.
 ───────────────────────────────────────────────────────────── */
-function ShortcutsSection({ eplTop3, competitions, t }) {
+function ShortcutsSection({ eplTop3, competitions, leagueScorers, t }) {
   const standingsRows = (eplTop3 ?? []).map(e => ({
     rank: e.rank,
     label: e.teamName,
@@ -447,6 +447,16 @@ function ShortcutsSection({ eplTop3, competitions, t }) {
     rank: '',
     label: c.leader?.teamName ?? '-',
     value: c.shortName,
+  }))
+
+  // 통계 카드: EPL 리그 카드에서 상위 3명만 뽑아 재사용. 아래 LeagueScorersSection 과 문맥은 겹치지만
+  // 그건 5명 전체 · 여기는 3명 · 목적은 /stats 로의 CTA 겸 티저. 회고 4-6 — 호출 실패(error)면
+  // 빈 배열로 위장하지 않고 ErrorState 카드로 갈래를 드러낸다 (LeagueScorersSection:532 와 같은 패턴).
+  const eplLeague = (leagueScorers ?? []).find(l => l.competitionSlug === 'premier-league')
+  const scorerRows = (eplLeague?.entries ?? []).slice(0, 3).map(e => ({
+    rank: e.rank,
+    label: `${e.playerName ?? '-'}${e.teamName ? ` · ${e.teamName}` : ''}`,
+    value: t('home.goalsCountUnit', { goals: e.value }),
   }))
 
   return (
@@ -466,14 +476,20 @@ function ShortcutsSection({ eplTop3, competitions, t }) {
           zoneFirst
           t={t}
         />
-        <ShortcutCard
-          title={t('home.statsLabel')}
-          sub={t('home.leagueScorers')}
-          head={t('home.leagueScorers')}
-          rows={[]}
-          to="/stats"
-          t={t}
-        />
+        {eplLeague?.error ? (
+          <div className="pl-card" style={{ padding: 12 }}>
+            <ErrorState description={eplLeague.error} />
+          </div>
+        ) : (
+          <ShortcutCard
+            title={t('home.statsLabel')}
+            sub={t('home.eplScorersLabel')}
+            head={t('home.eplScorersLabel')}
+            rows={scorerRows}
+            to="/stats?competition=premier-league"
+            t={t}
+          />
+        )}
         <ShortcutCard
           title={t('home.teamsLabel')}
           sub={t('home.topTeamsLabel')}
@@ -740,6 +756,7 @@ export default function HomePage() {
         <ShortcutsSection
           eplTop3={eplTop3}
           competitions={competitions}
+          leagueScorers={leagueScorers}
           t={t}
         />
 

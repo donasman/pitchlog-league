@@ -130,7 +130,10 @@ export default function PlayerPage() {
 
       {/* 대회 필터 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t('player.seasonStats')}</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+          {t('player.seasonStats')}
+          <span className="text-xs font-normal ml-2 normal-case tracking-normal">· {t('player.sourceOfficial')}</span>
+        </h2>
         <FilterBar options={compOptions} value={filterComp} onChange={handleFilter} label={t('team.filterLabel')} />
       </div>
 
@@ -204,6 +207,9 @@ function ThisSeasonSection({ seasonTotals, t }) {
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
         <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider flex-1">
           {t('player.thisSeasonSection')}
+          <span className="text-xs font-normal ml-2 normal-case tracking-normal text-muted-foreground">
+            · {t('player.sourceMatchRecords')}
+          </span>
         </h2>
         {seasonTotals?.season?.label && (
           <span className="text-xs text-muted-foreground">{seasonTotals.season.label}</span>
@@ -237,6 +243,15 @@ function ThisSeasonSection({ seasonTotals, t }) {
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="border-t border-border bg-accent/30 font-semibold">
+              <td className="px-4 py-3 text-foreground">{t('player.totalRow')}</td>
+              <td className="text-center px-3 py-3 text-foreground">{formatStat(seasonTotals.apps)}</td>
+              <td className="text-center px-3 py-3 text-foreground">{formatStat(seasonTotals.goals)}</td>
+              <td className="text-center px-3 py-3 text-foreground">{formatStat(seasonTotals.assists)}</td>
+              <td className="text-center px-3 py-3 text-foreground">{formatStat(seasonTotals.minutes)}</td>
+            </tr>
+          </tfoot>
         </table>
       )}
     </section>

@@ -15,6 +15,7 @@ import i18n from '@/i18n'
 import { apiGet, apiPost, NotImplementedError } from './http'
 import {
   COMPETITION_LIST_API_IDS,
+  MATCH_VISIBLE_COMPETITION_API_IDS,
   competitionRefFromSlug,
   deriveStage,
   groupCountOf,
@@ -137,6 +138,22 @@ function loadCompetitions() {
 }
 
 /**
+ * 통계 페이지 전용 대회 목록 (19개).
+ *
+ * `loadCompetitions` 은 대회 탭·순위표·시즌 선택기가 5대리그+UCL 6개 전제라 좁혀서 준다.
+ * 그런데 랭킹 API 는 `isTracked=true` 19대회 전부를 지원 (컵·슈퍼컵·UEL·UECL 포함) —
+ * StatsPage 의 드롭다운이 컵/유럽 대항전을 진입 경로로 열려면 19개가 통째로 필요하다.
+ * 별도 함수를 두는 이유: `loadCompetitions` 을 넓히면 대회 탭·순위표가 컵 6대회를 삼키는데
+ * 그쪽은 아직 화면이 없다 (백엔드 competitionVisibleWhere 도 6개로 좁힘). 회귀 방지.
+ */
+export async function fetchCompetitionsForStats() {
+  const res = await _cachedGet('/api/competitions')
+  return res.items
+    .filter(c => MATCH_VISIBLE_COMPETITION_API_IDS.includes(c.apiId))
+    .map(normalizeCompetition)
+}
+
+/**
  * 대회 목록이 바뀌었을 때(언어 전환 등) 캐시를 버린다.
  * `/api/competitions` · `/api/teams` prefix 를 함께 지운다 —
  * 대회 표기 언어가 바뀌면 팀 목록 표기도 같이 갱신되어야 한다.
@@ -185,7 +202,10 @@ async function toCompetitionRef(slugOrRef) {
   if (/^\d+(-|$)/.test(String(slugOrRef))) return slugOrRef  // 이미 ref 거나 숫자 id
   const known = competitionRefFromSlug(slugOrRef)
   if (known) return known
-  const comps = await loadCompetitions()
+  // 폴백은 19개 스코프로 — COMPETITION_ALIAS(6개) 밖 컵/UEL/UECL slug 는
+  // `loadCompetitions()`(6개)에서 찾지 못해 던졌다. StatsPage 드롭다운의 컵/UEL
+  // 선택이 여기서 막혔음(2026-09-18 프리뷰 실측). 회귀 잠금은 T6d·T6e.
+  const comps = await fetchCompetitionsForStats()
   const hit = comps.find(c => c.slug === slugOrRef)
   if (!hit) throw new Error(i18n.t('errors.competitionNotFound', { ref: slugOrRef }))
   return hit.ref

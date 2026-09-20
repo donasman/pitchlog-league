@@ -219,7 +219,10 @@
     "age": "Age {{age}}",
     "errorTitle": "Could not load player",
     "thisSeasonSection": "This season",
-    "thisSeasonNoData": "No stats for this season yet"
+    "thisSeasonNoData": "No stats for this season yet",
+    "sourceOfficial": "Official",
+    "sourceMatchRecords": "From match records",
+    "totalRow": "Total"
   },
   "team": {
     "stadium": "Stadium",
@@ -329,6 +332,7 @@
     "teamsLabel": "Teams",
     "epl3Label": "EPL Top 3",
     "leagueScorers": "Top scorers by league",
+    "eplScorersLabel": "EPL Top 3 scorers",
     "topTeamsLabel": "Leaders",
     "dataSource": "Data by API-Football",
     "openAll": "View all",
