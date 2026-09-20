@@ -202,7 +202,10 @@ async function toCompetitionRef(slugOrRef) {
   if (/^\d+(-|$)/.test(String(slugOrRef))) return slugOrRef  // 이미 ref 거나 숫자 id
   const known = competitionRefFromSlug(slugOrRef)
   if (known) return known
-  const comps = await loadCompetitions()
+  // 폴백은 19개 스코프로 — COMPETITION_ALIAS(6개) 밖 컵/UEL/UECL slug 는
+  // `loadCompetitions()`(6개)에서 찾지 못해 던졌다. StatsPage 드롭다운의 컵/UEL
+  // 선택이 여기서 막혔음(2026-09-18 프리뷰 실측). 회귀 잠금은 T6d·T6e.
+  const comps = await fetchCompetitionsForStats()
   const hit = comps.find(c => c.slug === slugOrRef)
   if (!hit) throw new Error(i18n.t('errors.competitionNotFound', { ref: slugOrRef }))
   return hit.ref

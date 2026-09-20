@@ -450,16 +450,14 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t }) {
   }))
 
   // 통계 카드: EPL 리그 카드에서 상위 3명만 뽑아 재사용. 아래 LeagueScorersSection 과 문맥은 겹치지만
-  // 그건 5명 전체 · 여기는 3명 · 목적은 /stats 로의 CTA 겸 티저. 회고 4-6 — entries=null(에러)이면
-  // 빈 배열로 위장 금지, rows 를 안 주고 카드가 자기 갈래를 그리게 둔다.
+  // 그건 5명 전체 · 여기는 3명 · 목적은 /stats 로의 CTA 겸 티저. 회고 4-6 — 호출 실패(error)면
+  // 빈 배열로 위장하지 않고 ErrorState 카드로 갈래를 드러낸다 (LeagueScorersSection:532 와 같은 패턴).
   const eplLeague = (leagueScorers ?? []).find(l => l.competitionSlug === 'premier-league')
-  const scorerRows = eplLeague?.entries
-    ? eplLeague.entries.slice(0, 3).map(e => ({
-        rank: e.rank,
-        label: `${e.playerName ?? '-'}${e.teamName ? ` · ${e.teamName}` : ''}`,
-        value: t('home.goalsCountUnit', { goals: e.value }),
-      }))
-    : []
+  const scorerRows = (eplLeague?.entries ?? []).slice(0, 3).map(e => ({
+    rank: e.rank,
+    label: `${e.playerName ?? '-'}${e.teamName ? ` · ${e.teamName}` : ''}`,
+    value: t('home.goalsCountUnit', { goals: e.value }),
+  }))
 
   return (
     <section style={{ display: 'grid', gap: 16 }}>
@@ -478,14 +476,20 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t }) {
           zoneFirst
           t={t}
         />
-        <ShortcutCard
-          title={t('home.statsLabel')}
-          sub={t('home.eplScorersLabel')}
-          head={t('home.eplScorersLabel')}
-          rows={scorerRows}
-          to="/stats?competition=premier-league"
-          t={t}
-        />
+        {eplLeague?.error ? (
+          <div className="pl-card" style={{ padding: 12 }}>
+            <ErrorState description={eplLeague.error} />
+          </div>
+        ) : (
+          <ShortcutCard
+            title={t('home.statsLabel')}
+            sub={t('home.eplScorersLabel')}
+            head={t('home.eplScorersLabel')}
+            rows={scorerRows}
+            to="/stats?competition=premier-league"
+            t={t}
+          />
+        )}
         <ShortcutCard
           title={t('home.teamsLabel')}
           sub={t('home.topTeamsLabel')}
