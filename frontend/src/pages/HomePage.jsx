@@ -331,10 +331,7 @@ function CompetitionSection({ competitions, t, locale }) {
     <section style={{ display: 'grid', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <h2 className="t-sec" style={{ margin: 0, fontSize: 22 }}>{t('home.competitionSection')}</h2>
-        <span className="t-sub">{t('home.competitionSectionDesc')}</span>
-        <Link to="/competitions" className="pl-link" style={{ marginLeft: 'auto' }}>
-          {t('home.viewAllComps')}
-        </Link>
+        <span className="t-sub" style={{ marginLeft: 'auto' }}>{t('home.competitionSectionDesc')}</span>
       </div>
       <div
         style={{

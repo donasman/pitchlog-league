@@ -6,7 +6,13 @@
     "teams": "Teams",
     "players": "Players",
     "standings": "Standings",
-    "stats": "Stats"
+    "stats": "Stats",
+    "competitionGroup": {
+      "league": "Leagues",
+      "european": "European",
+      "domesticCup": "Domestic cup",
+      "superCup": "Super cup"
+    }
   },
   "header": {
     "competitionSelect": "Competition",
@@ -273,7 +279,11 @@
     "allCompetitions": "All competitions",
     "allCompetitionsChip": "All ({{count}})",
     "allMatches": "All fixtures",
-    "errorTitle": "Could not load competition"
+    "errorTitle": "Could not load competition",
+    "noDataYet": "Data collection has not started for this competition yet.",
+    "sidebarLabel": "Competitions",
+    "chipsLabel": "Choose competition",
+    "moreCompetitions": "More"
   },
   "knockout": {
     "pageTitle": "UEFA Champions League — Knockout",
