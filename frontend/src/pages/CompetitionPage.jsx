@@ -10,7 +10,8 @@
  *   - `groups_knockout`   → UCL·UEL·UECL (스탠딩 있음 · 팀 섹션 있음 · 3탭 + 녹아웃 링크)
  *   - `cup`               → 국내 컵 6 + 슈퍼컵 5 (스탠딩 없음 · 팀 섹션 없음 · 2탭 · 라운드별 그룹)
  *
- * `dataState==='NONE'` 이거나 컵인데 경기가 0건이면 "아직 수집이 시작되지 않았다" 배너를 헤더 아래에.
+ * "아직 수집이 시작되지 않았다" 배너: 컵은 실제 경기 0건이면 (dataState 무시 — 컵은 전 시즌 NONE 이 정상) ·
+ * 리그·UCL·UEL·UECL 은 `dataState==='NONE'` 이면. 순수 함수 `shouldShowNoDataBanner` (T-B1~T-B3 잠금).
  */
 
 import { useParams, useNavigate, Link } from 'react-router-dom'
@@ -48,6 +49,23 @@ function competitionGroup(comp) {
 }
 
 const GROUP_ORDER = ['league', 'european', 'domesticCup', 'superCup']
+
+/**
+ * "아직 수집이 시작되지 않았다" 배너 노출 여부.
+ *
+ * 컵(`isCup`)은 백엔드 `dataState` 가 전 시즌 NONE 인 것이 정상값이라 dataState 를 무시하고
+ * 실제 경기 수만 본다 — 매치 창을 걷었어도 실제 0건이면 시즌이 아직 안 시작.
+ * 리그·UCL·UEL·UECL 은 기존대로 `dataState==='NONE'` 이 판정 근거.
+ *
+ * 순수 함수라 CompetitionPage.test.js 에서 잠근다 (T-B1~T-B3).
+ *
+ * @param {{ isCup: boolean, matchesLength: number, dataState: string|null|undefined }} args
+ * @returns {boolean}
+ */
+export function shouldShowNoDataBanner({ isCup, matchesLength, dataState }) {
+  if (isCup) return matchesLength === 0
+  return dataState === 'NONE'
+}
 
 /** 데스크톱 사이드바 (>=1024px). CompetitionPage 안에서만 쓴다. */
 function CompetitionSidebar({ competitions, activeSlug, locale, t }) {
@@ -227,8 +245,15 @@ export default function CompetitionPage() {
 
   const { comp, matches, standings, teams, topScorers, topAssisters } = data
   const isUCL = comp.format === 'groups_knockout'
-  const dataStateNone = comp.currentSeason?.dataState === 'NONE'
-  const showNoDataBanner = dataStateNone || (isCup && matches.length === 0)
+  const showNoDataBanner = shouldShowNoDataBanner({
+    isCup,
+    matchesLength: matches.length,
+    dataState: comp.currentSeason?.dataState,
+  })
+
+  // 컵은 selectableSeasons 필터(COMPLETE 만)를 우회한다 — 컵 시즌은 전부 NONE 이 정상.
+  // 리그·UCL·UEL·UECL 은 기존 seasonsMemo(COMPLETE 만) 그대로.
+  const seasonsForDropdown = isCup ? (comp.seasons ?? []) : seasonsMemo
 
   const competitionsList = competitionsAll ?? []
 
@@ -286,8 +311,8 @@ export default function CompetitionPage() {
               </span>
             </div>
 
-            {/* 시즌 드롭다운 — 선택 가능 시즌만. 현재 시즌은 값 '' (URL 에서 param 제거) */}
-            {seasonsMemo.length > 0 && (
+            {/* 시즌 드롭다운 — 컵은 comp.seasons 전부 · 그 외는 selectableSeasons(COMPLETE). 현재 시즌은 값 '' (URL 에서 param 제거) */}
+            {seasonsForDropdown.length > 0 && (
               <select
                 aria-label={t('header.seasonSelect')}
                 value={seasonYear !== undefined ? String(seasonYear) : ''}
@@ -295,7 +320,7 @@ export default function CompetitionPage() {
                 className="pl-chip"
                 style={{ flexShrink: 0, fontFamily: 'var(--font)' }}
               >
-                {seasonsMemo.map(s => (
+                {seasonsForDropdown.map(s => (
                   <option key={s.year} value={s.current ? '' : String(s.year)}>
                     {s.label}
                     {s.current ? ` ${t('header.currentSeason')}` : ''}
