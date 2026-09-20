@@ -178,12 +178,6 @@ export async function fetchCompetitions() {
   return loadCompetitions()
 }
 
-export async function fetchCompetitionsOverview() {
-  // 라운드·스테이지 표기는 L2(일정 적재) 이후에 생긴다. 그전에는 stage 가 없다
-  const comps = await loadCompetitions()
-  return comps.map(c => ({ ...c, stage: null }))
-}
-
 /** @param {string} slugOrRef  화면 라우팅은 기존 slug 를 쓴다 — 목록에서 ref 를 찾는다 */
 export async function fetchCompetition(slugOrRef) {
   const ref = await toCompetitionRef(slugOrRef)
@@ -413,6 +407,9 @@ export async function fetchCompetitionHub(slugOrRef, season) {
   const comp = await fetchCompetition(slugOrRef)
   // 대회 상세가 시즌 목록을 같이 주므로 isCurrent 로 직접 가린다 — 과거 시즌엔 공통 창이 0건을 만든다
   const range = isPastSeason(season, comp.seasons) ? {} : matchWindow()
+  // 컵 대회는 참가팀 사이드 섹션 자체를 안 그린다 (D3) — 백엔드 콜을 아낀다.
+  // UEL·UECL 는 `groups_knockout` 이라 이 분기 밖 · UCL 처럼 팀 섹션 유지.
+  const isCup = comp.format === 'cup'
   const [
     { items: matches },
     table,
@@ -423,7 +420,8 @@ export async function fetchCompetitionHub(slugOrRef, season) {
     // 과거 시즌엔 창이 걷혀 대회 시즌 전체(≈380경기)가 온다. 안전판으로 limit 명시
     loadMatches({ competition: comp.ref, season, limit: 500, ...range }),
     loadStandingsTable(comp.ref, slugOrRef, season),
-    _cachedGet('/api/teams', { competition: comp.ref, season }),
+    isCup ? Promise.resolve({ items: [] })
+          : _cachedGet('/api/teams', { competition: comp.ref, season }),
     _cachedGet('/api/stats/scorers',   { competition: comp.ref, season, limit: 10 })
       .catch(err => {
         console.error('[fetchCompetitionHub] /api/stats/scorers failed', comp.ref, err)

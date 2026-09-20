@@ -6,7 +6,13 @@
     "teams": "팀",
     "players": "선수",
     "standings": "순위",
-    "stats": "통계"
+    "stats": "통계",
+    "competitionGroup": {
+      "league": "리그",
+      "european": "유럽 대항전",
+      "domesticCup": "국내 컵",
+      "superCup": "슈퍼컵"
+    }
   },
   "header": {
     "competitionSelect": "대회 선택",
@@ -273,7 +279,11 @@
     "allCompetitions": "전체 대회",
     "allCompetitionsChip": "전체 대회 {{count}}",
     "allMatches": "전체 일정",
-    "errorTitle": "대회 정보를 불러오지 못했습니다"
+    "errorTitle": "대회 정보를 불러오지 못했습니다",
+    "noDataYet": "이 대회는 아직 수집이 시작되지 않았습니다.",
+    "sidebarLabel": "대회 목록",
+    "chipsLabel": "대회 선택",
+    "moreCompetitions": "더 보기"
   },
   "knockout": {
     "pageTitle": "UEFA Champions League — 녹아웃 대진",

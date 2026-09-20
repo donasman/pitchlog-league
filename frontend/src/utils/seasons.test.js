@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { selectableSeasons, seasonYearFromParam, isPastSeason } from './seasons.js'
+import { selectableSeasons, seasonYearFromParam, isPastSeason, nextSeasonParamAction } from './seasons.js'
 
 // backend `SeasonSummaryDto` as reshaped by normalizeSeason (services/normalize.js:167-177)
 function season(year, { dataState = 'COMPLETE', current = false } = {}) {
@@ -104,5 +104,32 @@ describe('isPastSeason', () => {
     ['a non-numeric year', 'latest', COMPLETE_5],
   ])('is false for %s', (_label, year, seasons) => {
     expect(isPastSeason(year, seasons)).toBe(false)
+  })
+})
+
+describe('nextSeasonParamAction', () => {
+  it("T-A: normalizes label '2025-26' to '2025' when it's a past season", () => {
+    expect(nextSeasonParamAction('2025-26', COMPLETE_5)).toEqual({ action: 'set', value: '2025' })
+  })
+
+  it("T-B: no-op when URL already equals numeric year for a past season", () => {
+    expect(nextSeasonParamAction('2025', COMPLETE_5)).toBeNull()
+  })
+
+  it("T-C: deletes URL param when resolved year is the current season", () => {
+    expect(nextSeasonParamAction('2026', COMPLETE_5)).toEqual({ action: 'delete' })
+    expect(nextSeasonParamAction('2026-27', COMPLETE_5)).toEqual({ action: 'delete' })
+  })
+
+  it("T-D: deletes URL param when the value does not resolve (unknown label)", () => {
+    expect(nextSeasonParamAction('2019-20', COMPLETE_5)).toEqual({ action: 'delete' })
+    expect(nextSeasonParamAction('latest', COMPLETE_5)).toEqual({ action: 'delete' })
+  })
+
+  it("T-E: no-op when seasons list is empty (cannot judge)", () => {
+    expect(nextSeasonParamAction('2025', [])).toBeNull()
+    expect(nextSeasonParamAction('2025-26', [])).toBeNull()
+    // null URL 도 아무 것도 안 한다
+    expect(nextSeasonParamAction(null, COMPLETE_5)).toBeNull()
   })
 })
