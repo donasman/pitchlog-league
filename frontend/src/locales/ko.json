@@ -270,7 +270,11 @@
       "standings": "순위",
       "stats": "통계"
     },
-    "mainMatches": "주요 경기",
+    "schedule": {
+      "live": "진행 중",
+      "upcoming": "예정",
+      "results": "결과"
+    },
     "teams": "참가 팀",
     "topScorers": "득점 순위",
     "topAssisters": "도움 순위",
@@ -278,7 +282,6 @@
     "noStandings": "순위 데이터가 없습니다.",
     "allCompetitions": "전체 대회",
     "allCompetitionsChip": "전체 대회 {{count}}",
-    "allMatches": "전체 일정",
     "errorTitle": "대회 정보를 불러오지 못했습니다",
     "noDataYet": "이 대회는 아직 수집이 시작되지 않았습니다.",
     "sidebarLabel": "대회 목록",

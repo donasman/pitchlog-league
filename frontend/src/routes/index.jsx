@@ -36,7 +36,7 @@ export const routes = [
       { index: true,                                         element: <HomePage /> },
 
       // 대회
-      { path: 'competitions',                                element: <Navigate to="/competitions/premier-league" replace /> },
+      { path: 'competitions',                                element: <Navigate to="/competitions/champions-league" replace /> },
       { path: 'competitions/champions-league/knockout',      element: <UCLKnockoutPage /> },
       { path: 'competitions/:slug',                          element: <CompetitionPage /> },
 

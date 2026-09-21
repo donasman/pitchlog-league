@@ -17,7 +17,6 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import MatchCard from '@/components/ui/MatchCard'
 import StandingsTable from '@/components/ui/StandingsTable'
 import StatsRanking from '@/components/ui/StatsRanking'
 import TeamBadge from '@/components/ui/TeamBadge'
@@ -25,11 +24,14 @@ import EmptyState from '@/components/ui/EmptyState'
 import NotImplementedState from '@/components/ui/NotImplementedState'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
+import ScheduleSections from '@/components/competition/ScheduleSections'
 import { useData } from '@/hooks/useData'
 import { useSeasonParam } from '@/hooks/useSeasonParam'
 import { fetchCompetitionHub, fetchCompetitionsForStats, fetchSeasons } from '@/services/api'
 import { getLocalizedCompetitionName } from '@/utils/localization'
 import { selectableSeasons } from '@/utils/seasons'
+// groupCupMatchesByRound 는 utils/schedule 로 이관 — ScheduleSections 도 소비. 기존 T-C 잠금 유지 목적으로 여기서 re-export.
+export { groupCupMatchesByRound } from '@/utils/schedule'
 
 /**
  * 사이드바 / chip 그룹 판정. 백엔드 `displayOrder` + `format` 기준.
@@ -48,7 +50,9 @@ function competitionGroup(comp) {
   return 'superCup'
 }
 
-const GROUP_ORDER = ['league', 'european', 'domesticCup', 'superCup']
+// 사이드바 그룹 순서 — 사용자 결정 (2026-09-21 · feat/schedule-split):
+// 유럽 대항전을 위로 · 리그를 아래로. 그룹 안 대회는 displayOrder 그대로.
+const GROUP_ORDER = ['european', 'domesticCup', 'superCup', 'league']
 
 /**
  * "아직 수집이 시작되지 않았다" 배너 노출 여부.
@@ -65,40 +69,6 @@ const GROUP_ORDER = ['league', 'european', 'domesticCup', 'superCup']
 export function shouldShowNoDataBanner({ isCup, matchesLength, dataState }) {
   if (isCup) return matchesLength === 0
   return dataState === 'NONE'
-}
-
-/**
- * 컵 일정을 라운드별로 묶는다. 그룹 순서는 `roundOrdinal` 오름차순 (백엔드 `/fixtures/rounds` 순서 ·
- * `normalize.js:407` 통과). 그룹 안 경기는 `date` 오름차순.
- *
- * `normalize.js:386` 가 `round` 를 **문자열** (`'Round of 64'` · null) 로 넘긴다 —
- * `m.round?.name` 은 항상 undefined → 키가 `''` 하나로 뭉쳐 flat 이 되던 09-21 실측 결함이 여기서 잡힌다.
- *
- * @param {Array<{ round: string|null, roundOrdinal: number|null, date: string|null }>} matches
- * @returns {Array<[string, Array<object>]>}
- */
-export function groupCupMatchesByRound(matches) {
-  const map = new Map()
-  for (const m of matches ?? []) {
-    const key = m.round ?? ''
-    if (!map.has(key)) map.set(key, [])
-    map.get(key).push(m)
-  }
-  for (const list of map.values()) {
-    list.sort((a, b) => new Date(a?.date ?? 0).getTime() - new Date(b?.date ?? 0).getTime())
-  }
-  const firstOrdinal = (list) => {
-    for (const m of list) if (m?.roundOrdinal != null) return m.roundOrdinal
-    return null
-  }
-  return Array.from(map.entries()).sort(([, a], [, b]) => {
-    const ao = firstOrdinal(a)
-    const bo = firstOrdinal(b)
-    if (ao == null && bo == null) return 0   // 첫 등장 순 (Map 삽입 순) 유지
-    if (ao == null) return 1
-    if (bo == null) return -1
-    return ao - bo
-  })
 }
 
 /**
@@ -280,13 +250,8 @@ export default function CompetitionPage() {
         { id: 'stats',     labelKey: 'competition.tabs.stats' },
       ], [isCup])
 
-  // 컵일 때 schedule 탭은 라운드별 그룹. Hook 규칙상 early return 이전에 호출한다 —
-  // data 가 아직 없어도 빈 배열로 계산되고, 렌더 시점엔 이 값이 필요 없어 낭비도 없다.
-  // 순수함수 `groupCupMatchesByRound` 로 잠금 (T-C1·T-C2·T-C3).
-  const cupRoundGroups = useMemo(() => {
-    if (!isCup) return null
-    return groupCupMatchesByRound(data?.matches ?? [])
-  }, [isCup, data])
+  // 일정 탭은 splitSchedule + ScheduleSections 컴포넌트가 담당 — 페이지에 인라인 없음.
+  // 컵 라운드 그룹은 그 안에서 자동 (groupByRound=true 전달).
 
   if (loading) return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 16px' }}>
@@ -434,55 +399,25 @@ export default function CompetitionPage() {
             ))}
           </div>
 
-          {/* 일정 탭 */}
+          {/* 일정 탭 — ScheduleSections 가 splitSchedule 로 진행중·예정·결과 분할. 컵은 라운드 그룹 안. */}
           {activeTab === 'schedule' && (
             isCup ? (
-              // 컵: 팀 사이드 없이 1열. 라운드별 그룹 (그룹 1개면 헤더 생략)
-              <div style={{ display: 'grid', gap: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <h2 className="t-card" style={{ margin: 0 }}>{t('competition.mainMatches')}</h2>
-                  <Link to={`/matches?competition=${slug}`} className="pl-link" style={{ marginLeft: 'auto', fontSize: 12 }}>
-                    {t('competition.allMatches')}
-                  </Link>
-                </div>
-                {matches.length === 0 ? (
-                  <EmptyState description={t('competition.noMatches')} />
-                ) : cupRoundGroups.length <= 1 ? (
-                  // 라운드 1개면 헤더 생략 (예: 슈퍼컵 결승)
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
-                    {matches.map(m => <MatchCard key={m.id} match={m} />)}
-                  </div>
-                ) : (
-                  cupRoundGroups.map(([roundName, list]) => (
-                    <div key={roundName} style={{ display: 'grid', gap: 8 }}>
-                      {roundName && <h3 className="t-card" style={{ margin: '4px 0 0' }}>{roundName}</h3>}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
-                        {list.map(m => <MatchCard key={m.id} match={m} />)}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              // 컵: 팀 사이드 없이 1열
+              matches.length === 0 ? (
+                <EmptyState description={t('competition.noMatches')} />
+              ) : (
+                <ScheduleSections matches={matches} groupByRound />
+              )
             ) : (
               // 리그·UCL: 기존 2열 (경기 + 참가 팀 사이드)
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }} className="comp-sched-grid">
                 <style>{`@media(min-width:768px){.comp-sched-grid{grid-template-columns:1fr 280px!important}}`}</style>
 
-                <div style={{ display: 'grid', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <h2 className="t-card" style={{ margin: 0 }}>{t('competition.mainMatches')}</h2>
-                    <Link to={`/matches?competition=${slug}`} className="pl-link" style={{ marginLeft: 'auto', fontSize: 12 }}>
-                      {t('competition.allMatches')}
-                    </Link>
-                  </div>
-                  {matches.length > 0 ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
-                      {matches.map(m => <MatchCard key={m.id} match={m} />)}
-                    </div>
-                  ) : (
-                    <EmptyState description={t('competition.noMatches')} />
-                  )}
-                </div>
+                {matches.length > 0 ? (
+                  <ScheduleSections matches={matches} />
+                ) : (
+                  <EmptyState description={t('competition.noMatches')} />
+                )}
 
                 <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
                   <h2 className="t-card" style={{ margin: 0 }}>{t('competition.teams')}</h2>
