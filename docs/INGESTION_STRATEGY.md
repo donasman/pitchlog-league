@@ -87,6 +87,8 @@ League Cup `Preliminary Round`는 4팀, Coppa Italia `Preliminary Round`는 8팀
 | **합계** | **1,411** | **541** | **222** | |
 
 FA컵이 872 → 63으로 떨어진다. 참가 팀도 700개 이상에서 64개가 된다.
+
+**위 수치는 2025 시즌 기준.** 2026 시즌은 FA Cup·Copa del Rey·Supercoppa 가 아직 시작하지 않아 경기 0건 (DB 실측 2026-09-20 · 컵 페이지 배너 대상 · `pages/CompetitionPage.jsx:shouldShowNoDataBanner`).
 **한국어 팀명 매칭 부담이 여기서 결정된다.**
 
 잃는 것은 예선 경로다. "6부 팀이 4라운드를 거쳐 올라왔다"를 보여주지 못한다.

@@ -67,6 +67,71 @@ export function shouldShowNoDataBanner({ isCup, matchesLength, dataState }) {
   return dataState === 'NONE'
 }
 
+/**
+ * 컵 일정을 라운드별로 묶는다. 그룹 순서는 `roundOrdinal` 오름차순 (백엔드 `/fixtures/rounds` 순서 ·
+ * `normalize.js:407` 통과). 그룹 안 경기는 `date` 오름차순.
+ *
+ * `normalize.js:386` 가 `round` 를 **문자열** (`'Round of 64'` · null) 로 넘긴다 —
+ * `m.round?.name` 은 항상 undefined → 키가 `''` 하나로 뭉쳐 flat 이 되던 09-21 실측 결함이 여기서 잡힌다.
+ *
+ * @param {Array<{ round: string|null, roundOrdinal: number|null, date: string|null }>} matches
+ * @returns {Array<[string, Array<object>]>}
+ */
+export function groupCupMatchesByRound(matches) {
+  const map = new Map()
+  for (const m of matches ?? []) {
+    const key = m.round ?? ''
+    if (!map.has(key)) map.set(key, [])
+    map.get(key).push(m)
+  }
+  for (const list of map.values()) {
+    list.sort((a, b) => new Date(a?.date ?? 0).getTime() - new Date(b?.date ?? 0).getTime())
+  }
+  const firstOrdinal = (list) => {
+    for (const m of list) if (m?.roundOrdinal != null) return m.roundOrdinal
+    return null
+  }
+  return Array.from(map.entries()).sort(([, a], [, b]) => {
+    const ao = firstOrdinal(a)
+    const bo = firstOrdinal(b)
+    if (ao == null && bo == null) return 0   // 첫 등장 순 (Map 삽입 순) 유지
+    if (ao == null) return 1
+    if (bo == null) return -1
+    return ao - bo
+  })
+}
+
+/**
+ * 대회 페이지 부제에 쓸 시즌 라벨.
+ *
+ * 선택 시즌이 있으면 그 시즌 라벨을 우선 — 컵은 standings 가 없어 예전 로직은 항상 currentSeason 을
+ * 그려 `?season=2025` 로 진입해도 부제가 `2026-27` 이 되던 09-21 실측 결함을 이 함수가 잡는다.
+ * 리그도 같은 식이면 `standings.seasonId` 와 값이 같아 무해.
+ *
+ * @param {{ seasons: Array<{year:number,label:string}>|null|undefined, seasonYear:number|undefined, standings:{seasonId?:string}|null, comp:{currentSeason?:string}|null }} args
+ * @returns {string|undefined}
+ */
+export function seasonLabelFor({ seasons, seasonYear, standings, comp }) {
+  if (seasonYear != null) {
+    const hit = (seasons ?? []).find(s => s?.year === seasonYear)
+    if (hit?.label) return hit.label
+  }
+  return standings?.seasonId ?? comp?.currentSeason
+}
+
+/**
+ * 시즌 드롭다운 옵션. `selectableSeasons` 는 `dataState==='COMPLETE'` 만 필터 (`utils/seasons.js:24`) —
+ * UEL·UECL 은 전 시즌 NONE 이라 필터 결과가 비어 드롭다운이 사라지던 09-21 실측 결함을 이 함수가 잡는다.
+ * 컵도 같은 이유로 이 폴백에 의존.
+ *
+ * @param {Array<object>} seasonsMemo  `selectableSeasons(fetchSeasons)` 결과 (COMPLETE 만)
+ * @param {Array<object>} compSeasons  `data.comp.seasons` 원본 (필터 없음)
+ * @returns {Array<object>}
+ */
+export function pickSeasonsForDropdown(seasonsMemo, compSeasons) {
+  return (seasonsMemo?.length ?? 0) > 0 ? seasonsMemo : (compSeasons ?? [])
+}
+
 /** 데스크톱 사이드바 (>=1024px). CompetitionPage 안에서만 쓴다. */
 function CompetitionSidebar({ competitions, activeSlug, locale, t }) {
   const grouped = useMemo(() => {
@@ -217,16 +282,10 @@ export default function CompetitionPage() {
 
   // 컵일 때 schedule 탭은 라운드별 그룹. Hook 규칙상 early return 이전에 호출한다 —
   // data 가 아직 없어도 빈 배열로 계산되고, 렌더 시점엔 이 값이 필요 없어 낭비도 없다.
+  // 순수함수 `groupCupMatchesByRound` 로 잠금 (T-C1·T-C2·T-C3).
   const cupRoundGroups = useMemo(() => {
     if (!isCup) return null
-    const matches = data?.matches ?? []
-    const map = new Map()
-    for (const m of matches) {
-      const key = m.round?.name ?? ''
-      if (!map.has(key)) map.set(key, [])
-      map.get(key).push(m)
-    }
-    return Array.from(map.entries())
+    return groupCupMatchesByRound(data?.matches ?? [])
   }, [isCup, data])
 
   if (loading) return (
@@ -251,9 +310,9 @@ export default function CompetitionPage() {
     dataState: comp.currentSeason?.dataState,
   })
 
-  // 컵은 selectableSeasons 필터(COMPLETE 만)를 우회한다 — 컵 시즌은 전부 NONE 이 정상.
-  // 리그·UCL·UEL·UECL 은 기존 seasonsMemo(COMPLETE 만) 그대로.
-  const seasonsForDropdown = isCup ? (comp.seasons ?? []) : seasonsMemo
+  // 시즌 드롭다운은 selectableSeasons(COMPLETE) 결과가 있으면 그대로 · 비면 comp.seasons 폴백.
+  // UEL·UECL(groups_knockout)·컵은 전 시즌 NONE 이라 폴백을 탐. 리그·UCL 은 폴백 안 탐. T-E1 잠금.
+  const seasonsForDropdown = pickSeasonsForDropdown(seasonsMemo, comp.seasons)
 
   const competitionsList = competitionsAll ?? []
 
@@ -299,7 +358,7 @@ export default function CompetitionPage() {
             <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
               <h1 className="t-page" style={{ margin: 0, fontSize: 24 }}>{getLocalizedCompetitionName(comp, locale)}</h1>
               <span className="t-sub">
-                {standings?.seasonId ?? comp.currentSeason} · {comp.country}
+                {seasonLabelFor({ seasons: comp.seasons, seasonYear, standings, comp })} · {comp.country}
                 {standings?.stage && (
                   <span style={{ marginLeft: 8 }}>
                     · {standings.stage.label}
