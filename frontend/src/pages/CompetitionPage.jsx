@@ -430,7 +430,7 @@ export default function CompetitionPage() {
             ) : (
               // 리그·UCL: 기존 2열 (경기 + 참가 팀 사이드)
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }} className="comp-sched-grid">
-                <style>{`@media(min-width:768px){.comp-sched-grid{grid-template-columns:1fr 280px!important}}`}</style>
+                <style>{`@media(min-width:768px){.comp-sched-grid{grid-template-columns:minmax(0,1fr) 280px!important}}`}</style>
 
                 {matches.length > 0 ? (
                   <div>
