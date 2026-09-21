@@ -13,6 +13,7 @@ import MatchStatusBadge from './MatchStatusBadge'
 import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
 import { isLive } from '@/utils/matchStatus'
 import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
+import { isMatchWinner } from '@/utils/matchWinner'
 
 function TeamRow({ team, score, win, live, compact, locale }) {
   const name = compact
@@ -76,8 +77,8 @@ export default function MatchCard({ match, compact = false }) {
 
   const live     = isLive(match.displayState)
   const hasScore = match.score?.home !== null && match.score?.away !== null
-  const homeWin  = hasScore && match.score.home > match.score.away
-  const awayWin  = hasScore && match.score.away > match.score.home
+  const homeWin  = isMatchWinner(match, 'home')
+  const awayWin  = isMatchWinner(match, 'away')
 
   const pad = compact ? 10 : 14
 
@@ -141,6 +142,16 @@ export default function MatchCard({ match, compact = false }) {
           style={{ marginTop: compact ? 4 : 6, textAlign: 'right' }}
         >
           {toKSTTime(match.date, locale)} · {toKSTDate(match.date, locale)}
+        </div>
+      )}
+
+      {/* 승부차기 캡션 — 종료된 경기의 PK 결과 (`normalizeMatch` 가 penHome/penAway 통과) */}
+      {hasScore && match.penHome != null && match.penAway != null && (
+        <div
+          className="t-cap num"
+          style={{ marginTop: compact ? 4 : 6, textAlign: 'right' }}
+        >
+          {t('competition.round.pkPrefix')} {match.penHome}-{match.penAway}
         </div>
       )}
 

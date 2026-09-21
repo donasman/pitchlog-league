@@ -404,6 +404,11 @@ export function normalizeMatch(dto) {
 
     // 백엔드 통과 키 — 상세 탭 결손 판정과 스테이지 계산에 쓴다
     winnerTeamRef:  dto.winnerTeamRef ?? null,
+    // 승부차기·연장 스코어 — 카드 승자 강조·과거 결과 재구성에 쓴다 (D+ · MatchCard B 판 소비)
+    penHome:  dto.pen?.home  ?? null,
+    penAway:  dto.pen?.away  ?? null,
+    etHome:   dto.et?.home   ?? null,
+    etAway:   dto.et?.away   ?? null,
     roundOrdinal:   dto.round?.ordinal ?? null,
     roundMatchCount: dto.round?.matchCount ?? null,
     detailEligible: dto.detailEligible ?? null,

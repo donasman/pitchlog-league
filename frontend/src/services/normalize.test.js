@@ -284,6 +284,32 @@ describe('normalizeMatch', () => {
   it('renders a null venue as null (not an empty string)', () => {
     expect(normalizeMatch(matchDto({ venue: null })).venue).toBeNull()
   })
+
+  // T-K1~T-K3 (feat/round-navigation D+): normalize 확장.
+  // 백엔드 DTO shape `{ pen: {home, away}, et: {home, away} }` 을 프론트가 flat 4필드로 통과시킨다.
+  // MatchCard PK 캡션·연장 종료 판정이 이 필드를 소비.
+  it('T-K1: maps DTO pen.home/away to flat penHome/penAway', () => {
+    const m = normalizeMatch(matchDto({ pen: { home: 5, away: 4 } }))
+    expect(m.penHome).toBe(5)
+    expect(m.penAway).toBe(4)
+  })
+
+  it('T-K2: DTO pen with null home/away → flat penHome/penAway both null (not 0)', () => {
+    const m = normalizeMatch(matchDto({ pen: { home: null, away: null } }))
+    expect(m.penHome).toBeNull()
+    expect(m.penAway).toBeNull()
+  })
+
+  it('T-K3: DTO et.home/away and missing pen key → penHome/penAway null · etHome/etAway populated', () => {
+    // pen 이 아예 오지 않는 경우도 크래시 없이 null. et 는 별개.
+    const dto = matchDto({ et: { home: 2, away: 1 } })
+    delete dto.pen
+    const m = normalizeMatch(dto)
+    expect(m.penHome).toBeNull()
+    expect(m.penAway).toBeNull()
+    expect(m.etHome).toBe(2)
+    expect(m.etAway).toBe(1)
+  })
 })
 
 // ─── normalizeStanding ─────────────────────────────────────────

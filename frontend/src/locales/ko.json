@@ -275,6 +275,13 @@
       "upcoming": "예정",
       "results": "결과"
     },
+    "round": {
+      "previous": "이전 라운드",
+      "next": "다음 라운드",
+      "progressLabel": "라운드 진행",
+      "pkPrefix": "PK",
+      "noRoundsYet": "아직 편성된 라운드가 없어요"
+    },
     "teams": "참가 팀",
     "topScorers": "득점 순위",
     "topAssisters": "도움 순위",
