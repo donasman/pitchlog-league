@@ -82,11 +82,15 @@ function isSettled(state) {
 }
 
 /**
- * 정렬용 key — roundOrdinal 있으면 String(ordinal), 없으면 round 이름 (컵 폴백).
+ * 정렬용 key — roundOrdinal 있으면 1 기반(`String(ordinal + 1)`), 없으면 round 이름 (컵 폴백).
  * `pickDefaultRound`·`filterByRound`·`useRoundParam` 이 소비하는 URL `?round=` 값 규칙과 일치.
+ *
+ * URL 은 1 기반 (사용자 정정 2026-09-21 · `fix/round-url-one-based`) — `?round=4` = "라운드 4" 로
+ * 사람이 읽는 값과 일치. 백엔드 `roundOrdinal` 은 0 기반 API 순서라 URL 표기와 어긋나서 정정.
+ * 컵은 이름 폴백 유지 (`Round of 16` 등).
  */
 function roundKeyOf(m) {
-  return m?.roundOrdinal != null ? String(m.roundOrdinal) : (m?.round ?? '')
+  return m?.roundOrdinal != null ? String(m.roundOrdinal + 1) : (m?.round ?? '')
 }
 
 /**
@@ -235,7 +239,7 @@ export function filterByRound(matches, roundKey) {
   const list = Array.isArray(matches) ? matches : []
   if (!roundKey) return list
   return list.filter(m => {
-    if (m?.roundOrdinal != null) return String(m.roundOrdinal) === roundKey
+    if (m?.roundOrdinal != null) return String(m.roundOrdinal + 1) === roundKey  // URL 1 기반
     return m?.round === roundKey
   })
 }
