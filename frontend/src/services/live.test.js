@@ -437,7 +437,7 @@ describe('live.js — fetchCompetitionHub cup window (fix/cup-page-window)', () 
     expect(url).toMatch(/[?&]limit=500/)
   })
 
-  it('T7b: league competition — /api/matches request keeps from/to (current season window)', async () => {
+  it('T7b: league competition — /api/matches request has no from/to (feat/round-navigation removes league window · season-wide load)', async () => {
     // 리그·UCL 은 기존 동작 유지 — 컵 정정이 리그에 영향 없음을 잠근다
     const fetchMock = vi.fn(async (url) => {
       const u = String(url)
@@ -475,7 +475,11 @@ describe('live.js — fetchCompetitionHub cup window (fix/cup-page-window)', () 
 
     const matchesCall = fetchMock.mock.calls.find(c => String(c[0]).includes('/api/matches'))
     const url = String(matchesCall[0])
-    expect(url).toMatch(/[?&]from=/)
-    expect(url).toMatch(/[?&]to=/)
+    // feat/round-navigation: 리그 창 제거 (season-wide load) — from/to 있으면 라운드 셀렉터가 창 밖 라운드 못 봄.
+    // 컵 (T7) 과 이제 같은 동작 — season · limit=500 만 실려서 시즌 전체를 받는다.
+    expect(url).not.toMatch(/[?&]from=/)
+    expect(url).not.toMatch(/[?&]to=/)
+    expect(url).toMatch(/[?&]competition=39-premier-league/)
+    expect(url).toMatch(/[?&]limit=500/)
   })
 })
