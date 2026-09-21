@@ -18,21 +18,24 @@ const LEAGUE_MATCHES = [
   { date: '2026-09-28T15:00Z', displayState: 'scheduled', round: 'Regular Season - 6', roundOrdinal: 6 },
 ]
 
-describe('roundParamAction (feat/round-navigation)', () => {
-  it('T-J1: empty urlKey → pickDefaultRound (live round 5) · shouldSync=false', () => {
+describe('roundParamAction (feat/round-navigation · URL 1-based since fix/round-url-one-based)', () => {
+  it('T-J1: empty urlKey → pickDefaultRound (live round · roundOrdinal 5 → URL "6")', () => {
+    // 사용자 실측 값 (2026-09-21): EPL live RS-5 → 사람이 URL 로 볼 때 `?round=6` 이 자연스러움 (사람 1 기반).
     const r = roundParamAction('', LEAGUE_MATCHES, NOW)
-    expect(r).toEqual({ roundKey: '5', shouldSync: false })
+    expect(r).toEqual({ roundKey: '6', shouldSync: false })
   })
 
-  it('T-J2: valid urlKey exists in matches → pass-through · shouldSync=false', () => {
-    const r = roundParamAction('4', LEAGUE_MATCHES, NOW)
-    expect(r).toEqual({ roundKey: '4', shouldSync: false })
+  it('T-J2: valid urlKey exists in matches → pass-through · URL "4" = roundOrdinal 3 = RS-3', () => {
+    // `?round=4` 는 사람이 읽는 "라운드 4" · 실제 roundOrdinal 은 3 (0 기반 API 순서).
+    // LEAGUE_MATCHES 에 roundOrdinal 3 이 없어 pickDefaultRound 폴백 · 유효한 값 '5' (roundOrdinal 4 = RS-4) 로 검증.
+    const r = roundParamAction('5', LEAGUE_MATCHES, NOW)
+    expect(r).toEqual({ roundKey: '5', shouldSync: false })
   })
 
   it('T-J3: urlKey not in this season → falls back to pickDefaultRound (no auto-sync — parent clears explicitly)', () => {
     // 다른 시즌에서 온 URL — 이번 시즌 라운드에 없음. shouldSync=false 는 유지 (parent 가 명시적 정리)
     const r = roundParamAction('99', LEAGUE_MATCHES, NOW)
-    expect(r).toEqual({ roundKey: '5', shouldSync: false })
+    expect(r).toEqual({ roundKey: '6', shouldSync: false })
   })
 
   it('T-J4: season changed · new season matches empty (before first fetch) → { roundKey:"", shouldSync:false }', () => {

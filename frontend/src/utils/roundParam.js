@@ -23,11 +23,11 @@ export function roundParamAction(urlKey, matches, nowDate) {
   const list = Array.isArray(matches) ? matches : []
   if (list.length === 0) return { roundKey: '', shouldSync: false }
 
-  // urlKey 유효성 — 그 key 를 가진 경기가 목록에 있는가
+  // urlKey 유효성 — 그 key 를 가진 경기가 목록에 있는가. URL 은 1 기반.
   const key = String(urlKey ?? '')
   if (key) {
     const hit = list.some(m => {
-      if (m?.roundOrdinal != null) return String(m.roundOrdinal) === key
+      if (m?.roundOrdinal != null) return String(m.roundOrdinal + 1) === key  // URL 1 기반
       return m?.round === key
     })
     if (hit) return { roundKey: key, shouldSync: false }
