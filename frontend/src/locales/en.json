@@ -270,7 +270,11 @@
       "standings": "Standings",
       "stats": "Stats"
     },
-    "mainMatches": "Key Matches",
+    "schedule": {
+      "live": "Live",
+      "upcoming": "Upcoming",
+      "results": "Results"
+    },
     "teams": "Clubs",
     "topScorers": "Top Scorers",
     "topAssisters": "Top Assists",
@@ -278,7 +282,6 @@
     "noStandings": "No standings data.",
     "allCompetitions": "All competitions",
     "allCompetitionsChip": "All ({{count}})",
-    "allMatches": "All fixtures",
     "errorTitle": "Could not load competition",
     "noDataYet": "Data collection has not started for this competition yet.",
     "sidebarLabel": "Competitions",
