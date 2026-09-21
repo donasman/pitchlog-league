@@ -25,11 +25,14 @@ import NotImplementedState from '@/components/ui/NotImplementedState'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import ScheduleSections from '@/components/competition/ScheduleSections'
+import RoundNavigator from '@/components/competition/RoundNavigator'
 import { useData } from '@/hooks/useData'
 import { useSeasonParam } from '@/hooks/useSeasonParam'
+import { useRoundParam } from '@/hooks/useRoundParam'
 import { fetchCompetitionHub, fetchCompetitionsForStats, fetchSeasons } from '@/services/api'
 import { getLocalizedCompetitionName } from '@/utils/localization'
 import { selectableSeasons } from '@/utils/seasons'
+import { roundList, filterByRound } from '@/utils/schedule'
 // groupCupMatchesByRound 는 utils/schedule 로 이관 — ScheduleSections 도 소비. 기존 T-C 잠금 유지 목적으로 여기서 re-export.
 export { groupCupMatchesByRound } from '@/utils/schedule'
 
@@ -231,6 +234,18 @@ export default function CompetitionPage() {
   // deps 에 seasonYear 가 있어야 시즌을 바꿨을 때 다시 받는다
   const { data, loading, error } = useData(() => fetchCompetitionHub(slug, seasonYear), [slug, seasonYear])
 
+  // 라운드 네비게이션 — matches 가 아직 없으면 빈 배열로 훅 호출 (조기 return 앞이라 순서 고정).
+  // `data?.matches ?? []` 을 useMemo 로 감싸 매 렌더마다 새 빈 배열이 생기는 것을 막는다 (하위 useMemo deps 안정화).
+  const matchesForRounds = useMemo(() => data?.matches ?? [], [data])
+  const rounds = useMemo(() => roundList(matchesForRounds), [matchesForRounds])
+  const { roundKey, setRoundKey } = useRoundParam(matchesForRounds)
+
+  // 시즌 select 를 감싼다 — 시즌을 바꾸면 이전 시즌 URL 의 ?round= 를 버려 새 시즌 기본값이 잡히도록.
+  const handleSeasonChange = (year) => {
+    setSeasonYear(year)
+    setRoundKey(null)
+  }
+
   // 컵일 때는 standings 탭이 아예 없다. 초기 URL 로 진입하거나, 다른 대회에서
   // standings 활성 상태로 이 페이지에 들어오면 schedule 로 되돌린다.
   const isCup = data?.comp?.format === 'cup'
@@ -340,7 +355,7 @@ export default function CompetitionPage() {
               <select
                 aria-label={t('header.seasonSelect')}
                 value={seasonYear !== undefined ? String(seasonYear) : ''}
-                onChange={(e) => setSeasonYear(e.target.value === '' ? null : Number(e.target.value))}
+                onChange={(e) => handleSeasonChange(e.target.value === '' ? null : Number(e.target.value))}
                 className="pl-chip"
                 style={{ flexShrink: 0, fontFamily: 'var(--font)' }}
               >
@@ -399,14 +414,18 @@ export default function CompetitionPage() {
             ))}
           </div>
 
-          {/* 일정 탭 — ScheduleSections 가 splitSchedule 로 진행중·예정·결과 분할. 컵은 라운드 그룹 안. */}
+          {/* 일정 탭 — RoundNavigator + ScheduleSections. B 판에서 컵도 라운드 축을 셀렉터로 잡아
+              ScheduleSections 안 라운드 그룹핑을 끔 (`groupByRound={false}`). */}
           {activeTab === 'schedule' && (
             isCup ? (
               // 컵: 팀 사이드 없이 1열
               matches.length === 0 ? (
                 <EmptyState description={t('competition.noMatches')} />
               ) : (
-                <ScheduleSections matches={matches} groupByRound />
+                <>
+                  <RoundNavigator rounds={rounds} roundKey={roundKey} onChange={setRoundKey} />
+                  <ScheduleSections matches={filterByRound(matches, roundKey)} groupByRound={false} />
+                </>
               )
             ) : (
               // 리그·UCL: 기존 2열 (경기 + 참가 팀 사이드)
@@ -414,7 +433,10 @@ export default function CompetitionPage() {
                 <style>{`@media(min-width:768px){.comp-sched-grid{grid-template-columns:1fr 280px!important}}`}</style>
 
                 {matches.length > 0 ? (
-                  <ScheduleSections matches={matches} />
+                  <div>
+                    <RoundNavigator rounds={rounds} roundKey={roundKey} onChange={setRoundKey} />
+                    <ScheduleSections matches={filterByRound(matches, roundKey)} />
+                  </div>
                 ) : (
                   <EmptyState description={t('competition.noMatches')} />
                 )}

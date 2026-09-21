@@ -32,7 +32,6 @@ import {
   normalizeTeamDetail,
 } from './normalize'
 import { now, todayKstKey } from './clock'
-import { isPastSeason } from '../utils/seasons'
 import { kstDateKey } from '../utils/dateFormat'
 import { isLive } from '../utils/matchStatus'
 
@@ -408,11 +407,11 @@ export async function fetchCompetitionHub(slugOrRef, season) {
   // 컵 대회는 참가팀 사이드 섹션 자체를 안 그린다 (D3) — 백엔드 콜을 아낀다.
   // UEL·UECL 는 `groups_knockout` 이라 이 분기 밖 · UCL 처럼 팀 섹션 유지.
   const isCup = comp.format === 'cup'
-  // 컵 대회는 매치 창을 통째로 뺀다 — 실측 2026-09-21: DFB Pokal 시즌 전체 48경기·
-  // Coupe de France 2025 시즌 201경기가 공통 창(오늘 -14~+21일)에 잡혀 대개 0건 반환.
-  // 컵 시즌 최대 201경기 (INGESTION_STRATEGY.md:86 · L2 실측 09-17) 라 limit 500 유지.
-  // 리그·UCL 은 기존대로 · 과거 시즌만 창 걷음.
-  const range = isCup ? {} : (isPastSeason(season, comp.seasons) ? {} : matchWindow())
+  // 대회 허브는 라운드 네비게이션(A 판)이 시즌 전체를 소비하므로 매치 창을 통째로 뺀다.
+  // 리그(≈380) · UCL 2025 실측 223 · UEL 189 · UECL 201 — limit 500 이하 감당 (DB 실측 D1).
+  // 컵도 시즌 최대 201 (INGESTION_STRATEGY.md:86 · L2 실측 09-17) 이라 같은 규약.
+  // `matchWindowFor` 는 fetchStandings·fetchOverview 가 계속 소비 (홈 창은 별개 유지).
+  const range = {}
   const [
     { items: matches },
     table,

@@ -275,6 +275,13 @@
       "upcoming": "Upcoming",
       "results": "Results"
     },
+    "round": {
+      "previous": "Previous round",
+      "next": "Next round",
+      "progressLabel": "Round progress",
+      "pkPrefix": "PK",
+      "noRoundsYet": "No rounds scheduled yet"
+    },
     "teams": "Clubs",
     "topScorers": "Top Scorers",
     "topAssisters": "Top Assists",

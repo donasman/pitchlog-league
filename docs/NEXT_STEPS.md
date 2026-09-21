@@ -923,5 +923,15 @@ Phase 4의 실질 내용은 L6 보정·푸시 알림·예산 실측으로 바뀐
 
 ### 대회 페이지 후속 판 예약 (2026-09-21 · feat/schedule-split 판이 남긴 것)
 
-- **A 판 · 라운드 네비게이션** — `splitSchedule` 재사용 (아래층 이미 준비 · `frontend/src/utils/schedule.js`). 컵 라운드 chip 셀렉터 + 리그 라운드 필터. **데이터 로딩 결정 (리그 창 vs 시즌 전체 vs 라운드별 페치) 은 01 탐색에서 정한다** — 리그 창 유지 시 라운드 셀렉터가 창 밖 라운드에 접근 못 함 · 시즌 전체는 EPL ~380경기라 초기 페이로드 부담.
+- ~~**A 판 · 라운드 네비게이션**~~ — ✅ 완료 (2026-09-21 · `feat/round-navigation` · PR). `splitSchedule` 재사용 + `pickDefaultRound`·`roundList`·`roundStatus`·`filterByRound` 신설 · `RoundNavigator` 컴포넌트 · 시즌 전체 로드 (리그 창 제거) · MatchCard 승자 강조 + PK 캡션.
+
+### 대회 페이지 후속 판 예약 (2026-09-21 · feat/round-navigation 판이 남긴 것)
+
+- **T 판 · 토너먼트 탭** — `utils/ties.js buildTies` 프론트 tie 합산 (2레그) · 16강~결승 브래킷 · 컵 탭 순서 대진표·일정·통계 · UCL 탭 순위·대진표·일정·통계 · `UCLKnockoutPage` 흡수. 검증 대상: UCL 2025 · FA Cup 2025 · Copa del Rey 2025. tie 백엔드 영속화는 L4 뒤 별개 판.
+- 홈·`/matches` 라운드 적용 (D7 유예) — MatchCard 승자 강조는 이미 이 판에서 자동 적용됨. 라운드 필터·기본 라운드만 후속.
+- UCL 시즌 전체 500 근접 리스크 재실측 — DB 실측 UCL 2025=223 · UECL=201 · UEL=189 확인 (2026-09-21 · 500 이하). 리스크 닫힘 · 페이지네이션 별개 판 불필요.
+- `services/live.js` 죽은 `isPastSeason` import 삭제 완료 (2026-09-21 · verifier 관측 청소).
+- 죽은 `competition.round.noRoundsYet` i18n 키 (RoundNavigator `rounds.length<=1` 은 return null 이라 문구 없음) — 브라우저 실측에서 자리 찾을지 판정 · 아니면 삭제.
+- 죽은 `scheduleAll` i18n 키 (fix/frontend-leftovers 판 이후 예약) — 여전히 소비처 없음.
+
 
