@@ -30,7 +30,7 @@ bootstrap.sh 가 옆의 `backend.env.example` 과 `pitchlog-backend.service` 를
 ### 2. bootstrap 실행 (약 3~5분)
 
 ```bash
-ssh ubuntu@3.36.159.128
+ssh -i ~/.ssh/pitchlog-league-ec2.pem ubuntu@3.36.159.128
 sudo bash ec2/bootstrap.sh
 ```
 
@@ -93,7 +93,7 @@ sudo systemctl status pitchlog-backend
 ## 재배포
 
 ```bash
-ssh ubuntu@3.36.159.128
+ssh -i ~/.ssh/pitchlog-league-ec2.pem ubuntu@3.36.159.128
 bash /opt/pitchlog/infra/ec2/deploy.sh          # 최신 main
 bash /opt/pitchlog/infra/ec2/deploy.sh dev      # dev 브랜치
 bash /opt/pitchlog/infra/ec2/deploy.sh v1-...   # 태그
@@ -120,7 +120,7 @@ curl -sf http://localhost:3000/health
 
 ### ssh `Connection timed out` (3000 포트는 정상)
 
-증상: `ssh ubuntu@3.36.159.128` 이 timed out · 브라우저·curl 로 `http://3.36.159.128:3000/*` 는 정상 응답.
+증상: `ssh -i ~/.ssh/pitchlog-league-ec2.pem ubuntu@3.36.159.128` 이 timed out · 브라우저·curl 로 `http://3.36.159.128:3000/*` 는 정상 응답.
 
 원인: EC2 보안 그룹 SSH(22) 인바운드 규칙 소스가 "내 IP/32" 로 잡혀 있는데 로컬 공인 IP 가 바뀜 (Wi-Fi 이동·ISP DHCP 갱신 등). 3000 포트는 0.0.0.0/0 이라 무관.
 
