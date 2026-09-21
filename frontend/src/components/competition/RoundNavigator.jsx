@@ -130,6 +130,10 @@ export default function RoundNavigator({ rounds, roundKey, onChange }) {
         alignItems: 'center',
         gap: 8,
         marginBottom: 12,
+        // 부모 grid/flex 자식 규약 — chip 리스트가 넘쳐도 컨테이너 폭을 늘리지 않는다.
+        // 없으면 chip 폭 합이 뷰포트 폭을 넘겨 문서 전체가 가로 스크롤되는 fix/round-bar-overflow 실측 결함.
+        minWidth: 0,
+        maxWidth: '100%',
       }}
     >
       <ArrowButton label={t('competition.round.previous')} onClick={goPrev} disabled={prevDisabled}>‹</ArrowButton>
