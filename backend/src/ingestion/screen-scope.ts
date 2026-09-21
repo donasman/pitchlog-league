@@ -7,7 +7,10 @@
  * |----------------------------|--------------|----------------------------------------|----------------------------------------------|
  * | ingestScopeWhere           | 전체         | 수집 (L2·L6·백필 워커)                 | l2.service · l6.service · match-details-backfill |
  * | matchVisibleWhere          | 전체         | 경기 노출 + 로고                       | match.service · logo.service                 |
- * | competitionVisibleWhere    | <= 60        | 대회 탭·순위표·랭킹·시즌 선택기        | standing.service · statistics.service        |
+ * | competitionVisibleWhere    | <= 60        | 대회 탭·순위표·시즌 선택기             | standing.service                             |
+ * |                            |              | (랭킹은 별도 — statistics.service 가        |                                              |
+ * |                            |              |  competition 을 필수로 받아 19대회 전부     |                                              |
+ * |                            |              |  열림 · 09-20 실측 · statistics.service.ts:14) |                                       |
  * | squadScopeWhere            | <= 60        | L1 스쿼드                              | l1.service                                   |
  *
  * ## 왜 4개인가
