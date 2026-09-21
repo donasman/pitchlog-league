@@ -441,9 +441,13 @@ export default function CompetitionPage() {
                   <EmptyState description={t('competition.noMatches')} />
                 )}
 
-                <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
+                {/* 참가팀 사이드 (280px 열) — minWidth:0 로 넘침 방어 (fix/round-url-one-based 실측:
+                    UCL 페이지 scrollWidth 1450 vs innerWidth 1438 = 12px 넘침. 원인: 안쪽 2열 그리드
+                    `1fr 1fr` 이 팀명 자연 폭에 늘어남 (`.tname` ellipsis 있어도 부모 grid `1fr` 은
+                    `minmax(auto, 1fr)` 등가라 자식 요구 폭에 따라 넓어짐). 두 자리 모두 min-width:0 로 잠근다. */}
+                <div style={{ display: 'grid', gap: 12, alignContent: 'start', minWidth: 0 }}>
                   <h2 className="t-card" style={{ margin: 0 }}>{t('competition.teams')}</h2>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 8 }}>
                     {teams.slice(0, 12).map(team => (
                       <Link
                         key={team.slug}

@@ -69,34 +69,35 @@ describe('splitSchedule (feat/schedule-split · reused by next round-nav pane)',
 describe('pickDefaultRound (feat/round-navigation D2 fallback chain)', () => {
   const now = new Date('2026-09-21T12:00:00Z')
 
-  it('T-F1: live match exists → its round (source=live) even if there are upcoming/results', () => {
+  it('T-F1: live match exists → its round (source=live) even if there are upcoming/results · URL 1-based', () => {
     const matches = [
       { date: '2026-09-01T15:00:00Z', displayState: 'final',     round: 'Regular Season - 3', roundOrdinal: 3 },
       { date: '2026-09-21T14:00:00Z', displayState: 'live',      round: 'Regular Season - 5', roundOrdinal: 5 },
       { date: '2026-09-28T15:00:00Z', displayState: 'scheduled', round: 'Regular Season - 6', roundOrdinal: 6 },
     ]
     const r = pickDefaultRound(matches, now)
-    expect(r).toEqual({ roundOrdinal: 5, roundKey: '5', source: 'live' })
+    // URL 1 기반 (fix/round-url-one-based): roundOrdinal 5 → roundKey '6' (사람이 읽는 "라운드 6")
+    expect(r).toEqual({ roundOrdinal: 5, roundKey: '6', source: 'live' })
   })
 
-  it('T-F2: no live · upcoming exists → earliest kickoff round (source=upcoming)', () => {
+  it('T-F2: no live · upcoming exists → earliest kickoff round (source=upcoming) · URL 1-based', () => {
     const matches = [
       { date: '2026-09-01T15:00:00Z', displayState: 'final',     round: 'Regular Season - 3', roundOrdinal: 3 },
       { date: '2026-10-05T15:00:00Z', displayState: 'scheduled', round: 'Regular Season - 7', roundOrdinal: 7 },
       { date: '2026-09-28T15:00:00Z', displayState: 'scheduled', round: 'Regular Season - 6', roundOrdinal: 6 },
     ]
     const r = pickDefaultRound(matches, now)
-    expect(r).toEqual({ roundOrdinal: 6, roundKey: '6', source: 'upcoming' })
+    expect(r).toEqual({ roundOrdinal: 6, roundKey: '7', source: 'upcoming' })
   })
 
-  it('T-F3: all settled → largest roundOrdinal (source=results · end of season)', () => {
+  it('T-F3: all settled → largest roundOrdinal (source=results · end of season) · URL 1-based', () => {
     const matches = [
       { date: '2026-05-01T15:00:00Z', displayState: 'final', round: 'Regular Season - 36', roundOrdinal: 36 },
       { date: '2026-05-15T15:00:00Z', displayState: 'final', round: 'Regular Season - 38', roundOrdinal: 38 },
       { date: '2026-05-08T15:00:00Z', displayState: 'final', round: 'Regular Season - 37', roundOrdinal: 37 },
     ]
     const r = pickDefaultRound(matches, now)
-    expect(r).toEqual({ roundOrdinal: 38, roundKey: '38', source: 'results' })
+    expect(r).toEqual({ roundOrdinal: 38, roundKey: '39', source: 'results' })
   })
 
   it('T-F4: empty input → { null, "", results }', () => {
@@ -112,7 +113,7 @@ describe('pickDefaultRound (feat/round-navigation D2 fallback chain)', () => {
     expect(r).toEqual({ roundOrdinal: null, roundKey: 'Final', source: 'upcoming' })
   })
 
-  it('T-F6: prior round finished +12h · next round scheduled → next round (upcoming)', () => {
+  it('T-F6: prior round finished +12h · next round scheduled → next round (upcoming) · URL 1-based', () => {
     // 사용자 정정 1 (2026-09-21): "직전 라운드 완료 +12h" 케이스 명시.
     // 12시간 전 마지막 경기 종료 · 다음 라운드는 며칠 뒤. pickDefaultRound 는 upcoming 폴백을 타야.
     const matches = [
@@ -120,17 +121,17 @@ describe('pickDefaultRound (feat/round-navigation D2 fallback chain)', () => {
       { date: '2026-09-28T15:00:00Z', displayState: 'scheduled', round: 'Regular Season - 6', roundOrdinal: 6 },
     ]
     const r = pickDefaultRound(matches, now)
-    expect(r).toEqual({ roundOrdinal: 6, roundKey: '6', source: 'upcoming' })
+    expect(r).toEqual({ roundOrdinal: 6, roundKey: '7', source: 'upcoming' })
   })
 
-  it('T-F7: prior round finished +72h · next round scheduled → next round (upcoming)', () => {
+  it('T-F7: prior round finished +72h · next round scheduled → next round (upcoming) · URL 1-based', () => {
     // 사용자 정정 1 (2026-09-21): "+72h" 케이스 명시. 규칙 동일.
     const matches = [
       { date: '2026-09-18T12:00:00Z', displayState: 'final',     round: 'Regular Season - 5', roundOrdinal: 5 }, // -72h
       { date: '2026-09-28T15:00:00Z', displayState: 'scheduled', round: 'Regular Season - 6', roundOrdinal: 6 },
     ]
     const r = pickDefaultRound(matches, now)
-    expect(r).toEqual({ roundOrdinal: 6, roundKey: '6', source: 'upcoming' })
+    expect(r).toEqual({ roundOrdinal: 6, roundKey: '7', source: 'upcoming' })
   })
 })
 
@@ -195,8 +196,11 @@ describe('filterByRound (feat/round-navigation)', () => {
     { round: 'Round of 16',        roundOrdinal: null, id: 'c' },
   ]
 
-  it('T-I1: numeric roundKey narrows to matching roundOrdinal · falsy key returns full list · cup name key matches by round string', () => {
-    expect(filterByRound(MIX, '5').map(m => m.id)).toEqual(['a'])
+  it('T-I1: numeric roundKey narrows to matching roundOrdinal (1-based) · falsy key returns full list · cup name key matches by round string', () => {
+    // URL 1 기반 (fix/round-url-one-based): `?round=6` 는 roundOrdinal 5 를 가리킴.
+    expect(filterByRound(MIX, '6').map(m => m.id)).toEqual(['a'])   // roundOrdinal 5 → URL '6'
+    expect(filterByRound(MIX, '7').map(m => m.id)).toEqual(['b'])   // roundOrdinal 6 → URL '7'
+    expect(filterByRound(MIX, '5').map(m => m.id)).toEqual([])       // 없는 라운드 (roundOrdinal 4 매칭 없음)
     expect(filterByRound(MIX, '').map(m => m.id)).toEqual(['a', 'b', 'c'])
     expect(filterByRound(MIX, null).map(m => m.id)).toEqual(['a', 'b', 'c'])
     expect(filterByRound(MIX, 'Round of 16').map(m => m.id)).toEqual(['c'])
