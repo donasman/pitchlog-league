@@ -11,7 +11,6 @@ import AppLayout from '@/layouts/AppLayout'
 const HomePage          = lazy(() => import('@/pages/HomePage'))
 const TeamsPage         = lazy(() => import('@/pages/TeamsPage'))
 const CompetitionPage   = lazy(() => import('@/pages/CompetitionPage'))
-const UCLKnockoutPage   = lazy(() => import('@/pages/UCLKnockoutPage'))
 const MatchesPage       = lazy(() => import('@/pages/MatchesPage'))
 const MatchPage         = lazy(() => import('@/pages/MatchPage'))
 const StandingsPage     = lazy(() => import('@/pages/StandingsPage'))
@@ -37,7 +36,7 @@ export const routes = [
 
       // 대회
       { path: 'competitions',                                element: <Navigate to="/competitions/champions-league" replace /> },
-      { path: 'competitions/champions-league/knockout',      element: <UCLKnockoutPage /> },
+      // /competitions/champions-league/knockout 은 T 판 (feat/tournament-bracket) 에서 삭제 — 대진표 탭으로 흡수
       { path: 'competitions/:slug',                          element: <CompetitionPage /> },
 
       // 경기

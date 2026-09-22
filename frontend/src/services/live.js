@@ -12,7 +12,7 @@
  */
 
 import i18n from '@/i18n'
-import { apiGet, apiPost, NotImplementedError } from './http'
+import { apiGet, apiPost } from './http'
 import {
   COMPETITION_LIST_API_IDS,
   MATCH_VISIBLE_COMPETITION_API_IDS,
@@ -164,11 +164,6 @@ export function invalidateCompetitions() {
       cache.delete(key)
     }
   }
-}
-
-/** @param {string} featureKey  i18n 키 (errors.feature.*) */
-function notImplemented(featureKey) {
-  return Promise.reject(new NotImplementedError(featureKey))
 }
 
 // ─── 대회 ──────────────────────────────────────────────────────
@@ -768,7 +763,4 @@ export async function fetchCompetitionStats(slug) {
   }
 }
 
-// ─── 아직 백엔드에 없는 것 ─────────────────────────────────────
-// UCL 녹아웃 대진표는 백엔드에 없다. h2h · 라인업/이벤트/통계는 매치 상세에 편입됐다.
-
-export const fetchUCLKnockout      = () => notImplemented('errors.feature.knockout')
+// UCL 녹아웃 대진표는 T 판 (feat/tournament-bracket) 에서 프론트 buildTies 로 이관 · fetchUCLKnockout 삭제.
