@@ -44,3 +44,10 @@ describe('route: /competitions redirect', () => {
     expect(route.element.props.replace).toBe(true)
   })
 })
+
+describe('route: /competitions/champions-league/knockout removed (feat/tournament-bracket)', () => {
+  it('T-Q1: UCL knockout route no longer exists — absorbed into CompetitionPage bracket tab', () => {
+    const route = findRouteByPath(routes, '/competitions/champions-league/knockout')
+    expect(route).toBeNull()
+  })
+})

@@ -48,8 +48,7 @@ export const fetchStandings            = (...a) => impl.fetchStandings(...a)
 export const fetchPlayerDetail         = (...a) => impl.fetchPlayerDetail(...a)
 export const fetchCompetitionStats     = (...a) => impl.fetchCompetitionStats(...a)
 
-// 그 밖
-export const fetchUCLKnockout          = (...a) => impl.fetchUCLKnockout(...a)
+// 그 밖 — fetchUCLKnockout 은 T 판 (feat/tournament-bracket) 에서 삭제 · 대진표 탭이 buildTies 로 대체
 export const fetchOverview             = (...a) => impl.fetchOverview(...a)
 
 // 검색

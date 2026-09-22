@@ -189,7 +189,6 @@
     "leaguePhaseDesc": "상위 8팀 16강 직행 · 9~24위 플레이오프 · 25위 이하 탈락",
     "groupPhaseTitle": "조별리그",
     "groupPhaseDesc": "각 조 1·2위 16강 직행 · 3위 유로파리그 · 4위 탈락",
-    "leaguePhaseLink": "녹아웃 대진 보기",
     "errorTitle": "순위 데이터를 불러오지 못했습니다",
     "season": "2026-27 시즌",
     "leaguePhaseLabel": "UCL 리그 페이즈 순위",
@@ -260,12 +259,12 @@
     "filterLabel": "대회 필터"
   },
   "competition": {
-    "knockoutLink": "녹아웃 대진 보기",
     "leaguePhaseOngoing": "리그 페이즈 진행 중",
     "season": "2026-27 시즌",
     "leagueRank": "리그 순위",
     "uclLeaguePhase": "UCL 리그 페이즈",
     "tabs": {
+      "bracket": "대진표",
       "schedule": "일정",
       "standings": "순위",
       "stats": "통계"
@@ -295,31 +294,16 @@
     "chipsLabel": "대회 선택",
     "moreCompetitions": "더 보기"
   },
-  "knockout": {
-    "pageTitle": "UEFA Champions League — 녹아웃 대진",
-    "pageSubtitle": "2026-27 시즌 · 1·2차전 합산 점수 기준",
-    "backLink": "대회 페이지로 돌아가기",
-    "legendInProgress": "진행 중",
-    "legendConfirmed": "진출 확정",
-    "legendTbd": "대진 미정",
-    "legendAgg": "합산: 1차전(홈) + 2차전(원정)",
-    "roundOf16": "16강",
-    "quarterFinal": "8강",
-    "semiFinal": "4강",
-    "final": "결승",
+  "tie": {
     "leg1": "1차전",
     "leg2": "2차전",
     "aggregate": "합산",
-    "leg2Pending": "2차전 대기",
-    "tbd": "미정",
-    "winner": "진출",
-    "through": "{{team}} 진출",
-    "inProgress": "진행 중",
-    "tieTbd": "대진 미정",
-    "tieComplete": "종료",
-    "noWinner": "아직 확정된 팀이 없습니다",
-    "noTeam": "미정",
-    "errorTitle": "대진 데이터를 불러오지 못했습니다"
+    "pending": "미정",
+    "inProgress": "진행 중"
+  },
+  "bracket": {
+    "emptyRound": "대진표 미확정",
+    "byeLeaguePhase": "리그페이즈 직행"
   },
   "home": {
     "heroHeadline": "유럽 5대 리그와 UCL, 한 곳에서",
@@ -556,7 +540,6 @@
     "competitionRequired": "대회를 지정해야 합니다",
     "competitionNotFound": "대회를 찾을 수 없습니다: {{ref}}",
     "feature": {
-      "knockout": "녹아웃 대진",
       "h2h": "상대 전적",
       "top_scorers": "득점 순위",
       "top_assisters": "도움 순위"

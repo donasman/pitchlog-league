@@ -26,6 +26,8 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import ScheduleSections from '@/components/competition/ScheduleSections'
 import RoundNavigator from '@/components/competition/RoundNavigator'
+import TournamentBracket from '@/components/competition/TournamentBracket'
+import TieCard from '@/components/competition/TieCard'
 import { useData } from '@/hooks/useData'
 import { useSeasonParam } from '@/hooks/useSeasonParam'
 import { useRoundParam } from '@/hooks/useRoundParam'
@@ -33,6 +35,7 @@ import { fetchCompetitionHub, fetchCompetitionsForStats, fetchSeasons } from '@/
 import { getLocalizedCompetitionName } from '@/utils/localization'
 import { selectableSeasons } from '@/utils/seasons'
 import { roundList, filterByRound } from '@/utils/schedule'
+import { buildTies, bracketRounds, defaultTab, isSuperCup } from '@/utils/ties'
 // groupCupMatchesByRound 는 utils/schedule 로 이관 — ScheduleSections 도 소비. 기존 T-C 잠금 유지 목적으로 여기서 re-export.
 export { groupCupMatchesByRound } from '@/utils/schedule'
 
@@ -246,24 +249,69 @@ export default function CompetitionPage() {
     setRoundKey(null)
   }
 
-  // 컵일 때는 standings 탭이 아예 없다. 초기 URL 로 진입하거나, 다른 대회에서
-  // standings 활성 상태로 이 페이지에 들어오면 schedule 로 되돌린다.
-  const isCup = data?.comp?.format === 'cup'
+  // T 판 · 컵/유럽 갈래 판정 — comp.format 은 'cup'|'groups_knockout'|'league'.
+  const isCup      = data?.comp?.format === 'cup'
+  const superCup   = data?.comp ? isSuperCup(data.comp) : false
+  const isUCLFmt   = data?.comp?.format === 'groups_knockout'
+
+  // 녹아웃 대진 — buildTies (프론트) · bracketRounds (라운드 별 4열 트리 + 접힌 리스트).
+  const ties    = useMemo(() => buildTies(matchesForRounds), [matchesForRounds])
+  const bracket = useMemo(
+    () => (data?.comp?.format ? bracketRounds(ties, data.comp.format) : []),
+    [ties, data],
+  )
+
+  // 방어 useEffect — 컵은 standings 없음 · 슈퍼컵은 bracket 없음. 활성 탭이 없어질 조합이면 되돌린다.
   useEffect(() => {
     if (isCup && activeTab === 'standings') setActiveTab('schedule')
-  }, [isCup, activeTab])
+    if (superCup && activeTab === 'bracket') setActiveTab('schedule')
+  }, [isCup, superCup, activeTab])
 
-  // TABS 는 대회 갈래에 따라 다르다 — 컵은 스탠딩 없음(2탭).
-  const TABS = useMemo(() => isCup
-    ? [
+  // 기본 탭 결정 — data 도착 후 한 번만 (사용자가 탭을 눌렀으면 덮지 않는다).
+  const [tabInitialized, setTabInitialized] = useState(false)
+  useEffect(() => {
+    if (!data?.comp || tabInitialized) return
+    const target = defaultTab({
+      format:        data.comp.format,
+      ties,
+      hasStandings:  !!data.standings,
+      matches:       data.matches ?? [],
+    })
+    if (target !== activeTab) setActiveTab(target)
+    setTabInitialized(true)
+    // activeTab 변화는 초기화 트리거 아님
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, ties, tabInitialized])
+
+  // TABS 는 갈래 3분 — 슈퍼컵(2) · 컵(3 · bracket 우선) · UCL·UEL·UECL(4 · standings·bracket 포함) · league(3 · 기존).
+  const TABS = useMemo(() => {
+    if (superCup) {
+      return [
         { id: 'schedule', labelKey: 'competition.tabs.schedule' },
         { id: 'stats',    labelKey: 'competition.tabs.stats' },
       ]
-    : [
-        { id: 'schedule',  labelKey: 'competition.tabs.schedule' },
+    }
+    if (isCup) {
+      return [
+        { id: 'bracket',  labelKey: 'competition.tabs.bracket' },
+        { id: 'schedule', labelKey: 'competition.tabs.schedule' },
+        { id: 'stats',    labelKey: 'competition.tabs.stats' },
+      ]
+    }
+    if (isUCLFmt) {
+      return [
         { id: 'standings', labelKey: 'competition.tabs.standings' },
+        { id: 'bracket',   labelKey: 'competition.tabs.bracket' },
+        { id: 'schedule',  labelKey: 'competition.tabs.schedule' },
         { id: 'stats',     labelKey: 'competition.tabs.stats' },
-      ], [isCup])
+      ]
+    }
+    return [
+      { id: 'schedule',  labelKey: 'competition.tabs.schedule' },
+      { id: 'standings', labelKey: 'competition.tabs.standings' },
+      { id: 'stats',     labelKey: 'competition.tabs.stats' },
+    ]
+  }, [isCup, superCup, isUCLFmt])
 
   // 일정 탭은 splitSchedule + ScheduleSections 컴포넌트가 담당 — 페이지에 인라인 없음.
   // 컵 라운드 그룹은 그 안에서 자동 (groupByRound=true 전달).
@@ -283,7 +331,6 @@ export default function CompetitionPage() {
   if (!data) return null
 
   const { comp, matches, standings, teams, topScorers, topAssisters } = data
-  const isUCL = comp.format === 'groups_knockout'
   const showNoDataBanner = shouldShowNoDataBanner({
     isCup,
     matchesLength: matches.length,
@@ -368,11 +415,7 @@ export default function CompetitionPage() {
               </select>
             )}
 
-            {isUCL && (
-              <Link to="/competitions/champions-league/knockout" className="pl-btn pl-btn-sm pl-btn-ghost">
-                {t('competition.knockoutLink')}
-              </Link>
-            )}
+            {/* UCL 녹아웃 링크는 T 판 (feat/tournament-bracket) 에서 삭제 — 대진표 탭으로 흡수 */}
           </div>
 
           {/* 데이터 없음 / 컵 경기 0건 배너 */}
@@ -414,10 +457,30 @@ export default function CompetitionPage() {
             ))}
           </div>
 
+          {/* 대진표 탭 (T 판) — TournamentBracket 이 buildTies → bracketRounds 결과를 소비.
+              슈퍼컵은 TABS 에서 bracket 이 아예 빠짐. UCL R32 는 트리 밖 접힌 리스트. */}
+          {activeTab === 'bracket' && (
+            <TournamentBracket rounds={bracket} locale={locale} />
+          )}
+
           {/* 일정 탭 — RoundNavigator + ScheduleSections. B 판에서 컵도 라운드 축을 셀렉터로 잡아
-              ScheduleSections 안 라운드 그룹핑을 끔 (`groupByRound={false}`). */}
+              ScheduleSections 안 라운드 그룹핑을 끔 (`groupByRound={false}`).
+              슈퍼컵 (`isSuperCup`) 은 상단에 tie 카드 리스트 (1~3개) 를 얹은 뒤 그 아래 일정. */}
           {activeTab === 'schedule' && (
-            isCup ? (
+            superCup ? (
+              matches.length === 0 ? (
+                <EmptyState description={t('competition.noMatches')} />
+              ) : (
+                <div style={{ display: 'grid', gap: 16 }}>
+                  {ties.length > 0 && (
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      {ties.map(tie => <TieCard key={tie.tieId} tie={tie} locale={locale} />)}
+                    </div>
+                  )}
+                  <ScheduleSections matches={filterByRound(matches, roundKey)} groupByRound={false} />
+                </div>
+              )
+            ) : isCup ? (
               // 컵: 팀 사이드 없이 1열
               matches.length === 0 ? (
                 <EmptyState description={t('competition.noMatches')} />
