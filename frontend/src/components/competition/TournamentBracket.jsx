@@ -69,6 +69,10 @@ export default function TournamentBracket({ rounds, locale }) {
     )
   }
 
+  // 빈 트리 안내 — trees 0 · earlies 있음 (예: DFB 2026 R64·R32 · R16 미도래).
+  // ties.js:383 bracketRounds 는 roundOrdinal asc 정렬이라 earlies[last] 가 최대 ordinal (R64 > R32).
+  const latestEarly = earlies.length > 0 ? earlies[earlies.length - 1].roundName : null
+
   return (
     <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>
       {trees.length > 0 && (
@@ -84,6 +88,11 @@ export default function TournamentBracket({ rounds, locale }) {
           }}
         >
           {trees.map(round => <TreeColumn key={round.roundName} round={round} locale={locale} />)}
+        </div>
+      )}
+      {trees.length === 0 && latestEarly && (
+        <div className="t-cap" style={{ color: 'var(--pl-sub)' }}>
+          {t('bracket.treeFromR16', { round: latestEarly })}
         </div>
       )}
       {earlies.length > 0 && (
