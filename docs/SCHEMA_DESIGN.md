@@ -933,6 +933,167 @@ Prisma migration을 이 순서로 쪼갠다. 각 단계가 독립적으로 배�
 
 ---
 
+## 12-N. 녹아웃 대진(Tie) DTO — 프론트 규격이 백엔드 예약이다
+
+**결정 (2026-09-21 · feat/tournament-bracket).** `KnockoutTie`·`BracketSlot` 모델은
+`schema.prisma:511~567` 에 이미 있지만 L2-b (UCL 녹아웃 · 2027-02) 이후 채워진다.
+그 전까지 프론트가 `normalizeMatch` 결과에서 같은 라운드·같은 팀 페어를 묶어 tie 를 만든다.
+이 절이 그 규격이다 — 백엔드가 tie 를 실을 때 이 shape 을 그대로 반환한다.
+
+### Tie DTO
+
+프론트 `frontend/src/utils/ties.js` 의 `buildTies` 가 만드는 형태 = 백엔드 응답 형태.
+필드가 이보다 늘어나면 프론트 화면(TieCard·TournamentBracket)이 어긋난다.
+
+```js
+/**
+ * @typedef {'pending'|'in_progress'|'settled'} TieStatus
+ * @typedef {'single'|'aggregate'|'et'|'pens'|'pending'} DecidedBy
+ *
+ * @typedef {object} Tie
+ * @property {string} tieId                     `${roundName}::${sortedRefsJoined}`
+ * @property {string} roundName                 원문 그대로 (예: 'Round of 16')
+ * @property {number|null} roundOrdinal
+ * @property {object} home                      1차전 홈 · 단판 홈
+ * @property {object} away
+ * @property {Array<object>} legs               길이 1 (단판) 또는 2 (2레그)
+ * @property {{home:number, away:number}|null} aggregate   2레그 goals 합. leg 어느 하나라도 null 이면 null
+ * @property {{home:number, away:number}|null} penalties   penHome/penAway 둘 다 non-null 일 때만
+ * @property {string|null} winnerTeamRef
+ * @property {TieStatus} status
+ * @property {DecidedBy} decidedBy
+ */
+```
+
+### enum 매핑
+
+`TieStatus` 는 백엔드 `TieStatus` (schema.prisma:523) 를 그대로 이어받는다.
+
+| 프론트 값       | 백엔드 `TieStatus` | 조건 |
+|-----------------|-------------------|------|
+| `'pending'`     | `SCHEDULED`       | 모든 legs 가 scheduled |
+| `'in_progress'` | `IN_PROGRESS`     | 일부만 종료 |
+| `'settled'`     | `SETTLED`         | 모든 legs 종료(final/recheck/confirmed/cancelled) |
+
+`DecidedBy` 는 백엔드 `WinReason` (schema.prisma:522) 을 그대로 이어받는다 —
+`'pending'` 만 프론트 전용 (백엔드는 미결정 tie 를 winReason=null 로 실는다).
+
+| 프론트 값     | 백엔드 `WinReason` | 뜻 |
+|---------------|--------------------|------|
+| `'single'`    | `SINGLE_LEG`       | 단판 종료 (연장·PK 없음) |
+| `'aggregate'` | `AGGREGATE`        | 2레그 합산 (연장 아님) |
+| `'et'`        | `EXTRA_TIME`       | 연장 결정 |
+| `'pens'`      | `PENALTIES`        | 승부차기 결정 |
+| `'pending'`   | `null`             | 미결정 |
+
+### aggregate 계산 규약 (정정 2)
+
+`aggregate = 연장 포함 최종 골(dto.goals) 합 · 승부차기 별도.`
+
+프론트 `NormalizedMatch.score = { home, away }` 는 `normalize.js:392` 에서 `dto.goals`
+를 그대로 매핑한다 — API 최종 골 (연장 포함). `penHome/penAway` 는 별도 필드.
+
+2레그일 때:
+```
+aggregate.home = legs[0].score.home + legs[1].score.away
+aggregate.away = legs[0].score.away + legs[1].score.home
+```
+반전 검증: `legs[0].homeTeam.slug === legs[1].awayTeam.slug &&
+legs[0].awayTeam.slug === legs[1].homeTeam.slug`. 실패하면 각 경기 단판 폴백.
+leg 스코어 어느 하나라도 null 이면 `aggregate = null`.
+
+### tie 생성 규칙 (buildTies)
+
+1. groupBy `(roundName, sortedPairKey=[home.slug, away.slug].sort().join('::'))`
+2. 그룹 사이즈 **1** → 단판 tie
+3. 그룹 사이즈 **2** → 반전 검증 통과하면 2레그 tie · 실패면 각 경기 단판 폴백
+4. 그룹 사이즈 **3+** → 오류 케이스 · `console.warn` · 각 경기 단판 폴백
+5. legs 정렬: `date asc`
+6. `winnerTeamRef = legs[legs.length-1].winnerTeamRef`
+7. 정렬 (반환 배열): `roundOrdinal asc · null 뒤 · tieId asc`
+
+### decidedBy 판정
+
+- `winnerTeamRef == null` → `'pending'`
+- 단판:
+  - `penHome/penAway` 둘 다 non-null → `'pens'`
+  - `etHome` non-null → `'et'`
+  - 그 외 → `'single'`
+- 2레그:
+  - `penHome/penAway` 둘 다 non-null (leg2) → `'pens'`
+  - `aggregate` 동률 && leg2 `etHome/etAway` non-null → `'et'`
+  - 그 외 → `'aggregate'`
+
+### bracketRounds — 4열 고정 + UCL R32 접힌 리스트
+
+**정정 1.** 모든 대회의 트리는 **16강→8강→4강→결승 4열 고정**이다.
+UCL 의 `Round of 32` 는 트리 밖 · 접힌 리스트로 그린다 (`isBracket=false · isEarly=true`).
+
+`BracketRound` 필드:
+```js
+/**
+ * @typedef {object} BracketRound
+ * @property {string} roundName
+ * @property {number|null} roundOrdinal
+ * @property {Array<Tie>} ties
+ * @property {boolean} isBracket           true = 트리 4열 대상
+ * @property {boolean} isEarly             true = 트리 밖 · 접힌 리스트 (UCL R32 · 컵 R64/R128)
+ * @property {boolean} isQualifier         UCL 예선·Play-offs (D4 · 표시 안 함)
+ * @property {Array<object>|null} byeSlots UCL R16 만 · R32 참가 안 한 R16 참가팀
+ */
+```
+
+라운드 분류 규칙 (`roundName` 정확 매칭):
+
+| roundName | isBracket | isEarly | isQualifier |
+|---|---|---|---|
+| `Round of 16` · `Quarter-finals` · `Semi-finals` · `Final` | `true` | `false` | `false` |
+| `Round of 32` · `Round of 64` · `Round of 128` | `false` | `true` | `false` |
+| `1st Qualifying Round` · `2nd Qualifying Round` · `3rd Qualifying Round` · 포함 `Qualifying Round` · 정확 `Play-offs` · `Preliminary Round` · `Preliminary` | `false` | `false` | `true` |
+| 접두 `League Stage -` · `Regular Season -` 등 | `false` | `false` | `false` |
+
+### byeSlots — UCL R16 부전승 (정정 1)
+
+UCL 리그페이즈 1~8위는 R16 직행이다 (2024-25 시즌부터 UCL 스위스 포맷).
+R32 tie 안에 팀 slug 집합을 만들고, R16 tie 안 팀 중 그 집합에 없는 팀 = bye.
+
+계산 조건:
+- `format === 'groups_knockout'` 이고 `roundName === 'Round of 16'` 일 때만
+- 그 외 라운드·컵(`format === 'cup'`) 은 `byeSlots = null`
+
+중복 제거 · legs 정렬 순서 유지. 최대 8개 (UCL 리그페이즈 1~8위 규모).
+
+### defaultTab (D6)
+
+`{format, ties}` 로 대회 페이지 기본 탭을 정한다:
+- `format === 'league'` → `'schedule'`
+- `format === 'cup'`: `isBracket` 라운드에 tie 하나라도 있으면 `'bracket'` · 아니면 `'schedule'`
+- `format === 'groups_knockout'`: 같은 판정 · 아니면 `'standings'`
+
+### isSuperCup (정정 3)
+
+`comp?.format === 'cup' && (comp?.displayOrder ?? 0) >= 200`.
+
+임계값은 `>= 200` (`>` 아님) — Community Shield(210) · Supercopa de España(220) · UEFA Super Cup 등
+슈퍼컵 5종 (`normalize.js:31`, apiId 528/556/529/547/526) 이 displayOrder 200 대에 몰려 있다.
+`FA Cup` 같은 국내 컵(110~180)은 걸러진다.
+
+렌더 판정 (tie 1개 → 결과 카드 · 2~3개 → tie 카드 리스트) 은 `CompetitionPage` (B 판) 담당 —
+`isSuperCup` 은 boolean 만 낸다.
+
+### 백엔드 도래 시
+
+`backend/prisma/schema.prisma:511~567` 의 `KnockoutTie`·`BracketSlot` 은 외래키가 없다
+(`docs/BACKEND_GUIDE.md`). tie 응답 DTO 는 이 절 값 그대로 매핑:
+
+- `KnockoutTie.winReason` (enum) ↔ 프론트 `decidedBy` — `'pending'` 만 `winReason=null` 로 실는다
+- `KnockoutTie.status` (enum) ↔ 프론트 `status`
+- `aggregateHome`/`aggregateAway` ↔ 프론트 `aggregate.home`/`.away`
+- `firstLegMatchId`/`secondLegMatchId` ↔ 프론트 `legs[0]`/`legs[1]` (매치 ref 로 조인)
+- `BracketSlot.placeholderLabel` ↔ 프론트 `byeSlots` 팀 이름 (bye 슬롯 라벨)
+
+---
+
 ## 부록 — 이 문서가 적용한 검토 방법
 
 | 방법 | 어디에 | 무엇을 찾았나 |

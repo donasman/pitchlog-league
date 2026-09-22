@@ -189,7 +189,6 @@
     "leaguePhaseDesc": "Top 8: R16 direct · 9–24: Playoff · 25+: Eliminated",
     "groupPhaseTitle": "Group stage",
     "groupPhaseDesc": "Top two of each group reach the round of 16 · third drops to the Europa League · fourth is out",
-    "leaguePhaseLink": "Knockout bracket",
     "errorTitle": "Could not load standings",
     "season": "2026-27 season",
     "leaguePhaseLabel": "UCL League Phase",
@@ -260,12 +259,12 @@
     "filterLabel": "Competition"
   },
   "competition": {
-    "knockoutLink": "Knockout bracket",
     "leaguePhaseOngoing": "League Phase ongoing",
     "season": "2026-27 season",
     "leagueRank": "League Standings",
     "uclLeaguePhase": "UCL League Phase",
     "tabs": {
+      "bracket": "Bracket",
       "schedule": "Schedule",
       "standings": "Standings",
       "stats": "Stats"
@@ -295,31 +294,16 @@
     "chipsLabel": "Choose competition",
     "moreCompetitions": "More"
   },
-  "knockout": {
-    "pageTitle": "UEFA Champions League — Knockout",
-    "pageSubtitle": "2026-27 season · 2-leg aggregate",
-    "backLink": "Back to competition",
-    "legendInProgress": "In progress",
-    "legendConfirmed": "Through",
-    "legendTbd": "TBD",
-    "legendAgg": "Agg.: Leg1 (home) + Leg2 (away)",
-    "roundOf16": "Round of 16",
-    "quarterFinal": "Quarter-final",
-    "semiFinal": "Semi-final",
-    "final": "Final",
-    "leg1": "1st Leg",
-    "leg2Pending": "Awaiting 2nd leg",
-    "tbd": "TBD",
-    "leg2": "2nd Leg",
-    "aggregate": "Agg.",
-    "winner": "Through",
-    "through": "{{team}} through",
-    "inProgress": "In progress",
-    "tieTbd": "TBD",
-    "tieComplete": "FT",
-    "noWinner": "No teams confirmed yet",
-    "noTeam": "TBD",
-    "errorTitle": "Could not load bracket"
+  "tie": {
+    "leg1": "Leg 1",
+    "leg2": "Leg 2",
+    "aggregate": "Aggregate",
+    "pending": "TBD",
+    "inProgress": "In progress"
+  },
+  "bracket": {
+    "emptyRound": "Bracket not drawn yet",
+    "byeLeaguePhase": "League phase bye"
   },
   "home": {
     "heroHeadline": "Europe's top 5 leagues and UCL, in one place",
@@ -556,7 +540,6 @@
     "competitionRequired": "A competition must be specified",
     "competitionNotFound": "Competition not found: {{ref}}",
     "feature": {
-      "knockout": "knockout bracket",
       "h2h": "head-to-head",
       "top_scorers": "top scorers",
       "top_assisters": "top assisters"

@@ -196,16 +196,8 @@ export default function StandingsPage() {
                 {t(isGroupStage ? 'standings.groupPhaseDesc' : 'standings.leaguePhaseDesc')}
               </p>
             </div>
-            {/* 녹아웃 대진 화면은 현재 시즌만 그린다 — 과거 시즌에서 열면 다른 시즌 대진이 나온다 */}
-            {!seasonYear && (
-              <Link
-                to="/competitions/champions-league/knockout"
-                className="pl-btn pl-btn-sm pl-btn-ghost"
-                style={{ flexShrink: 0 }}
-              >
-                {t('standings.leaguePhaseLink')}
-              </Link>
-            )}
+            {/* UCL 녹아웃 링크는 T 판 (feat/tournament-bracket) 에서 삭제 —
+                대진표는 이제 /competitions/champions-league 의 대진표 탭 */}
           </div>
         )}
 

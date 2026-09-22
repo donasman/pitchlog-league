@@ -9,7 +9,7 @@
 
 import { COMPETITION_OVERVIEW, LIVE_PULSE, NEXT_KICKOFF, DATA_AS_OF } from '@/mocks/overview'
 import { COMPETITIONS, SEASONS, getCompetitionBySlug } from '@/mocks/competitions'
-import { MATCHES, UCL_KNOCKOUT_TIES, getMatchById, getMatchesByCompetition, getMatchesByTeam } from '@/mocks/matches'
+import { MATCHES, getMatchById, getMatchesByCompetition, getMatchesByTeam } from '@/mocks/matches'
 import { MATCH_TEAM_STATS } from '@/mocks/matchStats'
 import { getLineup, getTopRated } from '@/mocks/lineups'
 import { STANDINGS, getStandings } from '@/mocks/standings'
@@ -305,10 +305,8 @@ export async function fetchPlayerDetail(slug) {
   return normalizePlayerDetail(dto)
 }
 
-// ─── UCL ───────────────────────────────────────────────────────
-
-/** UCL 녹아웃 대진 */
-export async function fetchUCLKnockout() { return UCL_KNOCKOUT_TIES }
+// UCL 녹아웃 대진표는 T 판 (feat/tournament-bracket) 에서 대진표 탭 (buildTies) 으로 이관 · fetchUCLKnockout 삭제.
+// `mocks/matches.js:UCL_KNOCKOUT_TIES` 상수는 src/mocks/** 무건드 원칙에 따라 별개 판에서 정리.
 
 // ─── 홈 화면 묶음 ──────────────────────────────────────────────
 
