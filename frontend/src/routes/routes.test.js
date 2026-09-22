@@ -45,9 +45,12 @@ describe('route: /competitions redirect', () => {
   })
 })
 
-describe('route: /competitions/champions-league/knockout removed (feat/tournament-bracket)', () => {
-  it('T-Q1: UCL knockout route no longer exists — absorbed into CompetitionPage bracket tab', () => {
+describe('route: /competitions/champions-league/knockout redirect (fix/bracket-bye-badge)', () => {
+  it('T-Q1: legacy UCL knockout URL redirects to /competitions/champions-league (replace)', () => {
     const route = findRouteByPath(routes, '/competitions/champions-league/knockout')
-    expect(route).toBeNull()
+    expect(route).not.toBeNull()
+    expect(route.element.type).toBe(Navigate)
+    expect(route.element.props.to).toBe('/competitions/champions-league')
+    expect(route.element.props.replace).toBe(true)
   })
 })

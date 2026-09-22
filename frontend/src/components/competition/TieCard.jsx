@@ -6,7 +6,8 @@
  *   - 2레그 (`legs.length===2`): 1차전 · 2차전 · 합산 3줄 (D2)
  *
  * 정정 2 반영 — aggregate 는 goals 합, PK 는 penalties 필드로 별도.
- * 부전승 배지 (props `homeBye`·`awayBye`) — UCL R16 에서 리그 스테이지 직행팀 표시.
+ * 부전승 캡션 (props `homeBye`·`awayBye`) — 카드 상단 1회. UCL R16 전용
+ *   (prod 실측 09-22: TeamSlot 배지가 열 폭 255px 에서 이름 span 을 0px 로 밀어 스코어와 겹침 · 2레그 카드는 3회 반복).
  *
  * 승자 강조: `winnerTeamRef` 팀 옆에 굵게 (matchWinner 재사용 아님 · tie 단위).
  */
@@ -17,9 +18,22 @@ import TeamBadge from '@/components/ui/TeamBadge'
 import { getLocalizedShortName } from '@/utils/localization'
 
 /**
- * 팀 슬롯 — 로고 + 짧은 이름. `bye` 이면 부전승 배지.
+ * 부전승 팀 이름 배열 — 카드 상단 캡션에 " · " 로 이어붙일 용.
+ * 순수함수 · 테스트에서 소비 (TieCard.test.js).
+ * @param {{ home:object, away:object, homeBye:boolean, awayBye:boolean, locale:string }} args
+ * @returns {Array<string>}
  */
-function TeamSlot({ team, isWinner, align, locale, bye, t }) {
+export function byeCaptionNames({ home, away, homeBye, awayBye, locale }) {
+  const names = []
+  if (homeBye && home) names.push(getLocalizedShortName(home, locale))
+  if (awayBye && away) names.push(getLocalizedShortName(away, locale))
+  return names
+}
+
+/**
+ * 팀 슬롯 — 로고 + 짧은 이름. 배지 렌더 없음 (카드 상단 캡션으로 이관).
+ */
+function TeamSlot({ team, isWinner, align, locale }) {
   const shortName = getLocalizedShortName(team, locale)
   return (
     <Link
@@ -41,27 +55,28 @@ function TeamSlot({ team, isWinner, align, locale, bye, t }) {
           color: 'var(--pl-text)',
           fontWeight: isWinner ? 700 : 500,
           minWidth: 0,
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
           textAlign: align,
         }}
       >
         {shortName}
       </span>
-      {bye && (
-        <span
-          className="t-cap"
-          style={{
-            color: 'var(--pl-sub)',
-            fontSize: 10,
-            padding: '2px 6px',
-            border: '1px solid var(--pl-line)',
-            borderRadius: 999,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {t('bracket.byeLeaguePhase')}
-        </span>
-      )}
     </Link>
+  )
+}
+
+/**
+ * 카드 상단 부전승 캡션 — 있으면 한 줄, 없으면 null.
+ */
+function ByeCaption({ names, t }) {
+  if (names.length === 0) return null
+  return (
+    <div className="t-cap" style={{ color: 'var(--pl-sub)', marginBottom: 6 }}>
+      {t('bracket.byeLeaguePhase')} · {names.join(' · ')}
+    </div>
   )
 }
 
@@ -85,15 +100,17 @@ export default function TieCard({ tie, locale, homeBye = false, awayBye = false 
   const isTwoLeg = legs.length === 2
   const homeWin = winnerTeamRef && winnerTeamRef === home.slug
   const awayWin = winnerTeamRef && winnerTeamRef === away.slug
+  const byeNames = byeCaptionNames({ home, away, homeBye, awayBye, locale })
 
   if (!isTwoLeg) {
     const leg = legs[0]
     return (
       <div className="pl-card" data-decided-by={decidedBy} style={{ padding: 12 }}>
+        <ByeCaption names={byeNames} t={t} />
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: 8, alignItems: 'center' }}>
-          <TeamSlot team={home} isWinner={homeWin} align="left" locale={locale} bye={homeBye} t={t} />
+          <TeamSlot team={home} isWinner={homeWin} align="left" locale={locale} />
           <Score home={leg?.score?.home} away={leg?.score?.away} bold />
-          <TeamSlot team={away} isWinner={awayWin} align="right" locale={locale} bye={awayBye} t={t} />
+          <TeamSlot team={away} isWinner={awayWin} align="right" locale={locale} />
         </div>
         {penalties && (
           <div className="t-cap" style={{ textAlign: 'center', marginTop: 6, color: 'var(--pl-sub)' }}>
@@ -106,13 +123,13 @@ export default function TieCard({ tie, locale, homeBye = false, awayBye = false 
 
   // 2레그 · 3줄
   const [leg1, leg2] = legs
-  const legRow = ({ label, leftTeam, leftBye, leftIsWinner, rightTeam, rightBye, rightIsWinner, scoreHome, scoreAway, pkRow }) => (
+  const legRow = ({ label, leftTeam, leftIsWinner, rightTeam, rightIsWinner, scoreHome, scoreAway, pkRow }) => (
     <div style={{ display: 'grid', gap: 4 }}>
       <div className="t-cap" style={{ color: 'var(--pl-sub)' }}>{label}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: 8, alignItems: 'center' }}>
-        <TeamSlot team={leftTeam} isWinner={leftIsWinner} align="left" locale={locale} bye={leftBye} t={t} />
+        <TeamSlot team={leftTeam} isWinner={leftIsWinner} align="left" locale={locale} />
         <Score home={scoreHome} away={scoreAway} />
-        <TeamSlot team={rightTeam} isWinner={rightIsWinner} align="right" locale={locale} bye={rightBye} t={t} />
+        <TeamSlot team={rightTeam} isWinner={rightIsWinner} align="right" locale={locale} />
       </div>
       {pkRow && (
         <div className="t-cap" style={{ textAlign: 'center', color: 'var(--pl-sub)' }}>
@@ -124,17 +141,18 @@ export default function TieCard({ tie, locale, homeBye = false, awayBye = false 
 
   return (
     <div className="pl-card" data-decided-by={decidedBy} style={{ padding: 12, display: 'grid', gap: 10 }}>
+      <ByeCaption names={byeNames} t={t} />
       {legRow({
         label: t('tie.leg1'),
-        leftTeam: home,   leftBye: homeBye,  leftIsWinner: false,   // 개별 leg 승자는 강조 안 함 (합산에서만)
-        rightTeam: away,  rightBye: awayBye, rightIsWinner: false,
+        leftTeam: home,   leftIsWinner: false,   // 개별 leg 승자는 강조 안 함 (합산에서만)
+        rightTeam: away,  rightIsWinner: false,
         scoreHome: leg1?.score?.home,
         scoreAway: leg1?.score?.away,
       })}
       {legRow({
         label: t('tie.leg2'),
-        leftTeam: away,   leftBye: awayBye,  leftIsWinner: false,
-        rightTeam: home,  rightBye: homeBye, rightIsWinner: false,
+        leftTeam: away,   leftIsWinner: false,
+        rightTeam: home,  rightIsWinner: false,
         scoreHome: leg2?.score?.home,
         scoreAway: leg2?.score?.away,
         pkRow: penalties,
@@ -145,9 +163,9 @@ export default function TieCard({ tie, locale, homeBye = false, awayBye = false 
         {status === 'in_progress' && <div className="t-sub">{t('tie.inProgress')}</div>}
         {status === 'settled' && aggregate && (
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: 8, alignItems: 'center' }}>
-            <TeamSlot team={home} isWinner={homeWin} align="left" locale={locale} bye={homeBye} t={t} />
+            <TeamSlot team={home} isWinner={homeWin} align="left" locale={locale} />
             <Score home={aggregate.home} away={aggregate.away} bold />
-            <TeamSlot team={away} isWinner={awayWin} align="right" locale={locale} bye={awayBye} t={t} />
+            <TeamSlot team={away} isWinner={awayWin} align="right" locale={locale} />
           </div>
         )}
       </div>

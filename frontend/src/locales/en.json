@@ -303,7 +303,8 @@
   },
   "bracket": {
     "emptyRound": "Bracket not drawn yet",
-    "byeLeaguePhase": "League phase bye"
+    "byeLeaguePhase": "League phase bye",
+    "treeFromR16": "Bracket tree starts from the Round of 16 · currently {{round}}"
   },
   "home": {
     "heroHeadline": "Europe's top 5 leagues and UCL, in one place",

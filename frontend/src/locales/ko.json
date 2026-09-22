@@ -303,7 +303,8 @@
   },
   "bracket": {
     "emptyRound": "대진표 미확정",
-    "byeLeaguePhase": "리그페이즈 직행"
+    "byeLeaguePhase": "리그 페이즈 직행",
+    "treeFromR16": "16강부터 대진표로 표시됩니다 · 현재 {{round}} 진행"
   },
   "home": {
     "heroHeadline": "유럽 5대 리그와 UCL, 한 곳에서",
