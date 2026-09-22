@@ -9,8 +9,8 @@
 import { describe, it, expect } from 'vitest'
 import { byeCaptionNames } from './TieCard.jsx'
 
-const TEAM_A = { slug: '10-team-a', name: 'Team A', shortNames: { ko: 'A팀', en: 'Team A' } }
-const TEAM_B = { slug: '20-team-b', name: 'Team B', shortNames: { ko: 'B팀', en: 'Team B' } }
+const TEAM_A = { slug: '10-team-a', name: 'Team A', shortNames: { ko: 'Team A (ko)', en: 'Team A' } }
+const TEAM_B = { slug: '20-team-b', name: 'Team B', shortNames: { ko: 'Team B (ko)', en: 'Team B' } }
 
 describe('byeCaptionNames (fix/bracket-bye-badge)', () => {
   it('T-R1: home bye only → [home]', () => {
