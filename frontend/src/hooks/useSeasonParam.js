@@ -11,6 +11,8 @@
  * vitest 는 `environment: 'node'` 라 훅 자체는 테스트하지 않는다 — 훅이 하는 일이 곧
  * `nextSeasonParamAction` 이 시키는 것 그대로다.
  *
+ * setter 는 함수형 setSearchParams — 같은 이벤트에서 useRoundParam 과 연달아 불러도 덮어쓰지 않는다 (2026-09-22 결함).
+ *
  * @param {Array} seasons  `selectableSeasons` 결과 (COMPLETE 만, 최신순). 참조가 안정적이도록
  *                         호출자는 `useMemo` 로 감싸 넘긴다.
  */
@@ -32,19 +34,23 @@ export function useSeasonParam(seasons) {
   useEffect(() => {
     const action = nextSeasonParamAction(seasonParam, seasons ?? [])
     if (action === null) return
-    const next = new URLSearchParams(searchParams)
-    if (action.action === 'delete') next.delete('season')
-    else                            next.set('season', action.value)
-    setSearchParams(next, { replace: true })
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (action.action === 'delete') next.delete('season')
+      else                            next.set('season', action.value)
+      return next
+    }, { replace: true })
     // seasons 는 useMemo 로 참조 고정된 것이 넘어온다 — 매 렌더 새 배열이 오는 걸 막는 건
     // 호출자 책임. searchParams / setSearchParams 는 react-router 가 안정 참조로 준다.
   }, [seasonParam, seasons, searchParams, setSearchParams])
 
   const setSeasonYear = (year) => {
-    const next = new URLSearchParams(searchParams)
-    if (year === null || year === undefined) next.delete('season')
-    else                                     next.set('season', String(year))
-    setSearchParams(next, { replace: true })
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (year === null || year === undefined) next.delete('season')
+      else                                     next.set('season', String(year))
+      return next
+    }, { replace: true })
   }
 
   return { seasonParam, seasonYear, isCurrentYear, setSeasonYear }
