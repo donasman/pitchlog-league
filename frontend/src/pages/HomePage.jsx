@@ -228,7 +228,7 @@ function CompetitionEmblem({ comp }) {
           alt={comp.name ?? comp.shortName}
           width={36}
           height={36}
-          loading="lazy"
+          loading="eager"
           onError={() => setFailed(true)}
           style={{ width: 36, height: 36, objectFit: 'contain' }}
         />
@@ -295,7 +295,7 @@ function CompetitionCard({ comp, t, locale }) {
         }}
       >
         <span className="t-cap">{t('home.leaderLabel')}</span>
-        {comp.leader && (
+        {comp.leader ? (
           <>
             <TeamBadge
               initials={comp.leader.teamInitials}
@@ -303,6 +303,7 @@ function CompetitionCard({ comp, t, locale }) {
               logoUrl={comp.leader.teamLogoUrl}
               size="xs"
               name={comp.leader.teamName}
+              loading="eager"
             />
             <span
               className="tname t-body"
@@ -317,6 +318,10 @@ function CompetitionCard({ comp, t, locale }) {
               </span>
             )}
           </>
+        ) : (
+          // singleTableLeader 판정이 null 을 준 자리 — 라벨만 남아 빈칸이 되지 않도록 대시 표시.
+          // 조 2개(UCL 리그페이즈 등)에서는 애초에 "선두" 라는 개념이 없어 null 이 맞다.
+          <span className="t-sub">—</span>
         )}
       </div>
     </Link>
