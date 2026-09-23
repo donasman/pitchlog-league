@@ -244,9 +244,10 @@ export default function CompetitionPage() {
   const { roundKey, setRoundKey } = useRoundParam(matchesForRounds)
 
   // 시즌 select 를 감싼다 — 시즌을 바꾸면 이전 시즌 URL 의 ?round= 를 버려 새 시즌 기본값이 잡히도록.
+  // URL 쓰기는 1회: react-router 6 setSearchParams(fn) 은 렌더 스냅샷을 넘기므로(#9304)
+  // setSeasonYear · setRoundKey 를 연달아 부르면 두 번째가 첫 번째(season) 를 지운다 (2026-09-22 결함).
   const handleSeasonChange = (year) => {
-    setSeasonYear(year)
-    setRoundKey(null)
+    setSeasonYear(year, { dropKeys: ['round'] })
   }
 
   // T 판 · 컵/유럽 갈래 판정 — comp.format 은 'cup'|'groups_knockout'|'league'.
