@@ -9,6 +9,8 @@
  * URL 규칙: `roundOrdinal` 있으면 `String(N)`, 컵은 `round` 이름 그대로. 빈 값이면 `?round=` 삭제.
  * URL 자동 동기화 없음 — 상위 CompetitionPage 가 명시적 `setRoundKey` 로만 URL 을 바꾼다.
  *
+ * setter 는 함수형 setSearchParams — 같은 이벤트에서 useSeasonParam 과 연달아 불러도 덮어쓰지 않는다 (2026-09-22 결함).
+ *
  * @param {Array} matches  normalized 경기 목록 (`normalizeMatch` 결과)
  * @returns {{ roundKey: string, setRoundKey: (next: string|number|null) => void }}
  */
@@ -22,10 +24,12 @@ export function useRoundParam(matches) {
   const { roundKey } = roundParamAction(urlKey, matches, new Date())
 
   const setRoundKey = (next) => {
-    const params = new URLSearchParams(searchParams)
-    if (next === null || next === undefined || next === '') params.delete('round')
-    else                                                    params.set('round', String(next))
-    setSearchParams(params, { replace: true })
+    setSearchParams(prev => {
+      const params = new URLSearchParams(prev)
+      if (next === null || next === undefined || next === '') params.delete('round')
+      else                                                    params.set('round', String(next))
+      return params
+    }, { replace: true })
   }
 
   return { roundKey, setRoundKey }
