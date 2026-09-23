@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { selectableSeasons, seasonYearFromParam, isPastSeason, nextSeasonParamAction } from './seasons.js'
+import { selectableSeasons, seasonYearFromParam, isPastSeason, nextSeasonParamAction, applySeasonParam } from './seasons.js'
 
 // backend `SeasonSummaryDto` as reshaped by normalizeSeason (services/normalize.js:167-177)
 function season(year, { dataState = 'COMPLETE', current = false } = {}) {
@@ -131,5 +131,29 @@ describe('nextSeasonParamAction', () => {
     expect(nextSeasonParamAction('2025-26', [])).toBeNull()
     // null URL 도 아무 것도 안 한다
     expect(nextSeasonParamAction(null, COMPLETE_5)).toBeNull()
+  })
+})
+
+// 시즌 변경을 URL 1회 쓰기로 계산 (react-router #9304 스냅샷 경합 회피)
+describe('applySeasonParam — one URL write per season change', () => {
+  it('sets season and drops round in the same write, keeping other keys', () => {
+    const prev = new URLSearchParams('round=4&tab=schedule')
+    const next = applySeasonParam(prev, 2025, { dropKeys: ['round'] })
+    expect(next.toString()).toBe('tab=schedule&season=2025')
+    // prev 는 건드리지 않는다
+    expect(prev.toString()).toBe('round=4&tab=schedule')
+  })
+
+  // "(현재)" 복귀
+  it('deletes season when year is null (back to current season)', () => {
+    const next = applySeasonParam('season=2024&round=7', null, { dropKeys: ['round'] })
+    expect(next.toString()).toBe('')
+  })
+
+  // StandingsPage 경로
+  it('without dropKeys, changes season only and keeps the rest', () => {
+    const next = applySeasonParam('competition=premier-league&season=2024', 2023)
+    expect(next.get('competition')).toBe('premier-league')
+    expect(next.get('season')).toBe('2023')
   })
 })
