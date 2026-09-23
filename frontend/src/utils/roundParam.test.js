@@ -2,7 +2,7 @@
  * roundParam.js — URL `?round=` 판정 회귀 잠금 (feat/round-navigation A 판).
  *
  * `roundParamAction(urlKey, matches, nowDate)` 은 훅 부수효과와 분리된 순수함수.
- * shouldSync 는 이 판에서 항상 false — 시즌 변경 시 상위 CompetitionPage 가 명시적 setRoundKey(null) 로 URL 을 정리한다.
+ * shouldSync 는 이 판에서 항상 false — 시즌 변경 시 상위 CompetitionPage 가 setSeasonYear(year, { dropKeys: ['round'] }) 로 같은 쓰기에서 ?round= 를 지운다.
  * 사용자 정정 3 (2026-09-21): "?round= 은 roundOrdinal 우선 · 이름 폴백. 시즌 변경(urlKey 부재 → 기본값 · shouldSync) 케이스" 명시.
  */
 
