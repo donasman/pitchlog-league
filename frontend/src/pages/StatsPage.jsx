@@ -28,19 +28,20 @@ function CoverageBadge({ coverage, t }) {
 }
 
 /* ── 득점/도움 행 ── */
+// StatsRanking.jsx 와 같은 규칙: playerSlug 가 있을 때만 /players/<slug> 로 이동 가능한 Link, 없으면 div.
+// 스타일(grid 레이아웃) 은 유지 · 밑줄 없음 · 색 상속.
 function StatRow({ rank, player, value, unit, locale, t }) {
   const name = getLocalizedName({ id: player.playerSlug, name: player.playerName }, locale) || player.playerName
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '28px 1fr auto',
-        gap: 10,
-        alignItems: 'center',
-        padding: '10px 16px',
-        borderTop: '1px solid var(--pl-line)',
-      }}
-    >
+  const rowStyle = {
+    display: 'grid',
+    gridTemplateColumns: '28px 1fr auto',
+    gap: 10,
+    alignItems: 'center',
+    padding: '10px 16px',
+    borderTop: '1px solid var(--pl-line)',
+  }
+  const inner = (
+    <>
       <span className="num t-sub" style={{ fontWeight: 700 }}>{rank}</span>
       <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
         <span
@@ -61,8 +62,19 @@ function StatRow({ rank, player, value, unit, locale, t }) {
       <span className="num t-body" style={{ fontWeight: 700, flexShrink: 0 }}>
         {value}{unit}
       </span>
-    </div>
+    </>
   )
+  if (player.playerSlug) {
+    return (
+      <Link
+        to={`/players/${player.playerSlug}`}
+        style={{ ...rowStyle, textDecoration: 'none', color: 'inherit' }}
+      >
+        {inner}
+      </Link>
+    )
+  }
+  return <div style={rowStyle}>{inner}</div>
 }
 
 /* ── 대회별 패널 ── */

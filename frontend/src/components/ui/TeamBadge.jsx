@@ -3,7 +3,9 @@
  * 실제 로고 이미지가 없을 때 이니셜 기반 배지를 렌더링.
  * logoUrl이 제공되면 이미지를 우선 시도하고, 로딩 실패 시 이니셜로 폴백.
  *
- * @param {{ initials:string, color:string, size?:'xs'|'sm'|'md'|'lg', name?:string, logoUrl?:string }} props
+ * `loading` 기본값은 'lazy'. 첫 화면 위(above-the-fold) 배지만 호출부에서 'eager' 로 넘긴다.
+ *
+ * @param {{ initials:string, color:string, size?:'xs'|'sm'|'md'|'lg', name?:string, logoUrl?:string, loading?:'lazy'|'eager' }} props
  */
 
 import { useState } from 'react'
@@ -24,7 +26,7 @@ function getTextColor(hex) {
   return onWhite >= onDark ? '#ffffff' : '#111827'
 }
 
-export default function TeamBadge({ initials, color, size = 'md', name, logoUrl }) {
+export default function TeamBadge({ initials, color, size = 'md', name, logoUrl, loading = 'lazy' }) {
   const [imgFailed, setImgFailed] = useState(false)
   const px = SIZE_PX[size] ?? SIZE_PX.md
   const fs = FONT_PX[size] ?? FONT_PX.md
@@ -37,7 +39,7 @@ export default function TeamBadge({ initials, color, size = 'md', name, logoUrl 
         alt={name ?? initials}
         width={px}
         height={px}
-        loading="lazy"
+        loading={loading}
         onError={() => setImgFailed(true)}
         className="pl-emblem"
         style={{ width: px, height: px }}

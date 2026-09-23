@@ -31,9 +31,11 @@ Vite SPA와 NestJS API를 분리하는 방식이므로 사용하지 않음. 이�
 
 ## 2. 현재 프론트엔드 상태
 
-2026-09-07 기준 `frontend`는 **React + Vite + JavaScript**로 구현되어 있으며,
-`VITE_USE_MOCK` 으로 **Mock 과 실 API 를 통째로 전환**함. 대회·팀은 실 API 를 타고
-나머지 화면은 백엔드에 아직 없어 Mock 전용임.
+2026-09-23 기준 `frontend`는 **React + Vite + JavaScript**로 구현되어 있으며,
+`VITE_USE_MOCK` 으로 Mock 과 실 API 를 전환함. **실 API 가 기본 운영 경로이고 Mock 은
+백엔드 없이 화면을 켜보거나 테스트 픽스처로 쓰는 따라오는 쪽**임 (L143·L148 과 같은 규칙).
+실 API 에 없는 기능은 빈 목록으로 위장하지 않고 `NotImplementedState` 로 드러냄
+(경기 상세 H2H · 팀 스쿼드 · 대회 득점·도움 순위).
 
 **다국어 지원**: i18next + react-i18next로 한국어(기본)·영어 전환 구현 완료.  
 Header에 언어 전환 버튼 포함. 선택 언어는 `localStorage`('pitchlog-lang')에 저장.  
