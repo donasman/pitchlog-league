@@ -36,7 +36,8 @@ export const routes = [
 
       // 대회
       { path: 'competitions',                                element: <Navigate to="/competitions/champions-league" replace /> },
-      // /competitions/champions-league/knockout 은 T 판 (feat/tournament-bracket) 에서 삭제 — 대진표 탭으로 흡수
+      // 이전 UCL 녹아웃 URL 은 대진표 탭으로 리다이렉트 (탭 파라미터가 없어 대회 페이지로만 보낸다 · 09-22 핫픽스)
+      { path: 'competitions/champions-league/knockout',      element: <Navigate to="/competitions/champions-league" replace /> },
       { path: 'competitions/:slug',                          element: <CompetitionPage /> },
 
       // 경기
