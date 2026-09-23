@@ -98,3 +98,26 @@ export function nextSeasonParamAction(currentParam, seasons) {
   if (String(resolved) === currentParam) return null
   return { action: 'set', value: String(resolved) }
 }
+
+/**
+ * 시즌 select 한 번의 선택을 URL 검색 파라미터 1회 쓰기로 계산한다 (순수 함수).
+ *
+ * 왜 한 번에 계산하나:
+ *   react-router-dom 6.30 `useSearchParams` 의 setter 는 함수형 인자에도 최신 URL 이 아니라
+ *   그 훅 인스턴스의 렌더 스냅샷 `searchParams` 를 넘긴다
+ *   (node_modules/react-router-dom/dist/index.js:1024-1031 · remix-run/react-router#9304).
+ *   그래서 한 이벤트에서 setter 를 두 번 부르면 두 번째 쓰기가 첫 번째를 덮는다.
+ *   시즌을 바꾸며 함께 지울 키(`round` 등) 는 `dropKeys` 로 받아 같은 쓰기에서 지운다.
+ *
+ * @param {URLSearchParams|string} prev   현재 검색 파라미터
+ * @param {number|null|undefined}  year   고른 시즌 연도. null/undefined 면 현재 시즌 → `season` 삭제
+ * @param {{ dropKeys?: string[] }} [opts] 같은 쓰기에서 함께 지울 키
+ * @returns {URLSearchParams} 새 인스턴스 (prev 는 건드리지 않는다)
+ */
+export function applySeasonParam(prev, year, { dropKeys = [] } = {}) {
+  const next = new URLSearchParams(prev)
+  if (year === null || year === undefined) next.delete('season')
+  else                                     next.set('season', String(year))
+  for (const key of dropKeys) next.delete(key)
+  return next
+}
