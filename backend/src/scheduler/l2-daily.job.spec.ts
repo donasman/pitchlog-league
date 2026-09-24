@@ -16,21 +16,25 @@ import { SchedulerModule } from './scheduler.module.js';
 import type { EnvironmentVariables } from '../config/env.validation.js';
 import type { L2Service, L2Summary } from '../ingestion/l2/l2.service.js';
 
-function makeSummary(partial = false, totals = { rounds: 229, matches: 2566, standings: 204 }): L2Summary {
+function makeSummary(
+  opts: { partial?: boolean; pending?: string[]; totals?: L2Summary['totals'] } = {},
+): L2Summary {
+  const { partial = false, pending = [], totals = { rounds: 229, matches: 2566, standings: 204 } } = opts;
   return {
     competitions: [],
     totals,
     skipped: [],
+    pending,
     ...(partial ? { partial: true } : {}),
   };
 }
 
 describe('classifyL2Summary (2분류 · error 는 catch)', () => {
   it('partial 없음 → ok', () => {
-    expect(classifyL2Summary(makeSummary(false))).toBe('ok');
+    expect(classifyL2Summary(makeSummary())).toBe('ok');
   });
   it('partial=true → partial', () => {
-    expect(classifyL2Summary(makeSummary(true))).toBe('partial');
+    expect(classifyL2Summary(makeSummary({ partial: true }))).toBe('partial');
   });
 });
 
@@ -97,7 +101,7 @@ describe('L2DailyJob.tick', () => {
   });
 
   it('(c1) ok — partial 없음 · totals 저장', async () => {
-    l2.run.mockResolvedValue(makeSummary(false));
+    l2.run.mockResolvedValue(makeSummary());
     await job.tick();
     const s = state.getL2DailyState();
     expect(s.lastOutcome).toBe('ok');
@@ -107,9 +111,22 @@ describe('L2DailyJob.tick', () => {
   });
 
   it('(c2) partial — L2Summary.partial=true', async () => {
-    l2.run.mockResolvedValue(makeSummary(true));
+    l2.run.mockResolvedValue(makeSummary({ partial: true }));
     await job.tick();
     expect(state.getL2DailyState().lastOutcome).toBe('partial');
+  });
+
+  // FA Cup·Copa del Rey 예선 단계 회귀 잠금 (2026-09-24 실측):
+  // pending 만 있고 partial 없으면 outcome='ok' (매일 partial 로 찍혀 진짜 이상을 가리던 결함 방지).
+  // 로그의 pending=[...] 조각은 Nest Logger 를 spy 하기 어려워 state 로 대체 검증
+  // (backfill-worker.job.spec.ts 의 "all seasons done" 케이스와 같은 판단).
+  it('(c2b) pending 만 있음 — outcome=ok (partial 아님)', async () => {
+    l2.run.mockResolvedValue(
+      makeSummary({ pending: ['FA Cup 2026 (no_top_flight)', 'Copa del Rey 2026 (no_top_flight)'] }),
+    );
+    await job.tick();
+    expect(state.getL2DailyState().lastOutcome).toBe('ok');
+    expect(state.getL2DailyState().lastError).toBeNull();
   });
 
   it('(c3) error — run() throw · lastError 저장 · totals=null', async () => {
@@ -123,7 +140,7 @@ describe('L2DailyJob.tick', () => {
   });
 
   it('l2.run 은 옵션 없이 호출 (스케줄러가 --all-seasons 를 켜지 않는다)', async () => {
-    l2.run.mockResolvedValue(makeSummary(false));
+    l2.run.mockResolvedValue(makeSummary());
     await job.tick();
     expect(l2.run).toHaveBeenCalledWith();
   });
