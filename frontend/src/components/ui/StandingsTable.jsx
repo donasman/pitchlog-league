@@ -172,7 +172,7 @@ function DesktopTable({ rows, competitionSlug, t, locale }) {
       <div
         role="row"
         className="zrow t-cap"
-        style={{ gridTemplateColumns: DESK_COLS, height: 36 }}
+        style={{ gridTemplateColumns: DESK_COLS, height: 36, paddingLeft: 14, paddingRight: 14 }}
       >
         <span role="columnheader">{t('standings.rank')}</span>
         <span role="columnheader">{t('standings.team')}</span>
@@ -204,6 +204,8 @@ function DesktopTable({ rows, competitionSlug, t, locale }) {
                 '--zc': zc ?? 'transparent',
                 gridTemplateColumns: DESK_COLS,
                 height: 44,
+                paddingLeft: 14,
+                paddingRight: 14,
               }}
             >
               <span role="cell" style={{ fontWeight: 700, color: 'var(--pl-sub)' }}>
