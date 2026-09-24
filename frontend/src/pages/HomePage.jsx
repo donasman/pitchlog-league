@@ -144,9 +144,9 @@ function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
       style={{ gridTemplateColumns: 'minmax(0,1fr)', alignItems: 'start' }}
     >
       <style>{`@media(min-width:1024px){.hero-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)!important}}`}</style>
-      <div className="hero-grid grid gap-6 lg:gap-10" style={{ alignItems: 'start' }}>
+      <div className="hero-grid grid gap-6 lg:gap-10" style={{ gridTemplateColumns: 'minmax(0, 1fr)', alignItems: 'start' }}>
         {/* 왼쪽 — 말 */}
-        <div style={{ display: 'grid', gap: 16, paddingTop: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16, paddingTop: 8 }}>
           {/* 워드마크 + h1 덩어리 (좁은 간격으로 한 덩어리처럼) */}
           <div style={{ display: 'grid', gap: 6 }}>
             <div
@@ -253,6 +253,7 @@ function CompetitionCard({ comp, t, locale }) {
       to={`/competitions/${comp.slug}`}
       style={{
         display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr)',
         gap: 12,
         padding: 16,
         textDecoration: 'none',
@@ -348,12 +349,12 @@ function CompetitionSection({ competitions, t, locale }) {
       >
         {/* minmax(0, 1fr) — /teams 와 같은 min-content 하한 버그. 2026-09-10 실측: 645~700px 구간에서
             분데스리가·UCL 카드가 컨테이너(562px) 를 넘어 트랙이 653px 로 부풀어 카드가 삐져나왔다. */}
-        <style>{`@media(min-width:640px){.comp-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}`}</style>
+        <style>{`@media(min-width:480px){.comp-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(min-width:640px){.comp-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}`}</style>
         <div
           className="comp-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gridTemplateColumns: 'minmax(0, 1fr)',
             gap: 12,
             gridColumn: '1 / -1',
           }}
@@ -710,7 +711,7 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '40px 24px' }}>
+      <div className="pl-container" style={{ paddingBlock: '40px' }}>
         <LoadingSkeleton rows={8} variant="card" />
       </div>
     )
@@ -718,7 +719,7 @@ export default function HomePage() {
 
   if (error) {
     return (
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '40px 24px' }}>
+      <div className="pl-container" style={{ paddingBlock: '40px' }}>
         <ErrorState description={error} />
       </div>
     )
@@ -729,12 +730,11 @@ export default function HomePage() {
   const season = (competitions ?? []).find(c => c.currentSeason)?.currentSeason ?? null
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
       <div
+        className="pl-container"
         style={{
-          maxWidth: 1440,
-          margin: '0 auto',
-          padding: 'clamp(20px,3vw,36px) clamp(16px,6vw,80px) 0',
+          paddingBlock: 'clamp(20px,3vw,36px) 0',
           display: 'grid',
           gap: 'clamp(28px,4vw,40px)',
         }}

@@ -36,4 +36,12 @@ i18n
     },
   })
 
+/* <html lang> 동기화 — 초기값 + 언어 전환 이벤트 */
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = i18n.language
+  i18n.on('languageChanged', lng => {
+    document.documentElement.lang = lng
+  })
+}
+
 export default i18n

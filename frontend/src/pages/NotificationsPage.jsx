@@ -147,8 +147,8 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8">
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
+      <div style={{ paddingBlock: '20px 48px' }} className="pl-container">
 
         {/* 헤더 */}
         <div style={{ marginBottom: 20 }}>
