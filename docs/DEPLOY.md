@@ -411,8 +411,10 @@ curl -s http://localhost:3000/health | jq '.scheduler.jobs'
 `L2Summary.partial` · `L1Summary.partial` 을 그대로 반영한다:
 
 - `ok`      — partial 없음
-- `partial` — 일부 대회·팀이 안 들어감 (컷 라운드 미판정 · 급감 가드 등). journalctl 요약 줄에 `skipped=[...]` 표기.
+- `partial` — 일부 대회·팀이 안 들어감 (unknownRounds · missingTeams 등 진짜 이상). journalctl 요약 줄에 `skipped=[...]`.
 - `error`   — `run()` throw. 다음 트리거에서 재시도.
+
+**pending** (L2 만) — outcome 과 별개로 요약 로그 끝에 `pending=[...]` 로 표기된다. "정상 진행 중 대기" 대회시즌 (FA Cup·Copa del Rey 가 1월 본선 진입 전 등 예선 단계) 이 여기 들어간다. outcome 은 `ok` 로 유지 — 매일 partial 로 찍혀 진짜 이상을 가리던 문제를 분리하기 위함 (fix/l2-pending-not-partial).
 
 ### 끄기
 
