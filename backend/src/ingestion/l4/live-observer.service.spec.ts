@@ -138,7 +138,7 @@ describe('LiveObserverService', () => {
     const inWindow = new Date(now.getTime() - 60_000);
 
     // DB 는 NS · elapsed=null · goalsHome=null · goalsAway=null.
-    // 응답: 1H · elapsed=30 · goals 1-0 → diff 4 (statusShort, elapsed, goalsHome, goalsAway)
+    // 응답: 1H · elapsed=30 · goals 1-0 → 5 컬럼 중 4 개 다름 → 행 단위 wouldWrite=1
     prisma.match.findMany.mockResolvedValue([dbRow(1, inWindow, { statusShort: 'NS' })]);
     client.get.mockImplementation(async (path: string) => {
       if (path === '/status') return { response: { requests: { current: 100, limit_day: 7500 } } };
@@ -150,9 +150,9 @@ describe('LiveObserverService', () => {
     const lastSeen = new Map<number, LastSeen>();
 
     const r1 = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false });
-    expect(r1.wouldWrite).toBe(4);
+    expect(r1.wouldWrite).toBe(1);
 
-    // 두 번째 tick — 같은 응답 · lastSeen 이 채워졌으므로 diff 0
+    // 두 번째 tick — 같은 응답 · lastSeen 이 채워졌으므로 diff 0 → wouldWrite=0
     const r2 = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false });
     expect(r2.wouldWrite).toBe(0);
   });
@@ -330,5 +330,36 @@ describe('LiveObserverService', () => {
     expect(d1?.lineups).toBe(-1);
     expect(d1?.statistics).toBe(-1);
     expect(d1?.players).toBe(-1);
+  });
+
+  it('(9) AET 관측 → memory.finishedAt 등록 · 10분+1초 뒤 selectDbTargets 에서 제외', async () => {
+    const t1 = new Date('2026-09-24T12:00:00Z');
+    const inWindow = new Date(t1.getTime() - 60_000);
+
+    prisma.match.findMany.mockResolvedValue([dbRow(111, inWindow, { statusShort: '1H' })]);
+    client.get.mockImplementation(async () =>
+      envelope([fixtureItem(111, 'AET', 120, null, 2, 1)]),
+    );
+
+    const memory = emptyMemory();
+    const probes = new Map<number, ProbeEntry>();
+    const lastSeen = new Map<number, LastSeen>();
+
+    await service.tick(t1, memory, probes, lastSeen, { fetchStatus: false });
+
+    // AET 는 FINAL_TERMINAL_STATUSES · memory.finishedAt 에 등록
+    expect(memory.finishedAt.get(111)).toEqual(t1);
+
+    // 10분+1초 뒤 · DB 는 여전히 관측 모드라 status 갱신 안 했다고 가정 (같은 row 반환)
+    const t2 = new Date(t1.getTime() + 10 * 60 * 1000 + 1000);
+    prisma.match.findMany.mockResolvedValue([dbRow(111, inWindow, { statusShort: '1H' })]);
+    client.get.mockClear();
+
+    const r = await service.tick(t2, memory, probes, lastSeen, { fetchStatus: false });
+
+    // finishedAt+10min TTL 초과 → 제외 · targets=0 · /fixtures 미호출
+    expect(r.targets).toBe(0);
+    expect(r.chunks).toBe(0);
+    expect(client.get).not.toHaveBeenCalled();
   });
 });

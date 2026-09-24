@@ -44,6 +44,10 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
 
   private lastStatusAt: Date | null = null;
   private probeCallsSinceLastTick = 0;
+  /** 마지막으로 관측한 /status.requests.current 값. fetchStatus=false 인 tick 에서도 강등 유지에 씀. */
+  private lastKnownUsed: number | null = null;
+  /** 이 잡 자체의 UTC-day 트래커. 자정 넘어가면 lastKnownUsed 를 null 로 리셋. */
+  private lastTickUtcYmd: string | null = null;
 
   private cfg!: LivePollerConfig;
   private probeIds: number[] = [];
@@ -161,6 +165,14 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
     }
 
     const now = new Date();
+
+    // UTC-day 롤오버 — lastKnownUsed 리셋. 상태 카운터 리셋은 state 가 별도로 처리.
+    const nowYmd = now.toISOString().slice(0, 10);
+    if (this.lastTickUtcYmd !== null && this.lastTickUtcYmd !== nowYmd) {
+      this.lastKnownUsed = null;
+    }
+    this.lastTickUtcYmd = nowYmd;
+
     this.state.markLivePollerStart(this.cfg.periodSec, now);
 
     const fetchStatus =
@@ -191,6 +203,11 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
       };
     }
 
+    // used 강등 유지: 이 tick 이 /status 를 안 불렀으면 마지막으로 본 값으로 판정
+    if (result.used !== null) this.lastKnownUsed = result.used;
+    const effectiveUsed = result.used ?? this.lastKnownUsed;
+    const dec = decidePeriod(effectiveUsed, this.cfg);
+
     const prevOpen = this.state.getLivePollerState().windowOpen;
     const nowOpen = result.targets > 0;
     if (!prevOpen && nowOpen) {
@@ -206,7 +223,7 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
       used: result.used,
       wouldWrite: result.wouldWrite,
       windowOpen: nowOpen,
-      periodSec: this.cfg.periodSec,
+      periodSec: dec.periodSec,
       error,
     });
     this.probeCallsSinceLastTick = 0;
@@ -216,12 +233,12 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
       const suffix = result.isProbe ? ' · probe' : '';
       this.logger.log(
         `live-poller tick · targets=${result.targets} live=${result.liveCount} chunks=${result.chunks}` +
-          ` bytes=${result.bytes} ms=${result.ms} used=${usedStr} period=${this.cfg.periodSec}s` +
+          ` bytes=${result.bytes} ms=${result.ms} used=${usedStr} period=${dec.periodSec}s` +
           ` wouldWrite=${result.wouldWrite}${suffix}`,
       );
-      if (result.ms > this.cfg.periodSec * 1000 * 0.7) {
+      if (result.ms > dec.periodSec * 1000 * 0.7) {
         this.logger.warn(
-          `live-poller tick slow · ms=${result.ms} > 70% of ${this.cfg.periodSec}s`,
+          `live-poller tick slow · ms=${result.ms} > 70% of ${dec.periodSec}s`,
         );
       }
       for (const t of result.transitions) {
@@ -249,22 +266,19 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
     let nextMs: number;
     if (result.targets === 0) {
       nextMs = LIVE_IDLE_CHECK_SEC * 1000;
+    } else if (dec.stopped) {
+      this.state.markLivePollerStop('quota_stop', now);
+      this.logger.log(
+        `live-poller stop · used=${effectiveUsed} ≥ ${this.cfg.stopAt}`,
+      );
+      nextMs = this.msUntilNextUtcMidnight(now);
     } else {
-      const dec = decidePeriod(result.used, this.cfg);
-      if (dec.stopped) {
-        this.state.markLivePollerStop('quota_stop', now);
+      if (dec.periodSec !== this.cfg.periodSec) {
         this.logger.log(
-          `live-poller stop · used=${result.used} ≥ ${this.cfg.stopAt}`,
+          `live-poller slow · used=${effectiveUsed} ≥ ${this.cfg.slowAt} · period=${dec.periodSec}s`,
         );
-        nextMs = this.msUntilNextUtcMidnight(now);
-      } else {
-        if (dec.periodSec !== this.cfg.periodSec) {
-          this.logger.log(
-            `live-poller slow · used=${result.used} ≥ ${this.cfg.slowAt} · period=${dec.periodSec}s`,
-          );
-        }
-        nextMs = dec.periodSec * 1000;
       }
+      nextMs = dec.periodSec * 1000;
     }
     this.scheduleTick(nextMs);
   }
