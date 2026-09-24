@@ -25,7 +25,7 @@ export default function LanguageToggle() {
       onClick={toggle}
       aria-label={isKo ? 'Switch to English' : '한국어로 전환'}
       title={isKo ? 'Switch to English' : '한국어로 전환'}
-      className="flex items-center justify-center w-8 h-8 rounded text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex items-center justify-center w-11 h-11 rounded text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {isKo ? 'EN' : '한'}
     </button>
