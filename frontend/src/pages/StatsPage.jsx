@@ -144,35 +144,37 @@ function CompetitionFilter({ competitions, slug, onChange, t, locale }) {
   const rest = (competitions ?? []).filter(c => (c.displayOrder ?? 0) > 60)
 
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--pl-line)', paddingBottom: 14, marginBottom: 14 }}>
-      <span className="t-cap" style={{ flexShrink: 0 }}>{t('stats.filterCompLabel')}</span>
-      {top.map(c => (
-        <button
-          key={c.slug}
-          type="button"
-          className="pl-chip"
-          aria-pressed={slug === c.slug}
-          onClick={() => onChange(c.slug)}
-        >
-          {c.shortName ?? getLocalizedCompetitionName(c, locale)}
-        </button>
-      ))}
-      {rest.length > 0 && (
-        <select
-          value={rest.some(c => c.slug === slug) ? slug : ''}
-          onChange={(e) => { if (e.target.value) onChange(e.target.value) }}
-          className="pl-chip"
-          style={{ marginLeft: 'auto' }}
-          aria-label={t('stats.filterCompLabel')}
-        >
-          <option value="">{t('home.openAll')} ▼</option>
-          {rest.map(c => (
-            <option key={c.slug} value={c.slug}>
-              {getLocalizedCompetitionName(c, locale)}
-            </option>
-          ))}
-        </select>
-      )}
+    <div className="pl-sticky-filter" style={{ paddingBottom: 14, marginBottom: 14 }}>
+      <div className="pl-chip-row">
+        <span className="t-cap" style={{ flexShrink: 0 }}>{t('stats.filterCompLabel')}</span>
+        {top.map(c => (
+          <button
+            key={c.slug}
+            type="button"
+            className="pl-chip"
+            aria-pressed={slug === c.slug}
+            onClick={() => onChange(c.slug)}
+          >
+            {c.shortName ?? getLocalizedCompetitionName(c, locale)}
+          </button>
+        ))}
+        {rest.length > 0 && (
+          <select
+            value={rest.some(c => c.slug === slug) ? slug : ''}
+            onChange={(e) => { if (e.target.value) onChange(e.target.value) }}
+            className="pl-chip"
+            style={{ marginLeft: 'auto' }}
+            aria-label={t('stats.filterCompLabel')}
+          >
+            <option value="">{t('home.openAll')} ▼</option>
+            {rest.map(c => (
+              <option key={c.slug} value={c.slug}>
+                {getLocalizedCompetitionName(c, locale)}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
     </div>
   )
 }
@@ -211,8 +213,8 @@ export default function StatsPage() {
   const seasonLabel = comp?.currentSeason ?? ''
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8">
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
+      <div style={{ paddingBlock: '20px 48px' }} className="pl-container">
 
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16 }}>

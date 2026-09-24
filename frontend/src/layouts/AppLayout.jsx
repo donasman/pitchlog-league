@@ -15,7 +15,7 @@ import { USE_MOCK } from '@/services/env'
 export default function AppLayout() {
   const { t } = useTranslation()
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className="flex flex-col bg-background text-foreground" style={{ minHeight: 'var(--pl-page-min-h)' }}>
       <AppHeader />
       <main className="flex-1">
         <Outlet />

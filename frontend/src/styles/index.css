@@ -27,6 +27,7 @@
     --input:               214 32% 91%;
     --ring:                225 100% 60%; /* 브랜드 블루 포커스 링 */
     --radius:              0.75rem;
+    --pl-page-min-h:       100dvh;
   }
 
   /* ── 다크 모드 ── */
@@ -81,4 +82,45 @@
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
+}
+
+@media (min-width: 1440px) {
+  html { zoom: 1.25; }
+  :root { --pl-page-min-h: calc(100dvh / 1.25); }
+}
+
+/* 전 페이지 좌우 여백 통일 — 세로 padding 은 각 페이지가 담당 */
+.pl-container {
+  max-width: 1328px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+@media (max-width: 639.98px) {
+  .pl-container { padding-inline: 16px; }
+}
+
+.pl-sticky-filter {
+  position: sticky;
+  top: var(--pl-header-h, 57px);
+  z-index: 40;
+  background: var(--pl-bg);
+  border-bottom: 1px solid var(--pl-line);
+}
+
+/* 칩 줄 — 데스크톱은 wrap, 640px 미만은 nowrap + 가로 스크롤. overflow 는 sticky 조상이 아니라 이 안쪽 래퍼에만 걸려야 한다. */
+.pl-chip-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 639.98px) {
+  .pl-chip-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .pl-chip-row::-webkit-scrollbar { display: none; }
+  .pl-chip-row > * { flex-shrink: 0; }
 }

@@ -127,7 +127,7 @@ function CompetitionSidebar({ competitions, activeSlug, locale, t }) {
         alignContent: 'start',
         position: 'sticky',
         top: 16,
-        maxHeight: 'calc(100dvh - 32px)',
+        maxHeight: 'calc(var(--pl-page-min-h) - 32px)',
         overflowY: 'auto',
       }}
     >
@@ -318,13 +318,13 @@ export default function CompetitionPage() {
   // 컵 라운드 그룹은 그 안에서 자동 (groupByRound=true 전달).
 
   if (loading) return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 16px' }}>
+    <div className="pl-container" style={{ paddingBlock: '24px' }}>
       <LoadingSkeleton rows={6} />
     </div>
   )
 
   if (error) return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '64px 16px' }}>
+    <div className="pl-container" style={{ paddingBlock: '64px' }}>
       <ErrorState title={t('competition.errorTitle')} description={error} />
     </div>
   )
@@ -345,14 +345,10 @@ export default function CompetitionPage() {
   const competitionsList = competitionsAll ?? []
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
       <div
-        style={{
-          maxWidth: 1400,
-          margin: '0 auto',
-          padding: '20px 16px 48px',
-        }}
-        className="lg:px-8 comp-page-layout"
+        style={{ paddingBlock: '20px 48px' }}
+        className="pl-container comp-page-layout"
       >
         {/* 데스크톱은 240px 사이드바 + 본문, 모바일은 1열 */}
         <style>{`
@@ -383,8 +379,8 @@ export default function CompetitionPage() {
             >
               {comp.initials}
             </span>
-            <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
-              <h1 className="t-page" style={{ margin: 0, fontSize: 24 }}>{getLocalizedCompetitionName(comp, locale)}</h1>
+            <div style={{ display: 'grid', minWidth: 0, flex: '1 1 auto' }}>
+              <h1 className="t-page" style={{ margin: 0, fontSize: 24, wordBreak: 'keep-all' }}>{getLocalizedCompetitionName(comp, locale)}</h1>
               <span className="t-sub">
                 {seasonLabelFor({ seasons: comp.seasons, seasonYear, standings, comp })} · {comp.country}
                 {standings?.stage && (
@@ -428,8 +424,8 @@ export default function CompetitionPage() {
 
           {/* 탭 바 */}
           <div
-            className="pl-card"
-            style={{ display: 'flex', overflow: 'hidden', marginBottom: 16 }}
+            className="pl-card pl-sticky-filter"
+            style={{ display: 'flex', overflow: 'hidden', marginBottom: 16, background: 'var(--pl-card)' }}
             role="tablist"
           >
             {TABS.map(tab => (
@@ -487,18 +483,22 @@ export default function CompetitionPage() {
                 <EmptyState description={t('competition.noMatches')} />
               ) : (
                 <>
-                  <RoundNavigator rounds={rounds} roundKey={roundKey} onChange={setRoundKey} />
+                  <div className="pl-sticky-filter" style={{ top: 'calc(var(--pl-header-h) + 44px)' }}>
+                    <RoundNavigator rounds={rounds} roundKey={roundKey} onChange={setRoundKey} />
+                  </div>
                   <ScheduleSections matches={filterByRound(matches, roundKey)} groupByRound={false} />
                 </>
               )
             ) : (
               // 리그·UCL: 기존 2열 (경기 + 참가 팀 사이드)
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }} className="comp-sched-grid">
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16 }} className="comp-sched-grid">
                 <style>{`@media(min-width:768px){.comp-sched-grid{grid-template-columns:minmax(0,1fr) 280px!important}}`}</style>
 
                 {matches.length > 0 ? (
                   <div>
-                    <RoundNavigator rounds={rounds} roundKey={roundKey} onChange={setRoundKey} />
+                    <div className="pl-sticky-filter" style={{ top: 'calc(var(--pl-header-h) + 44px)' }}>
+                      <RoundNavigator rounds={rounds} roundKey={roundKey} onChange={setRoundKey} />
+                    </div>
                     <ScheduleSections matches={filterByRound(matches, roundKey)} />
                   </div>
                 ) : (
