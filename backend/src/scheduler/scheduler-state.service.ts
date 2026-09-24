@@ -9,6 +9,9 @@ import { Injectable } from '@nestjs/common';
 
 export type BackfillOutcome = 'cap_reached' | 'no_targets' | 'error';
 
+/** L2/L1 갱신 잡의 종료 분류 — L2Summary.partial · L1Summary.partial 을 반영한다. */
+export type IngestOutcome = 'ok' | 'partial' | 'error';
+
 export interface BackfillWorkerState {
   enabled: boolean;
   running: boolean;
@@ -19,6 +22,29 @@ export interface BackfillWorkerState {
   lastProcessed: number | null;
   /** 마지막으로 처리를 시도한 시즌 (시즌 목록 순회 시 · 현재 시즌만이면 null) */
   currentSeason: number | null;
+}
+
+export interface L2DailyState {
+  enabled: boolean;
+  running: boolean;
+  lastStartedAt: string | null;
+  lastFinishedAt: string | null;
+  lastOutcome: IngestOutcome | null;
+  lastError: string | null;
+  /** 마지막 L2Summary.totals — rounds·matches·standings */
+  lastTotals: { rounds: number; matches: number; standings: number } | null;
+}
+
+export interface L1WeeklyState {
+  enabled: boolean;
+  running: boolean;
+  lastStartedAt: string | null;
+  lastFinishedAt: string | null;
+  lastOutcome: IngestOutcome | null;
+  lastError: string | null;
+  /** 마지막 L1Summary — 팀 커버리지 · 선수 수 */
+  lastTeams: { target: number; covered: number; failed: number } | null;
+  lastPlayers: number | null;
 }
 
 @Injectable()
@@ -32,6 +58,27 @@ export class SchedulerStateService {
     lastError: null,
     lastProcessed: null,
     currentSeason: null,
+  };
+
+  private readonly l2Daily: L2DailyState = {
+    enabled: false,
+    running: false,
+    lastStartedAt: null,
+    lastFinishedAt: null,
+    lastOutcome: null,
+    lastError: null,
+    lastTotals: null,
+  };
+
+  private readonly l1Weekly: L1WeeklyState = {
+    enabled: false,
+    running: false,
+    lastStartedAt: null,
+    lastFinishedAt: null,
+    lastOutcome: null,
+    lastError: null,
+    lastTeams: null,
+    lastPlayers: null,
   };
 
   markBackfillEnabled(): void {
@@ -63,5 +110,71 @@ export class SchedulerStateService {
 
   getBackfillWorkerState(): BackfillWorkerState {
     return { ...this.backfillWorker };
+  }
+
+  // ── L2 매일 (4-b-2) ──
+
+  markL2DailyEnabled(): void {
+    this.l2Daily.enabled = true;
+  }
+
+  isL2DailyRunning(): boolean {
+    return this.l2Daily.running;
+  }
+
+  markL2DailyStart(): void {
+    this.l2Daily.running = true;
+    this.l2Daily.lastStartedAt = new Date().toISOString();
+    this.l2Daily.lastFinishedAt = null;
+  }
+
+  markL2DailyFinish(
+    outcome: IngestOutcome,
+    totals: L2DailyState['lastTotals'],
+    error?: string,
+  ): void {
+    this.l2Daily.running = false;
+    this.l2Daily.lastFinishedAt = new Date().toISOString();
+    this.l2Daily.lastOutcome = outcome;
+    this.l2Daily.lastTotals = totals;
+    this.l2Daily.lastError = error ?? null;
+  }
+
+  getL2DailyState(): L2DailyState {
+    return { ...this.l2Daily };
+  }
+
+  // ── L1 매주 (4-b-2) ──
+
+  markL1WeeklyEnabled(): void {
+    this.l1Weekly.enabled = true;
+  }
+
+  isL1WeeklyRunning(): boolean {
+    return this.l1Weekly.running;
+  }
+
+  markL1WeeklyStart(): void {
+    this.l1Weekly.running = true;
+    this.l1Weekly.lastStartedAt = new Date().toISOString();
+    this.l1Weekly.lastFinishedAt = null;
+  }
+
+  markL1WeeklyFinish(
+    outcome: IngestOutcome,
+    teams: L1WeeklyState['lastTeams'],
+    players: number | null,
+    error?: string,
+  ): void {
+    this.l1Weekly.running = false;
+    this.l1Weekly.lastFinishedAt = new Date().toISOString();
+    this.l1Weekly.lastOutcome = outcome;
+    this.l1Weekly.lastTeams = teams;
+    this.l1Weekly.lastPlayers = players;
+    this.l1Weekly.lastError = error ?? null;
+  }
+
+  getL1WeeklyState(): L1WeeklyState {
+    return { ...this.l1Weekly };
   }
 }
