@@ -48,14 +48,18 @@ export default function TeamFixturesPage() {
   }
 
   if (loading) return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '24px 16px' }}>
-      <LoadingSkeleton rows={8} />
+    <div className="pl-container" style={{ paddingBlock: '24px' }}>
+      <div style={{ maxWidth: 960, margin: 0 }}>
+        <LoadingSkeleton rows={8} />
+      </div>
     </div>
   )
 
   if (error) return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '64px 16px' }}>
-      <ErrorState title={t('team.fixtureErrorTitle')} description={error} />
+    <div className="pl-container" style={{ paddingBlock: '64px' }}>
+      <div style={{ maxWidth: 960, margin: 0 }}>
+        <ErrorState title={t('team.fixtureErrorTitle')} description={error} />
+      </div>
     </div>
   )
 
@@ -91,8 +95,9 @@ export default function TeamFixturesPage() {
     ?? null
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
-      <div style={{ maxWidth: 820, margin: '0 auto', padding: '16px 16px 48px' }} className="lg:px-8">
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
+      <div className="pl-container" style={{ paddingBlock: '16px 48px' }}>
+        <div style={{ maxWidth: 960, margin: 0 }}>
 
         {/* 헤더 */}
         <div style={{ marginBottom: 16 }}>
@@ -106,7 +111,7 @@ export default function TeamFixturesPage() {
         </div>
 
         {/* 대회 필터 */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div className="pl-sticky-filter" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16, padding: '8px 0' }}>
           {compOptions.map(c => (
             <button
               key={c.slug}
@@ -160,6 +165,7 @@ export default function TeamFixturesPage() {
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   )

@@ -18,20 +18,20 @@ export default function TeamsPage() {
   const { data: groups, loading, error } = useData(fetchTeamsByLeague, [])
 
   if (loading) return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+    <div className="pl-container" style={{ paddingBlock: '24px' }}>
       <LoadingSkeleton rows={8} />
     </div>
   )
 
   if (error) return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 16px' }}>
+    <div className="pl-container" style={{ paddingBlock: '64px' }}>
       <ErrorState title={t('common.errorTitle')} description={error} />
     </div>
   )
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8">
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
+      <div style={{ paddingBlock: '20px 48px' }} className="pl-container">
 
         <div style={{ marginBottom: 24 }}>
           <h1 className="t-page" style={{ margin: 0, fontSize: 26 }}>{t('nav.teams')}</h1>

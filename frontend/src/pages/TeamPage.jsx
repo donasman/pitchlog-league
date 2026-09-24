@@ -51,8 +51,8 @@ export default function TeamPage() {
   const teamDisplayName = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8 space-y-5">
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
+    <div style={{ paddingBlock: '20px 48px' }} className="pl-container space-y-5">
       {/* 팀 헤더 */}
       <div className="pl-card" style={{ padding: 'clamp(14px,3vw,24px)', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         <TeamBadge initials={team.initials} color={team.color} logoUrl={team.logoUrl} size="lg" name={team.name} />

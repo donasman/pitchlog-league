@@ -404,9 +404,9 @@ export default function MatchesPage() {
   const liveCount  = liveMatches.length
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
       {/* 모바일 필터 (lg 미만) */}
-      <div className="lg:hidden">
+      <div className="lg:hidden pl-sticky-filter">
         <MobileFilterBar
           competitions={competitions}
           activeComp={activeComp}
@@ -420,10 +420,9 @@ export default function MatchesPage() {
 
       {/* 3열 그리드 (lg+) / 단일 열 (모바일) */}
       <div
+        className="pl-container"
         style={{
-          maxWidth: 1440,
-          margin: '0 auto',
-          padding: '16px 16px 40px',
+          paddingBlock: '16px 40px',
         }}
       >
         {/* ── 레이아웃: 데스크톱 3열 ── */}
@@ -434,14 +433,14 @@ export default function MatchesPage() {
               grid-template-columns: 196px 1fr 300px;
               gap: 16px;
               align-items: start;
-              padding: 16px 24px 40px;
+              padding-block: 16px 40px;
             }
           }
         `}</style>
         <div className="matches-3col">
 
           {/* LEFT: 필터 레일 (lg+) */}
-          <div className="hidden lg:block">
+          <div className="hidden lg:block pl-sticky-filter" style={{ top: 'calc(var(--pl-header-h) + 16px)' }}>
             <CompFilterRail
               competitions={competitions}
               activeComp={activeComp}
