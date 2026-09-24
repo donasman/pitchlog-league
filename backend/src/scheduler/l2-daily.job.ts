@@ -68,7 +68,8 @@ export class L2DailyJob implements OnModuleInit {
       this.state.markL2DailyFinish(outcome, summary.totals);
       this.logger.log(
         `l2-daily ${outcome} · rounds=${summary.totals.rounds} matches=${summary.totals.matches} standings=${summary.totals.standings}` +
-          (summary.skipped.length > 0 ? ` · skipped=[${summary.skipped.join(',')}]` : ''),
+          (summary.skipped.length > 0 ? ` · skipped=[${summary.skipped.join(',')}]` : '') +
+          (summary.pending.length > 0 ? ` · pending=[${summary.pending.join(',')}]` : ''),
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

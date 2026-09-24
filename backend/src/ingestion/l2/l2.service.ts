@@ -49,6 +49,13 @@ export interface L2CompetitionResult {
   missingTeams: number[];
   /** 이 대회시즌이 온전히 들어가지 않았다 — 시즌 단위 ingestion_runs 가 PARTIAL 로 남는다 */
   partial?: boolean;
+  /**
+   * 정상 진행 중 "아직 없음" — partial 이 아니라 성공 계열이다.
+   *   no_fixtures  : 라운드/경기 목록이 비어 있음 (시즌 등록 전 · 일정 미발표)
+   *   no_top_flight: 1부 팀이 한 라운드에도 없음 (컵 예선 단계 · FA Cup·Copa del Rey 등이 1월 본선 진입 전까지)
+   * 매일 partial 로 찍혀 진짜 이상(missingTeams·unknownRounds)을 가리던 문제를 분리한다.
+   */
+  pending?: 'no_fixtures' | 'no_top_flight';
 }
 
 export interface L2Summary {
@@ -56,6 +63,8 @@ export interface L2Summary {
   totals: { rounds: number; matches: number; standings: number };
   skipped: string[];
   partial?: boolean;
+  /** "정상 진행 중 대기" 대회시즌 라벨 목록 (예: "FA Cup 2026 (no_top_flight)"). partial 과 분리. */
+  pending: string[];
 }
 
 export interface L2RunOptions {
@@ -92,6 +101,7 @@ export class L2Service {
         competitions: [],
         totals: { rounds: 0, matches: 0, standings: 0 },
         skipped: [],
+        pending: [],
       };
 
       const scoped = opts.seasonYear !== undefined || opts.allSeasons === true;
@@ -135,6 +145,7 @@ export class L2Service {
           summary.totals.matches += r.matches;
           summary.totals.standings += r.standings;
           if (r.partial === true) summary.partial = true;
+          if (r.pending) summary.pending.push(`${label} (${r.pending})`);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           this.logger.warn(`${label} 실패 — ${msg}`);
@@ -150,7 +161,8 @@ export class L2Service {
 
       this.logger.log(
         `L2 완료 — 라운드 ${summary.totals.rounds} · 경기 ${summary.totals.matches} · 순위 ${summary.totals.standings}` +
-          (summary.skipped.length ? ` · 건너뜀 ${summary.skipped.length}` : ''),
+          (summary.skipped.length ? ` · 건너뜀 ${summary.skipped.length}` : '') +
+          (summary.pending.length ? ` · 대기 ${summary.pending.length}` : ''),
       );
       return summary;
     });
@@ -230,8 +242,9 @@ export class L2Service {
 
     if (roundNames.length === 0 || fixtures.length === 0) {
       // 시즌 등록 전이거나 일정 미발표. 실패가 아니라 "아직 없음" (DATA_RULES 5-4)
+      // partial 이 아니라 pending — 매일 partial 로 찍혀 진짜 이상을 가리지 않도록.
       this.logger.warn(`${label}: 라운드 ${roundNames.length} · 경기 ${fixtures.length} — 건너뜀`);
-      result.partial = true;
+      result.pending = 'no_fixtures';
       return result;
     }
 
@@ -247,8 +260,10 @@ export class L2Service {
     result.unknownRounds = scope.unknownRounds;
     result.droppedRounds = scope.rounds.filter((r) => !r.included).length;
     if (scope.cutOrdinal === null) {
+      // 컵 예선 단계 등 정상 "아직 없음". FA Cup·Copa del Rey 는 1월 본선 진입 전까지 여기에 걸린다.
+      // partial 이 아니라 pending — WARN 로그로 관측만 유지한다.
       this.logger.warn(`${label}: 1부 팀이 한 라운드에도 없다 — 아무것도 저장하지 않는다`);
-      result.partial = true;
+      result.pending = 'no_top_flight';
       return result;
     }
     result.cutRound = scope.rounds[scope.cutOrdinal].name;
