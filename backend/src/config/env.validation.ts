@@ -38,6 +38,51 @@ export function parseBackfillWorkerSeasons(value: string): number[] {
   return value.split(',').map(Number);
 }
 
+/** LIVE_POLLER_STOP_AT > LIVE_POLLER_SLOW_AT · ≤ 7500. cross-field 관계 제약. */
+@ValidatorConstraint({ name: 'livePollerStopAtRelation', async: false })
+class LivePollerStopAtRelationConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown, args: ValidationArguments): boolean {
+    if (typeof value !== 'number' || !Number.isInteger(value)) return false;
+    const env = args.object as EnvironmentVariables;
+    return value > env.LIVE_POLLER_SLOW_AT && value <= 7500;
+  }
+  defaultMessage(): string {
+    return 'LIVE_POLLER_STOP_AT 은 LIVE_POLLER_SLOW_AT 보다 크고 7500 이하여야 한다';
+  }
+}
+
+/** LIVE_POLLER_SLOW_PERIOD_SEC > LIVE_POLLER_PERIOD_SEC. cross-field 관계 제약. */
+@ValidatorConstraint({ name: 'livePollerSlowPeriodRelation', async: false })
+class LivePollerSlowPeriodRelationConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown, args: ValidationArguments): boolean {
+    if (typeof value !== 'number' || !Number.isInteger(value)) return false;
+    const env = args.object as EnvironmentVariables;
+    return value > env.LIVE_POLLER_PERIOD_SEC;
+  }
+  defaultMessage(): string {
+    return 'LIVE_POLLER_SLOW_PERIOD_SEC 은 LIVE_POLLER_PERIOD_SEC 보다 커야 한다';
+  }
+}
+
+/** LIVE_POLLER_PROBE_FIXTURE_IDS — 쉼표 구분 양의 정수 · 개수 ≤ 20 · 빈 항목·중복 금지 (빈 문자열 OK). */
+@ValidatorConstraint({ name: 'livePollerProbeIds', async: false })
+class LivePollerProbeIdsConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string') return false;
+    if (value === '') return true;
+    const parts = value.split(',');
+    if (parts.length > 20) return false;
+    if (parts.some((p) => p.length === 0)) return false;
+    const nums = parts.map((p) => Number(p));
+    if (nums.some((n) => !Number.isInteger(n) || n <= 0)) return false;
+    if (new Set(nums).size !== nums.length) return false;
+    return true;
+  }
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} 는 쉼표 구분 양의 정수 목록 · 개수 ≤ 20 · 빈 항목·중복 금지 (빈 문자열 OK)`;
+  }
+}
+
 export enum NodeEnv {
   Development = 'development',
   Test = 'test',
@@ -162,6 +207,55 @@ export class EnvironmentVariables {
   @IsString()
   @Matches(/^(\S+\s+){4}\S+$/, { message: 'L1_WEEKLY_CRON 은 5 필드 cron 표현식이어야 한다' })
   L1_WEEKLY_CRON: string = '30 5 * * 1';
+
+  // L4 라이브 폴러 (관측 모드)
+  /** 마스터 스위치 — false 면 잡 미등록. SCHEDULER_ENABLED=true 와 API_FOOTBALL_KEY 필요. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  @IsString()
+  LIVE_POLLER_ENABLED: string = 'false';
+
+  /** 정상 주기 (초). */
+  @Type(() => Number)
+  @IsInt()
+  @Min(5)
+  @Max(300)
+  LIVE_POLLER_PERIOD_SEC: number = 15;
+
+  /** used ≥ SLOW_AT 이면 이 주기로 강등. PERIOD_SEC 보다 커야 한다. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(10)
+  @Max(600)
+  @Validate(LivePollerSlowPeriodRelationConstraint)
+  LIVE_POLLER_SLOW_PERIOD_SEC: number = 30;
+
+  /** 강등 임계 (오늘 사용량 · /status requests.current). */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(7500)
+  LIVE_POLLER_SLOW_AT: number = 6000;
+
+  /** 정지 임계. 이 값 이상이면 UTC 자정까지 정지. SLOW_AT 보다 크고 7500 이하. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(7500)
+  @Validate(LivePollerStopAtRelationConstraint)
+  LIVE_POLLER_STOP_AT: number = 7000;
+
+  /** A매치 probe (DB 에 없는 경기 · 쉼표 구분 apiFixtureId · 개수 ≤ 20 · 중복 금지 · 빈값 OK). */
+  @IsOptional()
+  @IsString()
+  @Validate(LivePollerProbeIdsConstraint)
+  LIVE_POLLER_PROBE_FIXTURE_IDS: string = '';
+}
+
+/** LIVE_POLLER_PROBE_FIXTURE_IDS 문자열 → apiFixtureId 정수 배열. 빈 문자열이면 빈 배열. */
+export function parseLivePollerProbeIds(value: string): number[] {
+  if (value === '') return [];
+  return value.split(',').map(Number);
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
