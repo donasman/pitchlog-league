@@ -552,6 +552,14 @@ export default function AssistantPanel() {
     }
   }, [messages, isThinking]);
 
+  /* Esc 닫기 (SearchPanel 과 동일 패턴) */
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e) => { if (e.key === "Escape") closePanel(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isOpen, closePanel]);
+
   const handleAsk = useCallback(
     (question) => sendMessage(question),
     [sendMessage],

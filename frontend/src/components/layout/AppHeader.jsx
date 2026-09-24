@@ -20,6 +20,20 @@ export default function AppHeader() {
 
   const { unreadCount, panelOpen, togglePanel, closePanel } = useNotifications()
   const bellRef = useRef(null)
+  const headerRef = useRef(null)
+
+  /* --pl-header-h 를 실측 높이로 유지 (필터 sticky top 오프셋) */
+  useEffect(() => {
+    if (!headerRef.current) return
+    const el = headerRef.current
+    const apply = () => {
+      document.documentElement.style.setProperty('--pl-header-h', `${el.offsetHeight}px`)
+    }
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const [mobileOpen,  setMobileOpen]  = useState(false)
   const [searchOpen,  setSearchOpen]  = useState(false)
@@ -54,8 +68,8 @@ export default function AppHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-card border-b border-border">
-        <div className="flex items-center gap-3 px-4 lg:px-6 h-14">
+      <header ref={headerRef} className="sticky top-0 z-50 bg-card border-b border-border">
+        <div className="pl-container flex items-center gap-3 h-14">
           {/* 로고 */}
           <Link
             to="/"
@@ -93,7 +107,7 @@ export default function AppHeader() {
           <button
             onClick={() => setSearchOpen(true)}
             aria-label={t('header.searchLabel')}
-            className="p-2 text-muted-foreground hover:text-foreground rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex items-center justify-center w-11 h-11 text-muted-foreground hover:text-foreground rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Search size={18} aria-hidden="true" />
           </button>
@@ -160,7 +174,7 @@ export default function AppHeader() {
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label={mobileOpen ? t('header.menuClose') : t('header.menuOpen')}
             aria-expanded={mobileOpen}
-            className="lg:hidden p-2 text-muted-foreground hover:text-foreground transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="lg:hidden flex items-center justify-center w-11 h-11 text-muted-foreground hover:text-foreground transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
