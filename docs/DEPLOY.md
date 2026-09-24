@@ -90,10 +90,33 @@ sudo systemctl status pitchlog-backend
    - 로딩되면 `vercel.json` 의 rewrite (`/api/:path*` → `http://3.36.159.128:3000/api/:path*`) 가 동작 중
    - **딥링크 검증**: (a) `/matches/<id>` 직접 진입 200 (b) `/api/competitions` 는 백엔드 응답 (`/api/health` 는 안 됨 — health 는 `/health` 로만 매핑돼 있어 `/api/health` 는 `Cannot GET` 을 돌려준다) (c) 존재하지 않는 경로 `/없는경로` 는 앱 자체 404 화면 (Vercel 404 아님) · **없는 정적 파일은 진짜 404**: `curl -sI https://<앱>.vercel.app/logos/teams/999999.webp` 가 `HTTP/2 404` · content-type 이 `image/webp` 나 `text/html` 이 아니어야 한다 (fix/logos-and-spa-fallback 판)
 
-## 재배포
+## 서버 접속
+
+두 경로 중 하나. 집 Wi-Fi 는 22번을 막는 경우가 있어 SSM 이 확실하다.
+
+### SSH (내 IP 22번 허용 상태)
 
 ```bash
 ssh -i ~/.ssh/pitchlog-league-ec2.pem ubuntu@3.36.159.128
+```
+
+Wi-Fi 이동으로 공인 IP 가 바뀌면 트러블슈팅 "ssh Connection timed out" 항 참조.
+
+### AWS Session Manager (22번 차단 환경 · 권장 폴백)
+
+AWS Console → **EC2** → 인스턴스 선택 → **연결** → **웹 브라우저에서** → **Session Manager** → 세션 시작.
+브라우저 안 셸이 `ssm-user` 로 열린다. 우리 서비스는 `ubuntu` 아래에서 배포하므로 바로:
+
+```bash
+sudo su - ubuntu
+```
+
+**전제**: 인스턴스에 SSM Agent (Ubuntu 24.04 AMI 기본 포함) · IAM 역할에 `AmazonSSMManagedInstanceCore` 정책 부착.
+후자 없으면 콘솔에서 "연결" 버튼이 회색이다.
+
+## 재배포
+
+```bash
 bash /opt/pitchlog/infra/ec2/deploy.sh          # 최신 main
 bash /opt/pitchlog/infra/ec2/deploy.sh dev      # dev 브랜치
 bash /opt/pitchlog/infra/ec2/deploy.sh v1-...   # 태그
@@ -339,6 +362,72 @@ BACKFILL_WORKER_CRON="*/10 * * * *"
 - **에러 재시도** — `error` 는 다음 트리거에서 재시도 · 커서 (`backfill_jobs.cursor_match_id`) 가 재개 보장.
 - **DAILY_CAP** — 워커가 매 경기 앞에서 `/status` 로 확인 · 5,700 초과 시 자연 중단 (`cap_reached`).
 - **`/status` 스냅숏** — `SCHEDULER_ENABLED=true` 면 매일 UTC 23:50 자동 (개별 스위치 없음).
+
+## L2 매일 · L1 매주 (4-b-2)
+
+`L2Service.run()` · `L1Service.run()` 을 `@Cron` 트리거로 부른다. 백필 워커가 어제 경기(FT/AET/PEN · kickoff < now-24h) 를 잡으려면 L2 가 그전에 상태를 갱신해 둬야 한다 — 그게 이 잡이다. L1 은 이적·부상으로 스쿼드가 바뀌었을 때 다음 라운드에 반영되도록 주 1회 돈다.
+
+**동시 실행 정책**: 세 이송 잡(backfill · l2-daily · l1-weekly)은 완전 독립이다. matches 컬럼 소유권이 이미 분리(L2 = 스코어·라운드·순위 / L3~L5 = detail_*, `l2.service.ts` 소유권 경계) 되어 있어 같은 시각에 돌아도 안전. 각 잡은 자기 겹침만 in-memory 플래그로 막는다. quota 는 백필 워커만 매 경기 앞에서 `/status` 로 확인 — L2 는 대회당 3콜 × 12 ≈ 36, L1 은 팀당 1콜로 예산 대비 미미해 별도 방어를 두지 않는다.
+
+### 켜기 (개별 스위치)
+
+새 잡은 **꺼진 상태로 배포** 후 마스터 → 개별 스위치 순서로 켠다. 첫 관측이 정상이면 원복.
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# SCHEDULER_ENABLED=true           (마스터)
+# L2_DAILY_ENABLED=true            (매일 UTC 04:10 = KST 13:10)
+# L1_WEEKLY_ENABLED=true           (매주 월 UTC 05:30 = KST 14:30)
+sudo systemctl restart pitchlog-backend
+sudo journalctl -u pitchlog-backend -f
+# 부팅 로그: "l2-daily registered · cron=\"10 4 * * *\" UTC" · "l1-weekly registered · ..."
+# 각 트리거: "l2-daily ok · rounds=229 matches=2566 standings=204"
+```
+
+### 첫 관측 요령 (cron 을 임시로 가깝게)
+
+정기 시각까지 기다리지 않고 즉시 첫 실행을 보려면 CRON 을 몇 분 뒤로 잡는다. 예: 현재 05:12 UTC 라면 `L2_DAILY_CRON="15 5 * * *"` 로 3분 뒤 트리거. 관측 뒤 원복하고 restart.
+
+### 상태 확인
+
+```bash
+curl -s http://localhost:3000/health | jq '.scheduler.jobs'
+# {
+#   "backfillWorker": {...},
+#   "l2Daily":  { "enabled": true, "lastOutcome": "ok",      "lastTotals": {"rounds":229,"matches":2566,"standings":204}, ... },
+#   "l1Weekly": { "enabled": true, "lastOutcome": "ok",      "lastTeams": {"target":12,"covered":12,"failed":0}, "lastPlayers":456, ... }
+# }
+```
+
+### env (새 4개)
+
+- `L2_DAILY_ENABLED` (true/false · 기본 false) — 개별 스위치. `SCHEDULER_ENABLED=true` 여야 효과.
+- `L2_DAILY_CRON` (기본 `10 4 * * *` · UTC 04:10 = KST 13:10) — 5 필드. UTC 로 등록. **유럽 저녁 경기 종료(최대 22:00 UTC) 뒤 · 워커 24h 컷 앞** 시각. 잘못된 값이면 부팅 실패.
+- `L1_WEEKLY_ENABLED` (true/false · 기본 false) — 개별 스위치.
+- `L1_WEEKLY_CRON` (기본 `30 5 * * 1` · 매주 월 UTC 05:30 = KST 14:30) — 백필 워커 매시 5분 트리거·L2 데일리와 겹치지 않는 시각.
+
+### outcome 3분류
+
+`L2Summary.partial` · `L1Summary.partial` 을 그대로 반영한다:
+
+- `ok`      — partial 없음
+- `partial` — 일부 대회·팀이 안 들어감 (컷 라운드 미판정 · 급감 가드 등). journalctl 요약 줄에 `skipped=[...]` 표기.
+- `error`   — `run()` throw. 다음 트리거에서 재시도.
+
+### 끄기
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# L2_DAILY_ENABLED=false            (L2 만 중지 · 나머지 잡 유지)
+# 또는 SCHEDULER_ENABLED=false      (마스터 · 모든 잡 중지)
+sudo systemctl restart pitchlog-backend
+```
+
+### 실측 체크리스트 (켠 다음 날)
+
+- [ ] `curl -s http://localhost:3000/health | jq '.scheduler.jobs.l2Daily.lastOutcome'` → `"ok"`
+- [ ] `curl -s http://localhost:3000/api/matches | jq '.asOf'` — 어제 갱신 시각으로 이동했는가
+- [ ] `journalctl -u pitchlog-backend --since "24h ago" | grep backfill-worker | grep processed` — `processed>0` 이 있는가 (어제 경기 상세가 붙었는가)
 
 ## 실측 체크리스트 (첫 배포 후)
 

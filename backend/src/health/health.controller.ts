@@ -29,6 +29,8 @@ export class HealthController {
         enabled: process.env.SCHEDULER_ENABLED === 'true',
         jobs: {
           backfillWorker: this.scheduler.getBackfillWorkerState(),
+          l2Daily: this.scheduler.getL2DailyState(),
+          l1Weekly: this.scheduler.getL1WeeklyState(),
         },
       },
     };
