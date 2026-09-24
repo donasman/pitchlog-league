@@ -148,4 +148,34 @@ describe('LivePollerJob', () => {
     const s = state.getLivePollerState();
     expect(s.callsToday).toBeGreaterThanOrEqual(1);
   });
+
+  it('(8) 강등 유지 — used=6100 관측 후 fetchStatus=false tick 3회 모두 30초 예약', async () => {
+    // 각 tick 마다 observer.tick 반환값이 시나리오를 결정 (mock 은 fetchStatus 인자 무시)
+    observer.tick
+      .mockResolvedValueOnce(mkResult({ targets: 1, chunks: 1, used: 6100 })) // tick1: /status 관측 6100
+      .mockResolvedValueOnce(mkResult({ targets: 1, chunks: 1, used: null })) // tick2: /status 미호출
+      .mockResolvedValueOnce(mkResult({ targets: 1, chunks: 1, used: null })) // tick3: /status 미호출
+      .mockResolvedValueOnce(mkResult({ targets: 1, chunks: 1, used: null })); // tick4: 안 실행되어야 함
+
+    job.onModuleInit();
+
+    // tick1 (0ms 뒤) — used=6100 관측 → 30s 강등
+    await vi.advanceTimersByTimeAsync(0);
+    expect(observer.tick).toHaveBeenCalledTimes(1);
+    expect(state.getLivePollerState().periodSec).toBe(30);
+
+    // tick2 (30s 뒤) — used=null 이지만 lastKnownUsed=6100 → 여전히 30s 예약
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(observer.tick).toHaveBeenCalledTimes(2);
+    expect(state.getLivePollerState().periodSec).toBe(30);
+
+    // tick3 (다시 30s 뒤) — 강등 유지
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(observer.tick).toHaveBeenCalledTimes(3);
+    expect(state.getLivePollerState().periodSec).toBe(30);
+
+    // tick3 뒤 다시 30s 예약된 상태에서 15s 만 지나가면 tick 안 나감 (15s 예약이었으면 여기서 4번째 실행)
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(observer.tick).toHaveBeenCalledTimes(3);
+  });
 });

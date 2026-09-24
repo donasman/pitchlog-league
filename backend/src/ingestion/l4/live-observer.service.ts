@@ -223,13 +223,13 @@ export class LiveObserverService {
         };
         const prev = lastSeen.get(id) ?? null;
 
-        // wouldWrite (probe 매치는 0)
+        // wouldWrite (probe 매치는 0). 행 단위 — 5 컬럼 중 하나라도 다르면 +1.
         if (!isProbeFixture) {
           if (prev === null) {
             const dbRow = dbRowMap.get(id);
-            if (dbRow) wouldWrite += countDiffs5(dbRow, next);
+            if (dbRow && countDiffs5(dbRow, next) > 0) wouldWrite += 1;
           } else {
-            wouldWrite += countDiffs5(prev, next);
+            if (countDiffs5(prev, next) > 0) wouldWrite += 1;
           }
         }
 
@@ -266,8 +266,10 @@ export class LiveObserverService {
           });
         }
 
-        // 메모리 필터 갱신
-        if (next.statusShort === 'FT') memory.finishedAt.set(id, now);
+        // 메모리 필터 갱신 — FINAL_TERMINAL_STATUSES 전부(FT · AET · PEN) 를 finishedAt 에 기록
+        if ((FINAL_TERMINAL_STATUSES as readonly string[]).includes(next.statusShort)) {
+          memory.finishedAt.set(id, now);
+        }
         if ((EXCLUDE_STATUSES as readonly string[]).includes(next.statusShort)) {
           memory.excluded.add(id);
         }
