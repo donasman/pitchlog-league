@@ -112,6 +112,34 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('L2 매일 · L1 매주 잡 env (4-b-2)', () => {
+    it('기본값 — 두 스위치 모두 false · cron 은 UTC 04:10 / 월 05:30', () => {
+      const env = validateEnv({ ...base });
+      expect(env.L2_DAILY_ENABLED).toBe('false');
+      expect(env.L1_WEEKLY_ENABLED).toBe('false');
+      expect(env.L2_DAILY_CRON).toBe('10 4 * * *');
+      expect(env.L1_WEEKLY_CRON).toBe('30 5 * * 1');
+    });
+
+    it("L2_DAILY_ENABLED='yes' 는 거부", () => {
+      expect(() => validateEnv({ ...base, L2_DAILY_ENABLED: 'yes' })).toThrow(/L2_DAILY_ENABLED/);
+    });
+
+    it("L1_WEEKLY_ENABLED='yes' 는 거부", () => {
+      expect(() => validateEnv({ ...base, L1_WEEKLY_ENABLED: 'yes' })).toThrow(/L1_WEEKLY_ENABLED/);
+    });
+
+    it('L2_DAILY_CRON 5 필드 아니면 거부', () => {
+      expect(validateEnv({ ...base, L2_DAILY_CRON: '0 5 * * *' }).L2_DAILY_CRON).toBe('0 5 * * *');
+      expect(() => validateEnv({ ...base, L2_DAILY_CRON: '5 * *' })).toThrow(/L2_DAILY_CRON/);
+    });
+
+    it('L1_WEEKLY_CRON 5 필드 아니면 거부', () => {
+      expect(validateEnv({ ...base, L1_WEEKLY_CRON: '0 6 * * 0' }).L1_WEEKLY_CRON).toBe('0 6 * * 0');
+      expect(() => validateEnv({ ...base, L1_WEEKLY_CRON: '30 5 *' })).toThrow(/L1_WEEKLY_CRON/);
+    });
+  });
+
   describe('BACKFILL_DAILY_CAP (feat/backfill-daily-cap-env)', () => {
     it('기본값은 5700 (미설정 시 현행 동작 유지)', () => {
       expect(validateEnv({ ...base }).BACKFILL_DAILY_CAP).toBe(5700);
