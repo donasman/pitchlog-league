@@ -512,6 +512,32 @@ describe('L2 라운드·경기·순위 (e2e, 가짜 API)', () => {
     expect(top.teamId).toBe(teamIdByApi.get(TF[3]));
   }, 180_000);
 
+  it('4-a. 순위 group_name 이 바뀐 응답 — 옛 group 은 지워지고 새 group 만 남는다', async () => {
+    // 2026-09-23 UCL 사고 회귀 잠금: 외부 API 가 group_name 을 바꾸면 옛 행이 영구 잔존했다.
+    // 옛 이름으로 한 번 심고, 다음 실행에서 새 이름으로 받으면 옛 4행이 지워져 새 4행만 남아야 한다.
+    fake.standings.set(LEAGUE_API_ID, [TF.map((t, i) => standingRow(i + 1, t, 'Old League Phase'))]);
+    await l2.run();
+    const afterOld = await prisma.standing.findMany({
+      where: { competitionSeasonId: leagueCsId },
+      select: { groupName: true },
+    });
+    expect(afterOld).toHaveLength(4);
+    expect(new Set(afterOld.map((s) => s.groupName))).toEqual(new Set(['Old League Phase']));
+
+    // API 가 조 이름을 바꿨다 — 새 group 4행. collectStandings 가 옛 4행을 지운다.
+    fake.standings.set(LEAGUE_API_ID, [TF.map((t, i) => standingRow(i + 1, t, 'New League Phase'))]);
+    await l2.run();
+    const afterNew = await prisma.standing.findMany({
+      where: { competitionSeasonId: leagueCsId },
+      select: { groupName: true },
+    });
+    expect(afterNew).toHaveLength(4);
+    expect(new Set(afterNew.map((s) => s.groupName))).toEqual(new Set(['New League Phase']));
+
+    // 뒤 케이스가 label 폴백(빈 문자열)을 기대하므로 원래대로 복구.
+    fake.standings.set(LEAGUE_API_ID, [TF.map((t, i) => standingRow(i + 1, t, ''))]);
+  }, 180_000);
+
   it('5. 소유권 경계 — 재실행이 L3~L5 의 열을 지우지 않는다', async () => {
     const target = fake.fixtures.get(CUP_API_ID)!.find((f) => f.league.round === 'Quarter-finals')!;
     const checkedAt = new Date('2026-09-01T00:00:00Z');
