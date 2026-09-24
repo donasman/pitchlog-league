@@ -7,6 +7,7 @@
  *   + BACKFILL_WORKER_ENABLED     → BackfillWorkerJob 등록 (API 키 있을 때만)
  *   + L2_DAILY_ENABLED            → L2DailyJob 등록 (API 키 있을 때만)
  *   + L1_WEEKLY_ENABLED           → L1WeeklyJob 등록 (API 키 있을 때만)
+ *   + LIVE_POLLER_ENABLED         → LivePollerJob 등록 (API 키 있을 때만)
  *
  * API_FOOTBALL_KEY 없으면 잡 등록 안 함 (부팅 로그 경고 · 부팅은 성공 — 안전장치).
  *
@@ -25,10 +26,12 @@ import { ApiFootballModule } from '../ingestion/api-football/api-football.module
 import { BackfillModule } from '../ingestion/backfill/backfill.module.js';
 import { L1Module } from '../ingestion/l1/l1.module.js';
 import { L2Module } from '../ingestion/l2/l2.module.js';
+import { L4Module } from '../ingestion/l4/l4.module.js';
 import { SchedulerStateService } from './scheduler-state.service.js';
 import { BackfillWorkerJob } from './backfill-worker.job.js';
 import { L1WeeklyJob } from './l1-weekly.job.js';
 import { L2DailyJob } from './l2-daily.job.js';
+import { LivePollerJob } from './live-poller.job.js';
 import { QuotaSnapshotJob } from './quota-snapshot.job.js';
 
 @Global()
@@ -40,6 +43,7 @@ export class SchedulerModule {
     const backfillWorkerEnabled = process.env.BACKFILL_WORKER_ENABLED === 'true';
     const l2DailyEnabled = process.env.L2_DAILY_ENABLED === 'true';
     const l1WeeklyEnabled = process.env.L1_WEEKLY_ENABLED === 'true';
+    const livePollerEnabled = process.env.LIVE_POLLER_ENABLED === 'true';
     const hasApiKey = !!process.env.API_FOOTBALL_KEY;
 
     const providers: Provider[] = [SchedulerStateService];
@@ -103,6 +107,20 @@ export class SchedulerModule {
       }
     } else {
       logger.log('scheduler: L1_WEEKLY_ENABLED != true — l1-weekly 등록 건너뜀');
+    }
+
+    // L4 라이브 폴러 (관측 모드) — 개별 스위치 + API 키 필요
+    if (livePollerEnabled) {
+      if (hasApiKey) {
+        imports.push(L4Module);
+        providers.push(LivePollerJob);
+      } else {
+        logger.warn(
+          'scheduler: LIVE_POLLER_ENABLED=true 이지만 API_FOOTBALL_KEY 없음 — live-poller 등록 건너뜀',
+        );
+      }
+    } else {
+      logger.log('scheduler: LIVE_POLLER_ENABLED != true — live-poller 등록 건너뜀');
     }
 
     logger.log(
