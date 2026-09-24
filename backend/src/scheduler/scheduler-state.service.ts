@@ -47,6 +47,25 @@ export interface L1WeeklyState {
   lastPlayers: number | null;
 }
 
+export interface LivePollerState {
+  enabled: boolean;
+  running: boolean;
+  windowOpen: boolean;
+  periodSec: number;
+  stoppedReason: 'quota_stop' | null;
+  targets: number;
+  liveCount: number;
+  lastTickAt: string | null;
+  lastTickMs: number | null;
+  maxTickMsToday: number;
+  ticksToday: number;
+  /** 오늘(UTC) 누적 /fixtures 호출 수 (/status 는 제외) */
+  callsToday: number;
+  lastUsed: number | null;
+  wouldWriteToday: number;
+  lastError: string | null;
+}
+
 @Injectable()
 export class SchedulerStateService {
   private readonly backfillWorker: BackfillWorkerState = {
@@ -80,6 +99,26 @@ export class SchedulerStateService {
     lastTeams: null,
     lastPlayers: null,
   };
+
+  private readonly livePoller: LivePollerState = {
+    enabled: false,
+    running: false,
+    windowOpen: false,
+    periodSec: 15,
+    stoppedReason: null,
+    targets: 0,
+    liveCount: 0,
+    lastTickAt: null,
+    lastTickMs: null,
+    maxTickMsToday: 0,
+    ticksToday: 0,
+    callsToday: 0,
+    lastUsed: null,
+    wouldWriteToday: 0,
+    lastError: null,
+  };
+
+  private lastLivePollerUtcYmd: string | null = null;
 
   markBackfillEnabled(): void {
     this.backfillWorker.enabled = true;
@@ -176,5 +215,76 @@ export class SchedulerStateService {
 
   getL1WeeklyState(): L1WeeklyState {
     return { ...this.l1Weekly };
+  }
+
+  // ── Live Poller ──
+
+  markLivePollerEnabled(): void {
+    this.livePoller.enabled = true;
+  }
+
+  isLivePollerRunning(): boolean {
+    return this.livePoller.running;
+  }
+
+  markLivePollerStart(periodSec: number, now: Date = new Date()): void {
+    this.rolloverLivePollerIfNeeded(now);
+    this.livePoller.running = true;
+    this.livePoller.periodSec = periodSec;
+    this.livePoller.lastTickAt = now.toISOString();
+  }
+
+  markLivePollerTick(summary: {
+    now: Date;
+    ms: number;
+    targets: number;
+    liveCount: number;
+    calls: number;
+    used: number | null;
+    wouldWrite: number;
+    windowOpen: boolean;
+    periodSec: number;
+    error?: string | null;
+  }): void {
+    this.rolloverLivePollerIfNeeded(summary.now);
+    const s = this.livePoller;
+    s.running = false;
+    s.windowOpen = summary.windowOpen;
+    s.periodSec = summary.periodSec;
+    s.targets = summary.targets;
+    s.liveCount = summary.liveCount;
+    s.lastTickAt = summary.now.toISOString();
+    s.lastTickMs = summary.ms;
+    if (summary.ms > s.maxTickMsToday) s.maxTickMsToday = summary.ms;
+    s.ticksToday += 1;
+    s.callsToday += summary.calls;
+    if (summary.used !== null) s.lastUsed = summary.used;
+    s.wouldWriteToday += summary.wouldWrite;
+    s.lastError = summary.error ?? null;
+  }
+
+  markLivePollerStop(reason: 'quota_stop', now: Date = new Date()): void {
+    this.rolloverLivePollerIfNeeded(now);
+    this.livePoller.stoppedReason = reason;
+  }
+
+  getLivePollerState(): LivePollerState {
+    return { ...this.livePoller };
+  }
+
+  private rolloverLivePollerIfNeeded(now: Date): void {
+    const ymd = now.toISOString().slice(0, 10);
+    if (this.lastLivePollerUtcYmd === null) {
+      this.lastLivePollerUtcYmd = ymd;
+      return;
+    }
+    if (this.lastLivePollerUtcYmd !== ymd) {
+      this.livePoller.callsToday = 0;
+      this.livePoller.ticksToday = 0;
+      this.livePoller.maxTickMsToday = 0;
+      this.livePoller.wouldWriteToday = 0;
+      this.livePoller.stoppedReason = null;
+      this.lastLivePollerUtcYmd = ymd;
+    }
   }
 }
