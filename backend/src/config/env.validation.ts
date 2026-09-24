@@ -139,6 +139,29 @@ export class EnvironmentVariables {
   @Min(1)
   @Max(7500)
   BACKFILL_DAILY_CAP: number = 5700;
+
+  /** L2 매일 잡 개별 스위치 (4-b-2). SCHEDULER_ENABLED=true 여야 효과 있음. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  @IsString()
+  L2_DAILY_ENABLED: string = 'false';
+
+  /** L2 매일 잡 cron (기본 UTC 04:10 = KST 13:10 — 유럽 저녁 경기 종료 후 · 워커 24h 컷 앞).
+   *  cron 은 SchedulerRegistry 에 UTC 로 등록된다 (quota-snapshot 과 동일). */
+  @IsString()
+  @Matches(/^(\S+\s+){4}\S+$/, { message: 'L2_DAILY_CRON 은 5 필드 cron 표현식이어야 한다' })
+  L2_DAILY_CRON: string = '10 4 * * *';
+
+  /** L1 매주 잡 개별 스위치 (4-b-2). SCHEDULER_ENABLED=true 여야 효과 있음. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  @IsString()
+  L1_WEEKLY_ENABLED: string = 'false';
+
+  /** L1 매주 잡 cron (기본 매주 월 UTC 05:30 = KST 14:30 — 워커 매시 5분 트리거·L2 데일리와 겹치지 않음). */
+  @IsString()
+  @Matches(/^(\S+\s+){4}\S+$/, { message: 'L1_WEEKLY_CRON 은 5 필드 cron 표현식이어야 한다' })
+  L1_WEEKLY_CRON: string = '30 5 * * 1';
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

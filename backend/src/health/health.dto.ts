@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { BackfillOutcome } from '../scheduler/scheduler-state.service.js';
+import type { BackfillOutcome, IngestOutcome } from '../scheduler/scheduler-state.service.js';
 
 export class BackfillWorkerStateDto {
   @ApiProperty({ description: '잡 등록 여부 (SCHEDULER_ENABLED + BACKFILL_WORKER_ENABLED + API 키)' })
@@ -27,9 +27,76 @@ export class BackfillWorkerStateDto {
   currentSeason!: number | null;
 }
 
+export class L2DailyTotalsDto {
+  @ApiProperty() rounds!: number;
+  @ApiProperty() matches!: number;
+  @ApiProperty() standings!: number;
+}
+
+export class L2DailyStateDto {
+  @ApiProperty({ description: '잡 등록 여부 (SCHEDULER_ENABLED + L2_DAILY_ENABLED + API 키)' })
+  enabled!: boolean;
+
+  @ApiProperty({ description: '이번 트리거 실행 중 여부' })
+  running!: boolean;
+
+  @ApiProperty({ nullable: true, type: String })
+  lastStartedAt!: string | null;
+
+  @ApiProperty({ nullable: true, type: String })
+  lastFinishedAt!: string | null;
+
+  @ApiProperty({ nullable: true, enum: ['ok', 'partial', 'error'], type: String })
+  lastOutcome!: IngestOutcome | null;
+
+  @ApiProperty({ nullable: true, type: String, description: '오류 메시지만' })
+  lastError!: string | null;
+
+  @ApiProperty({ nullable: true, type: L2DailyTotalsDto, description: '마지막 L2Summary.totals' })
+  lastTotals!: L2DailyTotalsDto | null;
+}
+
+export class L1WeeklyTeamsDto {
+  @ApiProperty() target!: number;
+  @ApiProperty() covered!: number;
+  @ApiProperty() failed!: number;
+}
+
+export class L1WeeklyStateDto {
+  @ApiProperty({ description: '잡 등록 여부 (SCHEDULER_ENABLED + L1_WEEKLY_ENABLED + API 키)' })
+  enabled!: boolean;
+
+  @ApiProperty({ description: '이번 트리거 실행 중 여부' })
+  running!: boolean;
+
+  @ApiProperty({ nullable: true, type: String })
+  lastStartedAt!: string | null;
+
+  @ApiProperty({ nullable: true, type: String })
+  lastFinishedAt!: string | null;
+
+  @ApiProperty({ nullable: true, enum: ['ok', 'partial', 'error'], type: String })
+  lastOutcome!: IngestOutcome | null;
+
+  @ApiProperty({ nullable: true, type: String, description: '오류 메시지만' })
+  lastError!: string | null;
+
+  @ApiProperty({ nullable: true, type: L1WeeklyTeamsDto, description: '마지막 L1Summary.teams 요약' })
+  lastTeams!: L1WeeklyTeamsDto | null;
+
+  @ApiProperty({ nullable: true, type: Number })
+  lastPlayers!: number | null;
+}
+
 export class SchedulerJobsDto {
   @ApiProperty({ type: BackfillWorkerStateDto })
   backfillWorker!: BackfillWorkerStateDto;
+
+  @ApiProperty({ type: L2DailyStateDto })
+  l2Daily!: L2DailyStateDto;
+
+  @ApiProperty({ type: L1WeeklyStateDto })
+  l1Weekly!: L1WeeklyStateDto;
 }
 
 export class SchedulerStateDto {
