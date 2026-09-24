@@ -431,6 +431,83 @@ sudo systemctl restart pitchlog-backend
 - [ ] `curl -s http://localhost:3000/api/matches | jq '.asOf'` — 어제 갱신 시각으로 이동했는가
 - [ ] `journalctl -u pitchlog-backend --since "24h ago" | grep backfill-worker | grep processed` — `processed>0` 이 있는가 (어제 경기 상세가 붙었는가)
 
+## L4 라이브 폴러 (관측 모드 · 1판)
+
+경기 진행 중 상태(스코어·경기 시간)를 실시간에 가깝게 관측한다. **이 판은 DB 쓰기 없음** — 응답을 파싱해 "쓰면 바뀌었을 필드 수(`wouldWrite`)"만 계측·로그·`/health` 로 노출한다. 실제 DB 갱신은 2판에서 붙인다.
+
+**동작 요약**
+- 소스: `GET /fixtures?ids=<a-b-…>` (한 청크당 최대 20 id · '-' 결합)
+- 폴링 대상: DB 매치 (`kickoff_at ∈ [now-4h, now+5m]` · `Competition.isTracked=true` · 미종료) + `LIVE_POLLER_PROBE_FIXTURE_IDS` 로 지정한 A매치 (DB 에 없는 경기 · 부팅 시 + 매시 1회 fetch 후 메모리 적재)
+- 주기: 대상 있으면 15초(기본) · `used ≥ 6000` 이면 30초 · `used ≥ 7000` 이면 UTC 자정까지 정지(다음 날 자동 재개) · 대상 0 이면 60초 idle (`LIVE_IDLE_CHECK_SEC` 상수)
+- 겹침 방지: `running` 플래그 · 실행 중 트리거 skip
+- `wouldWrite` 규칙: **첫 관측**만 DB 값과 5컬럼(`status_short · elapsed · extra_elapsed · goals_home · goals_away`) 비교, 이후는 **직전 관측(lastSeen)** 과 비교. probe 매치는 첫 관측도 0
+- `/status` 최소 60초 간격 · `QuotaService.snapshot()` 미사용 (스냅샷 INSERT 원치 않음)
+
+### 켜기 (개별 스위치)
+
+기본 상태는 꺼짐. 마스터 → 개별 스위치 순서.
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# SCHEDULER_ENABLED=true          (마스터)
+# LIVE_POLLER_ENABLED=true        (개별)
+# (선택) LIVE_POLLER_PROBE_FIXTURE_IDS=1628999,1629003,1629005   # KOR 9/28 URU · 10/2 VEN · 10/6 UZB
+sudo systemctl restart pitchlog-backend
+sudo journalctl -u pitchlog-backend --since "3 min ago" | grep live-poller
+# 부팅 로그:   "live-poller registered · period=15s · slowAt=6000 · stopAt=7000"
+# probe 있으면: "live-poller probe registered · ids=1628999,1629003,1629005 · refresh=hourly"
+```
+
+### 상태 확인
+
+```bash
+curl -s http://localhost:3000/health | jq '.scheduler.jobs.livePoller'
+# {
+#   "enabled": true, "running": false, "windowOpen": false, "periodSec": 15,
+#   "stoppedReason": null, "targets": 0, "liveCount": 0,
+#   "lastTickAt": "2026-09-24T...", "lastTickMs": 32, "maxTickMsToday": 189,
+#   "ticksToday": 240, "callsToday": 12, "lastUsed": 3245,
+#   "wouldWriteToday": 68, "lastError": null
+# }
+```
+
+### 관측 로그 앵커 (grep)
+
+```
+live-poller tick · targets=N live=N chunks=N bytes=N ms=N used=N period=15s wouldWrite=N [· probe]
+live-poller transition · <id> <home>-<away> <prev>→<next> <hg>-<ag>
+live-poller detail · <id> events=N lineups=N statistics=N players=N [· probe]
+live-poller window open · targets=N
+live-poller window closed · ticks=N calls=N maxMs=N
+live-poller slow · used=N ≥ 6000 · period=30s
+live-poller stop · used=N ≥ 7000
+```
+
+### env 6개
+
+- `LIVE_POLLER_ENABLED` (true/false · 기본 false) — 개별 스위치. `SCHEDULER_ENABLED=true` 여야 효과.
+- `LIVE_POLLER_PERIOD_SEC` (5~300 · 기본 15) — 정상 주기 초.
+- `LIVE_POLLER_SLOW_PERIOD_SEC` (10~600 · 기본 30 · **반드시 `PERIOD_SEC` 보다 큼**) — 강등 주기.
+- `LIVE_POLLER_SLOW_AT` (1~7500 · 기본 6000) — `/status` 응답의 `used` 이 값 이상이면 강등.
+- `LIVE_POLLER_STOP_AT` (1~7500 · 기본 7000 · **`SLOW_AT < STOP_AT ≤ 7500`**) — 이 값 이상이면 UTC 자정까지 정지.
+- `LIVE_POLLER_PROBE_FIXTURE_IDS` (쉼표 구분 apiFixtureId · 개수 ≤ 20 · 중복 금지 · 빈 값 OK) — DB 밖 매치 관측.
+
+### 끄기
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_POLLER_ENABLED=false
+sudo systemctl restart pitchlog-backend
+```
+
+### 실측 체크리스트 (켠 다음 날 또는 A매치 관측 후)
+
+- [ ] `curl -s http://localhost:3000/health | jq '.scheduler.jobs.livePoller.ticksToday'` > 0
+- [ ] `curl -s http://localhost:3000/health | jq '.scheduler.jobs.livePoller.callsToday'` < 7500
+- [ ] `journalctl -u pitchlog-backend --since today | grep "live-poller transition"` — 실제 스코어·상태 변화만큼 잡혔는가
+- [ ] `journalctl -u pitchlog-backend --since today | grep "live-poller error"` — 0 (있으면 원인 조사 · `lastError` 는 메시지만 저장, 스택 없음)
+- [ ] `journalctl -u pitchlog-backend --since today | grep "live-poller stop"` — used ≥ 7000 에 실제로 도달했는지
+
 ## 실측 체크리스트 (첫 배포 후)
 
 - [ ] **(a) 백엔드 직결**: `curl -i http://3.36.159.128:3000/health` — 200 · `db:true`

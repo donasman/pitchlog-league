@@ -31,6 +31,7 @@ export class HealthController {
           backfillWorker: this.scheduler.getBackfillWorkerState(),
           l2Daily: this.scheduler.getL2DailyState(),
           l1Weekly: this.scheduler.getL1WeeklyState(),
+          livePoller: this.scheduler.getLivePollerState(),
         },
       },
     };

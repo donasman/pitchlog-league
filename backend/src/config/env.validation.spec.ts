@@ -1,4 +1,4 @@
-import { validateEnv, NodeEnv } from './env.validation.js';
+import { validateEnv, NodeEnv, parseLivePollerProbeIds } from './env.validation.js';
 
 const base = { DATABASE_URL: 'postgresql://u:p@localhost:5432/db' };
 
@@ -159,6 +159,66 @@ describe('validateEnv', () => {
 
     it('비정수 "abc" 는 거부', () => {
       expect(() => validateEnv({ ...base, BACKFILL_DAILY_CAP: 'abc' })).toThrow(/BACKFILL_DAILY_CAP/);
+    });
+  });
+
+  describe('L4 라이브 폴러 env (LIVE_POLLER_*)', () => {
+    it('기본값 — enabled=false · period=15 · slow=30 · slowAt=6000 · stopAt=7000 · probeIds=""', () => {
+      const env = validateEnv({ ...base });
+      expect(env.LIVE_POLLER_ENABLED).toBe('false');
+      expect(env.LIVE_POLLER_PERIOD_SEC).toBe(15);
+      expect(env.LIVE_POLLER_SLOW_PERIOD_SEC).toBe(30);
+      expect(env.LIVE_POLLER_SLOW_AT).toBe(6000);
+      expect(env.LIVE_POLLER_STOP_AT).toBe(7000);
+      expect(env.LIVE_POLLER_PROBE_FIXTURE_IDS).toBe('');
+    });
+
+    it("LIVE_POLLER_ENABLED='yes' 는 거부", () => {
+      expect(() => validateEnv({ ...base, LIVE_POLLER_ENABLED: 'yes' })).toThrow(/LIVE_POLLER_ENABLED/);
+    });
+
+    it('PERIOD_SEC < 5 거부 · SLOW_PERIOD_SEC > 600 거부', () => {
+      expect(() => validateEnv({ ...base, LIVE_POLLER_PERIOD_SEC: '4' })).toThrow(/LIVE_POLLER_PERIOD_SEC/);
+      expect(() => validateEnv({ ...base, LIVE_POLLER_SLOW_PERIOD_SEC: '601' })).toThrow(/LIVE_POLLER_SLOW_PERIOD_SEC/);
+    });
+
+    it('cross-field — SLOW_AT >= STOP_AT 거부', () => {
+      // SLOW_AT == STOP_AT
+      expect(() => validateEnv({ ...base, LIVE_POLLER_SLOW_AT: '7000', LIVE_POLLER_STOP_AT: '7000' }))
+        .toThrow(/LIVE_POLLER_STOP_AT/);
+      // SLOW_AT > STOP_AT
+      expect(() => validateEnv({ ...base, LIVE_POLLER_SLOW_AT: '7100', LIVE_POLLER_STOP_AT: '7000' }))
+        .toThrow(/LIVE_POLLER_STOP_AT/);
+    });
+
+    it('cross-field — PERIOD_SEC >= SLOW_PERIOD_SEC 거부', () => {
+      // PERIOD_SEC == SLOW_PERIOD_SEC
+      expect(() => validateEnv({ ...base, LIVE_POLLER_PERIOD_SEC: '30', LIVE_POLLER_SLOW_PERIOD_SEC: '30' }))
+        .toThrow(/LIVE_POLLER_SLOW_PERIOD_SEC/);
+      // PERIOD_SEC > SLOW_PERIOD_SEC
+      expect(() => validateEnv({ ...base, LIVE_POLLER_PERIOD_SEC: '60', LIVE_POLLER_SLOW_PERIOD_SEC: '30' }))
+        .toThrow(/LIVE_POLLER_SLOW_PERIOD_SEC/);
+    });
+
+    it('PROBE_FIXTURE_IDS — 실측 3개 통과 · 21개 거부 · 중복 거부 · 빈 항목 거부', () => {
+      // 실측 3개 (KOR 9/28 URU · 10/2 VEN · 10/6 UZB)
+      expect(validateEnv({ ...base, LIVE_POLLER_PROBE_FIXTURE_IDS: '1628999,1629003,1629005' })
+        .LIVE_POLLER_PROBE_FIXTURE_IDS).toBe('1628999,1629003,1629005');
+      // 21 개 거부
+      const tooMany = Array.from({ length: 21 }, (_, i) => String(1000 + i)).join(',');
+      expect(() => validateEnv({ ...base, LIVE_POLLER_PROBE_FIXTURE_IDS: tooMany }))
+        .toThrow(/LIVE_POLLER_PROBE_FIXTURE_IDS/);
+      // 중복
+      expect(() => validateEnv({ ...base, LIVE_POLLER_PROBE_FIXTURE_IDS: '1628999,1628999' }))
+        .toThrow(/LIVE_POLLER_PROBE_FIXTURE_IDS/);
+      // 빈 항목 (연속 쉼표)
+      expect(() => validateEnv({ ...base, LIVE_POLLER_PROBE_FIXTURE_IDS: '1628999,,1629003' }))
+        .toThrow(/LIVE_POLLER_PROBE_FIXTURE_IDS/);
+    });
+
+    it('parseLivePollerProbeIds — 빈 문자열 → [] · 값 있으면 정수 배열', () => {
+      expect(parseLivePollerProbeIds('')).toEqual([]);
+      expect(parseLivePollerProbeIds('1628999,1629003,1629005')).toEqual([1628999, 1629003, 1629005]);
     });
   });
 });
