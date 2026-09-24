@@ -61,14 +61,10 @@ export default function StandingsPage() {
   }
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
       <div
-        style={{
-          maxWidth: 1120,
-          margin: '0 auto',
-          padding: '20px 16px 48px',
-        }}
-        className="lg:px-8"
+        style={{ paddingBlock: '20px 48px' }}
+        className="pl-container"
       >
         {/* ── 페이지 헤더 ── */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -80,44 +76,42 @@ export default function StandingsPage() {
 
         {/* ── 대회 필터 칩 ── */}
         <div
+          className="pl-sticky-filter"
           style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            borderBottom: '1px solid var(--pl-line)',
             paddingBottom: 14,
             marginBottom: 14,
           }}
         >
-          <span className="t-cap" style={{ width: 44, flexShrink: 0 }}>{t('matches.filterComp')}</span>
-          {(competitions ?? []).map(c => (
-            <button
-              key={c.slug}
-              onClick={() => setComp(c.slug)}
-              aria-pressed={c.slug === competitionSlug}
-              className="pl-chip"
-            >
-              {getLocalizedCompetitionName(c, locale) || c.shortName}
-            </button>
-          ))}
-          {/* 시즌 드롭다운 — 활성 대회의 선택 가능 시즌만 (COMPLETE) · 현재 시즌은 값 '' (URL 에서 param 제거) */}
-          {seasonsMemo.length > 0 && (
-            <select
-              aria-label={t('header.seasonSelect')}
-              value={seasonYear !== undefined ? String(seasonYear) : ''}
-              onChange={(e) => setSeasonYear(e.target.value === '' ? null : Number(e.target.value))}
-              className="pl-chip"
-              style={{ marginLeft: 'auto', fontFamily: 'var(--font)' }}
-            >
-              {seasonsMemo.map(s => (
-                <option key={s.year} value={s.current ? '' : String(s.year)}>
-                  {s.label}
-                  {s.current ? ` ${t('header.currentSeason')}` : ''}
-                </option>
-              ))}
-            </select>
-          )}
+          <div className="pl-chip-row">
+            <span className="t-cap" style={{ width: 44, flexShrink: 0 }}>{t('matches.filterComp')}</span>
+            {(competitions ?? []).map(c => (
+              <button
+                key={c.slug}
+                onClick={() => setComp(c.slug)}
+                aria-pressed={c.slug === competitionSlug}
+                className="pl-chip"
+              >
+                {getLocalizedCompetitionName(c, locale) || c.shortName}
+              </button>
+            ))}
+            {/* 시즌 드롭다운 — 활성 대회의 선택 가능 시즌만 (COMPLETE) · 현재 시즌은 값 '' (URL 에서 param 제거) */}
+            {seasonsMemo.length > 0 && (
+              <select
+                aria-label={t('header.seasonSelect')}
+                value={seasonYear !== undefined ? String(seasonYear) : ''}
+                onChange={(e) => setSeasonYear(e.target.value === '' ? null : Number(e.target.value))}
+                className="pl-chip"
+                style={{ marginLeft: 'auto', fontFamily: 'var(--font)' }}
+              >
+                {seasonsMemo.map(s => (
+                  <option key={s.year} value={s.current ? '' : String(s.year)}>
+                    {s.label}
+                    {s.current ? ` ${t('header.currentSeason')}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
 
         {/* ── 스테이지 정보 + 데이터 기준 시각 ── */}

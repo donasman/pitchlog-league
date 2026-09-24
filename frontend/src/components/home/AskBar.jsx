@@ -27,6 +27,7 @@ export default function AskBar() {
         alignItems: 'center',
         gap: 12,
         width: '100%',
+        minWidth: 0,
         maxWidth: 520,
         height: 52,
         padding: '0 6px 0 18px',

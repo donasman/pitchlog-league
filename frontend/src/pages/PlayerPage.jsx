@@ -50,17 +50,21 @@ export default function PlayerPage() {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
-        <LoadingSkeleton rows={3} variant="text" />
-        <LoadingSkeleton rows={5} variant="card" />
+      <div className="pl-container" style={{ paddingBlock: '24px' }}>
+        <div style={{ maxWidth: 960, margin: 0 }}>
+          <LoadingSkeleton rows={3} variant="text" />
+          <LoadingSkeleton rows={5} variant="card" />
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '64px 16px' }}>
-        <ErrorState title={t('player.errorTitle')} description={error} />
+      <div className="pl-container" style={{ paddingBlock: '64px' }}>
+        <div style={{ maxWidth: 960, margin: 0 }}>
+          <ErrorState title={t('player.errorTitle')} description={error} />
+        </div>
       </div>
     )
   }
@@ -89,7 +93,7 @@ export default function PlayerPage() {
   const teamName = getLocalizedName({ id: team?.id, name: team?.name }, locale) || team?.name
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}><div style={{ maxWidth: 960, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8 space-y-5">
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}><div className="pl-container" style={{ paddingBlock: '20px 48px' }}><div style={{ maxWidth: 960, margin: 0 }} className="space-y-5">
       {team && (
         <Link
           to={`/teams/${team.slug}`}
@@ -162,23 +166,24 @@ export default function PlayerPage() {
       {/* 대회별 상세 테이블 */}
       {allStats.length > 0 && (
         <section className="bg-card border border-border rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="w-full text-sm" style={{ minWidth: 560 }}>
             <thead>
               <tr className="text-muted-foreground text-xs border-b border-border">
-                <th className="text-left px-4 py-3">{t('header.season')}</th>
-                <th className="text-left px-4 py-3">{t('matches.filterComp')}</th>
-                <th className="text-center px-3 py-3">{t('player.appearances')}</th>
-                <th className="text-center px-3 py-3">{t('player.starts')}</th>
-                <th className="text-center px-3 py-3">{t('player.goals')}</th>
-                <th className="text-center px-3 py-3">{t('player.assists')}</th>
-                <th className="text-center px-3 py-3">{t('player.yellowCards')}</th>
+                <th className="text-left px-4 py-3" style={{ whiteSpace: 'nowrap' }}>{t('header.season')}</th>
+                <th className="text-left px-4 py-3" style={{ whiteSpace: 'nowrap' }}>{t('matches.filterComp')}</th>
+                <th className="text-center px-3 py-3" style={{ whiteSpace: 'nowrap' }}>{t('player.appearances')}</th>
+                <th className="text-center px-3 py-3" style={{ whiteSpace: 'nowrap' }}>{t('player.starts')}</th>
+                <th className="text-center px-3 py-3" style={{ whiteSpace: 'nowrap' }}>{t('player.goals')}</th>
+                <th className="text-center px-3 py-3" style={{ whiteSpace: 'nowrap' }}>{t('player.assists')}</th>
+                <th className="text-center px-3 py-3" style={{ whiteSpace: 'nowrap' }}>{t('player.yellowCards')}</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(s => (
                 <tr key={s.key} className="border-b border-border/50 hover:bg-accent/50 transition-colors">
                   <td className="px-4 py-3 font-medium text-foreground">{s.seasonLabel}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{s.competitionName}{s.teamName ? ` · ${s.teamName}` : ''}</td>
+                  <td className="px-4 py-3 text-muted-foreground" style={{ whiteSpace: 'nowrap' }}>{s.competitionName}{s.teamName ? ` · ${s.teamName}` : ''}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.appearances)}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.starts)}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.goals)}</td>
@@ -188,12 +193,13 @@ export default function PlayerPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </section>
       )}
 
       {/* 이번 시즌 — seasonTotals.breakdown 를 대회별로 분해해 표기 */}
       <ThisSeasonSection seasonTotals={seasonTotals} t={t} />
-    </div></div>
+    </div></div></div>
   )
 }
 

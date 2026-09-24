@@ -953,7 +953,7 @@ export default function MatchPage() {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+      <div className="pl-container" style={{ paddingBlock: '24px' }}>
         <LoadingSkeleton rows={8} />
       </div>
     )
@@ -961,7 +961,7 @@ export default function MatchPage() {
 
   if (error || !data?.match) {
     return (
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+      <div className="pl-container" style={{ paddingBlock: '24px' }}>
         <ErrorState title={t('common.errorTitle')} description={error} />
       </div>
     )
@@ -980,10 +980,10 @@ export default function MatchPage() {
   const awayShort = getLocalizedShortName(match.awayTeam, locale) || match.awayTeam?.shortName
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
       <div
-        style={{ maxWidth: 1100, margin: '0 auto', padding: '16px 16px 48px' }}
-        className="lg:px-8"
+        style={{ paddingBlock: '16px 48px' }}
+        className="pl-container"
       >
         {/* 뒤로 가기 */}
         <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>

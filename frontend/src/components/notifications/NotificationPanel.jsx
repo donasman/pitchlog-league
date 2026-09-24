@@ -87,21 +87,30 @@ export default function NotificationPanel({ onClose }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [onClose])
 
+  /* Esc 닫기 (SearchPanel 과 동일 패턴) */
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
   const empty = notifications.length === 0
 
   return (
+    <>
+      <style>{`
+        .notif-panel { position: fixed; top: 60px; left: 16px; right: 16px; width: auto; margin-top: 0; }
+        @media (min-width: 640px) {
+          .notif-panel { position: absolute; top: 100%; left: auto; right: 0; width: 400px; margin-top: 8px; }
+        }
+      `}</style>
     <div
       ref={panelRef}
-      className="pl-card"
+      className="pl-card notif-panel"
       style={{
-        width: 400,
         maxWidth: 'calc(100vw - 32px)',
         overflow: 'hidden',
         boxShadow: 'var(--sh-modal)',
-        position: 'absolute',
-        top: '100%',
-        right: 0,
-        marginTop: 8,
         zIndex: 1000,
       }}
       role="dialog"
@@ -162,5 +171,6 @@ export default function NotificationPanel({ onClose }) {
         <span className="t-cap" style={{ marginLeft: 'auto' }}>{t('notif.browserOnly')}</span>
       </div>
     </div>
+    </>
   )
 }
