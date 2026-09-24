@@ -23,6 +23,7 @@
  * L2 가 캐시된 옛 값으로 덮어쓰면 안 된다 (SCHEMA_DESIGN 충돌 ①, `data_version`).
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ApiFootballClient } from '../api-football/api-football.client.js';
 import { IngestionRunService } from '../ingestion-run.service.js';
@@ -33,6 +34,7 @@ import { ApiQuotaExhaustedError } from '../api-football/api-football.errors.js';
 import { CompetitionFormat, IngestionLayer } from '../../generated/prisma/client.js';
 import type { ApiFixture, ApiStandings } from '../api-football/api-football.types.js';
 import { resolveRoundScope, type FixtureRef } from './round-scope.js';
+import { standingKeepKeys } from './standings-keep.js';
 
 export interface L2CompetitionResult {
   name: string;
@@ -396,24 +398,44 @@ export class L2Service {
     });
 
     if (rows.length === 0) {
-      // 리그페이즈 시작 전이면 비어 있다. 실패가 아니다
+      // 리그페이즈 시작 전이면 비어 있다. 실패가 아니다.
+      // 빈 응답에 기존 행 전부를 지우지 않도록 조기 return — 옛 값 그대로 두는 게 낫다.
       this.logger.warn(`${label}: 순위표 0건 — 아직 시작 전`);
       return 0;
     }
 
-    const res = await batchUpsert<(typeof rows)[number]>(this.prisma, {
-      table: 'standings',
-      columns: {
-        competition_season_id: 'int', team_id: 'int', group_name: 'text', rank: 'int', points: 'int',
-        played: 'int', win: 'int', draw: 'int', lose: 'int',
-        goals_for: 'int', goals_against: 'int', goal_diff: 'int',
-        home_played: 'int', home_win: 'int', home_draw: 'int', home_lose: 'int', home_gf: 'int', home_ga: 'int',
-        away_played: 'int', away_win: 'int', away_draw: 'int', away_lose: 'int', away_gf: 'int', away_ga: 'int',
-        form: 'text', description: 'text', status: 'text', as_of: 'timestamptz',
-      },
-      conflict: ['competition_season_id', 'team_id', 'group_name'],
-      updatedAtColumn: 'updated_at',
-    }, rows);
-    return res.rows;
+    // 이번 응답에서 살아남을 (team_id, group_name) 키. 아래 DELETE 절에서 NOT IN 목록으로 쓴다.
+    const keepKeys = standingKeepKeys(rows);
+    const keepTuples = Prisma.join(
+      keepKeys.map((k) => Prisma.sql`(${k.teamId}::int, ${k.groupName}::text)`),
+    );
+
+    // upsert 와 옛 행 DELETE 를 한 트랜잭션으로 묶어, 외부 API 가 group_name 을 바꿔도
+    // (예: UCL "League Phase" → "UEFA Champions League") 옛 행이 영구 잔존하지 않도록 한다.
+    const { upserted, deleted } = await this.prisma.$transaction(async (tx) => {
+      const res = await batchUpsert<(typeof rows)[number]>(tx, {
+        table: 'standings',
+        columns: {
+          competition_season_id: 'int', team_id: 'int', group_name: 'text', rank: 'int', points: 'int',
+          played: 'int', win: 'int', draw: 'int', lose: 'int',
+          goals_for: 'int', goals_against: 'int', goal_diff: 'int',
+          home_played: 'int', home_win: 'int', home_draw: 'int', home_lose: 'int', home_gf: 'int', home_ga: 'int',
+          away_played: 'int', away_win: 'int', away_draw: 'int', away_lose: 'int', away_gf: 'int', away_ga: 'int',
+          form: 'text', description: 'text', status: 'text', as_of: 'timestamptz',
+        },
+        conflict: ['competition_season_id', 'team_id', 'group_name'],
+        updatedAtColumn: 'updated_at',
+      }, rows);
+
+      const deletedCount = await tx.$executeRaw`
+        DELETE FROM "standings"
+        WHERE "competition_season_id" = ${competitionSeasonId}::int
+          AND ("team_id", "group_name") NOT IN (VALUES ${keepTuples})
+      `;
+      return { upserted: res.rows, deleted: Number(deletedCount) };
+    });
+
+    if (deleted > 0) this.logger.log(`${label}: 순위 옛 행 삭제 ${deleted}`);
+    return upserted;
   }
 }
