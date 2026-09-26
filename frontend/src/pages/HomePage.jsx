@@ -185,7 +185,7 @@ function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
           >
             {t('home.heroSubtitle')}
           </p>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div className="hero-cta" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Link to="/matches" className="pl-btn">{t('home.btnTodayMatches')}</Link>
             <Link to="/standings" className="pl-btn pl-btn-ghost">{t('home.standingsLabel')}</Link>
           </div>
@@ -370,8 +370,13 @@ function CompetitionSection({ competitions, t, locale }) {
 
 /* ─────────────────────────────────────────────────────────────
    ShortcutCard — 바로 가기 카드 (3행 미리보기)
+   rows[i].logo 는 React node (TeamBadge). rank 가 전부 비면 rank 컬럼 자체를 뺀다.
 ───────────────────────────────────────────────────────────── */
-function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
+function ShortcutCard({ title, sub, rows, to, zoneFirst, t }) {
+  const hasRank = rows.some(r => r.rank !== '' && r.rank != null)
+  // rank(20px) + badge(24px) + name(1fr) + value(auto) · 팀 카드는 rank 를 뺀다
+  const rowTemplate = hasRank ? '20px 24px 1fr auto' : '24px 1fr auto'
+
   return (
     <Link
       to={to}
@@ -386,9 +391,6 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
           <span className="pl-link" style={{ fontSize: 12 }}>{t('home.openAll')}</span>
         </span>
       </div>
-      <div style={{ padding: '0 16px 6px' }}>
-        <span className="t-cap">{head}</span>
-      </div>
 
       {/* 미리보기 3행 */}
       {rows.map((row, i) => (
@@ -396,11 +398,11 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
           key={i}
           style={{
             display: 'grid',
-            gridTemplateColumns: '20px 1fr auto',
+            gridTemplateColumns: rowTemplate,
             gap: 10,
             alignItems: 'center',
             padding: '9px 16px',
-            borderTop: '1px solid var(--pl-line)',
+            borderTop: i === 0 ? '1px solid var(--pl-line)' : '1px solid var(--pl-line)',
             position: 'relative',
           }}
         >
@@ -416,7 +418,12 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
               aria-hidden="true"
             />
           )}
-          <span className="num t-sub" style={{ fontWeight: 700 }}>{row.rank}</span>
+          {hasRank && (
+            <span className="num t-sub" style={{ fontWeight: 700 }}>{row.rank}</span>
+          )}
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            {row.logo}
+          </span>
           <span
             className="t-body tname"
             style={{ fontWeight: 600 }}
@@ -442,12 +449,32 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
 function ShortcutsSection({ eplTop3, competitions, leagueScorers, t }) {
   const standingsRows = (eplTop3 ?? []).map(e => ({
     rank: e.rank,
+    logo: (
+      <TeamBadge
+        initials={e.teamInitials}
+        color={e.teamColor}
+        logoUrl={e.teamLogoUrl}
+        sizePx={24}
+        name={e.teamName}
+        loading="eager"
+      />
+    ),
     label: e.teamName,
     value: t('home.ptsUnit', { pts: e.points }),
   }))
 
   const leaderRows = (competitions ?? []).slice(0, 3).map(c => ({
     rank: '',
+    logo: c.leader ? (
+      <TeamBadge
+        initials={c.leader.teamInitials}
+        color={c.leader.teamColor}
+        logoUrl={c.leader.teamLogoUrl}
+        sizePx={24}
+        name={c.leader.teamName}
+        loading="eager"
+      />
+    ) : null,
     label: c.leader?.teamName ?? '-',
     value: c.shortName,
   }))
@@ -458,6 +485,16 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t }) {
   const eplLeague = (leagueScorers ?? []).find(l => l.competitionSlug === 'premier-league')
   const scorerRows = (eplLeague?.entries ?? []).slice(0, 3).map(e => ({
     rank: e.rank,
+    logo: (
+      <TeamBadge
+        initials={e.teamInitials}
+        color={e.teamColor}
+        logoUrl={e.teamLogoUrl}
+        sizePx={20}
+        name={e.teamName}
+        loading="eager"
+      />
+    ),
     label: `${e.playerName ?? '-'}${e.teamName ? ` · ${e.teamName}` : ''}`,
     value: t('home.goalsCountUnit', { goals: e.value }),
   }))
@@ -473,7 +510,6 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t }) {
         <ShortcutCard
           title={t('home.standingsLabel')}
           sub={t('home.epl3Label')}
-          head="EPL Top 3"
           rows={standingsRows}
           to="/standings?competition=premier-league"
           zoneFirst
@@ -487,7 +523,6 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t }) {
           <ShortcutCard
             title={t('home.statsLabel')}
             sub={t('home.eplScorersLabel')}
-            head={t('home.eplScorersLabel')}
             rows={scorerRows}
             to="/stats?competition=premier-league"
             t={t}
@@ -496,7 +531,6 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t }) {
         <ShortcutCard
           title={t('home.teamsLabel')}
           sub={t('home.topTeamsLabel')}
-          head={t('home.topTeamsLabel')}
           rows={leaderRows}
           to="/teams"
           t={t}
@@ -548,7 +582,7 @@ function LeagueScorersSection({ leagueScorers, t }) {
                   key={s.playerSlug ?? i}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '24px 1fr auto',
+                    gridTemplateColumns: '24px 20px 1fr auto',
                     gap: 10,
                     alignItems: 'center',
                     padding: '10px 16px',
@@ -556,6 +590,16 @@ function LeagueScorersSection({ leagueScorers, t }) {
                   }}
                 >
                   <span className="num t-sub" style={{ fontWeight: 700 }}>{s.rank ?? i + 1}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <TeamBadge
+                      initials={s.teamInitials}
+                      color={s.teamColor}
+                      logoUrl={s.teamLogoUrl}
+                      sizePx={20}
+                      name={s.teamName}
+                      loading="eager"
+                    />
+                  </span>
                   <span
                     className="t-body tname"
                     style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
