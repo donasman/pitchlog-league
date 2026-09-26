@@ -250,6 +250,12 @@ export class EnvironmentVariables {
   @IsString()
   @Validate(LivePollerProbeIdsConstraint)
   LIVE_POLLER_PROBE_FIXTURE_IDS: string = '';
+
+  /** L4 라이브 폴러 쓰기 모드 (D6). 'observe' 는 관측만 · 'write' 는 조건부 UPDATE 시도.
+   *  기본 'observe'. write 여도 probe 경기는 절대 쓰지 않는다. */
+  @IsIn(['observe', 'write'])
+  @IsString()
+  LIVE_POLLER_MODE: string = 'observe';
 }
 
 /** LIVE_POLLER_PROBE_FIXTURE_IDS 문자열 → apiFixtureId 정수 배열. 빈 문자열이면 빈 배열. */

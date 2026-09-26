@@ -49,6 +49,15 @@ export interface BatchUpsertSpec<Row extends Record<string, unknown>> {
   coalesceUpdate?: readonly (keyof Row & string)[];
   /** `updated_at` 처럼 INSERT·UPDATE 양쪽에서 now() 로 채울 컬럼 */
   updatedAtColumn?: string;
+  /**
+   * ON CONFLICT ... DO UPDATE SET ... WHERE <updateWhere> 로 조건부 UPDATE.
+   * WHERE 안에서 EXCLUDED.<col> · <table>.<col> 을 참조할 수 있다.
+   * <table> 은 spec.table 문자열을 그대로 쓴다 (예: "matches"."status_short").
+   * 옵션 미지정 시 WHERE 절이 붙지 않아 기존 동작이 유지된다.
+   *
+   * DO NOTHING (update: []) 케이스에는 WHERE 개념이 없어 조용히 무시된다.
+   */
+  updateWhere?: Prisma.Sql;
   /** RETURNING 컬럼. 보통 ['id', ...conflict] 로 외부키 → 내부 id 매핑을 받는다 */
   returning?: readonly string[];
   /** 청크당 최대 행 수 (기본: 파라미터 한도에서 계산, 최대 1,000) */
@@ -131,10 +140,15 @@ export async function batchUpsert<Row extends Record<string, unknown>, Ret = Rec
   );
   if (spec.updatedAtColumn) setParts.push(Prisma.sql`${ident(spec.updatedAtColumn)} = now()`);
   const insertCols = spec.updatedAtColumn ? Prisma.sql`${colList}, ${ident(spec.updatedAtColumn)}` : colList;
-  const onConflict =
-    setParts.length > 0
-      ? Prisma.sql`ON CONFLICT (${conflictList}) DO UPDATE SET ${Prisma.join(setParts)}`
-      : Prisma.sql`ON CONFLICT (${conflictList}) DO NOTHING`;
+  // updateWhere 는 DO UPDATE 케이스에만 붙는다. DO NOTHING 은 WHERE 개념 자체가 없으므로 조용히 무시한다.
+  // 주의: Prisma.join([]) 은 예외를 던지므로 setParts 가 비면 이 분기 자체를 만들지 않는다.
+  let onConflict: Prisma.Sql;
+  if (setParts.length > 0) {
+    const doUpdateSql = Prisma.sql`ON CONFLICT (${conflictList}) DO UPDATE SET ${Prisma.join(setParts)}`;
+    onConflict = spec.updateWhere ? Prisma.sql`${doUpdateSql} WHERE ${spec.updateWhere}` : doUpdateSql;
+  } else {
+    onConflict = Prisma.sql`ON CONFLICT (${conflictList}) DO NOTHING`;
+  }
   const returning = spec.returning?.length ? Prisma.sql` RETURNING ${Prisma.join(spec.returning.map(ident))}` : Prisma.empty;
 
   for (let i = 0; i < rows.length; i += chunkSize) {

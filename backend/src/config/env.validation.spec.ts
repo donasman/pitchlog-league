@@ -220,5 +220,18 @@ describe('validateEnv', () => {
       expect(parseLivePollerProbeIds('')).toEqual([]);
       expect(parseLivePollerProbeIds('1628999,1629003,1629005')).toEqual([1628999, 1629003, 1629005]);
     });
+
+    it("LIVE_POLLER_MODE 기본값은 'observe'", () => {
+      expect(validateEnv({ ...base }).LIVE_POLLER_MODE).toBe('observe');
+    });
+
+    it("LIVE_POLLER_MODE='write' 통과", () => {
+      expect(validateEnv({ ...base, LIVE_POLLER_MODE: 'write' }).LIVE_POLLER_MODE).toBe('write');
+    });
+
+    it("LIVE_POLLER_MODE 대문자·오타는 거부", () => {
+      expect(() => validateEnv({ ...base, LIVE_POLLER_MODE: 'WRITE' })).toThrow(/LIVE_POLLER_MODE/);
+      expect(() => validateEnv({ ...base, LIVE_POLLER_MODE: 'other' })).toThrow(/LIVE_POLLER_MODE/);
+    });
   });
 });
