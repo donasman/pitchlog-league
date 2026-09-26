@@ -29,6 +29,7 @@ import {
   drawerMounted as isDrawerMounted,
   drawerIntendedOpen as isDrawerIntendedOpen,
   drawerDataOpen,
+  drawerFocusTarget,
 } from './drawerState'
 
 function prefersReducedMotion() {
@@ -71,7 +72,6 @@ export default function AppHeader() {
   const [searchOpen, setSearchOpen] = useState(false)
   const menuBtnRef      = useRef(null)
   const drawerRef       = useRef(null)
-  const firstNavRef     = useRef(null)
   const closeTimerRef   = useRef(0)
 
   const drawerMounted  = isDrawerMounted(drawerState)
@@ -133,11 +133,14 @@ export default function AppHeader() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname])
 
-  /* 포커스: open 진입 시 첫 항목으로. opening 이 아니라 open — 첫 프레임을 놓친 뒤
-     실제 슬라이드가 시작되는 시점에 포커스 이동. */
+  /* 포커스: open 진입 시 드로어 컨테이너로 이동 (첫 링크 아님).
+     첫 링크로 옮기면 Safari 가 프로그램 포커스에도 링을 그려, 현재 페이지가
+     '순위' 인데도 '홈' 링크가 강조돼 보이는 오해가 생긴다. 컨테이너 자체는
+     tabIndex=-1 + outline:none 이라 링이 나오지 않고, 스크린리더는 dialog
+     라벨을 읽는다. 키보드 사용자는 Tab 을 누르면 첫 링크로 정상 이동. */
   useEffect(() => {
-    if (drawerState !== 'open') return
-    const id = requestAnimationFrame(() => firstNavRef.current?.focus())
+    if (drawerFocusTarget(drawerState) !== 'drawer') return
+    const id = requestAnimationFrame(() => drawerRef.current?.focus({ preventScroll: true }))
     return () => cancelAnimationFrame(id)
   }, [drawerState])
 
@@ -315,17 +318,17 @@ export default function AppHeader() {
             role="dialog"
             aria-modal="true"
             aria-label={t('nav.home')}
+            tabIndex={-1}
             data-open={drawerDataOpen(drawerState)}
             className="pl-drawer"
             onTransitionEnd={onDrawerTransitionEnd}
           >
             <div className="space-y-1">
-              {NAV.map(({ to, label, Icon }, i) => (
+              {NAV.map(({ to, label, Icon }) => (
                 <NavLink
                   key={to}
                   to={to}
                   end={to === '/'}
-                  ref={i === 0 ? firstNavRef : undefined}
                   onClick={closeDrawer}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-3 rounded transition-colors ${isActive ? navActive : navInactive}`
