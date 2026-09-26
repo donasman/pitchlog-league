@@ -371,6 +371,12 @@ export class L2Service {
         'et_home', 'et_away', 'pen_home', 'pen_away', 'winner_team_id', 'detail_eligible', 'as_of',
       ],
       updatedAtColumn: 'updated_at',
+      // L4 (라이브 폴링) 가 진행 중 경기의 스코어 주인이다.
+      // L2 매일 upsert 가 캐시된 옛 값으로 라이브 컬럼을 덮지 않도록 진행 중 상태(9종) + 킥오프 6시간 이내 는 UPDATE 대상에서 제외한다.
+      // 킥오프 6시간이 지난 진행 중 행은 (L4 가 FT 를 놓쳤을 것이므로) L2 가 다시 덮어 복구한다.
+      // LIVE_STATUSES 리터럴 값은 backend/src/ingestion/l4/status-rank.ts 와 일치해야 한다 (batch-upsert.spec 정합 검사).
+      // kickoff 6h 값은 backend/src/ingestion/l4/status-rank.ts LIVE_LOOKBACK_MS 와 일치.
+      updateWhere: Prisma.sql`NOT ("matches"."status_short" IN ('1H','HT','2H','ET','BT','P','SUSP','INT','LIVE') AND "matches"."kickoff_at" > now() - interval '6 hours')`,
     }, matchRows);
     result.matches = matchRes.rows;
 

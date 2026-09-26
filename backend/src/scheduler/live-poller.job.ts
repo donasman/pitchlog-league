@@ -51,6 +51,8 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
 
   private cfg!: LivePollerConfig;
   private probeIds: number[] = [];
+  /** LIVE_POLLER_MODE env — onModuleInit 에서 1회 읽는다. */
+  private mode: 'observe' | 'write' = 'observe';
   private registered = false;
   private destroyed = false;
 
@@ -83,10 +85,12 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
       this.config.get('LIVE_POLLER_PROBE_FIXTURE_IDS', { infer: true }),
     );
 
+    this.mode = this.config.get('LIVE_POLLER_MODE', { infer: true }) as 'observe' | 'write';
     this.state.markLivePollerEnabled();
+    this.state.markLivePollerMode(this.mode);
     this.registered = true;
     this.logger.log(
-      `live-poller registered · period=${this.cfg.periodSec}s · slowAt=${this.cfg.slowAt} · stopAt=${this.cfg.stopAt}`,
+      `live-poller registered · mode=${this.mode} · period=${this.cfg.periodSec}s · slowAt=${this.cfg.slowAt} · stopAt=${this.cfg.stopAt}`,
     );
     if (this.probeIds.length > 0) {
       this.logger.log(
@@ -184,6 +188,7 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
     try {
       result = await this.observer.tick(now, this.memory, this.probes, this.lastSeen, {
         fetchStatus,
+        mode: this.mode,
       });
       if (fetchStatus && result.used !== null) this.lastStatusAt = now;
     } catch (err) {
@@ -197,6 +202,8 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
         ms: 0,
         used: null,
         wouldWrite: 0,
+        written: 0,
+        blocked: 0,
         isProbe: false,
         transitions: [],
         details: [],
@@ -222,6 +229,8 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
       calls: result.chunks + this.probeCallsSinceLastTick,
       used: result.used,
       wouldWrite: result.wouldWrite,
+      written: result.written,
+      blocked: result.blocked,
       windowOpen: nowOpen,
       periodSec: dec.periodSec,
       error,
@@ -229,17 +238,20 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
     this.probeCallsSinceLastTick = 0;
 
     if (error === null) {
-      const usedStr = result.used === null ? '-' : String(result.used);
-      const suffix = result.isProbe ? ' · probe' : '';
-      this.logger.log(
-        `live-poller tick · targets=${result.targets} live=${result.liveCount} chunks=${result.chunks}` +
-          ` bytes=${result.bytes} ms=${result.ms} used=${usedStr} period=${dec.periodSec}s` +
-          ` wouldWrite=${result.wouldWrite}${suffix}`,
-      );
-      if (result.ms > dec.periodSec * 1000 * 0.7) {
-        this.logger.warn(
-          `live-poller tick slow · ms=${result.ms} > 70% of ${dec.periodSec}s`,
+      const isIdle = result.targets === 0 && !prevOpen && !nowOpen;
+      if (!isIdle) {
+        const usedStr = result.used === null ? '-' : String(result.used);
+        const suffix = result.isProbe ? ' · probe' : '';
+        this.logger.log(
+          `live-poller tick · targets=${result.targets} live=${result.liveCount} chunks=${result.chunks}` +
+            ` bytes=${result.bytes} ms=${result.ms} used=${usedStr} period=${dec.periodSec}s` +
+            ` wouldWrite=${result.wouldWrite}${suffix}`,
         );
+        if (result.ms > dec.periodSec * 1000 * 0.7) {
+          this.logger.warn(
+            `live-poller tick slow · ms=${result.ms} > 70% of ${dec.periodSec}s`,
+          );
+        }
       }
       for (const t of result.transitions) {
         this.logger.log(
