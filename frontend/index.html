@@ -18,6 +18,19 @@
         }
       } catch (e) { /* 저장소 접근 불가 시 라이트 유지 */ }
     </script>
+    <!-- 첫 페인트 zoom 세팅 (src/utils/zoom.js 와 동일 공식) — 미디어쿼리 점프 대신 1280→1600 선형 -->
+    <script>
+      (function () {
+        try {
+          var w = window.innerWidth
+          var z = 1
+          if (w >= 1600) z = 1.25
+          else if (w > 1280) z = Math.round((1 + 0.25 * (w - 1280) / 320) * 100) / 100
+          document.documentElement.style.zoom = z
+          document.documentElement.style.setProperty('--pl-zoom', String(z))
+        } catch (e) { /* zoom 미지원·접근 실패 시 폴백은 CSS 기본값(z=1) */ }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
