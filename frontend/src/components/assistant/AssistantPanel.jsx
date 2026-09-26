@@ -26,6 +26,7 @@ import {
 import StandingsTable from "@/components/ui/StandingsTable";
 import MatchCard from "@/components/ui/MatchCard";
 import StatsRanking from "@/components/ui/StatsRanking";
+import BallLottie from "@/components/assistant/BallLottie";
 
 /* ── P 마크 (AI 아바타) ── */
 function PMark({ size = 28 }) {
@@ -363,45 +364,30 @@ function AiMessage({ msg, locale, t, onRetry }) {
   );
 }
 
-/* ── 생각 중 메시지 ── */
+/* ── 생각 중 메시지 (세로: Lottie 공 위 · 텍스트 아래) ── */
 function ThinkingMessage({ thinkingText, t }) {
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-      <PMark />
-      <div
-        className="pl-card"
-        style={{ flex: 1, padding: 14, display: "grid", gap: 10 }}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+        padding: "8px 0",
+        width: "100%",
+      }}
+    >
+      <BallLottie />
+      <span
+        role="status"
+        aria-live="polite"
+        style={{
+          fontSize: 13,
+          color: "var(--pl-text-muted, color-mix(in srgb, var(--pl-text) 70%, transparent))",
+        }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* 스피너 */}
-          <span
-            className="pl-spin"
-            aria-hidden="true"
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: "50%",
-              borderTop: "2px solid var(--pl-sub)",
-              border: "2px solid var(--pl-fill-2)",
-              borderTopColor: "var(--pl-sub)",
-              display: "inline-block",
-            }}
-          />
-          <span className="t-body">
-            {thinkingText ?? t("assistant.thinking")}…
-          </span>
-        </div>
-        {/* 스켈레톤 */}
-        <div style={{ display: "grid", gap: 6 }}>
-          {[70, 52, 86].map((w, i) => (
-            <span
-              key={i}
-              className="pl-sk"
-              style={{ height: 12, width: `${w}%` }}
-            />
-          ))}
-        </div>
-      </div>
+        {thinkingText ?? t("assistant.thinking")}…
+      </span>
     </div>
   );
 }

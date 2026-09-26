@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import ThemeToggle from './ThemeToggle'
 import LanguageToggle from './LanguageToggle'
 import SearchPanel from './SearchPanel'
+import BrandMark from '@/components/ui/BrandMark'
 import NotificationPanel from '@/components/notifications/NotificationPanel'
 import { useNotifications } from '@/contexts/NotificationContext'
 
@@ -75,9 +76,7 @@ export default function AppHeader() {
             to="/"
             className="flex items-center gap-2 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
           >
-            <div className="w-7 h-7 bg-primary rounded flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-black text-primary-foreground select-none">PL</span>
-            </div>
+            <BrandMark size={28} className="flex-shrink-0" />
             <span
               className="font-bold text-foreground text-sm tracking-tight hidden sm:block"
               style={{ boxShadow: isHome ? 'inset 0 -2px 0 var(--pl-primary)' : 'none', paddingBottom: 2 }}
@@ -160,7 +159,7 @@ export default function AppHeader() {
                 </span>
               )}
             </button>
-            {panelOpen && <NotificationPanel onClose={closePanel} />}
+            {panelOpen && <NotificationPanel onClose={closePanel} containerRef={bellRef} />}
           </div>
 
           {/* 언어 전환 */}
@@ -190,9 +189,7 @@ export default function AppHeader() {
             aria-label={t('nav.home')}
           >
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-primary rounded flex items-center justify-center">
-                <span className="text-xs font-black text-primary-foreground">PL</span>
-              </div>
+              <BrandMark size={28} />
               <span className="font-bold text-foreground">PitchLog</span>
             </div>
 
