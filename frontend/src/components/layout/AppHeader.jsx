@@ -2,10 +2,20 @@
  * 공통 헤더
  * 로고, 주메뉴, 검색, 알림, 언어 전환, 테마 전환 포함.
  * 대회·시즌 선택은 각 페이지에서 처리 — 헤더는 대회 목록·시즌 목록을 fetch 하지 않는다.
+ *
+ * 모바일 드로어 (2026-09-26 재작성):
+ *   - 오른쪽에서 슬라이드 (메뉴 버튼이 오른쪽 위이므로 왼쪽 슬라이드는 방향이 어긋난다)
+ *   - AssistantPanel 과 동일 모션 토큰(--pl-panel-dur/ease) 공유
+ *   - 상태 머신 open|closing|closed — 닫힘 애니메이션 종료까지 언마운트 지연
+ *   - 오버레이 탭 · Esc · nav 클릭 · 라우트 변경 시 닫힘
+ *   - 열림 중 body 스크롤 잠금, 포커스 첫 항목 이동, 닫힘 시 메뉴 버튼 복귀
+ *   - prefers-reduced-motion 이면 transition 없이 즉시 열고 닫기
+ *   - z-index 는 --pl-z-header > --pl-z-drawer > --pl-z-drawer-scrim > --pl-z-sticky.
+ *     헤더가 드로어보다 위여야 X(닫기) 버튼이 눌린다.
  */
 
-import { useState, useEffect, useRef } from 'react'
-import { Link, NavLink, useMatch } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Link, NavLink, useMatch, useLocation } from 'react-router-dom'
 import { Home, Trophy, Calendar, Users, List, BarChart2, Search, Menu, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ThemeToggle from './ThemeToggle'
@@ -15,9 +25,16 @@ import BrandMark from '@/components/ui/BrandMark'
 import NotificationPanel from '@/components/notifications/NotificationPanel'
 import { useNotifications } from '@/contexts/NotificationContext'
 
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false
+}
+
 export default function AppHeader() {
   const { t } = useTranslation()
   const isHome = useMatch('/')  // 홈에서 로고 밑줄 표시
+  const location = useLocation()
 
   const { unreadCount, panelOpen, togglePanel, closePanel } = useNotifications()
   const bellRef = useRef(null)
@@ -36,8 +53,96 @@ export default function AppHeader() {
     return () => ro.disconnect()
   }, [])
 
-  const [mobileOpen,  setMobileOpen]  = useState(false)
-  const [searchOpen,  setSearchOpen]  = useState(false)
+  /* ── 모바일 드로어 상태 머신 ─────────────────────────────────
+     closed → open (버튼 클릭)
+     open → closing (닫기 트리거) → closed (transitionend / reduced-motion fallback) */
+  const [drawerState, setDrawerState] = useState('closed')
+  const [searchOpen, setSearchOpen]   = useState(false)
+  const menuBtnRef      = useRef(null)
+  const drawerRef       = useRef(null)
+  const firstNavRef     = useRef(null)
+  const closeTimerRef   = useRef(0)
+
+  const drawerMounted = drawerState !== 'closed'
+  const drawerOpen    = drawerState === 'open'
+
+  const openDrawer  = useCallback(() => {
+    setDrawerState('open')
+  }, [])
+
+  const closeDrawer = useCallback(() => {
+    setDrawerState(prev => {
+      if (prev === 'closed') return prev
+      // reduced-motion 이면 애니메이션이 없어 transitionend 가 안 온다 → 즉시 closed
+      if (prefersReducedMotion()) return 'closed'
+      return 'closing'
+    })
+  }, [])
+
+  /* closing 상태 안전장치 — transitionend 를 못 받아도 350ms 뒤 강제 closed */
+  useEffect(() => {
+    if (drawerState !== 'closing') return
+    closeTimerRef.current = setTimeout(() => setDrawerState('closed'), 350)
+    return () => clearTimeout(closeTimerRef.current)
+  }, [drawerState])
+
+  const onDrawerTransitionEnd = (e) => {
+    // 드로어 자체의 transform 전이만 채택 (자식 요소의 다른 전이 무시)
+    if (e.target !== drawerRef.current) return
+    if (e.propertyName !== 'transform') return
+    if (drawerState === 'closing') setDrawerState('closed')
+  }
+
+  /* Esc 닫기 */
+  useEffect(() => {
+    if (drawerState === 'closed') return
+    const onKey = (e) => { if (e.key === 'Escape') closeDrawer() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [drawerState, closeDrawer])
+
+  /* 열림 중 body 스크롤 잠금 */
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (drawerMounted) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = prev }
+    }
+  }, [drawerMounted])
+
+  /* 라우트 변경 시 닫기 */
+  useEffect(() => {
+    if (drawerState !== 'closed') closeDrawer()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname])
+
+  /* 포커스: 열림 완료 시 첫 항목으로, 닫힘 완료 시 메뉴 버튼으로 복귀 */
+  useEffect(() => {
+    if (drawerOpen) {
+      // paint 뒤에 focus (transform 전이 시작 이후)
+      const id = requestAnimationFrame(() => firstNavRef.current?.focus())
+      return () => cancelAnimationFrame(id)
+    }
+    if (drawerState === 'closed' && menuBtnRef.current) {
+      // 완전히 닫힌 뒤에만 포커스 복귀 — 열기 직후에는 아님
+      // (초회 마운트 시에도 포커스가 튀지 않도록 이전 상태를 활용)
+    }
+  }, [drawerOpen, drawerState])
+
+  /* 닫힘 완료 시 (closing → closed 전이) 메뉴 버튼으로 포커스 복귀 */
+  const wasMountedRef = useRef(false)
+  useEffect(() => {
+    if (drawerMounted) {
+      wasMountedRef.current = true
+      return
+    }
+    if (wasMountedRef.current) {
+      // 마운트→언마운트 전이 시점: 메뉴 버튼 포커스 복귀
+      menuBtnRef.current?.focus()
+      wasMountedRef.current = false
+    }
+  }, [drawerMounted])
 
   const NAV = [
     { to: '/',               label: t('nav.home'),        Icon: Home      },
@@ -60,16 +165,16 @@ export default function AppHeader() {
     return () => document.removeEventListener('keydown', handler)
   }, [])
 
-  if (typeof document !== 'undefined') {
-    document.body.style.overflow = mobileOpen ? 'hidden' : ''
-  }
-
   const navActive    = 'text-primary bg-primary/10'
   const navInactive  = 'text-muted-foreground hover:text-foreground hover:bg-accent'
 
   return (
     <>
-      <header ref={headerRef} className="sticky top-0 z-50 bg-card border-b border-border">
+      <header
+        ref={headerRef}
+        className="sticky top-0 bg-card border-b border-border"
+        style={{ zIndex: 'var(--pl-z-header)' }}
+      >
         <div className="pl-container flex items-center gap-3 h-14">
           {/* 로고 */}
           <Link
@@ -168,38 +273,48 @@ export default function AppHeader() {
           {/* 테마 전환 */}
           <ThemeToggle />
 
-          {/* 모바일 메뉴 토글 */}
+          {/* 모바일 메뉴 토글 (오른쪽) */}
           <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label={mobileOpen ? t('header.menuClose') : t('header.menuOpen')}
-            aria-expanded={mobileOpen}
+            ref={menuBtnRef}
+            onClick={() => (drawerMounted ? closeDrawer() : openDrawer())}
+            aria-label={drawerMounted ? t('header.menuClose') : t('header.menuOpen')}
+            aria-expanded={drawerMounted}
+            aria-controls="mobile-drawer"
             className="lg:hidden flex items-center justify-center w-11 h-11 text-muted-foreground hover:text-foreground transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+            {drawerMounted ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </header>
 
-      {/* 모바일 메뉴 오버레이 */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+      {/* 모바일 드로어 — 오른쪽 슬라이드 · AssistantPanel 과 같은 모션 */}
+      {drawerMounted && (
+        <div className="lg:hidden">
+          {/* 오버레이 (헤더 아래로만 덮음 — 헤더 X 버튼이 눌리게) */}
+          <div
+            data-open={drawerOpen ? 'true' : 'false'}
+            onClick={closeDrawer}
+            aria-hidden="true"
+            className="pl-drawer-scrim"
+          />
           <nav
-            className="absolute top-0 left-0 w-72 h-full bg-card border-r border-border p-6 space-y-6 overflow-y-auto"
+            id="mobile-drawer"
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
             aria-label={t('nav.home')}
+            data-open={drawerOpen ? 'true' : 'false'}
+            className="pl-drawer"
+            onTransitionEnd={onDrawerTransitionEnd}
           >
-            <div className="flex items-center gap-2">
-              <BrandMark size={28} />
-              <span className="font-bold text-foreground">PitchLog</span>
-            </div>
-
             <div className="space-y-1">
-              {NAV.map(({ to, label, Icon }) => (
+              {NAV.map(({ to, label, Icon }, i) => (
                 <NavLink
                   key={to}
                   to={to}
                   end={to === '/'}
-                  onClick={() => setMobileOpen(false)}
+                  ref={i === 0 ? firstNavRef : undefined}
+                  onClick={closeDrawer}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-3 rounded transition-colors ${isActive ? navActive : navInactive}`
                   }
@@ -209,7 +324,7 @@ export default function AppHeader() {
               ))}
             </div>
 
-            {/* 모바일 언어·테마 */}
+            {/* 언어·테마 (기존 유지) */}
             <div className="border-t border-border pt-4 flex items-center gap-3">
               <span className="text-xs text-muted-foreground">{t('header.language')}</span>
               <LanguageToggle />

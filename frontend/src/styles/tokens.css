@@ -67,6 +67,24 @@
   --sh-modal: 0 8px 24px rgba(0, 0, 0, .12);
 
   --font: "Pretendard JP", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+
+  /* ── z-index 층 (2026-09-26 재정의)
+     스티키 < FAB < 드로어 오버레이 < 드로어 < 헤더 ≤ 알림·어시스턴트 패널
+     헤더가 드로어보다 위여야 헤더 오른쪽의 X(메뉴 닫기) 버튼이 눌린다.
+     PermissionCard · Toast 는 시스템 알림 층으로 이 스택 위에 별도로 얹힌다. */
+  --pl-z-sticky:      10;
+  --pl-z-fab:         20;
+  --pl-z-drawer-scrim: 30;
+  --pl-z-drawer:      40;
+  --pl-z-header:      50;
+  --pl-z-panel:       60;
+  --pl-z-permission: 800;
+  --pl-z-toast:      900;
+
+  /* ── 슬라이드 패널 공용 모션 (AssistantPanel · 모바일 드로어)
+     둘이 다른 값이면 열림 감각이 어긋난다 — 한 곳에서 관리한다. */
+  --pl-panel-dur:  280ms;
+  --pl-panel-ease: cubic-bezier(.22, .61, .36, 1);
 }
 
 .dark {
