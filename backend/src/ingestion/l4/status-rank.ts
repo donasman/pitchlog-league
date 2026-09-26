@@ -12,8 +12,15 @@ export const TERMINAL_STATUSES: readonly string[] = ['FT', 'AET', 'PEN'];
 // 무산/조기종료 상태 — 관측 중단 + 최상위 rank.
 export const CANCELLED_STATUSES: readonly string[] = ['PST', 'CANC', 'ABD', 'AWD', 'WO'];
 
-// /api/live 에서 "FT 후 3시간 이내" 창을 계산할 때 쓴다.
-export const RECENTLY_FINISHED_WINDOW_MS: number = 3 * 60 * 60 * 1000;
+// /api/live 창 · L4 2판 후속 (fix/l4-live-window-bounds)
+//
+// finishedAt 은 Match 모델에 없다 (schema.prisma 437-508). kickoff_at 기준 창으로 근사한다.
+//   진행 중       = status ∈ LIVE_STATUSES    AND kickoff_at ≥ now − LIVE_LOOKBACK_MS  (6h · A매치·연장·PSO 여유 포함)
+//   최근 종료     = status ∈ TERMINAL_STATUSES AND kickoff_at ≥ now − RECENTLY_FINISHED_LOOKBACK_MS
+//                                                             (5h · ≈ FT 후 3h · 90'+휴식+연장 여유)
+//   L2 보호 만료  = 같은 6시간 · 킥오프 6시간이 지난 진행 중 행은 L2 매일이 다시 덮어 복구
+export const LIVE_LOOKBACK_MS: number = 6 * 60 * 60 * 1000;
+export const RECENTLY_FINISHED_LOOKBACK_MS: number = 5 * 60 * 60 * 1000;
 
 // 상태 → 순위. SUSP/INT/LIVE 는 null 반환 — 호출자는 "DB 현재 rank 를 그대로 취급" 규칙을 적용.
 export function statusRank(status: string): number | null {
