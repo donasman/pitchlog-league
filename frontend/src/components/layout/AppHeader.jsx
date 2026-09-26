@@ -14,7 +14,7 @@
  *     헤더가 드로어보다 위여야 X(닫기) 버튼이 눌린다.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useReducer } from 'react'
 import { Link, NavLink, useMatch, useLocation } from 'react-router-dom'
 import { Home, Trophy, Calendar, Users, List, BarChart2, Search, Menu, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -24,6 +24,12 @@ import SearchPanel from './SearchPanel'
 import BrandMark from '@/components/ui/BrandMark'
 import NotificationPanel from '@/components/notifications/NotificationPanel'
 import { useNotifications } from '@/contexts/NotificationContext'
+import {
+  nextDrawerState,
+  drawerMounted as isDrawerMounted,
+  drawerIntendedOpen as isDrawerIntendedOpen,
+  drawerDataOpen,
+} from './drawerState'
 
 function prefersReducedMotion() {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -53,36 +59,46 @@ export default function AppHeader() {
     return () => ro.disconnect()
   }, [])
 
-  /* ── 모바일 드로어 상태 머신 ─────────────────────────────────
-     closed → open (버튼 클릭)
-     open → closing (닫기 트리거) → closed (transitionend / reduced-motion fallback) */
-  const [drawerState, setDrawerState] = useState('closed')
-  const [searchOpen, setSearchOpen]   = useState(false)
+  /* ── 모바일 드로어 상태 머신 ──
+     로직은 drawerState.js 순수 reducer 에 있다. 컴포넌트는 rAF 로 opening→open,
+     transitionend/350ms 안전장치로 closing→closed 를 dispatch 하는 얇은 어댑터.
+     'opening' 이 한 프레임 존재해야 브라우저가 초기 스타일을 페인트해서
+     data-open flip 시 CSS transition 이 실제로 발동한다 (없으면 즉시 나타남 = 열림 버그). */
+  const [drawerState, dispatchDrawer] = useReducer(
+    (prev, action) => nextDrawerState(prev, action, { reducedMotion: prefersReducedMotion() }),
+    'closed',
+  )
+  const [searchOpen, setSearchOpen] = useState(false)
   const menuBtnRef      = useRef(null)
   const drawerRef       = useRef(null)
   const firstNavRef     = useRef(null)
   const closeTimerRef   = useRef(0)
 
-  const drawerMounted = drawerState !== 'closed'
-  const drawerOpen    = drawerState === 'open'
+  const drawerMounted  = isDrawerMounted(drawerState)
+  const intendedOpen   = isDrawerIntendedOpen(drawerState)
 
-  const openDrawer  = useCallback(() => {
-    setDrawerState('open')
-  }, [])
+  const openDrawer  = useCallback(() => dispatchDrawer('open'),  [])
+  const closeDrawer = useCallback(() => dispatchDrawer('close'), [])
 
-  const closeDrawer = useCallback(() => {
-    setDrawerState(prev => {
-      if (prev === 'closed') return prev
-      // reduced-motion 이면 애니메이션이 없어 transitionend 가 안 온다 → 즉시 closed
-      if (prefersReducedMotion()) return 'closed'
-      return 'closing'
+  /* opening → open : 두 번의 rAF 이후 dispatch. 브라우저가 첫 프레임에서 초기 스타일
+     (translateX(100%)) 을 페인트한 뒤 두 번째 프레임에서 data-open="true" 로 바뀌어
+     transition 이 정상 실행된다. */
+  useEffect(() => {
+    if (drawerState !== 'opening') return
+    let raf1 = 0, raf2 = 0
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => dispatchDrawer('enter'))
     })
-  }, [])
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
+  }, [drawerState])
 
-  /* closing 상태 안전장치 — transitionend 를 못 받아도 350ms 뒤 강제 closed */
+  /* closing 안전장치 — transitionend 를 못 받아도 350ms 뒤 exit dispatch */
   useEffect(() => {
     if (drawerState !== 'closing') return
-    closeTimerRef.current = setTimeout(() => setDrawerState('closed'), 350)
+    closeTimerRef.current = setTimeout(() => dispatchDrawer('exit'), 350)
     return () => clearTimeout(closeTimerRef.current)
   }, [drawerState])
 
@@ -90,16 +106,16 @@ export default function AppHeader() {
     // 드로어 자체의 transform 전이만 채택 (자식 요소의 다른 전이 무시)
     if (e.target !== drawerRef.current) return
     if (e.propertyName !== 'transform') return
-    if (drawerState === 'closing') setDrawerState('closed')
+    if (drawerState === 'closing') dispatchDrawer('exit')
   }
 
   /* Esc 닫기 */
   useEffect(() => {
-    if (drawerState === 'closed') return
+    if (!drawerMounted) return
     const onKey = (e) => { if (e.key === 'Escape') closeDrawer() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [drawerState, closeDrawer])
+  }, [drawerMounted, closeDrawer])
 
   /* 열림 중 body 스크롤 잠금 */
   useEffect(() => {
@@ -113,24 +129,19 @@ export default function AppHeader() {
 
   /* 라우트 변경 시 닫기 */
   useEffect(() => {
-    if (drawerState !== 'closed') closeDrawer()
+    if (drawerMounted) closeDrawer()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname])
 
-  /* 포커스: 열림 완료 시 첫 항목으로, 닫힘 완료 시 메뉴 버튼으로 복귀 */
+  /* 포커스: open 진입 시 첫 항목으로. opening 이 아니라 open — 첫 프레임을 놓친 뒤
+     실제 슬라이드가 시작되는 시점에 포커스 이동. */
   useEffect(() => {
-    if (drawerOpen) {
-      // paint 뒤에 focus (transform 전이 시작 이후)
-      const id = requestAnimationFrame(() => firstNavRef.current?.focus())
-      return () => cancelAnimationFrame(id)
-    }
-    if (drawerState === 'closed' && menuBtnRef.current) {
-      // 완전히 닫힌 뒤에만 포커스 복귀 — 열기 직후에는 아님
-      // (초회 마운트 시에도 포커스가 튀지 않도록 이전 상태를 활용)
-    }
-  }, [drawerOpen, drawerState])
+    if (drawerState !== 'open') return
+    const id = requestAnimationFrame(() => firstNavRef.current?.focus())
+    return () => cancelAnimationFrame(id)
+  }, [drawerState])
 
-  /* 닫힘 완료 시 (closing → closed 전이) 메뉴 버튼으로 포커스 복귀 */
+  /* 닫힘 완료 시 (마운트 → 언마운트 전이) 메뉴 버튼으로 포커스 복귀 */
   const wasMountedRef = useRef(false)
   useEffect(() => {
     if (drawerMounted) {
@@ -138,7 +149,6 @@ export default function AppHeader() {
       return
     }
     if (wasMountedRef.current) {
-      // 마운트→언마운트 전이 시점: 메뉴 버튼 포커스 복귀
       menuBtnRef.current?.focus()
       wasMountedRef.current = false
     }
@@ -273,26 +283,28 @@ export default function AppHeader() {
           {/* 테마 전환 */}
           <ThemeToggle />
 
-          {/* 모바일 메뉴 토글 (오른쪽) */}
+          {/* 모바일 메뉴 토글 (오른쪽) — 라벨/아이콘은 "의도된 열림 상태" 기준.
+              closing 중에는 다시 ☰ 로 돌아가서 재-열기 시 reducer 가 open 으로 뒤집는다. */}
           <button
             ref={menuBtnRef}
-            onClick={() => (drawerMounted ? closeDrawer() : openDrawer())}
-            aria-label={drawerMounted ? t('header.menuClose') : t('header.menuOpen')}
-            aria-expanded={drawerMounted}
+            onClick={() => (intendedOpen ? closeDrawer() : openDrawer())}
+            aria-label={intendedOpen ? t('header.menuClose') : t('header.menuOpen')}
+            aria-expanded={intendedOpen}
             aria-controls="mobile-drawer"
             className="lg:hidden flex items-center justify-center w-11 h-11 text-muted-foreground hover:text-foreground transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {drawerMounted ? <X size={20} /> : <Menu size={20} />}
+            {intendedOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </header>
 
-      {/* 모바일 드로어 — 오른쪽 슬라이드 · AssistantPanel 과 같은 모션 */}
+      {/* 모바일 드로어 — 오른쪽 슬라이드 · AssistantPanel 과 같은 모션.
+          data-open 은 drawerDataOpen(state): opening 은 "false" 로 한 프레임 두어야
+          다음 rAF 에서 "true" 로 바뀌면서 브라우저가 transition 을 발동한다. */}
       {drawerMounted && (
         <div className="lg:hidden">
-          {/* 오버레이 (헤더 아래로만 덮음 — 헤더 X 버튼이 눌리게) */}
           <div
-            data-open={drawerOpen ? 'true' : 'false'}
+            data-open={drawerDataOpen(drawerState)}
             onClick={closeDrawer}
             aria-hidden="true"
             className="pl-drawer-scrim"
@@ -303,7 +315,7 @@ export default function AppHeader() {
             role="dialog"
             aria-modal="true"
             aria-label={t('nav.home')}
-            data-open={drawerOpen ? 'true' : 'false'}
+            data-open={drawerDataOpen(drawerState)}
             className="pl-drawer"
             onTransitionEnd={onDrawerTransitionEnd}
           >
