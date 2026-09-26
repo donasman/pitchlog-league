@@ -420,6 +420,7 @@ npm run backup:verify   # 일회용 postgres 컨테이너에 복원해 운영 DB
 - **한 주기 처리 시간을 계측해 기록한다.** 주기의 70%를 넘으면 경고
 - Phase 2에서 실제 라운드 1회를 무중단 관측하며 실측한다
 - **1판 (관측 모드 · 2026-09-24 배포)**: L4 뼈대 붙임 — `LIVE_POLLER_ENABLED=false` 기본. 켜면 위 규칙대로 폴링하되 **DB 쓰기 없음**. 응답 파싱 후 "쓰면 바뀌었을 필드 수(`wouldWrite`)"만 계측 · `/health` 노출. `LIVE_POLLER_PROBE_FIXTURE_IDS` 로 DB 밖 A매치(KOR 대표팀 등) 를 부팅 시 + 매시 1회 fetch 해 폴링 대상에 합류. 실제 DB 갱신은 2판.
+- **2판 (쓰기 모드 · 역행 가드 · L2 보호 · `/api/live` · 2026-09-26)**: `LIVE_POLLER_MODE=observe|write` (기본 `observe`). `write` 여도 probe 는 쓰지 않는다. 쓰기는 조건부 UPDATE 1건 (D6-a 상태 순위: NS/TBD=0·1H=1·HT=2·2H=3·ET=4·BT=5·P=6·FT/AET/PEN=7·PST/CANC/ABD/AWD/WO=8·SUSP/INT/LIVE 는 현재 rank 유지 · 판정 `newRank>curRank OR (=rank AND coalesce(newElapsed,0)>=coalesce(curElapsed,0))` · 스코어는 조건 밖). 성공 시 `data_version+1 · as_of=now() · updated_at=now()`. L2 매일은 진행 중 행(status ∈ 9종)의 라이브 컬럼을 덮지 않는다 (`batchUpsert.updateWhere`). 조회 `GET /api/live` — 진행 중 + FT/AET/PEN 후 3시간 이내 · `Cache-Control: public, max-age=0, s-maxage=5` (이 경로만).
 
 ### 6-6. 확정 처리는 그대로
 

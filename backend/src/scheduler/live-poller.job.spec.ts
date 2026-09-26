@@ -20,6 +20,8 @@ function mkResult(over: Partial<TickResult> = {}): TickResult {
     ms: 0,
     used: null,
     wouldWrite: 0,
+    written: 0,
+    blocked: 0,
     isProbe: false,
     transitions: [],
     details: [],
@@ -36,6 +38,7 @@ function mkConfig(
     LIVE_POLLER_SLOW_AT: 6000,
     LIVE_POLLER_STOP_AT: 7000,
     LIVE_POLLER_PROBE_FIXTURE_IDS: '',
+    LIVE_POLLER_MODE: 'observe',
     ...over,
   };
   return { get: vi.fn((k: string) => values[k]) } as unknown as ConfigService<
@@ -177,5 +180,56 @@ describe('LivePollerJob', () => {
     // tick3 뒤 다시 30s 예약된 상태에서 15s 만 지나가면 tick 안 나감 (15s 예약이었으면 여기서 4번째 실행)
     await vi.advanceTimersByTimeAsync(15_000);
     expect(observer.tick).toHaveBeenCalledTimes(3);
+  });
+
+  // ── 2판 (L4 쓰기 모드) ──
+
+  it("(9) LIVE_POLLER_MODE=observe 부팅 — state.mode='observe' · observer.tick 이 mode='observe' 로 호출", async () => {
+    job = new LivePollerJob(
+      mkConfig({ LIVE_POLLER_MODE: 'observe' }),
+      observer as unknown as LiveObserverService,
+      state,
+    );
+    observer.tick.mockResolvedValueOnce(mkResult({ targets: 1, chunks: 1 }));
+    job.onModuleInit();
+    expect(state.getLivePollerState().mode).toBe('observe');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(observer.tick).toHaveBeenCalledTimes(1);
+    const call = observer.tick.mock.calls[0];
+    // 마지막 인자가 TickOpts
+    const opts = call[call.length - 1] as { fetchStatus: boolean; mode: string };
+    expect(opts.mode).toBe('observe');
+  });
+
+  it("(10) LIVE_POLLER_MODE=write 부팅 — state.mode='write' · observer.tick 이 mode='write' 로 호출", async () => {
+    job = new LivePollerJob(
+      mkConfig({ LIVE_POLLER_MODE: 'write' }),
+      observer as unknown as LiveObserverService,
+      state,
+    );
+    observer.tick.mockResolvedValueOnce(mkResult({ targets: 1, chunks: 1, written: 1 }));
+    job.onModuleInit();
+    expect(state.getLivePollerState().mode).toBe('write');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(observer.tick).toHaveBeenCalledTimes(1);
+    const call = observer.tick.mock.calls[0];
+    const opts = call[call.length - 1] as { fetchStatus: boolean; mode: string };
+    expect(opts.mode).toBe('write');
+    // written/blocked 이 state 에 누적
+    const s = state.getLivePollerState();
+    expect(s.writtenToday).toBe(1);
+    expect(s.blockedToday).toBe(0);
+  });
+
+  it('(11) idle tick (targets=0 · prev/now 모두 창 닫힘) — "live-poller tick · " 정상 로그 억제', async () => {
+    const logSpy = vi.spyOn(job['logger'], 'log');
+    observer.tick.mockResolvedValueOnce(mkResult({ targets: 0 }));
+    job.onModuleInit();
+    await vi.advanceTimersByTimeAsync(0);
+    // 정상 tick 로그는 "live-poller tick · " 로 시작한다 (transitions/details 는 " transition"·" detail" 이라 접두가 다르다)
+    const idleTickLog = logSpy.mock.calls.find(
+      (c) => typeof c[0] === 'string' && (c[0] as string).startsWith('live-poller tick · '),
+    );
+    expect(idleTickLog).toBeUndefined();
   });
 });
