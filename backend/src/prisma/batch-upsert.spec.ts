@@ -152,10 +152,19 @@ describe('batchUpsert · updateWhere', () => {
     const l2Src = await import('node:fs/promises').then((fs) =>
       fs.readFile(new URL('../ingestion/l2/l2.service.ts', import.meta.url), 'utf8'),
     );
-    // NOT IN ('1H','HT','2H',...) 리터럴을 뽑는다
-    const m = /"matches"\."status_short" NOT IN \(([^)]+)\)/.exec(l2Src);
-    expect(m, 'l2.service.ts 에서 status_short NOT IN 리터럴을 찾지 못했다').not.toBeNull();
+    // IN ('1H','HT','2H',...) 리터럴을 뽑는다 (NOT IN · IN 어느 형태든 매칭)
+    const m = /"matches"\."status_short"\s+IN\s+\(([^)]+)\)/.exec(l2Src);
+    expect(m, 'l2.service.ts 에서 status_short IN 리터럴을 찾지 못했다').not.toBeNull();
     const literalTokens = (m![1].match(/'([^']+)'/g) ?? []).map((s) => s.slice(1, -1));
     expect([...literalTokens].sort()).toEqual([...LIVE_STATUSES].sort());
+  });
+
+  it('L2 updateWhere 에 kickoff_at > now() - interval \'6 hours\' 가드가 살아 있다 (L4 실패 복구용)', async () => {
+    // fix/l4-live-window-bounds: L4 가 FT 를 놓쳤을 때 L2 매일 upsert 가 다시 덮어 복구할 수 있어야 한다.
+    // 이 검사는 킥오프 6시간 만료 규칙이 사라지면 실패한다.
+    const l2Src = await import('node:fs/promises').then((fs) =>
+      fs.readFile(new URL('../ingestion/l2/l2.service.ts', import.meta.url), 'utf8'),
+    );
+    expect(l2Src).toContain(`"matches"."kickoff_at" > now() - interval '6 hours'`);
   });
 });

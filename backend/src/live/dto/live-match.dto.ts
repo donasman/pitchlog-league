@@ -2,7 +2,7 @@
  * GET /api/live 응답 DTO.
  *
  * 계약 요지:
- *   - LIVE_STATUSES 는 진행 중 · TERMINAL_STATUSES + finished_at ≥ now-3h 는 최근 종료.
+ *   - LIVE_STATUSES 는 진행 중 (kickoff ≥ now-6h) · TERMINAL_STATUSES 는 최근 종료 (kickoff ≥ now-5h · ≈ FT 후 3h).
  *   - CompetitionRefDto · ScoreDto 는 match.dto.ts 의 것 그대로 재사용 (재정의 금지).
  *   - TeamRefDto 는 여기서 신설한 축약형 — TeamSummaryDto 를 상속하지 않는다.
  *   - `dataVersion` · 항목 단위 `asOf` · 응답 단위 `asOf` 를 제공한다.
