@@ -531,7 +531,9 @@
     "season": "2026-27 season",
     "country": "Country",
     "scrollPrev": "Previous",
-    "scrollNext": "Next"
+    "scrollNext": "Next",
+    "pause": "Pause",
+    "play": "Play"
   },
   "favorites": {
     "add": "Add {{name}} to favorites",
