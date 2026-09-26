@@ -563,10 +563,10 @@ export default function AssistantPanel() {
           position: "fixed",
           inset: 0,
           background: "rgba(0,0,0,.3)",
-          zIndex: 7000,
+          zIndex: "var(--pl-z-panel)",
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? "auto" : "none",
-          transition: "opacity .22s ease",
+          transition: "opacity var(--pl-panel-dur) var(--pl-panel-ease)",
         }}
         onClick={closePanel}
         aria-hidden="true"
@@ -576,7 +576,7 @@ export default function AssistantPanel() {
       <div
         style={{
           position: "fixed",
-          zIndex: 7001,
+          zIndex: "var(--pl-z-panel)",
           background: "var(--pl-card)",
           display: "flex",
           flexDirection: "column",
@@ -596,7 +596,7 @@ export default function AssistantPanel() {
               border-left:1px solid var(--pl-line);
               box-shadow:var(--sh-modal);
               transform:translateX(100%);
-              transition:transform 280ms cubic-bezier(.22,.61,.36,1);
+              transition:transform var(--pl-panel-dur) var(--pl-panel-ease);
               will-change:transform;
             }
             .assistant-panel[data-open="true"]{
@@ -610,7 +610,7 @@ export default function AssistantPanel() {
               border-radius:16px 16px 0 0;
               box-shadow:var(--sh-modal);
               transform:translateY(100%);
-              transition:transform 280ms cubic-bezier(.22,.61,.36,1);
+              transition:transform var(--pl-panel-dur) var(--pl-panel-ease);
               will-change:transform;
             }
             .assistant-panel[data-open="true"]{
