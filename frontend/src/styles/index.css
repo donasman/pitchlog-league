@@ -124,3 +124,79 @@
   .pl-chip-row::-webkit-scrollbar { display: none; }
   .pl-chip-row > * { flex-shrink: 0; }
 }
+
+/* 홈 hero CTA — 모바일에서 세로 · 전체 폭. 데스크톱은 기존 flex(가로·wrap) 그대로. */
+@media (max-width: 639.98px) {
+  .hero-cta { flex-direction: column; }
+  .hero-cta > .pl-btn { width: 100%; justify-content: center; min-height: 48px; }
+}
+
+/* ── HScroller — 공용 가로 슬라이드 (components/ui/HScroller.jsx) ────────────
+   grid-auto-columns 로 "보이는 칸 수"(--pl-hs-visible) 만큼 자동 폭 계산.
+   scroll-snap x mandatory · overscroll-behavior x contain · 스크롤바 숨김.
+   페이드는 넘칠 때만 (data-fade-l/-r 로 도달한 쪽 해제).
+   화살표는 ≥768px 에서만 표시. */
+.pl-hscroller { position: relative; }
+
+.pl-hscroller-track {
+  --pl-hs-rows: 1;
+  --pl-hs-gap: 12px;
+  --pl-hs-visible: 1.6;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--pl-hs-rows), auto);
+  grid-auto-columns: calc((100% - var(--pl-hs-gap) * (var(--pl-hs-visible) - 1)) / var(--pl-hs-visible));
+  gap: var(--pl-hs-gap);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  outline: none;
+}
+.pl-hscroller-track::-webkit-scrollbar { display: none; }
+.pl-hscroller-track > * { scroll-snap-align: start; min-width: 0; }
+.pl-hscroller-track:focus-visible { box-shadow: 0 0 0 2px var(--pl-primary); border-radius: 6px; }
+
+.pl-hscroller-track[data-fade-l="1"] {
+  mask-image: linear-gradient(to right, transparent 0, black 24px, black 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 24px, black 100%);
+}
+.pl-hscroller-track[data-fade-r="1"] {
+  mask-image: linear-gradient(to right, black 0, black calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 0, black calc(100% - 24px), transparent 100%);
+}
+.pl-hscroller-track[data-fade-l="1"][data-fade-r="1"] {
+  mask-image: linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%);
+}
+
+@media (min-width: 640px) {
+  .pl-hscroller-track { --pl-hs-visible: 3; }
+}
+@media (min-width: 1024px) {
+  .pl-hscroller-track { --pl-hs-visible: 5; }
+}
+
+.pl-hscroller-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--pl-card);
+  color: var(--pl-text);
+  border: 1px solid var(--pl-line);
+  box-shadow: var(--sh-over);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+}
+.pl-hscroller-arrow:hover { background: var(--pl-fill); }
+.pl-hscroller-arrow-prev { left: -6px; }
+.pl-hscroller-arrow-next { right: -6px; }
+@media (min-width: 768px) {
+  .pl-hscroller-arrow { display: inline-flex; }
+}
