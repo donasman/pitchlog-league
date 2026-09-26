@@ -49,3 +49,9 @@ backend/*.tsbuildinfo
 
 # smoke 스크립트 로그
 backend/smoke.log
+
+# 에이전트 도구·세션 상태 (로컬 전용)
+.omc/
+.agents/
+.aider-desk/
+skills-lock.json
