@@ -266,9 +266,10 @@ export class LiveObserverService {
           });
         }
 
-        // 메모리 필터 갱신 — FINAL_TERMINAL_STATUSES 전부(FT · AET · PEN) 를 finishedAt 에 기록
+        // 메모리 필터 갱신 — FINAL_TERMINAL_STATUSES 전부(FT · AET · PEN) 를 finishedAt 에 기록.
+        // 처음 본 시각만 기록 — 매 tick 갱신하면 FT_TTL 이 재시작돼 관측 창이 닫히지 않는다.
         if ((FINAL_TERMINAL_STATUSES as readonly string[]).includes(next.statusShort)) {
-          memory.finishedAt.set(id, now);
+          if (!memory.finishedAt.has(id)) memory.finishedAt.set(id, now);
         }
         if ((EXCLUDE_STATUSES as readonly string[]).includes(next.statusShort)) {
           memory.excluded.add(id);
