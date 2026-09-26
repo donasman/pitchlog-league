@@ -71,14 +71,15 @@ describe('favorites — storage layer', () => {
   })
 
   // T7
-  it('rejects add with limit_reached when 5 favorites are already stored', () => {
-    for (const slug of ['a', 'b', 'c', 'd', 'e']) addFavoriteTeam(slug)
+  it('rejects add with limit_reached when the limit is already reached', () => {
+    const full = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
+    for (const slug of full) addFavoriteTeam(slug)
     expect(getFavoriteTeams()).toHaveLength(FAVORITE_TEAMS_LIMIT)
-    const result = addFavoriteTeam('f')
+    const result = addFavoriteTeam('k')
     expect(result.ok).toBe(false)
     expect(result.reason).toBe('limit_reached')
-    expect(result.list).toEqual(['a', 'b', 'c', 'd', 'e'])
-    expect(getFavoriteTeams()).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(result.list).toEqual(full)
+    expect(getFavoriteTeams()).toEqual(full)
   })
 
   // T8
@@ -133,11 +134,12 @@ describe('favorites — storage layer', () => {
   })
 
   // T14
-  it('toggle returns limit_reached for a new slug when the list is at 5', () => {
-    for (const slug of ['a', 'b', 'c', 'd', 'e']) addFavoriteTeam(slug)
-    const result = toggleFavoriteTeam('f')
+  it('toggle returns limit_reached for a new slug when the list is at the limit', () => {
+    const full = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
+    for (const slug of full) addFavoriteTeam(slug)
+    const result = toggleFavoriteTeam('k')
     expect(result.ok).toBe(false)
     expect(result.reason).toBe('limit_reached')
-    expect(getFavoriteTeams()).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(getFavoriteTeams()).toEqual(full)
   })
 })
