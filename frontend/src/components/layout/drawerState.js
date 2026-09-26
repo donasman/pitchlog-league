@@ -86,3 +86,17 @@ export function drawerIntendedOpen(state) {
 export function drawerDataOpen(state) {
   return state === 'open' ? 'true' : 'false'
 }
+
+/**
+ * 열림 완료 시 포커스 대상.
+ *   'drawer' 만 반환하고, 첫 링크로 자동 포커스는 하지 않는다 —
+ *   Safari 는 프로그램 포커스에도 링을 그려서, 현재 페이지와 무관한 첫 항목
+ *   (예: '홈') 이 강조되는 것처럼 보인다. 드로어 컨테이너 자체(tabIndex=-1,
+ *   outline:none)로 포커스를 옮기면 스크린리더는 dialog 를 읽고 시각적 링은
+ *   나오지 않는다. 키보드 사용자는 Tab 으로 첫 링크부터 자연스럽게 이동.
+ *
+ *   open 이 아닌 상태에서는 null — 컴포넌트가 별도로 처리 (닫힘 완료 시 메뉴 버튼).
+ */
+export function drawerFocusTarget(state) {
+  return state === 'open' ? 'drawer' : null
+}
