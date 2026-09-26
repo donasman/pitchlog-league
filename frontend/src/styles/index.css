@@ -100,9 +100,49 @@
 .pl-sticky-filter {
   position: sticky;
   top: var(--pl-header-h, 57px);
-  z-index: 40;
+  z-index: var(--pl-z-sticky);
   background: var(--pl-bg);
   border-bottom: 1px solid var(--pl-line);
+}
+
+/* ── 모바일 드로어 (components/layout/AppHeader.jsx) ─────────────────────────
+   오른쪽 슬라이드. 오버레이는 헤더 아래에서만 덮어 헤더 X 버튼을 살린다.
+   모션은 AssistantPanel 과 공용 토큰(--pl-panel-dur/ease) 을 쓴다.
+   상태는 [data-open="true|false"] 로 controlled — 마운트/언마운트는 컴포넌트가 관리. */
+.pl-drawer-scrim {
+  position: fixed;
+  inset: var(--pl-header-h, 57px) 0 0 0;
+  background: rgba(0, 0, 0, .6);
+  z-index: var(--pl-z-drawer-scrim);
+  opacity: 0;
+  transition: opacity var(--pl-panel-dur) var(--pl-panel-ease);
+  will-change: opacity;
+}
+.pl-drawer-scrim[data-open="true"] { opacity: 1; }
+
+.pl-drawer {
+  position: fixed;
+  top: var(--pl-header-h, 57px);
+  right: 0;
+  height: calc(100dvh - var(--pl-header-h, 57px));
+  width: min(320px, 85vw);
+  z-index: var(--pl-z-drawer);
+  background: var(--pl-card);
+  border-left: 1px solid var(--pl-line);
+  box-shadow: var(--sh-modal);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform var(--pl-panel-dur) var(--pl-panel-ease);
+  will-change: transform;
+}
+.pl-drawer[data-open="true"] { transform: translateX(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pl-drawer, .pl-drawer-scrim { transition: none; }
 }
 
 /* 칩 줄 — 데스크톱은 wrap, 640px 미만은 nowrap + 가로 스크롤. overflow 는 sticky 조상이 아니라 이 안쪽 래퍼에만 걸려야 한다. */
