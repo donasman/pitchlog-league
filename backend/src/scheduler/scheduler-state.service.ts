@@ -63,6 +63,12 @@ export interface LivePollerState {
   callsToday: number;
   lastUsed: number | null;
   wouldWriteToday: number;
+  /** L4 쓰기 모드 (D6). 'observe' 는 관측만 · 'write' 는 조건부 UPDATE 시도. */
+  mode: 'observe' | 'write';
+  /** 오늘(UTC) 누적 성공 쓰기 수 (mode='write' 에서만 증가). */
+  writtenToday: number;
+  /** 오늘(UTC) 누적 역행 가드 차단 수 (조건부 UPDATE 0행). */
+  blockedToday: number;
   lastError: string | null;
 }
 
@@ -115,6 +121,9 @@ export class SchedulerStateService {
     callsToday: 0,
     lastUsed: null,
     wouldWriteToday: 0,
+    mode: 'observe',
+    writtenToday: 0,
+    blockedToday: 0,
     lastError: null,
   };
 
@@ -223,6 +232,11 @@ export class SchedulerStateService {
     this.livePoller.enabled = true;
   }
 
+  /** LIVE_POLLER_MODE env 반영 — 잡 등록 시 1회 호출. UTC 롤오버에서 리셋 대상 아님. */
+  markLivePollerMode(mode: 'observe' | 'write'): void {
+    this.livePoller.mode = mode;
+  }
+
   isLivePollerRunning(): boolean {
     return this.livePoller.running;
   }
@@ -242,6 +256,8 @@ export class SchedulerStateService {
     calls: number;
     used: number | null;
     wouldWrite: number;
+    written: number;
+    blocked: number;
     windowOpen: boolean;
     periodSec: number;
     error?: string | null;
@@ -260,6 +276,8 @@ export class SchedulerStateService {
     s.callsToday += summary.calls;
     if (summary.used !== null) s.lastUsed = summary.used;
     s.wouldWriteToday += summary.wouldWrite;
+    s.writtenToday += summary.written;
+    s.blockedToday += summary.blocked;
     s.lastError = summary.error ?? null;
   }
 
@@ -283,6 +301,9 @@ export class SchedulerStateService {
       this.livePoller.ticksToday = 0;
       this.livePoller.maxTickMsToday = 0;
       this.livePoller.wouldWriteToday = 0;
+      // mode 는 env 로 결정되므로 리셋 대상 아님.
+      this.livePoller.writtenToday = 0;
+      this.livePoller.blockedToday = 0;
       this.livePoller.stoppedReason = null;
       this.lastLivePollerUtcYmd = ymd;
     }

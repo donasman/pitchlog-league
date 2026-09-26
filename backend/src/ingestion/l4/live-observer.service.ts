@@ -13,7 +13,7 @@
  *   6. 응답 파싱 · wouldWrite · 전이 · detail · lastSeen 갱신
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ApiFootballClient } from '../api-football/api-football.client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { ApiEnvelope, ApiFixture, ApiStatus } from '../api-football/api-football.types.js';
@@ -32,9 +32,13 @@ import type {
   ProbeEntry,
   LastSeen,
 } from './live-window.js';
+import { LiveWriterService } from './live-writer.service.js';
+
+export type LivePollerMode = 'observe' | 'write';
 
 export interface TickOpts {
   fetchStatus: boolean;
+  mode: LivePollerMode;
 }
 
 export interface TickTransition {
@@ -67,6 +71,10 @@ export interface TickResult {
   ms: number;
   used: number | null;
   wouldWrite: number;
+  /** 이번 tick 에 실제로 조건부 UPDATE 가 성공한 수 (mode='write' 에서만 증가). */
+  written: number;
+  /** 역행 가드로 UPDATE 가 0행 반환한 수 (mode='write' 에서만 증가). */
+  blocked: number;
   isProbe: boolean;
   transitions: TickTransition[];
   details: TickDetail[];
@@ -106,9 +114,12 @@ const LIVE_EXCLUDE_STATUSES: readonly string[] = [
 
 @Injectable()
 export class LiveObserverService {
+  private readonly logger = new Logger(LiveObserverService.name);
+
   constructor(
     private readonly api: ApiFootballClient,
     private readonly prisma: PrismaService,
+    @Optional() private readonly writer?: LiveWriterService,
   ) {}
 
   async tick(
@@ -172,6 +183,8 @@ export class LiveObserverService {
         ms: Date.now() - start,
         used: null,
         wouldWrite: 0,
+        written: 0,
+        blocked: 0,
         isProbe: false,
         transitions: [],
         details: [],
@@ -193,6 +206,8 @@ export class LiveObserverService {
     let chunks = 0;
     let liveCount = 0;
     let wouldWrite = 0;
+    let written = 0;
+    let blocked = 0;
     const transitions: TickTransition[] = [];
     const details: TickDetail[] = [];
 
@@ -207,10 +222,16 @@ export class LiveObserverService {
         const item = raw as Record<string, unknown>;
         const f = item.fixture as {
           id: number;
-          status: { short: string; elapsed: number | null; extra: number | null };
+          status: { short: string; long?: string | null; elapsed: number | null; extra: number | null };
         };
         const teams = item.teams as { home: { name: string }; away: { name: string } };
         const goals = item.goals as { home: number | null; away: number | null };
+        const score = (item.score ?? {}) as {
+          halftime?: { home: number | null; away: number | null } | null;
+          fulltime?: { home: number | null; away: number | null } | null;
+          extratime?: { home: number | null; away: number | null } | null;
+          penalty?: { home: number | null; away: number | null } | null;
+        };
 
         const id = f.id;
         const isProbeFixture = probes.has(id);
@@ -224,12 +245,62 @@ export class LiveObserverService {
         const prev = lastSeen.get(id) ?? null;
 
         // wouldWrite (probe 매치는 0). 행 단위 — 5 컬럼 중 하나라도 다르면 +1.
+        let shouldWrite = false;
         if (!isProbeFixture) {
           if (prev === null) {
             const dbRow = dbRowMap.get(id);
-            if (dbRow && countDiffs5(dbRow, next) > 0) wouldWrite += 1;
+            if (dbRow && countDiffs5(dbRow, next) > 0) {
+              wouldWrite += 1;
+              shouldWrite = true;
+            }
           } else {
-            if (countDiffs5(prev, next) > 0) wouldWrite += 1;
+            if (countDiffs5(prev, next) > 0) {
+              wouldWrite += 1;
+              shouldWrite = true;
+            }
+          }
+        }
+
+        // 쓰기 모드 — probe 는 절대 쓰지 않는다. diff 있을 때만 조건부 UPDATE 시도.
+        if (shouldWrite && opts.mode === 'write' && this.writer) {
+          const prevForLog =
+            prev?.statusShort ?? dbRowMap.get(id)?.statusShort ?? '?';
+          const prevElapsedForLog =
+            prev?.elapsed ?? dbRowMap.get(id)?.elapsed ?? null;
+          try {
+            const r = await this.writer.write({
+              apiFixtureId: id,
+              statusShort: next.statusShort,
+              statusLong: f.status.long ?? null,
+              elapsed: next.elapsed,
+              extraElapsed: next.extraElapsed,
+              goalsHome: next.goalsHome,
+              goalsAway: next.goalsAway,
+              htHome: score.halftime?.home ?? null,
+              htAway: score.halftime?.away ?? null,
+              ftHome: score.fulltime?.home ?? null,
+              ftAway: score.fulltime?.away ?? null,
+              etHome: score.extratime?.home ?? null,
+              etAway: score.extratime?.away ?? null,
+              penHome: score.penalty?.home ?? null,
+              penAway: score.penalty?.away ?? null,
+            });
+            written += r.written;
+            blocked += r.blocked;
+            if (r.written) {
+              this.logger.log(
+                `live-poller write · ${id} ${teams.home.name}-${teams.away.name} ` +
+                  `${prevForLog}→${next.statusShort} ${next.goalsHome ?? 0}-${next.goalsAway ?? 0}`,
+              );
+            } else {
+              this.logger.log(
+                `live-poller blocked · ${id} ${prevForLog}(${prevElapsedForLog ?? '-'})` +
+                  ` ← ${next.statusShort}(${next.elapsed ?? '-'})`,
+              );
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.logger.error(`live-poller write error · ${id}: ${msg}`);
           }
         }
 
@@ -291,6 +362,8 @@ export class LiveObserverService {
       ms: Date.now() - start,
       used,
       wouldWrite,
+      written,
+      blocked,
       isProbe,
       transitions,
       details,

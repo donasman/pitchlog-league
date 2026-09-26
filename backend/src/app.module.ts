@@ -17,6 +17,7 @@ import { ProbeModule } from './ingestion/probe/probe.module.js';
 import { CompetitionModule } from './competition/competition.module.js';
 import { TeamModule } from './team/team.module.js';
 import { MatchModule } from './match/match.module.js';
+import { LiveModule } from './live/live.module.js';
 import { StandingModule } from './standing/standing.module.js';
 import { PlayerModule } from './player/player.module.js';
 import { StatisticsModule } from './statistics/statistics.module.js';
@@ -56,6 +57,7 @@ import { SchedulerModule } from './scheduler/scheduler.module.js';
     CompetitionModule,
     TeamModule,
     MatchModule,
+    LiveModule,
     StandingModule,
     PlayerModule,
     StatisticsModule,
