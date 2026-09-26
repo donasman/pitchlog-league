@@ -73,19 +73,22 @@ function formatAt(isoString) {
   return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
 }
 
-export default function NotificationPanel({ onClose }) {
+export default function NotificationPanel({ onClose, containerRef }) {
   const { t } = useTranslation()
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications()
   const panelRef = useRef(null)
 
-  /* 바깥 클릭 닫기 */
+  /* 바깥 클릭 닫기 — containerRef(벨+패널 감싼 래퍼) 기준으로 판정해
+     벨 버튼 자체 클릭이 "바깥" 으로 잡혀 close→toggle 이 다시 여는 것을 막는다.
+     터치 대비로 pointerdown 사용. */
   useEffect(() => {
-    function handleClick(e) {
-      if (panelRef.current && !panelRef.current.contains(e.target)) onClose()
+    function handlePointerDown(e) {
+      const root = containerRef?.current ?? panelRef.current
+      if (root && !root.contains(e.target)) onClose()
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [onClose])
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [onClose, containerRef])
 
   /* Esc 닫기 (SearchPanel 과 동일 패턴) */
   useEffect(() => {

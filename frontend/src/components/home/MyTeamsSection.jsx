@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useMyTeams } from '@/hooks/useMyTeams'
 import ErrorState from '@/components/ui/ErrorState'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
+import HScroller from '@/components/ui/HScroller'
 import MyTeamCard from './MyTeamCard'
 
 export default function MyTeamsSection() {
@@ -31,16 +32,11 @@ export default function MyTeamsSection() {
         </div>
       ) : (
         <>
-          <div
-            className="myteams-grid"
-            style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}
-          >
-            {/* minmax(0, 1fr) — /teams 와 같은 min-content 하한 버그 방어 · MyTeamCard 안 긴 팀명이 트랙을 밀지 않게 */}
-            <style>{`@media(min-width:768px){.myteams-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}`}</style>
+          <HScroller rows={1} gap={12} ariaLabel={t('home.myTeams.title')}>
             {cards.map(card => (
               <MyTeamCard key={card.teamRef} card={card} />
             ))}
-          </div>
+          </HScroller>
           <span className="t-cap">{t('home.myTeams.browser_only_notice')}</span>
         </>
       )}

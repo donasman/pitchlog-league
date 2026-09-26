@@ -173,6 +173,8 @@
     "uclLeagueNote": "36-team single table · not group stage",
     "uclGroupNote": "Eight groups of four",
     "legend": {
+      "champion": "Champion",
+      "championLeader": "Leader",
       "ucl": "UCL direct",
       "uclQualPlayoff": "UCL qualifying PO",
       "uel": "Europa League",
@@ -527,7 +529,9 @@
     "captain": "(C)",
     "phase5": "Phase 5",
     "season": "2026-27 season",
-    "country": "Country"
+    "country": "Country",
+    "scrollPrev": "Previous",
+    "scrollNext": "Next"
   },
   "favorites": {
     "add": "Add {{name}} to favorites",
