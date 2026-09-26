@@ -17,7 +17,7 @@
  */
 
 export const FAVORITE_TEAMS_KEY = 'pitchlog-favorites'
-export const FAVORITE_TEAMS_LIMIT = 5
+export const FAVORITE_TEAMS_LIMIT = 10
 
 /** localStorage 접근 안전 가드 — SSR·비지원 환경 방어 */
 function safeStorage() {
