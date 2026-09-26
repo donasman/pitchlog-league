@@ -14,6 +14,7 @@ import {
   drawerMounted,
   drawerIntendedOpen,
   drawerDataOpen,
+  drawerFocusTarget,
 } from './drawerState.js'
 
 describe('nextDrawerState — normal motion', () => {
@@ -96,5 +97,15 @@ describe('drawerMounted / drawerIntendedOpen / drawerDataOpen', () => {
     expect(drawerDataOpen('opening')).toBe('false')
     expect(drawerDataOpen('open')).toBe('true')
     expect(drawerDataOpen('closing')).toBe('false')
+  })
+
+  it('T-M4: focus target on open is drawer container, not first link', () => {
+    // Safari draws a ring on programmatic focus of anchors — landing on the first
+    // NavLink made an unrelated item (e.g. Home) look active while another route
+    // was current. Focus must land on the drawer container (tabIndex=-1, outline:none).
+    expect(drawerFocusTarget('open')).toBe('drawer')
+    expect(drawerFocusTarget('opening')).toBeNull()
+    expect(drawerFocusTarget('closing')).toBeNull()
+    expect(drawerFocusTarget('closed')).toBeNull()
   })
 })

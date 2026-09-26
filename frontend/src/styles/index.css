@@ -141,6 +141,20 @@
 }
 .pl-drawer[data-open="true"] { transform: translateX(0); }
 
+/* 프로그램 포커스 대상(tabIndex=-1) — 링 숨김. 스크린리더는 dialog 라벨을 읽는다. */
+.pl-drawer:focus,
+.pl-drawer:focus-visible { outline: none; }
+
+/* 드로어 안 링크: 마우스/터치는 링 없음, 키보드(:focus-visible) 만 브랜드 링.
+   전역 :focus-visible 룰(index.css L70) 을 덮어써 드로어 안에서는 outline-offset
+   과 border-radius 를 맞춘다. */
+.pl-drawer a:focus { outline: none; }
+.pl-drawer a:focus-visible {
+  outline: 2px solid var(--pl-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pl-drawer, .pl-drawer-scrim { transition: none; }
 }
