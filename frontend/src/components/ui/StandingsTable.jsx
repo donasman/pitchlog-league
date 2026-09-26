@@ -29,6 +29,7 @@ import { getLocalizedName } from '@/utils/localization'
 
 /* ── i18n 키 맵 ── */
 const ZONE_LABEL_KEY = {
+  champion:                 'standings.legend.champion',
   champions_league:         'standings.legend.ucl',
   // 라벨이 비어 있으면 ZoneLegend 가 걸러내 색만 칠하고 설명이 없는 행이 된다
   champions_league_playoff: 'standings.legend.uclQualPlayoff',
@@ -43,11 +44,20 @@ const ZONE_LABEL_KEY = {
 }
 
 const ZONE_DISPLAY_ORDER = [
+  'champion',
   'champions_league','champions_league_playoff',
   'europa_league','europa_conference',
   'relegation_playoff','relegation',
   'ucl_direct','ucl_playoff','ucl_eliminated',
 ]
+
+/* ── 표시용 구역 계산 ── (원본 entry.zone 은 건드리지 않음)
+   리그 형식(format 'league') 이고 rank===1 이면 'champion' 으로 치환한다.
+   UCL/UEL/UECL 리그 페이즈 · 조별 순위(format 'groups_knockout') 는 제외 — 그대로 entry.zone. */
+function toDisplayZone(entry, format) {
+  if (format === 'league' && entry.rank === 1) return 'champion'
+  return entry.zone ?? 'none'
+}
 
 /* ── 패턴 배경 생성 ── */
 function patternBg(zc, pat) {
@@ -92,14 +102,19 @@ function computeZoneRanges(groups) {
 /* ─────────────────────────────────────────────────────────────
    ZoneLegend — 하단 범례
 ───────────────────────────────────────────────────────────── */
-/** @param {{ groups: Array<{groupName: string|null, entries: Array}>, small?: boolean }} props */
-function ZoneLegend({ groups, small }) {
+/** @param {{ groups: Array<{groupName: string|null, entries: Array}>, small?: boolean, seasonFinished?: boolean }} props */
+function ZoneLegend({ groups, small, seasonFinished }) {
   const { t } = useTranslation()
   const rows        = (groups ?? []).flatMap(g => g.entries ?? [])
   const zonesInData = new Set(rows.map(e => e.zone ?? 'none'))
   const ranges      = computeZoneRanges(groups ?? [])
   const items       = ZONE_DISPLAY_ORDER.filter(z => zonesInData.has(z) && ZONE_LABEL_KEY[z])
   if (!items.length) return null
+
+  // champion 라벨은 시즌 종료 여부로 갈린다: FINISHED → "우승", 아니면 "선두"
+  const labelKeyFor = (zone) => zone === 'champion'
+    ? (seasonFinished ? 'standings.legend.champion' : 'standings.legend.championLeader')
+    : ZONE_LABEL_KEY[zone]
 
   return (
     <div
@@ -144,7 +159,7 @@ function ZoneLegend({ groups, small }) {
                 backgroundImage: patternBg(zc ?? '', pat),
               }}
             />
-            {t(ZONE_LABEL_KEY[zone])}
+            {t(labelKeyFor(zone))}
             {rangeStr && (
               <span
                 className="num"
@@ -200,6 +215,7 @@ function DesktopTable({ rows, competitionSlug, t, locale }) {
               className="zrow num"
               data-zone={zc ? zone : undefined}
               data-pat={pat && pat !== 'solid' ? pat : undefined}
+              data-top={zone === 'champion' ? '1' : undefined}
               style={{
                 '--zc': zc ?? 'transparent',
                 gridTemplateColumns: DESK_COLS,
@@ -315,6 +331,7 @@ function MobileTable({ rows, t, locale }) {
               className={`zrow num ${stickyBg}`}
               data-zone={zc ? zone : undefined}
               data-pat={pat && pat !== 'solid' ? pat : undefined}
+              data-top={zone === 'champion' ? '1' : undefined}
               style={{
                 '--zc': zc ?? 'transparent',
                 gridTemplateColumns: '30px 110px',
@@ -519,11 +536,21 @@ export default function StandingsTable({
   maxRows,
   competitionSlug,
   compact = false,
+  format,
+  seasonFinished = false,
 }) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
   // 조별리그면 조 단위로 나눈다. 단일 표 대회는 `groupName: null` 인 한 덩어리라 예전과 같다.
-  const groups  = limitStandingGroups(groupStandings(entries), maxRows)
+  const rawGroups = limitStandingGroups(groupStandings(entries), maxRows)
+  // 표시용 zone 치환 — 원본 entry.zone 은 그대로 두고 새 객체로 만든다.
+  const groups = rawGroups.map(g => ({
+    ...g,
+    entries: (g.entries ?? []).map(e => {
+      const displayZone = toDisplayZone(e, format)
+      return displayZone === (e.zone ?? 'none') ? e : { ...e, zone: displayZone }
+    }),
+  }))
   const hasRows = groups.some(g => (g.entries ?? []).length > 0)
 
   if (compact) {
@@ -554,7 +581,7 @@ export default function StandingsTable({
       {hasRows && (
         <div style={{ padding: '12px 14px 10px', borderTop: '1px solid var(--pl-line)' }}>
           <p className="t-cap" style={{ margin: '0 0 8px' }}>{t('standings.zoneNote')}</p>
-          <ZoneLegend groups={groups} />
+          <ZoneLegend groups={groups} seasonFinished={seasonFinished} />
         </div>
       )}
     </div>

@@ -22,6 +22,7 @@
  *   dark : #0f172a + zone-color @ 4% (color-mix 와 동일 공식 — 이전 8%에서 수정)
  */
 export const ZONE_STICKY_BG = {
+  champion:                  'bg-[#fdf6e1] dark:bg-[#31302d]',
   champions_league:          'bg-[#f7faff] dark:bg-[#111b32]',
   champions_league_playoff:  'bg-[#fefcf5] dark:bg-[#181d29]',
   europa_league:             'bg-[#fff9f6] dark:bg-[#181b29]',
@@ -40,6 +41,7 @@ export const ZONE_STICKY_BG = {
  * 패턴은 data-pat 속성으로 .zrow CSS에 전달된다.
  */
 export const ZONE_PAT = {
+  champion:                 'solid',
   champions_league:         'solid',
   champions_league_playoff: 'dash',
   europa_league:            'dash',
@@ -57,6 +59,7 @@ export const ZONE_PAT = {
  * StandingsTable 에서 --zc 로 주입해 좌측 2px 표시선 + 4% 배경 틴트에 사용.
  */
 export const ZONE_COLOR_VAR = {
+  champion:                  'var(--z-champ)',
   champions_league:          'var(--z-ucl)',
   champions_league_playoff:  'var(--z-uclpo)',
   europa_league:             'var(--z-uel)',

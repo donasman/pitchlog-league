@@ -31,6 +31,7 @@
   --form-draw: #667085; /* 폼 무승부 — 흰 글자 4.97:1 · 다크 카드와 3.59:1. 다크에서도 그대로 쓴다 */
 
   /* 순위 구역 색 */
+  --z-champ: #C88A00;
   --z-ucl: #3B82F6;
   --z-uclpo: #EAB308;
   --z-uel: #F97316;
@@ -90,6 +91,8 @@
   --sh-card: 0 1px 2px rgba(0, 0, 0, .4);
   --sh-over: 0 4px 12px rgba(0, 0, 0, .5);
   --sh-modal: 0 8px 24px rgba(0, 0, 0, .6);
+
+  --z-champ: #FFC83D;
 }
 
 /* ── 기본 리셋 ── */
@@ -341,6 +344,40 @@
   );
 }
 
+/* 1위 행 강조 — 은은한 골드 그라디언트 + 빛 띠 스윕 */
+.zrow[data-top="1"] {
+  background-image: linear-gradient(90deg, color-mix(in srgb, #F2B705 12%, transparent), transparent 75%);
+  overflow: hidden;
+}
+.zrow[data-top="1"]::before {
+  width: 3px;
+}
+.zrow[data-top="1"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(100deg, transparent 0%, color-mix(in srgb, #FFD54A 40%, transparent) 50%, transparent 100%);
+  background-size: 25% 100%;
+  background-repeat: no-repeat;
+  background-position: -30% 0;
+  animation: pl-top-sweep 7.5s ease-in-out infinite;
+}
+@keyframes pl-top-sweep {
+  0%   { background-position: -30% 0; }
+  20%  { background-position: 130% 0; }
+  100% { background-position: 130% 0; }
+}
+.dark .zrow[data-top="1"] {
+  background-image: linear-gradient(90deg, color-mix(in srgb, #FFC83D 14%, transparent), transparent 75%);
+}
+.dark .zrow[data-top="1"]::after {
+  background-image: linear-gradient(100deg, transparent 0%, color-mix(in srgb, #FFF1C2 30%, transparent) 50%, transparent 100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .zrow[data-top="1"]::after { animation: none; display: none; }
+}
+
 /* 범례 */
 .pl-legend {
   display: flex;
@@ -409,4 +446,23 @@
   font-family: var(--font);
   overflow: hidden;
   object-fit: contain;
+}
+
+/* ── 축구공 로더 (어시스턴트 "생각 중") ─────────────────────────────
+   Lottie 애니메이션(BallLottie.jsx) 을 담는 44×44 컨테이너.
+   JSON 의 rgb(0,0,0) → currentColor(=--pl-primary),
+   rgb(51,51,51) → --pl-text @ .18 로 CSS 로 재색상.
+   라이트/다크 모두 --pl-primary 소비 — 다크에서는 이미 밝은 #6E93FF (대비 6.19:1).
+   폴백(정적 SVG) 도 이 컨테이너 안에서 100% 로 그려진다 — 별도 규칙 불필요. */
+.pl-ball-lottie {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 44px;
+  color: var(--pl-primary);
+}
+.pl-ball-lottie svg [fill="rgb(0,0,0)"] { fill: currentColor; }
+.pl-ball-lottie svg [fill="rgb(51,51,51)"] {
+  fill: var(--pl-text);
+  fill-opacity: .18;
 }

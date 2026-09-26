@@ -233,6 +233,8 @@ export default function StandingsPage() {
               <StandingsTable
                 entries={standings.entries}
                 competitionSlug={competitionSlug}
+                format={comp?.format}
+                seasonFinished={(seasonsData ?? []).find(s => s?.year === seasonYear)?.status === 'FINISHED'}
               />
             ) : (
               <EmptyState

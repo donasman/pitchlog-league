@@ -26,6 +26,7 @@ export default function MyTeamCard({ card }) {
           logoUrl={card.teamLogoUrl}
           size="sm"
           name={card.teamName}
+          loading="eager"
         />
         <Link
           to={`/teams/${card.teamRef}`}
