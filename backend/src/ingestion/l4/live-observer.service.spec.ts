@@ -362,4 +362,142 @@ describe('LiveObserverService', () => {
     expect(r.chunks).toBe(0);
     expect(client.get).not.toHaveBeenCalled();
   });
+
+  // (10)~(13) 은 09-24 운영 실측 결함 회귀 방지 — FINAL 관측마다 finishedAt 을 갱신하면
+  // FT_TTL(10분) 재시작으로 창이 닫히지 않는다. 처음 본 시각만 기록해야 한다.
+
+  it('(10) DB 경기 · FT 연속 관측 (t0..t0+10min, 15s 간격) — 10분+1초 뒤 대상 제외 · /fixtures 미호출', async () => {
+    const t0 = new Date('2026-09-24T12:00:00Z');
+    const inWindow = new Date(t0.getTime() - 60_000);
+
+    // DB 는 관측 모드라 status 갱신 없음 — 매 tick 같은 row 반환.
+    prisma.match.findMany.mockResolvedValue([dbRow(200, inWindow, { statusShort: '1H' })]);
+    // /fixtures 응답도 매 tick FT 고정 — 연속 관측 시나리오.
+    client.get.mockImplementation(async () =>
+      envelope([fixtureItem(200, 'FT', 90, null, 2, 1)]),
+    );
+
+    const memory = emptyMemory();
+    const probes = new Map<number, ProbeEntry>();
+    const lastSeen = new Map<number, LastSeen>();
+
+    for (let sec = 0; sec <= 600; sec += 15) {
+      const t = new Date(t0.getTime() + sec * 1000);
+      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false });
+    }
+
+    // finishedAt 은 t0 (처음 본 시각). 매 tick 갱신되면 안 된다.
+    expect(memory.finishedAt.get(200)).toEqual(t0);
+
+    const tAfter = new Date(t0.getTime() + 10 * 60 * 1000 + 1000);
+    client.get.mockClear();
+    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false });
+    expect(r.targets).toBe(0);
+    expect(r.chunks).toBe(0);
+    expect(client.get).not.toHaveBeenCalled();
+  });
+
+  it('(11) probe 경기 · FT 연속 관측 (t0..t0+10min, 15s 간격) — 10분+1초 뒤 대상 제외 · /fixtures 미호출', async () => {
+    const t0 = new Date('2026-09-24T12:00:00Z');
+    const inWindow = new Date(t0.getTime() - 60_000);
+
+    prisma.match.findMany.mockResolvedValue([]);
+    client.get.mockImplementation(async () =>
+      envelope([fixtureItem(999, 'FT', 90, null, 2, 1)]),
+    );
+
+    const memory = emptyMemory();
+    const probes = new Map<number, ProbeEntry>();
+    probes.set(999, {
+      apiFixtureId: 999,
+      kickoffAt: inWindow,
+      statusShort: 'FT',
+      home: 'H',
+      away: 'A',
+      homeGoals: 2,
+      awayGoals: 1,
+      seenAt: inWindow,
+    });
+    const lastSeen = new Map<number, LastSeen>();
+
+    for (let sec = 0; sec <= 600; sec += 15) {
+      const t = new Date(t0.getTime() + sec * 1000);
+      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false });
+    }
+
+    expect(memory.finishedAt.get(999)).toEqual(t0);
+
+    const tAfter = new Date(t0.getTime() + 10 * 60 * 1000 + 1000);
+    client.get.mockClear();
+    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false });
+    expect(r.targets).toBe(0);
+    expect(r.chunks).toBe(0);
+    expect(client.get).not.toHaveBeenCalled();
+  });
+
+  it('(12) DB 경기 · AET 연속 관측 (t0..t0+10min, 15s 간격) — 10분+1초 뒤 대상 제외 · /fixtures 미호출', async () => {
+    const t0 = new Date('2026-09-24T12:00:00Z');
+    const inWindow = new Date(t0.getTime() - 60_000);
+
+    prisma.match.findMany.mockResolvedValue([dbRow(300, inWindow, { statusShort: '1H' })]);
+    client.get.mockImplementation(async () =>
+      envelope([fixtureItem(300, 'AET', 120, null, 2, 1)]),
+    );
+
+    const memory = emptyMemory();
+    const probes = new Map<number, ProbeEntry>();
+    const lastSeen = new Map<number, LastSeen>();
+
+    for (let sec = 0; sec <= 600; sec += 15) {
+      const t = new Date(t0.getTime() + sec * 1000);
+      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false });
+    }
+
+    expect(memory.finishedAt.get(300)).toEqual(t0);
+
+    const tAfter = new Date(t0.getTime() + 10 * 60 * 1000 + 1000);
+    client.get.mockClear();
+    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false });
+    expect(r.targets).toBe(0);
+    expect(r.chunks).toBe(0);
+    expect(client.get).not.toHaveBeenCalled();
+  });
+
+  it('(13) probe 경기 · AET 연속 관측 (t0..t0+10min, 15s 간격) — 10분+1초 뒤 대상 제외 · /fixtures 미호출', async () => {
+    const t0 = new Date('2026-09-24T12:00:00Z');
+    const inWindow = new Date(t0.getTime() - 60_000);
+
+    prisma.match.findMany.mockResolvedValue([]);
+    client.get.mockImplementation(async () =>
+      envelope([fixtureItem(998, 'AET', 120, null, 2, 1)]),
+    );
+
+    const memory = emptyMemory();
+    const probes = new Map<number, ProbeEntry>();
+    probes.set(998, {
+      apiFixtureId: 998,
+      kickoffAt: inWindow,
+      statusShort: 'AET',
+      home: 'H',
+      away: 'A',
+      homeGoals: 2,
+      awayGoals: 1,
+      seenAt: inWindow,
+    });
+    const lastSeen = new Map<number, LastSeen>();
+
+    for (let sec = 0; sec <= 600; sec += 15) {
+      const t = new Date(t0.getTime() + sec * 1000);
+      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false });
+    }
+
+    expect(memory.finishedAt.get(998)).toEqual(t0);
+
+    const tAfter = new Date(t0.getTime() + 10 * 60 * 1000 + 1000);
+    client.get.mockClear();
+    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false });
+    expect(r.targets).toBe(0);
+    expect(r.chunks).toBe(0);
+    expect(client.get).not.toHaveBeenCalled();
+  });
 });
