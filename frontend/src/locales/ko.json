@@ -173,6 +173,8 @@
     "uclLeagueNote": "36개 팀 단일 순위표 · 조별리그 아님",
     "uclGroupNote": "8개 조 × 4팀 · 조별리그",
     "legend": {
+      "champion": "우승",
+      "championLeader": "선두",
       "ucl": "UCL 직행",
       "uclQualPlayoff": "UCL 예선 PO",
       "uel": "유로파리그",
@@ -527,7 +529,9 @@
     "captain": "(C)",
     "phase5": "Phase 5",
     "season": "2026-27 시즌",
-    "country": "국가"
+    "country": "국가",
+    "scrollPrev": "이전",
+    "scrollNext": "다음"
   },
   "favorites": {
     "add": "{{name}} 즐겨찾기 추가",
