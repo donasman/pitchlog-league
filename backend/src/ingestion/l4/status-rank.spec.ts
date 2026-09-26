@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-import { isWriteAllowed, statusRank } from './status-rank.js';
+import {
+  isWriteAllowed,
+  statusRank,
+  LIVE_LOOKBACK_MS,
+  RECENTLY_FINISHED_LOOKBACK_MS,
+} from './status-rank.js';
 
 describe('statusRank', () => {
   it('상태 코드별 순위를 반환한다 (SUSP/INT/LIVE 는 null)', () => {
@@ -104,5 +109,12 @@ describe('isWriteAllowed', () => {
         { statusShort: 'PST', elapsed: null },
       ),
     ).toBe(true);
+  });
+});
+
+describe('lookback 상수', () => {
+  it('LIVE_LOOKBACK_MS 는 6h · RECENTLY_FINISHED_LOOKBACK_MS 는 5h', () => {
+    expect(LIVE_LOOKBACK_MS).toBe(6 * 60 * 60 * 1000);
+    expect(RECENTLY_FINISHED_LOOKBACK_MS).toBe(5 * 60 * 60 * 1000);
   });
 });

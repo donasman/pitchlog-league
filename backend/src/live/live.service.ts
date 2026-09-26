@@ -2,9 +2,9 @@
  * GET /api/live 서비스 — DB 만 본다 (외부 API 호출 금지 · CLAUDE.md 백엔드 규칙).
  *
  * 필터:
- *   1) statusShort ∈ LIVE_STATUSES  (진행 중)
- *   2) statusShort ∈ TERMINAL_STATUSES AND finishedAt ≥ now - 3h  (종료 후 3시간 이내)
- *   3) 대회는 is_tracked = true 만 (추적 대회 · 화면 스코프)
+ *   1) statusShort ∈ LIVE_STATUSES      AND kickoff_at ≥ now − 6h  (진행 중 · 6h 여유 · A매치·연장 포함)
+ *   2) statusShort ∈ TERMINAL_STATUSES  AND kickoff_at ≥ now − 5h  (최근 종료 · ≈ FT 후 3h)
+ *   3) 대회는 is_tracked = true 만
  *
  * 정렬: kickoffAt asc, apiFixtureId asc.
  * 매핑: 축약 TeamRefDto · CompetitionRefDto · ScoreDto 만 담는다 (통계·라운드·베뉴 없음).
@@ -19,7 +19,8 @@ import type { Competition, Match, Team, CompetitionSeason, Season } from '../gen
 import {
   LIVE_STATUSES,
   TERMINAL_STATUSES,
-  RECENTLY_FINISHED_WINDOW_MS,
+  LIVE_LOOKBACK_MS,
+  RECENTLY_FINISHED_LOOKBACK_MS,
 } from '../ingestion/l4/status-rank.js';
 import type { LiveMatchDto, LiveResponseDto, TeamRefDto } from './dto/live-match.dto.js';
 import type { CompetitionRefDto } from '../match/match.dto.js';
@@ -35,7 +36,8 @@ export class LiveService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(now: Date = new Date()): Promise<LiveResponseDto> {
-    const finishedAfter = new Date(now.getTime() - RECENTLY_FINISHED_WINDOW_MS);
+    const liveAfter = new Date(now.getTime() - LIVE_LOOKBACK_MS);
+    const finishedAfter = new Date(now.getTime() - RECENTLY_FINISHED_LOOKBACK_MS);
 
     const rows = (await this.prisma.match.findMany({
       where: {
@@ -43,12 +45,13 @@ export class LiveService {
           { competitionSeason: { competition: { isTracked: true } } },
           {
             OR: [
-              { statusShort: { in: [...LIVE_STATUSES] } },
               {
-                AND: [
-                  { statusShort: { in: [...TERMINAL_STATUSES] } },
-                  { finishedAt: { gte: finishedAfter } },
-                ],
+                statusShort: { in: [...LIVE_STATUSES] },
+                kickoffAt: { gte: liveAfter },
+              },
+              {
+                statusShort: { in: [...TERMINAL_STATUSES] },
+                kickoffAt: { gte: finishedAfter },
               },
             ],
           },
