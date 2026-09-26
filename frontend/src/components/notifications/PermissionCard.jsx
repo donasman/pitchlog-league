@@ -22,7 +22,7 @@ export default function PermissionCard() {
         position: 'fixed',
         inset: 0,
         background: 'rgba(11,17,32,.48)',
-        zIndex: 8000,
+        zIndex: 'var(--pl-z-permission)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

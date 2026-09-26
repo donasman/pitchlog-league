@@ -114,7 +114,7 @@ export default function NotificationPanel({ onClose, containerRef }) {
         maxWidth: 'calc(100vw - 32px)',
         overflow: 'hidden',
         boxShadow: 'var(--sh-modal)',
-        zIndex: 1000,
+        zIndex: 'var(--pl-z-panel)',
       }}
       role="dialog"
       aria-label={t('notif.bell')}
