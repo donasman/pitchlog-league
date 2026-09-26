@@ -431,6 +431,69 @@ sudo systemctl restart pitchlog-backend
 - [ ] `curl -s http://localhost:3000/api/matches | jq '.asOf'` — 어제 갱신 시각으로 이동했는가
 - [ ] `journalctl -u pitchlog-backend --since "24h ago" | grep backfill-worker | grep processed` — `processed>0` 이 있는가 (어제 경기 상세가 붙었는가)
 
+## L4 라이브 폴러 (관측 · 쓰기 · 2판)
+
+> 1판(관측)은 아래 절 그대로. 2판이 얹은 것: `LIVE_POLLER_MODE=observe|write` 스위치 · 조건부 UPDATE (역행 가드) · L2 매일이 진행 중 경기 덮지 않음 · `GET /api/live`.
+
+### 2판 스위치·전환 (모드 · 관측→쓰기)
+
+기본은 `observe` (관측만 · 1판과 동일 동작). `write` 로 바꾸는 것은 클럽 복귀일·첫 킥오프 전에 한다.
+
+```bash
+sudo su - ubuntu
+bash /opt/pitchlog/infra/ec2/deploy.sh dev
+curl -s localhost:3000/health | jq '.scheduler.jobs.livePoller | {enabled, mode}'
+# → { "enabled": true, "mode": "observe" }
+```
+
+**쓰기로 전환**
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_POLLER_MODE=write
+sudo systemctl restart pitchlog-backend
+```
+
+전환 후 경기 중 확인:
+```bash
+sudo journalctl -u pitchlog-backend --since "10 min ago" | grep -E "live-poller (write|blocked)"
+curl -s localhost:3000/health | jq '.scheduler.jobs.livePoller | {mode, writtenToday, blockedToday}'
+```
+
+**되돌리기 (문제 시)**
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_POLLER_MODE=observe
+sudo systemctl restart pitchlog-backend
+# 쓰인 값은 다음 L2 매일(UTC 04:10) 이 공식값으로 덮음.
+```
+
+### 2판 로그 앵커 (grep · 1판 앵커 위에 추가)
+
+```
+live-poller registered · mode=<observe|write> · period=15s · slowAt=6000 · stopAt=7000
+live-poller write · <apiFixtureId> <home>-<away> <prev>→<next> <hg>-<ag>
+live-poller blocked · <apiFixtureId> <curStatus>(<curElapsed>) ← <newStatus>(<newElapsed>)
+```
+
+대기 tick 로그 (`live-poller tick · targets=0 ...`) 는 2판부터 억제 (창 open/closed 는 유지).
+
+### 2판 `/api/live` 확인
+
+```bash
+curl -s -D - localhost:3000/api/live -o /dev/null | grep -i cache-control
+# → Cache-Control: public, max-age=0, s-maxage=5
+curl -s localhost:3000/api/live | jq '{asOf, count: (.matches|length)}'
+# 진행 중 경기 + FT/AET/PEN 후 3시간 이내 경기 반환. 없으면 count=0.
+```
+
+다른 `/api/*` 헤더가 안 바뀌었는지 확인:
+```bash
+curl -s -D - localhost:3000/api/matches -o /dev/null | grep -i cache-control
+# → Cache-Control: public, max-age=60
+```
+
+---
+
 ## L4 라이브 폴러 (관측 모드 · 1판)
 
 경기 진행 중 상태(스코어·경기 시간)를 실시간에 가깝게 관측한다. **이 판은 DB 쓰기 없음** — 응답을 파싱해 "쓰면 바뀌었을 필드 수(`wouldWrite`)"만 계측·로그·`/health` 로 노출한다. 실제 DB 갱신은 2판에서 붙인다.
