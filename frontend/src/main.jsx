@@ -5,7 +5,10 @@ import '@/i18n/index.js'
 import { NotificationProvider } from '@/contexts/NotificationContext'
 import { AssistantProvider } from '@/contexts/AssistantContext'
 import { FavoritesProvider } from '@/contexts/FavoritesContext'
+import { startZoomController } from '@/utils/zoom'
 import App from './App.jsx'
+
+startZoomController()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
