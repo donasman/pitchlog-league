@@ -27,7 +27,7 @@
     --input:               214 32% 91%;
     --ring:                225 100% 60%; /* 브랜드 블루 포커스 링 */
     --radius:              0.75rem;
-    --pl-page-min-h:       100dvh;
+    --pl-page-min-h:       calc(100dvh / var(--pl-zoom, 1));
   }
 
   /* ── 다크 모드 ── */
@@ -84,10 +84,8 @@
   }
 }
 
-@media (min-width: 1440px) {
-  html { zoom: 1.25; }
-  :root { --pl-page-min-h: calc(100dvh / 1.25); }
-}
+/* 화면 비율: 1280→1600 사이 z 1→1.25 선형 확대. 실제 적용은 src/utils/zoom.js.
+   미디어쿼리 zoom 은 경계에서 25% 점프가 있어 폐기 (2026-09-26). */
 
 /* 전 페이지 좌우 여백 통일 — 세로 padding 은 각 페이지가 담당 */
 .pl-container {
@@ -135,17 +133,16 @@
    grid-auto-columns 로 "보이는 칸 수"(--pl-hs-visible) 만큼 자동 폭 계산.
    scroll-snap x mandatory · overscroll-behavior x contain · 스크롤바 숨김.
    페이드는 넘칠 때만 (data-fade-l/-r 로 도달한 쪽 해제).
-   화살표는 ≥768px 에서만 표시. */
+   컨트롤(prev·next·pause) 은 트랙 위 절대 배치가 아니라 헤더 슬롯에 렌더한다. */
 .pl-hscroller { position: relative; }
 
 .pl-hscroller-track {
   --pl-hs-rows: 1;
+  --pl-hs-cols: 1;
   --pl-hs-gap: 12px;
   --pl-hs-visible: 1.6;
+  --pl-hs-item-w: calc((100% - var(--pl-hs-gap) * (var(--pl-hs-visible) - 1)) / var(--pl-hs-visible));
   display: grid;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(var(--pl-hs-rows), auto);
-  grid-auto-columns: calc((100% - var(--pl-hs-gap) * (var(--pl-hs-visible) - 1)) / var(--pl-hs-visible));
   gap: var(--pl-hs-gap);
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -156,6 +153,20 @@
 .pl-hscroller-track::-webkit-scrollbar { display: none; }
 .pl-hscroller-track > * { scroll-snap-align: start; min-width: 0; }
 .pl-hscroller-track:focus-visible { box-shadow: 0 0 0 2px var(--pl-primary); border-radius: 6px; }
+
+/* 1줄 (rows=1) — 열 방향 자동 흐름 */
+.pl-hscroller-track[data-flow="column"] {
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--pl-hs-rows), auto);
+  grid-auto-columns: var(--pl-hs-item-w);
+}
+
+/* 2줄 이상 (rows>=2) — 행 방향 흐름 + 열 수 명시. cols = ceil(n/rows) 는 JS 가 계산해서 --pl-hs-cols 로 넘긴다. */
+.pl-hscroller-track[data-flow="row"] {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(var(--pl-hs-cols), var(--pl-hs-item-w));
+  grid-template-rows: repeat(var(--pl-hs-rows), auto);
+}
 
 .pl-hscroller-track[data-fade-l="1"] {
   mask-image: linear-gradient(to right, transparent 0, black 24px, black 100%);
@@ -177,26 +188,31 @@
   .pl-hscroller-track { --pl-hs-visible: 5; }
 }
 
-.pl-hscroller-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+/* 헤더 컨트롤 바 — pause · prev · next 버튼 그룹. HScrollerHeaderControls 컴포넌트가 렌더. */
+.pl-hs-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.pl-hs-ctrl-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
   background: var(--pl-card);
   color: var(--pl-text);
   border: 1px solid var(--pl-line);
-  box-shadow: var(--sh-over);
-  display: none;
-  align-items: center;
-  justify-content: center;
+  border-radius: 999px;
   cursor: pointer;
-  z-index: 2;
+  transition: background .12s, color .12s, opacity .12s;
 }
-.pl-hscroller-arrow:hover { background: var(--pl-fill); }
-.pl-hscroller-arrow-prev { left: -6px; }
-.pl-hscroller-arrow-next { right: -6px; }
-@media (min-width: 768px) {
-  .pl-hscroller-arrow { display: inline-flex; }
+.pl-hs-ctrl-btn:hover { background: var(--pl-fill); }
+.pl-hs-ctrl-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+  color: var(--pl-sub);
+}
+@media (pointer: coarse) {
+  .pl-hs-ctrl-btn { width: 44px; height: 44px; }
 }
