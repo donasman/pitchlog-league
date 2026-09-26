@@ -533,7 +533,12 @@ export default function CompetitionPage() {
           {!isCup && activeTab === 'standings' && (
             <div className="pl-card" style={{ overflow: 'hidden' }}>
               {standings ? (
-                <StandingsTable entries={standings.entries} competitionSlug={slug} />
+                <StandingsTable
+                  entries={standings.entries}
+                  competitionSlug={slug}
+                  format={data?.comp?.format}
+                  seasonFinished={(data?.comp?.seasons ?? []).find(s => s?.year === seasonYear)?.status === 'FINISHED'}
+                />
               ) : (
                 <EmptyState description={t('competition.noStandings')} />
               )}
