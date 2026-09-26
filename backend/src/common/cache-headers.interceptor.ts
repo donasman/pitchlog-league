@@ -37,7 +37,11 @@ export class CacheHeaderInterceptor implements NestInterceptor {
         const json = JSON.stringify(body);
         const etag = 'W/"' + createHash('sha256').update(json).digest('base64').slice(0, 27) + '"';
         res.setHeader('ETag', etag);
-        res.setHeader('Cache-Control', 'public, max-age=60');
+        const isLive = req.url.startsWith('/api/live');
+        res.setHeader(
+          'Cache-Control',
+          isLive ? 'public, max-age=0, s-maxage=5' : 'public, max-age=60',
+        );
         const ifNone = req.header('if-none-match');
         if (ifNone && ifNone === etag) {
           // 304 는 body 를 보내지 않는다. Express send() 가 statusCode 304 면

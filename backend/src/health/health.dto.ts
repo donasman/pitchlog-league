@@ -133,6 +133,15 @@ export class LivePollerStateDto {
 
   @ApiProperty({ nullable: true, type: String, description: '오류 메시지만 (스택 없음)' })
   lastError!: string | null;
+
+  @ApiProperty({ enum: ['observe', 'write'], description: '쓰기 모드 (LIVE_POLLER_MODE)' })
+  mode!: 'observe' | 'write';
+
+  @ApiProperty({ description: '오늘(UTC) 누적 성공 쓰기 수 (L4 조건부 UPDATE 성공)' })
+  writtenToday!: number;
+
+  @ApiProperty({ description: '오늘(UTC) 누적 역행 가드 차단 수 (조건부 UPDATE 0행)' })
+  blockedToday!: number;
 }
 
 export class SchedulerJobsDto {
