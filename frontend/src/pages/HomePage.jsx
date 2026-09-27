@@ -10,10 +10,11 @@
  *  ⑤ 푸터
  */
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
+import { useLiveMatches } from '@/hooks/useLiveMatches'
 import { fetchOverview } from '@/services/api'
 import TeamBadge from '@/components/ui/TeamBadge'
 import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
@@ -31,9 +32,11 @@ const ZONE_COLORS = ['#3B82F6','#EAB308','#F97316','#16A34A','#F87171','#DC2626'
    LiveTicker — 히어로 오른쪽 패널
    경기 카드 금지. 얇은 스코어 줄(ticker)로 표현.
 ───────────────────────────────────────────────────────────── */
-function LiveTicker({ livePulse, nextKickoff, dataAsOf, t, locale }) {
+function LiveTicker({ livePulse, nextKickoff, dataAsOf, liveAsOf, liveStale, t, locale }) {
   const count = livePulse?.length ?? 0
   const empty = count === 0
+  // 라이브 폴링이 성공적으로 응답을 준 뒤에는 그 시각을, 그 전에는 오버뷰의 dataAsOf 를 표시.
+  const shownAsOf = liveAsOf ?? dataAsOf
 
   return (
     <div className="pl-card" style={{ overflow: 'hidden', display: 'grid', alignContent: 'start' }}>
@@ -55,12 +58,25 @@ function LiveTicker({ livePulse, nextKickoff, dataAsOf, t, locale }) {
             <span className="t-card">{t('home.liveNow', { count })}</span>
           </>
         )}
-        {dataAsOf && (
-          <span className="t-cap num" style={{ marginLeft: 'auto' }}>
+        {liveStale && (
+          <span
+            className="t-cap"
+            style={{ marginLeft: 'auto', color: 'var(--st-warn-text, var(--pl-sub))' }}
+            role="status"
+          >
+            {t('live.stale')}
+          </span>
+        )}
+        {!liveStale && shownAsOf && (
+          <span
+            className="t-cap num"
+            style={{ marginLeft: 'auto' }}
+            title={liveAsOf ? t('live.lastUpdated', { time: toKSTTime(liveAsOf, locale) }) : undefined}
+          >
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true" style={{ display: 'inline', marginRight: 4 }}>
               <circle cx="6" cy="6" r="4.6" /><path d="M6 3.4V6l1.8 1.2" />
             </svg>
-            {toKSTTime(dataAsOf, locale)}
+            {toKSTTime(shownAsOf, locale)}
           </span>
         )}
       </div>
@@ -137,7 +153,7 @@ function LiveTicker({ livePulse, nextKickoff, dataAsOf, t, locale }) {
 /* ─────────────────────────────────────────────────────────────
    Hero — 헤드라인(왼쪽) + LiveTicker(오른쪽)
 ───────────────────────────────────────────────────────────── */
-function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
+function Hero({ livePulse, nextKickoff, dataAsOf, liveAsOf, liveStale, t, locale }) {
   return (
     <div
       className="grid gap-6 lg:gap-10"
@@ -194,7 +210,15 @@ function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
         </div>
 
         {/* 오른쪽 — 살아있음의 증거 */}
-        <LiveTicker livePulse={livePulse} nextKickoff={nextKickoff} dataAsOf={dataAsOf} t={t} locale={locale} />
+        <LiveTicker
+          livePulse={livePulse}
+          nextKickoff={nextKickoff}
+          dataAsOf={dataAsOf}
+          liveAsOf={liveAsOf}
+          liveStale={liveStale}
+          t={t}
+          locale={locale}
+        />
       </div>
     </div>
   )
@@ -752,6 +776,26 @@ export default function HomePage() {
   const locale = i18n.language
 
   const { data: overview, loading, error } = useData(fetchOverview, [])
+  const { liveMap, asOf: liveAsOf, stale: liveStale } = useLiveMatches()
+
+  // 라이브 폴링이 응답을 준 뒤에는 오버뷰의 livePulse seed 를 훅 결과로 대체한다.
+  // shape 은 services/live.js:570-577 livePulse 와 동일 (matchId/competitionSlug/home/away/minute/displayState).
+  // 훅이 아직 응답 없음(빈 Map) → seed 유지.
+  // ★ early return 앞에 둔다 — 로딩→로드 전환 시 훅 호출 개수가 바뀌면 안 된다.
+  const livePulseSeed = overview?.livePulse
+  const livePulseMerged = useMemo(() => {
+    if (!liveMap || liveMap.size === 0) return livePulseSeed
+    return Array.from(liveMap.values())
+      .filter(m => m.displayState === 'live' || m.displayState === 'halftime')
+      .map(m => ({
+        matchId:         m.id,
+        competitionSlug: m.competitionSlug,
+        home: { name: m.homeTeam?.name, initials: m.homeTeam?.initials, color: m.homeTeam?.color, score: m.score?.home ?? null },
+        away: { name: m.awayTeam?.name, initials: m.awayTeam?.initials, color: m.awayTeam?.color, score: m.score?.away ?? null },
+        minute:       m.minute,
+        displayState: m.displayState,
+      }))
+  }, [liveMap, livePulseSeed])
 
   if (loading) {
     return (
@@ -769,7 +813,7 @@ export default function HomePage() {
     )
   }
 
-  const { competitions, livePulse, nextKickoff, dataAsOf, leagueScorers, eplTop3 } = overview ?? {}
+  const { competitions, nextKickoff, dataAsOf, leagueScorers, eplTop3 } = overview ?? {}
   /** 시즌 라벨은 응답에서 — 실 API 대회 객체의 currentSeason. Mock 오버뷰에는 없어 표기가 빠진다 */
   const season = (competitions ?? []).find(c => c.currentSeason)?.currentSeason ?? null
 
@@ -785,9 +829,11 @@ export default function HomePage() {
       >
         {/* ① 히어로 */}
         <Hero
-          livePulse={livePulse}
+          livePulse={livePulseMerged}
           nextKickoff={nextKickoff}
           dataAsOf={dataAsOf}
+          liveAsOf={liveAsOf}
+          liveStale={liveStale}
           t={t}
           locale={locale}
         />

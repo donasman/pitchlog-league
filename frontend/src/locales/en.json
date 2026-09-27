@@ -540,6 +540,10 @@
     "remove": "Remove {{name}} from favorites",
     "limit_reached": "You can save up to {{limit}} favorites."
   },
+  "live": {
+    "lastUpdated": "Last updated {{time}}",
+    "stale": "Update delayed"
+  },
   "errors": {
     "notImplemented": "Not available from the backend yet ({{what}})",
     "networkFailed": "Could not reach the backend: {{detail}}",

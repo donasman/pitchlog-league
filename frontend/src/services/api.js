@@ -31,6 +31,8 @@ export const fetchAllMatches           = (...a) => impl.fetchAllMatches(...a)
 export const fetchMatchesByCompetition = (...a) => impl.fetchMatchesByCompetition(...a)
 export const fetchMatch                = (...a) => impl.fetchMatch(...a)
 export const fetchMatchDetail          = (...a) => impl.fetchMatchDetail(...a)
+export const fetchLiveMatches          = (...a) => impl.fetchLiveMatches(...a)
+export const invalidateMatchDetail     = (...a) => impl.invalidateMatchDetail(...a)
 
 // 팀
 export const fetchTeams                = (...a) => impl.fetchTeams(...a)
