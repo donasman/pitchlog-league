@@ -69,6 +69,10 @@ export interface LivePollerState {
   writtenToday: number;
   /** 오늘(UTC) 누적 역행 가드 차단 수 (조건부 UPDATE 0행). */
   blockedToday: number;
+  /** L4 3판 — 오늘(UTC) 누적 finalize 성공 매치 수. LIVE_FT_DETAILS_ENABLED=true 여야 증가. */
+  finalizedToday: number;
+  /** L4 3판 — 오늘(UTC) 누적 순위표 재계산 행 수 합계. */
+  standingsRefreshedToday: number;
   lastError: string | null;
 }
 
@@ -124,6 +128,8 @@ export class SchedulerStateService {
     mode: 'observe',
     writtenToday: 0,
     blockedToday: 0,
+    finalizedToday: 0,
+    standingsRefreshedToday: 0,
     lastError: null,
   };
 
@@ -258,6 +264,8 @@ export class SchedulerStateService {
     wouldWrite: number;
     written: number;
     blocked: number;
+    finalized: number;
+    standingsRefreshed: number;
     windowOpen: boolean;
     periodSec: number;
     error?: string | null;
@@ -278,6 +286,8 @@ export class SchedulerStateService {
     s.wouldWriteToday += summary.wouldWrite;
     s.writtenToday += summary.written;
     s.blockedToday += summary.blocked;
+    s.finalizedToday += summary.finalized;
+    s.standingsRefreshedToday += summary.standingsRefreshed;
     s.lastError = summary.error ?? null;
   }
 
@@ -304,6 +314,8 @@ export class SchedulerStateService {
       // mode 는 env 로 결정되므로 리셋 대상 아님.
       this.livePoller.writtenToday = 0;
       this.livePoller.blockedToday = 0;
+      this.livePoller.finalizedToday = 0;
+      this.livePoller.standingsRefreshedToday = 0;
       this.livePoller.stoppedReason = null;
       this.lastLivePollerUtcYmd = ymd;
     }

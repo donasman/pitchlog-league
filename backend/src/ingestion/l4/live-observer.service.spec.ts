@@ -10,6 +10,8 @@ function emptyMemory(): MemoryFilter {
 
 function dbRow(id: number, kickoffAt: Date, overrides: Partial<LiveDbRow> = {}): LiveDbRow {
   return {
+    // matches.id (내부 PK) · apiFixtureId 는 관측 상 같은 숫자를 쓴다 (spec factory 단순화)
+    id,
     apiFixtureId: id,
     kickoffAt,
     statusShort: 'NS',
@@ -17,6 +19,7 @@ function dbRow(id: number, kickoffAt: Date, overrides: Partial<LiveDbRow> = {}):
     extraElapsed: null,
     goalsHome: null,
     goalsAway: null,
+    competitionSeasonId: 100,
     ...overrides,
   };
 }
@@ -99,7 +102,7 @@ describe('LiveObserverService', () => {
     const lastSeen = new Map<number, LastSeen>();
     const memory = emptyMemory();
 
-    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: true, mode: 'observe' });
+    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: true, mode: 'observe', finalizeEnabled: false });
 
     expect(prisma.match.findMany).toHaveBeenCalledTimes(1);
     expect(client.get).not.toHaveBeenCalled();
@@ -124,7 +127,7 @@ describe('LiveObserverService', () => {
     const probes = new Map<number, ProbeEntry>();
     const lastSeen = new Map<number, LastSeen>();
 
-    await service.tick(now, memory, probes, lastSeen, { fetchStatus: true, mode: 'observe' });
+    await service.tick(now, memory, probes, lastSeen, { fetchStatus: true, mode: 'observe', finalizeEnabled: false });
 
     expect(prisma.match.update).not.toHaveBeenCalled();
     expect(prisma.match.upsert).not.toHaveBeenCalled();
@@ -149,11 +152,11 @@ describe('LiveObserverService', () => {
     const probes = new Map<number, ProbeEntry>();
     const lastSeen = new Map<number, LastSeen>();
 
-    const r1 = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const r1 = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     expect(r1.wouldWrite).toBe(1);
 
     // 두 번째 tick — 같은 응답 · lastSeen 이 채워졌으므로 diff 0 → wouldWrite=0
-    const r2 = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const r2 = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     expect(r2.wouldWrite).toBe(0);
   });
 
@@ -179,7 +182,7 @@ describe('LiveObserverService', () => {
     });
     const lastSeen = new Map<number, LastSeen>();
 
-    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     expect(result.wouldWrite).toBe(0);
     expect(result.isProbe).toBe(true);
     expect(lastSeen.get(999)).toEqual({
@@ -221,7 +224,7 @@ describe('LiveObserverService', () => {
     });
     const lastSeen = new Map<number, LastSeen>();
 
-    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     expect(result.targets).toBe(3);
     expect(result.chunks).toBe(1);
     expect(result.isProbe).toBe(true);
@@ -257,7 +260,7 @@ describe('LiveObserverService', () => {
     const probes = new Map<number, ProbeEntry>();
     const lastSeen = new Map<number, LastSeen>();
 
-    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     expect(result.targets).toBe(25);
     expect(result.chunks).toBe(2);
     const fixtureCalls = client.get.mock.calls.filter((c: unknown[]) => c[0] === '/fixtures');
@@ -274,7 +277,7 @@ describe('LiveObserverService', () => {
     const probes = new Map<number, ProbeEntry>();
     const lastSeen = new Map<number, LastSeen>();
 
-    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     const statusCalls = client.get.mock.calls.filter((c: unknown[]) => c[0] === '/status');
     expect(statusCalls).toHaveLength(0);
     expect(result.used).toBeNull();
@@ -308,7 +311,7 @@ describe('LiveObserverService', () => {
     // 매치 1 의 이전 관측 상태
     lastSeen.set(1, { statusShort: '1H', elapsed: 40, extraElapsed: null, goalsHome: 0, goalsAway: 0 });
 
-    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const result = await service.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
 
     // 매치 1 은 status 전이 → transitions 포함
     const t1 = result.transitions.find((t) => t.apiFixtureId === 1);
@@ -345,7 +348,7 @@ describe('LiveObserverService', () => {
     const probes = new Map<number, ProbeEntry>();
     const lastSeen = new Map<number, LastSeen>();
 
-    await service.tick(t1, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    await service.tick(t1, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
 
     // AET 는 FINAL_TERMINAL_STATUSES · memory.finishedAt 에 등록
     expect(memory.finishedAt.get(111)).toEqual(t1);
@@ -355,7 +358,7 @@ describe('LiveObserverService', () => {
     prisma.match.findMany.mockResolvedValue([dbRow(111, inWindow, { statusShort: '1H' })]);
     client.get.mockClear();
 
-    const r = await service.tick(t2, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const r = await service.tick(t2, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
 
     // finishedAt+10min TTL 초과 → 제외 · targets=0 · /fixtures 미호출
     expect(r.targets).toBe(0);
@@ -383,7 +386,7 @@ describe('LiveObserverService', () => {
 
     for (let sec = 0; sec <= 600; sec += 15) {
       const t = new Date(t0.getTime() + sec * 1000);
-      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     }
 
     // finishedAt 은 t0 (처음 본 시각). 매 tick 갱신되면 안 된다.
@@ -391,7 +394,7 @@ describe('LiveObserverService', () => {
 
     const tAfter = new Date(t0.getTime() + 10 * 60 * 1000 + 1000);
     client.get.mockClear();
-    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     expect(r.targets).toBe(0);
     expect(r.chunks).toBe(0);
     expect(client.get).not.toHaveBeenCalled();
@@ -422,14 +425,14 @@ describe('LiveObserverService', () => {
 
     for (let sec = 0; sec <= 600; sec += 15) {
       const t = new Date(t0.getTime() + sec * 1000);
-      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     }
 
     expect(memory.finishedAt.get(999)).toEqual(t0);
 
     const tAfter = new Date(t0.getTime() + 10 * 60 * 1000 + 1000);
     client.get.mockClear();
-    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     expect(r.targets).toBe(0);
     expect(r.chunks).toBe(0);
     expect(client.get).not.toHaveBeenCalled();
@@ -450,14 +453,14 @@ describe('LiveObserverService', () => {
 
     for (let sec = 0; sec <= 600; sec += 15) {
       const t = new Date(t0.getTime() + sec * 1000);
-      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     }
 
     expect(memory.finishedAt.get(300)).toEqual(t0);
 
     const tAfter = new Date(t0.getTime() + 10 * 60 * 1000 + 1000);
     client.get.mockClear();
-    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     expect(r.targets).toBe(0);
     expect(r.chunks).toBe(0);
     expect(client.get).not.toHaveBeenCalled();
@@ -488,14 +491,14 @@ describe('LiveObserverService', () => {
 
     for (let sec = 0; sec <= 600; sec += 15) {
       const t = new Date(t0.getTime() + sec * 1000);
-      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+      await service.tick(t, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     }
 
     expect(memory.finishedAt.get(998)).toEqual(t0);
 
     const tAfter = new Date(t0.getTime() + 10 * 60 * 1000 + 1000);
     client.get.mockClear();
-    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+    const r = await service.tick(tAfter, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
     expect(r.targets).toBe(0);
     expect(r.chunks).toBe(0);
     expect(client.get).not.toHaveBeenCalled();
@@ -532,7 +535,7 @@ describe('LiveObserverService', () => {
       const probes = new Map<number, ProbeEntry>();
       const lastSeen = new Map<number, LastSeen>();
 
-      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe' });
+      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'observe', finalizeEnabled: false });
       expect(writer.write).not.toHaveBeenCalled();
       expect(r.written).toBe(0);
       expect(r.blocked).toBe(0);
@@ -548,7 +551,7 @@ describe('LiveObserverService', () => {
       const probes = new Map<number, ProbeEntry>();
       const lastSeen = new Map<number, LastSeen>();
 
-      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'write' });
+      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'write', finalizeEnabled: false });
       expect(writer.write).toHaveBeenCalledTimes(1);
       expect(r.written).toBe(1);
       expect(r.blocked).toBe(0);
@@ -573,7 +576,7 @@ describe('LiveObserverService', () => {
       });
       const lastSeen = new Map<number, LastSeen>();
 
-      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'write' });
+      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'write', finalizeEnabled: false });
       expect(writer.write).not.toHaveBeenCalled();
       expect(r.written).toBe(0);
     });
@@ -590,7 +593,7 @@ describe('LiveObserverService', () => {
       const probes = new Map<number, ProbeEntry>();
       const lastSeen = new Map<number, LastSeen>();
 
-      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'write' });
+      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'write', finalizeEnabled: false });
       expect(writer.write).not.toHaveBeenCalled();
       expect(r.written).toBe(0);
       expect(r.wouldWrite).toBe(0);
@@ -605,10 +608,225 @@ describe('LiveObserverService', () => {
       const probes = new Map<number, ProbeEntry>();
       const lastSeen = new Map<number, LastSeen>();
 
-      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'write' });
+      const r = await svc.tick(now, memory, probes, lastSeen, { fetchStatus: false, mode: 'write', finalizeEnabled: false });
       expect(writer.write).toHaveBeenCalledTimes(1);
       expect(r.written).toBe(0);
       expect(r.blocked).toBe(1);
+    });
+  });
+
+  // ── 3판 (L4 finalize + winner + standings) ──
+  describe('L4 finalize (3판)', () => {
+    const inWindow = new Date('2026-09-24T11:59:00Z');
+    const now = new Date('2026-09-24T12:00:00Z');
+
+    function mkFullServices(): {
+      svc: LiveObserverService;
+      writer: { write: ReturnType<typeof vi.fn> };
+      finalizer: {
+        onFinal: ReturnType<typeof vi.fn>;
+        refreshStandings: ReturnType<typeof vi.fn>;
+      };
+    } {
+      const writer = {
+        write: vi.fn().mockResolvedValue({ written: 1, blocked: 0 }),
+      };
+      const finalizer = {
+        onFinal: vi.fn().mockResolvedValue({
+          lineups: 'ok',
+          events: 'ok',
+          teamStats: 'ok',
+          playerStats: 'ok',
+          counts: { lineups: 1, events: 2, teamStats: 2, playerStats: 2 },
+        }),
+        refreshStandings: vi.fn().mockResolvedValue(20),
+      };
+      const svc = new LiveObserverService(
+        client as unknown as ApiFootballClient,
+        prisma as unknown as PrismaService,
+        writer as unknown as import('./live-writer.service.js').LiveWriterService,
+        finalizer as unknown as import('./live-finalizer.service.js').LiveFinalizerService,
+      );
+      return { svc, writer, finalizer };
+    }
+
+    it('(11) FT 첫 진입 + write 성공 + finalizeEnabled=true → finalizer.onFinal 1회 호출', async () => {
+      prisma.match.findMany.mockResolvedValue([
+        dbRow(50, inWindow, { statusShort: '2H', competitionSeasonId: 200 }),
+      ]);
+      client.get.mockImplementation(async () =>
+        envelope([fixtureItem(50, 'FT', 90, null, 2, 1)]),
+      );
+
+      const { svc, finalizer } = mkFullServices();
+      const memory = emptyMemory();
+      const probes = new Map<number, ProbeEntry>();
+      const lastSeen = new Map<number, LastSeen>();
+      // 이전 관측 상태 (2H) → 이번 FT 로 status 전이
+      lastSeen.set(50, { statusShort: '2H', elapsed: 88, extraElapsed: null, goalsHome: 2, goalsAway: 1 });
+
+      const r = await svc.tick(now, memory, probes, lastSeen, {
+        fetchStatus: false,
+        mode: 'write',
+        finalizeEnabled: true,
+      });
+      expect(finalizer.onFinal).toHaveBeenCalledTimes(1);
+      expect(r.finalized).toBe(1);
+      // standings 도 tick 끝에 1회
+      expect(finalizer.refreshStandings).toHaveBeenCalledTimes(1);
+      expect(finalizer.refreshStandings).toHaveBeenCalledWith([200]);
+      expect(r.standingsRefreshed).toBe(20);
+    });
+
+    it('(12) probe fixture 는 finalizer.onFinal 호출 안 함', async () => {
+      // probe 는 write 블록에 들어가지 않으므로 finalize 도 안 됨.
+      prisma.match.findMany.mockResolvedValue([]);
+      client.get.mockImplementation(async () =>
+        envelope([fixtureItem(999, 'FT', 90, null, 2, 1)]),
+      );
+
+      const { svc, finalizer } = mkFullServices();
+      const memory = emptyMemory();
+      const probes = new Map<number, ProbeEntry>();
+      probes.set(999, {
+        apiFixtureId: 999,
+        kickoffAt: inWindow,
+        statusShort: '2H',
+        home: 'H',
+        away: 'A',
+        homeGoals: 2,
+        awayGoals: 1,
+        seenAt: inWindow,
+      });
+      const lastSeen = new Map<number, LastSeen>();
+
+      const r = await svc.tick(now, memory, probes, lastSeen, {
+        fetchStatus: false,
+        mode: 'write',
+        finalizeEnabled: true,
+      });
+      expect(finalizer.onFinal).not.toHaveBeenCalled();
+      expect(r.finalized).toBe(0);
+      expect(finalizer.refreshStandings).not.toHaveBeenCalled();
+    });
+
+    it('(13) 같은 tick 안 같은 매치 두 번 관측 → finalizer 는 1회만', async () => {
+      // /fixtures 응답 안에 같은 매치가 두 번 등장 (실제로는 API 가 그렇게 안 주지만 dedup 을 검증).
+      prisma.match.findMany.mockResolvedValue([
+        dbRow(60, inWindow, { statusShort: '2H', competitionSeasonId: 300 }),
+      ]);
+      client.get.mockImplementation(async () =>
+        envelope([
+          fixtureItem(60, 'FT', 90, null, 2, 1),
+          fixtureItem(60, 'FT', 90, null, 2, 1),
+        ]),
+      );
+
+      const { svc, finalizer } = mkFullServices();
+      const memory = emptyMemory();
+      const probes = new Map<number, ProbeEntry>();
+      const lastSeen = new Map<number, LastSeen>();
+      lastSeen.set(60, { statusShort: '2H', elapsed: 88, extraElapsed: null, goalsHome: 2, goalsAway: 1 });
+
+      await svc.tick(now, memory, probes, lastSeen, {
+        fetchStatus: false,
+        mode: 'write',
+        finalizeEnabled: true,
+      });
+      expect(finalizer.onFinal).toHaveBeenCalledTimes(1);
+    });
+
+    it('(14) teams.home.winner=true → writer payload winnerApiTeamId = teams.home.id', async () => {
+      prisma.match.findMany.mockResolvedValue([
+        dbRow(70, inWindow, { statusShort: '2H' }),
+      ]);
+      client.get.mockImplementation(async () =>
+        envelope([
+          {
+            fixture: {
+              id: 70,
+              date: '2026-09-24T12:00:00+00:00',
+              status: { short: 'FT', elapsed: 90, extra: null },
+            },
+            teams: {
+              home: { id: 700, name: 'Home', winner: true },
+              away: { id: 701, name: 'Away', winner: false },
+            },
+            goals: { home: 2, away: 1 },
+          },
+        ]),
+      );
+
+      const { svc, writer } = mkFullServices();
+      const memory = emptyMemory();
+      const probes = new Map<number, ProbeEntry>();
+      const lastSeen = new Map<number, LastSeen>();
+      lastSeen.set(70, { statusShort: '2H', elapsed: 88, extraElapsed: null, goalsHome: 2, goalsAway: 1 });
+
+      await svc.tick(now, memory, probes, lastSeen, {
+        fetchStatus: false,
+        mode: 'write',
+        finalizeEnabled: true,
+      });
+      expect(writer.write).toHaveBeenCalledTimes(1);
+      const payload = writer.write.mock.calls[0][0] as { winnerApiTeamId: number | null };
+      expect(payload.winnerApiTeamId).toBe(700);
+    });
+
+    it('(15) finalizeEnabled=false → finalizer 호출 안 함', async () => {
+      prisma.match.findMany.mockResolvedValue([
+        dbRow(80, inWindow, { statusShort: '2H' }),
+      ]);
+      client.get.mockImplementation(async () =>
+        envelope([fixtureItem(80, 'FT', 90, null, 2, 1)]),
+      );
+
+      const { svc, finalizer } = mkFullServices();
+      const memory = emptyMemory();
+      const probes = new Map<number, ProbeEntry>();
+      const lastSeen = new Map<number, LastSeen>();
+      lastSeen.set(80, { statusShort: '2H', elapsed: 88, extraElapsed: null, goalsHome: 2, goalsAway: 1 });
+
+      const r = await svc.tick(now, memory, probes, lastSeen, {
+        fetchStatus: false,
+        mode: 'write',
+        finalizeEnabled: false,
+      });
+      expect(finalizer.onFinal).not.toHaveBeenCalled();
+      expect(finalizer.refreshStandings).not.toHaveBeenCalled();
+      expect(r.finalized).toBe(0);
+      expect(r.standingsRefreshed).toBe(0);
+    });
+
+    it('(16) tick 끝 finalizedCsIds 여러 개 → refreshStandings 1회로 모두 넘김', async () => {
+      // 두 매치가 서로 다른 competitionSeasonId · 둘 다 FT 첫 진입.
+      prisma.match.findMany.mockResolvedValue([
+        dbRow(90, inWindow, { statusShort: '2H', competitionSeasonId: 401 }),
+        dbRow(91, inWindow, { statusShort: '2H', competitionSeasonId: 402 }),
+      ]);
+      client.get.mockImplementation(async () =>
+        envelope([
+          fixtureItem(90, 'FT', 90, null, 2, 1),
+          fixtureItem(91, 'FT', 90, null, 1, 0),
+        ]),
+      );
+
+      const { svc, finalizer } = mkFullServices();
+      const memory = emptyMemory();
+      const probes = new Map<number, ProbeEntry>();
+      const lastSeen = new Map<number, LastSeen>();
+      lastSeen.set(90, { statusShort: '2H', elapsed: 88, extraElapsed: null, goalsHome: 2, goalsAway: 1 });
+      lastSeen.set(91, { statusShort: '2H', elapsed: 88, extraElapsed: null, goalsHome: 1, goalsAway: 0 });
+
+      await svc.tick(now, memory, probes, lastSeen, {
+        fetchStatus: false,
+        mode: 'write',
+        finalizeEnabled: true,
+      });
+      expect(finalizer.onFinal).toHaveBeenCalledTimes(2);
+      expect(finalizer.refreshStandings).toHaveBeenCalledTimes(1);
+      const csIdsArg = finalizer.refreshStandings.mock.calls[0][0] as number[];
+      expect(new Set(csIdsArg)).toEqual(new Set([401, 402]));
     });
   });
 });

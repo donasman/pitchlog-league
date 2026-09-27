@@ -256,6 +256,13 @@ export class EnvironmentVariables {
   @IsIn(['observe', 'write'])
   @IsString()
   LIVE_POLLER_MODE: string = 'observe';
+
+  /** L4 FT 즉시 상세 저장 스위치. LIVE_POLLER_MODE=write 여야 효과. 기본 'false'.
+   *  켜면 /fixtures?ids= 응답으로 L3·L5 를 추가 콜 없이 채운다. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  @IsString()
+  LIVE_FT_DETAILS_ENABLED: string = 'false';
 }
 
 /** LIVE_POLLER_PROBE_FIXTURE_IDS 문자열 → apiFixtureId 정수 배열. 빈 문자열이면 빈 배열. */
