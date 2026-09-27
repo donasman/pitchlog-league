@@ -27,7 +27,7 @@
     --input:               214 32% 91%;
     --ring:                225 100% 60%; /* 브랜드 블루 포커스 링 */
     --radius:              0.75rem;
-    --pl-page-min-h:       100dvh;
+    --pl-page-min-h:       calc(100dvh / var(--pl-zoom, 1));
   }
 
   /* ── 다크 모드 ── */
@@ -84,10 +84,8 @@
   }
 }
 
-@media (min-width: 1440px) {
-  html { zoom: 1.25; }
-  :root { --pl-page-min-h: calc(100dvh / 1.25); }
-}
+/* 화면 비율: 1280→1600 사이 z 1→1.25 선형 확대. 실제 적용은 src/utils/zoom.js.
+   미디어쿼리 zoom 은 경계에서 25% 점프가 있어 폐기 (2026-09-26). */
 
 /* 전 페이지 좌우 여백 통일 — 세로 padding 은 각 페이지가 담당 */
 .pl-container {
@@ -102,9 +100,63 @@
 .pl-sticky-filter {
   position: sticky;
   top: var(--pl-header-h, 57px);
-  z-index: 40;
+  z-index: var(--pl-z-sticky);
   background: var(--pl-bg);
   border-bottom: 1px solid var(--pl-line);
+}
+
+/* ── 모바일 드로어 (components/layout/AppHeader.jsx) ─────────────────────────
+   오른쪽 슬라이드. 오버레이는 헤더 아래에서만 덮어 헤더 X 버튼을 살린다.
+   모션은 AssistantPanel 과 공용 토큰(--pl-panel-dur/ease) 을 쓴다.
+   상태는 [data-open="true|false"] 로 controlled — 마운트/언마운트는 컴포넌트가 관리. */
+.pl-drawer-scrim {
+  position: fixed;
+  inset: var(--pl-header-h, 57px) 0 0 0;
+  background: rgba(0, 0, 0, .6);
+  z-index: var(--pl-z-drawer-scrim);
+  opacity: 0;
+  transition: opacity var(--pl-panel-dur) var(--pl-panel-ease);
+  will-change: opacity;
+}
+.pl-drawer-scrim[data-open="true"] { opacity: 1; }
+
+.pl-drawer {
+  position: fixed;
+  top: var(--pl-header-h, 57px);
+  right: 0;
+  height: calc(100dvh - var(--pl-header-h, 57px));
+  width: min(320px, 85vw);
+  z-index: var(--pl-z-drawer);
+  background: var(--pl-card);
+  border-left: 1px solid var(--pl-line);
+  box-shadow: var(--sh-modal);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform var(--pl-panel-dur) var(--pl-panel-ease);
+  will-change: transform;
+}
+.pl-drawer[data-open="true"] { transform: translateX(0); }
+
+/* 프로그램 포커스 대상(tabIndex=-1) — 링 숨김. 스크린리더는 dialog 라벨을 읽는다. */
+.pl-drawer:focus,
+.pl-drawer:focus-visible { outline: none; }
+
+/* 드로어 안 링크: 마우스/터치는 링 없음, 키보드(:focus-visible) 만 브랜드 링.
+   전역 :focus-visible 룰(index.css L70) 을 덮어써 드로어 안에서는 outline-offset
+   과 border-radius 를 맞춘다. */
+.pl-drawer a:focus { outline: none; }
+.pl-drawer a:focus-visible {
+  outline: 2px solid var(--pl-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pl-drawer, .pl-drawer-scrim { transition: none; }
 }
 
 /* 칩 줄 — 데스크톱은 wrap, 640px 미만은 nowrap + 가로 스크롤. overflow 는 sticky 조상이 아니라 이 안쪽 래퍼에만 걸려야 한다. */
@@ -131,21 +183,39 @@
   .hero-cta > .pl-btn { width: 100%; justify-content: center; min-height: 48px; }
 }
 
+/* iOS Safari 는 font-size < 16px 인 input/textarea/select 에 포커스하면 자동 확대한다 —
+   상세 페이지로 라우트 이동해도 확대 상태가 그대로 남아 왼쪽이 잘려 보이는 버그가 있었다.
+   모바일(<768) 에서만 최소 16px 을 강제. 데스크톱은 각 컴포넌트 크기(text-sm/pl-chip 등)를
+   그대로 유지 — 1280→1600 zoom 보간은 데스크톱 전용이라 모바일 값에 영향 없음.
+   viewport 메타의 maximum-scale/user-scalable 은 접근성상 추가하지 않는다.
+   checkbox·radio·range·color 는 font-size 영향이 없지만 명시 제외로 안전.
+
+   !important 는 접근성 하드 플로어라 정당화된다:
+   - .pl-chip (특이성 0,1,0) > select (0,0,1) 로 우리 규칙이 진다
+   - AssistantPanel <input> 은 inline style.fontSize:14 를 준다 (∞ 특이성)
+   이 두 경우를 모두 이기려면 !important 가 필요하다. 디자인 선호가 아니라 확대 방지 안전망. */
+@media (max-width: 767.98px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
 /* ── HScroller — 공용 가로 슬라이드 (components/ui/HScroller.jsx) ────────────
    grid-auto-columns 로 "보이는 칸 수"(--pl-hs-visible) 만큼 자동 폭 계산.
    scroll-snap x mandatory · overscroll-behavior x contain · 스크롤바 숨김.
    페이드는 넘칠 때만 (data-fade-l/-r 로 도달한 쪽 해제).
-   화살표는 ≥768px 에서만 표시. */
+   컨트롤(prev·next·pause) 은 트랙 위 절대 배치가 아니라 헤더 슬롯에 렌더한다. */
 .pl-hscroller { position: relative; }
 
 .pl-hscroller-track {
   --pl-hs-rows: 1;
+  --pl-hs-cols: 1;
   --pl-hs-gap: 12px;
   --pl-hs-visible: 1.6;
+  --pl-hs-item-w: calc((100% - var(--pl-hs-gap) * (var(--pl-hs-visible) - 1)) / var(--pl-hs-visible));
   display: grid;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(var(--pl-hs-rows), auto);
-  grid-auto-columns: calc((100% - var(--pl-hs-gap) * (var(--pl-hs-visible) - 1)) / var(--pl-hs-visible));
   gap: var(--pl-hs-gap);
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -156,6 +226,20 @@
 .pl-hscroller-track::-webkit-scrollbar { display: none; }
 .pl-hscroller-track > * { scroll-snap-align: start; min-width: 0; }
 .pl-hscroller-track:focus-visible { box-shadow: 0 0 0 2px var(--pl-primary); border-radius: 6px; }
+
+/* 1줄 (rows=1) — 열 방향 자동 흐름 */
+.pl-hscroller-track[data-flow="column"] {
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--pl-hs-rows), auto);
+  grid-auto-columns: var(--pl-hs-item-w);
+}
+
+/* 2줄 이상 (rows>=2) — 행 방향 흐름 + 열 수 명시. cols = ceil(n/rows) 는 JS 가 계산해서 --pl-hs-cols 로 넘긴다. */
+.pl-hscroller-track[data-flow="row"] {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(var(--pl-hs-cols), var(--pl-hs-item-w));
+  grid-template-rows: repeat(var(--pl-hs-rows), auto);
+}
 
 .pl-hscroller-track[data-fade-l="1"] {
   mask-image: linear-gradient(to right, transparent 0, black 24px, black 100%);
@@ -177,26 +261,31 @@
   .pl-hscroller-track { --pl-hs-visible: 5; }
 }
 
-.pl-hscroller-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+/* 헤더 컨트롤 바 — pause · prev · next 버튼 그룹. HScrollerHeaderControls 컴포넌트가 렌더. */
+.pl-hs-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.pl-hs-ctrl-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
   background: var(--pl-card);
   color: var(--pl-text);
   border: 1px solid var(--pl-line);
-  box-shadow: var(--sh-over);
-  display: none;
-  align-items: center;
-  justify-content: center;
+  border-radius: 999px;
   cursor: pointer;
-  z-index: 2;
+  transition: background .12s, color .12s, opacity .12s;
 }
-.pl-hscroller-arrow:hover { background: var(--pl-fill); }
-.pl-hscroller-arrow-prev { left: -6px; }
-.pl-hscroller-arrow-next { right: -6px; }
-@media (min-width: 768px) {
-  .pl-hscroller-arrow { display: inline-flex; }
+.pl-hs-ctrl-btn:hover { background: var(--pl-fill); }
+.pl-hs-ctrl-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+  color: var(--pl-sub);
+}
+@media (pointer: coarse) {
+  .pl-hs-ctrl-btn { width: 44px; height: 44px; }
 }
