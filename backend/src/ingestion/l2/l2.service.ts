@@ -394,7 +394,7 @@ export class L2Service {
     return result;
   }
 
-  private async collectStandings(competitionSeasonId: number, league: number, season: number, label: string, teamIdByApi: Map<number, number>): Promise<number> {
+  async collectStandings(competitionSeasonId: number, league: number, season: number, label: string, teamIdByApi: Map<number, number>): Promise<number> {
     const { response } = await this.api.get<ApiStandings[]>('/standings', { league, season });
     const groups = response[0]?.league?.standings ?? [];
     const rows = groups.flat().flatMap((r) => {

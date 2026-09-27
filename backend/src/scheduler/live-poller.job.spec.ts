@@ -22,6 +22,8 @@ function mkResult(over: Partial<TickResult> = {}): TickResult {
     wouldWrite: 0,
     written: 0,
     blocked: 0,
+    finalized: 0,
+    standingsRefreshed: 0,
     isProbe: false,
     transitions: [],
     details: [],

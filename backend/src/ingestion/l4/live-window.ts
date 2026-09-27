@@ -27,6 +27,8 @@ export const WINDOW_LOOKBACK_MS = 4 * 60 * 60 * 1000;
 export const WINDOW_LOOKAHEAD_MS = 5 * 60 * 1000;
 
 export interface LiveDbRow {
+  /** matches.id (내부 PK) — finalizer 는 이걸로 부른다 (3판) */
+  id: number;
   apiFixtureId: number;
   kickoffAt: Date;
   statusShort: string;
@@ -34,6 +36,8 @@ export interface LiveDbRow {
   extraElapsed: number | null;
   goalsHome: number | null;
   goalsAway: number | null;
+  /** competition_season_id — tick 끝의 standings refresh 대상 (3판) */
+  competitionSeasonId: number;
 }
 
 export interface MemoryFilter {

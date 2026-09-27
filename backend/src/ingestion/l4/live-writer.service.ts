@@ -12,7 +12,8 @@
  *   (마지막 두 개는 결국 elapsed 비교로 귀결)
  *
  * data_version 은 +1 · as_of · updated_at 은 now() 로 갱신한다.
- * winner_team_id 는 L2 매일이 정정하도록 두고 이 write 페이로드에서 제외한다 (관측자가 팀 매핑을 알기 어려움).
+ * winner_team_id 는 FT/AET/PEN 시 관측자가 함께 전달한다 (3판) · 미매핑 팀은 NULL 저장,
+ * L2 매일이 다음날 정정.
  *
  * 반환:
  *   { written: 1, blocked: 0 } — UPDATE 1행 (WHERE 통과)
@@ -39,6 +40,7 @@ export interface WriteInput {
   etAway: number | null;
   penHome: number | null;
   penAway: number | null;
+  winnerApiTeamId: number | null;
 }
 
 export interface WriteResult {
@@ -102,6 +104,11 @@ export class LiveWriterService {
              "et_away"       = ${input.etAway},
              "pen_home"      = ${input.penHome},
              "pen_away"      = ${input.penAway},
+             "winner_team_id" = CASE
+                                  WHEN ${input.statusShort}::text IN ('FT','AET','PEN')
+                                       THEN (SELECT "id" FROM "teams" WHERE "api_team_id" = ${input.winnerApiTeamId}::int)
+                                  ELSE "winner_team_id"
+                                END,
              "data_version"  = "data_version" + 1,
              "as_of"         = now(),
              "updated_at"    = now()

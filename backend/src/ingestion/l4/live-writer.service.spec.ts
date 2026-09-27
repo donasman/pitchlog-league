@@ -48,6 +48,7 @@ describe('LiveWriterService', () => {
     etAway: null,
     penHome: null,
     penAway: null,
+    winnerApiTeamId: null,
   };
 
   it('(1) cur 없음 (신규 · WHERE 통과) → UPDATE 반환 1 → written=1', async () => {
@@ -129,14 +130,95 @@ describe('LiveWriterService', () => {
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
-  it('(7) winnerTeamId 는 write 페이로드에 없음 (SET 목록에 등장 안 함)', async () => {
+  it('(8) winnerApiTeamId=123 + statusShort=FT → SQL 에 winner CASE · 파라미터에 123 포함', async () => {
     prisma.$executeRaw.mockResolvedValueOnce(1);
-    await writer.write(baseInput);
+    await writer.write({
+      ...baseInput,
+      statusShort: 'FT',
+      elapsed: 90,
+      winnerApiTeamId: 123,
+    });
 
     const call = prisma.$executeRaw.mock.calls[0];
     const [template, ...values] = call;
     const sql = tagToString(template, values);
 
-    expect(sql).not.toMatch(/winner_team_id/);
+    // CASE 표현식이 SET 안 · api_team_id 서브쿼리 포함
+    expect(sql).toMatch(/"winner_team_id"\s*=\s*CASE/);
+    expect(sql).toMatch(/api_team_id/);
+
+    // 파라미터 배열 어딘가에 123 이 들어가 있어야 한다
+    const flat: unknown[] = [];
+    const collect = (v: unknown): void => {
+      if (v && typeof v === 'object' && 'values' in (v as Record<string, unknown>)) {
+        const inner = (v as { values?: unknown[] }).values;
+        if (Array.isArray(inner)) for (const x of inner) collect(x);
+      } else {
+        flat.push(v);
+      }
+    };
+    for (const v of values) collect(v);
+    expect(flat).toContain(123);
+    expect(flat).toContain('FT');
+  });
+
+  it('(9) winnerApiTeamId=null + statusShort=FT → SQL 문자열 그대로 · 파라미터에 null', async () => {
+    prisma.$executeRaw.mockResolvedValueOnce(1);
+    await writer.write({
+      ...baseInput,
+      statusShort: 'FT',
+      elapsed: 90,
+      winnerApiTeamId: null,
+    });
+
+    const call = prisma.$executeRaw.mock.calls[0];
+    const [template, ...values] = call;
+    const sql = tagToString(template, values);
+
+    // CASE 표현식 자체는 여전히 SQL 문자열에 있어야 한다 (그대로)
+    expect(sql).toMatch(/"winner_team_id"\s*=\s*CASE/);
+
+    const flat: unknown[] = [];
+    const collect = (v: unknown): void => {
+      if (v && typeof v === 'object' && 'values' in (v as Record<string, unknown>)) {
+        const inner = (v as { values?: unknown[] }).values;
+        if (Array.isArray(inner)) for (const x of inner) collect(x);
+      } else {
+        flat.push(v);
+      }
+    };
+    for (const v of values) collect(v);
+    expect(flat).toContain(null);
+    expect(flat).toContain('FT');
+  });
+
+  it('(10) winnerApiTeamId=123 + statusShort=2H → SQL 그대로 · 파라미터 유지', async () => {
+    prisma.$executeRaw.mockResolvedValueOnce(1);
+    await writer.write({
+      ...baseInput,
+      statusShort: '2H',
+      elapsed: 70,
+      winnerApiTeamId: 123,
+    });
+
+    const call = prisma.$executeRaw.mock.calls[0];
+    const [template, ...values] = call;
+    const sql = tagToString(template, values);
+
+    // CASE 표현식은 그대로 (2H 는 IN ('FT','AET','PEN') 실패 → 옛 값 유지)
+    expect(sql).toMatch(/"winner_team_id"\s*=\s*CASE/);
+
+    const flat: unknown[] = [];
+    const collect = (v: unknown): void => {
+      if (v && typeof v === 'object' && 'values' in (v as Record<string, unknown>)) {
+        const inner = (v as { values?: unknown[] }).values;
+        if (Array.isArray(inner)) for (const x of inner) collect(x);
+      } else {
+        flat.push(v);
+      }
+    };
+    for (const v of values) collect(v);
+    expect(flat).toContain(123);
+    expect(flat).toContain('2H');
   });
 });
