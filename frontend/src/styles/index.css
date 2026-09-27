@@ -207,7 +207,7 @@
    scroll-snap x mandatory · overscroll-behavior x contain · 스크롤바 숨김.
    페이드는 넘칠 때만 (data-fade-l/-r 로 도달한 쪽 해제).
    컨트롤(prev·next·pause) 은 트랙 위 절대 배치가 아니라 헤더 슬롯에 렌더한다. */
-.pl-hscroller { position: relative; }
+.pl-hscroller { position: relative; min-width: 0; }
 
 .pl-hscroller-track {
   --pl-hs-rows: 1;
@@ -225,6 +225,7 @@
 }
 .pl-hscroller-track::-webkit-scrollbar { display: none; }
 .pl-hscroller-track > * { scroll-snap-align: start; min-width: 0; }
+.pl-hscroller-track[data-step="card"] > * { scroll-snap-stop: always; }
 .pl-hscroller-track:focus-visible { box-shadow: 0 0 0 2px var(--pl-primary); border-radius: 6px; }
 
 /* 1줄 (rows=1) — 열 방향 자동 흐름 */

@@ -20,6 +20,11 @@
  *   - document.hidden 이면 정지, prefers-reduced-motion 이면 autoPlay 무시
  *   - 헤더 pause 버튼 눌러 사용자가 명시적으로 정지하면 세션 동안 재개하지 않음
  *
+ * step ('page' | 'card', default 'page'):
+ *   - 'page' — 한 번에 clientWidth * 90% 이동 (기본, 기존 동작 그대로)
+ *   - 'card' — 첫 카드 폭 + gap 만큼 이동. rows>1 조합은 이번 판 범위 밖이라
+ *     rows>1 이면 page 계산으로 폴백한다.
+ *
  * @param {{
  *   rows?: number,
  *   gap?: number,
@@ -27,6 +32,7 @@
  *   autoPlay?: boolean,
  *   intervalMs?: number,
  *   startDelayMs?: number,
+ *   step?: 'page'|'card',
  *   showPauseToggle?: boolean,
  *   header?: (ctrl: HScrollerControl) => import('react').ReactNode,
  *   children: import('react').ReactNode
@@ -66,19 +72,62 @@ export function shouldAutoTick({
 }
 
 /**
- * 다음 자동 스크롤 대상 계산 (순수).
- * 끝에 도달했으면 처음으로 복귀, 아니면 clientWidth 의 90% 만큼 우측 이동.
+ * step 별 이동량 계산 (순수).
+ *   page: clientWidth * 0.9
+ *   card: 첫 자식 offsetWidth + gap (0 이하면 clientWidth * 0.9 폴백)
  */
-export function computeAutoScrollTarget({ scrollLeft, clientWidth, scrollWidth }) {
+export function computeStepDelta({ step, clientWidth, cardWidth, gap }) {
+  if (step === 'card' && Number.isFinite(cardWidth) && cardWidth > 0) {
+    return cardWidth + (Number.isFinite(gap) && gap > 0 ? gap : 0)
+  }
+  return clientWidth * 0.9
+}
+
+/**
+ * 다음 자동 스크롤 대상 계산 (순수).
+ * 끝에 도달했으면 처음으로 복귀, 아니면 step 규칙에 따라 우측 이동.
+ */
+export function computeAutoScrollTarget({ scrollLeft, clientWidth, scrollWidth, step = 'page', cardWidth = 0, gap = 0 }) {
   const atEnd = scrollLeft + clientWidth >= scrollWidth - 1
   if (atEnd) return { type: 'wrap', delta: scrollLeft === 0 ? 0 : -scrollLeft }
-  return { type: 'step', delta: clientWidth * 0.9 }
+  const delta = computeStepDelta({ step, clientWidth, cardWidth, gap })
+  return { type: 'step', delta }
+}
+
+/**
+ * step='card' 자동재생용 **스냅 위치 기준 절대 좌표** 계산 (순수).
+ *
+ * scrollBy 로 delta 를 누적하면 smooth 애니메이션 중간 scrollLeft 에 더해져 스냅 격자에서 벗어난다.
+ * 현재 스냅 위치(round(scrollLeft / stepDelta))에서 다음 카드로 정확히 옮기려면 절대 좌표가 안전.
+ * 끝에 도달했으면 { atEnd:true, left:0 } — 소비자가 wrap 애니메이션을 실행.
+ */
+export function computeCardStepTarget({ scrollLeft, clientWidth, scrollWidth, cardWidth, gap }) {
+  const atEnd = scrollLeft + clientWidth >= scrollWidth - 1
+  if (atEnd) return { atEnd: true, left: 0 }
+  // 카드 폭이 유효하지 않으면 현재 위치 유지 — 폴백은 소비자(autoTick)가 결정
+  if (!Number.isFinite(cardWidth) || cardWidth <= 0) return { atEnd: false, left: scrollLeft }
+  const stepPx = cardWidth + (Number.isFinite(gap) ? gap : 0)
+  if (stepPx <= 0) return { atEnd: false, left: scrollLeft }
+  const currentSnap = Math.round(scrollLeft / stepPx) * stepPx
+  const maxLeft = Math.max(0, scrollWidth - clientWidth)
+  const nextLeft = Math.min(currentSnap + stepPx, maxLeft)
+  return { atEnd: false, left: nextLeft }
 }
 
 function prefersReducedMotion() {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
     : false
+}
+
+/**
+ * 트랙의 실제 column-gap 을 픽셀로 잰다 (R4 · CSS var 오버라이드 대응).
+ * getComputedStyle 이 없으면 0.
+ */
+function measureGapPx(el) {
+  if (!el || typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return 0
+  const v = parseFloat(window.getComputedStyle(el).columnGap)
+  return Number.isFinite(v) ? v : 0
 }
 
 export default function HScroller({
@@ -88,6 +137,7 @@ export default function HScroller({
   autoPlay = false,
   intervalMs = 5000,
   startDelayMs = 0,
+  step = 'page',
   showPauseToggle = false,
   header,
   children,
@@ -135,6 +185,7 @@ export default function HScroller({
       ro?.disconnect()
       if (raf) cancelAnimationFrame(raf)
     }
+    // deps 에 children 을 넣지 않는다 — 스코어만 바뀐 재렌더에서 scrollLeft·타이머 유지
   }, [updateEdges, count, rows])
 
   /* reduced-motion 매체 쿼리 변화 반영 */
@@ -168,26 +219,60 @@ export default function HScroller({
     return () => io.disconnect()
   }, [])
 
+  // rows>1 조합은 이번 판 범위 밖 — step='card' 라도 page 계산으로 폴백한다.
+  const effectiveStep = step === 'card' && rows === 1 ? 'card' : 'page'
+
   const scrollByDir = useCallback((dir) => {
     const el = trackRef.current
     if (!el) return
     const behavior = prefersReducedMotion() ? 'auto' : 'smooth'
-    el.scrollBy({ left: dir * el.clientWidth * 0.9, behavior })
-  }, [])
+    const cardWidth = effectiveStep === 'card' ? (el.firstElementChild?.offsetWidth ?? 0) : 0
+    // R4 · CSS gap 이 --pl-hs-gap 변수·미디어 쿼리로 바뀌므로 실측값을 우선. props.gap 은 폴백.
+    const measured = measureGapPx(el)
+    const stepDelta = computeStepDelta({
+      step: effectiveStep,
+      clientWidth: el.clientWidth,
+      cardWidth,
+      gap: measured > 0 ? measured : gap,
+    })
+    el.scrollBy({ left: dir * stepDelta, behavior })
+  }, [effectiveStep, gap])
 
   const autoTick = useCallback(() => {
     const el = trackRef.current
     if (!el) return
+    const behavior = prefersReducedMotion() ? 'auto' : 'smooth'
+
+    if (effectiveStep === 'card') {
+      const cardWidth = el.firstElementChild?.offsetWidth ?? 0
+      const measured = measureGapPx(el)
+      const t = computeCardStepTarget({
+        scrollLeft: el.scrollLeft,
+        clientWidth: el.clientWidth,
+        scrollWidth: el.scrollWidth,
+        cardWidth,
+        gap: measured > 0 ? measured : gap,
+      })
+      // 절대 좌표로 이동 — scrollBy 로 delta 를 진행 중 애니메이션에 더하지 않는다.
+      el.scrollTo({ left: t.left, behavior })
+      return
+    }
+
+    const measured = measureGapPx(el)
     const target = computeAutoScrollTarget({
       scrollLeft: el.scrollLeft,
       clientWidth: el.clientWidth,
       scrollWidth: el.scrollWidth,
+      step: effectiveStep,
+      cardWidth: 0,
+      gap: measured > 0 ? measured : gap,
     })
-    const behavior = prefersReducedMotion() ? 'auto' : 'smooth'
     el.scrollBy({ left: target.delta, behavior })
-  }, [])
+  }, [effectiveStep, gap])
 
-  /* 자동 슬라이드 타이머 — 조건 만족 시 startDelay 후 첫 틱, 이후 intervalMs 마다 반복 */
+  /* 자동 슬라이드 타이머 — 첫 tick 은 startDelayMs + intervalMs 후. 마운트 초 상태 변동(overflow·visible·documentVisible)
+     이 반복해 effect 를 재실행해도 setTimeout 이 매번 리셋되므로 "즉시 tick" 이 여러 번 발화하지 않는다.
+     이전 판(setTimeout(startDelayMs)+즉시 tick)이 초당 여러 번 발화해 scrollLeft 가 폭주하던 회귀를 잠근다. */
   useEffect(() => {
     const run = shouldAutoTick({
       autoPlay, overflow, reducedMotion,
@@ -196,10 +281,11 @@ export default function HScroller({
     })
     if (!run) return
     let intervalId = 0
+    const firstDelay = Math.max(0, startDelayMs) + Math.max(1000, intervalMs)
     const startId = setTimeout(() => {
       autoTick()
       intervalId = setInterval(autoTick, Math.max(1000, intervalMs))
-    }, Math.max(0, startDelayMs))
+    }, firstDelay)
     return () => {
       clearTimeout(startId)
       if (intervalId) clearInterval(intervalId)
@@ -276,6 +362,7 @@ export default function HScroller({
         onBlur={onFocusOut}
         className="pl-hscroller-track"
         data-flow={rows > 1 ? 'row' : 'column'}
+        data-step={effectiveStep}
         data-fade-l={overflow && !atStart ? '1' : undefined}
         data-fade-r={overflow && !atEnd   ? '1' : undefined}
         style={trackStyle}

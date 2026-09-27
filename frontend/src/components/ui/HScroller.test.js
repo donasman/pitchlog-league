@@ -16,6 +16,8 @@ import {
   computeCols,
   shouldAutoTick,
   computeAutoScrollTarget,
+  computeCardStepTarget,
+  computeStepDelta,
 } from './HScroller.jsx'
 
 describe('HScroller computeCols — row-first column count', () => {
@@ -112,5 +114,83 @@ describe('HScroller computeAutoScrollTarget — step forward · wrap to start on
   it('T-S5: non-overflowing track (scrollWidth == clientWidth) -> wrap (delta 0)', () => {
     const r = computeAutoScrollTarget({ scrollLeft: 0, clientWidth: 800, scrollWidth: 800 })
     expect(r).toEqual({ type: 'wrap', delta: 0 })
+  })
+})
+
+describe('HScroller computeStepDelta — page vs card', () => {
+  it('T-D1: step=page returns clientWidth * 0.9', () => {
+    expect(computeStepDelta({ step: 'page', clientWidth: 800, cardWidth: 300, gap: 12 })).toBe(720)
+  })
+
+  it('T-D2: step=card uses cardWidth + gap', () => {
+    expect(computeStepDelta({ step: 'card', clientWidth: 800, cardWidth: 300, gap: 12 })).toBe(312)
+  })
+
+  it('T-D3: step=card with zero cardWidth falls back to clientWidth * 0.9', () => {
+    expect(computeStepDelta({ step: 'card', clientWidth: 800, cardWidth: 0, gap: 12 })).toBe(720)
+  })
+
+  it('T-D4: step=card with negative gap treats gap as 0', () => {
+    expect(computeStepDelta({ step: 'card', clientWidth: 800, cardWidth: 300, gap: -5 })).toBe(300)
+  })
+})
+
+describe('HScroller computeAutoScrollTarget — step=card', () => {
+  it("T-S6: step=card returns { type:'step', delta: cardWidth + gap } mid-scroll", () => {
+    const r = computeAutoScrollTarget({
+      scrollLeft: 0, clientWidth: 800, scrollWidth: 2400,
+      step: 'card', cardWidth: 300, gap: 12,
+    })
+    expect(r).toEqual({ type: 'step', delta: 312 })
+  })
+
+  it('T-S7: step=card at end wraps to start (delta = -scrollLeft) same as page', () => {
+    const r = computeAutoScrollTarget({
+      scrollLeft: 1600, clientWidth: 800, scrollWidth: 2400,
+      step: 'card', cardWidth: 300, gap: 12,
+    })
+    expect(r).toEqual({ type: 'wrap', delta: -1600 })
+  })
+})
+
+describe('HScroller computeCardStepTarget — snap-aligned absolute target', () => {
+  it('T-CT1: at start returns first snap position (cardWidth + gap)', () => {
+    const r = computeCardStepTarget({
+      scrollLeft: 0, clientWidth: 800, scrollWidth: 2400, cardWidth: 300, gap: 12,
+    })
+    expect(r).toEqual({ atEnd: false, left: 312 })
+  })
+
+  it('T-CT2: mid-animation position rounds to current snap + one step', () => {
+    // scrollLeft=200 mid-animation from 0 to 312 · currentSnap = round(200/312) = 312 · next = 624
+    const r = computeCardStepTarget({
+      scrollLeft: 200, clientWidth: 800, scrollWidth: 2400, cardWidth: 300, gap: 12,
+    })
+    expect(r.left).toBe(624)
+    expect(r.atEnd).toBe(false)
+  })
+
+  it('T-CT3: at end returns atEnd:true, left:0 for wrap animation', () => {
+    const r = computeCardStepTarget({
+      scrollLeft: 1600, clientWidth: 800, scrollWidth: 2400, cardWidth: 300, gap: 12,
+    })
+    expect(r).toEqual({ atEnd: true, left: 0 })
+  })
+
+  it('T-CT4: nextLeft clamps to max scrollable when near the end', () => {
+    // near-end · nextLeft would be 1872 but max = scrollWidth - clientWidth = 1600
+    const r = computeCardStepTarget({
+      scrollLeft: 1500, clientWidth: 800, scrollWidth: 2400, cardWidth: 300, gap: 12,
+    })
+    // 1500 + 800 = 2300 < 2399 → not at end. currentSnap = round(1500/312) = 4*312 = 1248. next = 1560. clamped to 1600.
+    expect(r.left).toBeLessThanOrEqual(1600)
+    expect(r.atEnd).toBe(false)
+  })
+
+  it('T-CT5: zero cardWidth returns current scrollLeft (no move)', () => {
+    const r = computeCardStepTarget({
+      scrollLeft: 400, clientWidth: 800, scrollWidth: 2400, cardWidth: 0, gap: 12,
+    })
+    expect(r).toEqual({ atEnd: false, left: 400 })
   })
 })
