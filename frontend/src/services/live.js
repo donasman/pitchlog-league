@@ -21,6 +21,7 @@ import {
   groupCountOf,
   matchDetail,
   normalizeCompetition,
+  normalizeLiveMatch,
   normalizeMatch,
   normalizePlayerDetail,
   normalizeSearchResults,
@@ -761,6 +762,41 @@ export async function fetchCompetitionStats(slug) {
     coverage: scorers.coverage ?? null,
     asOf:     scorers.asOf ?? null,
   }
+}
+
+// ─── 라이브 폴링 ───────────────────────────────────────────────
+
+/**
+ * 라이브 폴링 — `GET /api/live`. 서버가 `Cache-Control: s-maxage=5` 로 얇게 잡으므로
+ * `_cachedGet` (60s TTL) 을 우회한다 — 클라이언트 캐시가 서버 신선도를 덮으면 안 된다.
+ *
+ * 응답 shape: `{ asOf: string, matches: LiveMatchDto[] }`. matches 는 여기서 정규화 매핑.
+ * signal 은 훅(B 판)이 언마운트·재폴링 취소용으로 넘긴다 — apiGet 이 AbortError 를 그대로 던진다.
+ *
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<{ asOf: string, matches: Array<ReturnType<typeof normalizeLiveMatch>> }>}
+ */
+export async function fetchLiveMatches(opts = {}) {
+  const res = await apiGet('/api/live', undefined, { signal: opts.signal })
+  return {
+    asOf: res.asOf,
+    matches: (res.matches ?? []).map(normalizeLiveMatch),
+  }
+}
+
+/**
+ * 경기 상세 캐시 무효화 — 라이브 폴링이 live→final 전환을 감지하면 상세 페이지를
+ * 다시 부르게 하기 위해 이 함수를 호출한다. `invalidateCompetitions` 와 같은 규약:
+ * cache 만 지우고 inflight 는 손대지 않는다 (진행 중 promise 는 이번 사용자 요청의 결과).
+ *
+ * fetchMatchDetail 이 두 URL 을 병렬로 부르므로 둘 다 지운다.
+ *
+ * @param {string|number} id  API-Football fixture id
+ */
+export function invalidateMatchDetail(id) {
+  const enc = encodeURIComponent(String(id))
+  cache.delete(`/api/matches/${enc}`)
+  cache.delete(`/api/matches/${enc}/detail`)
 }
 
 // UCL 녹아웃 대진표는 T 판 (feat/tournament-bracket) 에서 프론트 buildTies 로 이관 · fetchUCLKnockout 삭제.

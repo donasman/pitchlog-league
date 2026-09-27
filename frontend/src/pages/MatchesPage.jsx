@@ -12,7 +12,9 @@ import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
+import { useLiveMatches } from '@/hooks/useLiveMatches'
 import { fetchAllMatches, fetchCompetitions, fetchStandings } from '@/services/api'
+import { mergeLive } from '@/utils/liveMerge'
 import MatchCard from '@/components/ui/MatchCard'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
@@ -376,17 +378,24 @@ export default function MatchesPage() {
   /** 과거 시즌인데 대회를 안 골랐다 — 빈 결과가 아니라 "고르면 보인다" 다. 둘을 같은 화면으로 그리지 않는다 */
   const needsCompetition = matchesResult?.unavailableReason === 'COMPETITION_REQUIRED'
 
+  /* 라이브 폴링 병합 — mergeLive 는 원본 배열 그대로(참조 유지) 또는 새 배열 반환 */
+  const { liveMap } = useLiveMatches()
+  const mergedMatches = useMemo(
+    () => allMatches ? mergeLive(allMatches, liveMap) : null,
+    [allMatches, liveMap]
+  )
+
   /* 필터 적용 */
   const filtered = useMemo(() => {
-    if (!allMatches) return []
-    return allMatches.filter(m => {
+    if (!mergedMatches) return []
+    return mergedMatches.filter(m => {
       const compOk = activeComp === 'all' || m.competitionSlug === activeComp
       if (!compOk) return false
       if (activeStatus === 'all') return true
       const group = STATUS_GROUPS[activeStatus] ?? []
       return group.includes(m.displayState)
     })
-  }, [allMatches, activeComp, activeStatus])
+  }, [mergedMatches, activeComp, activeStatus])
 
   /* LIVE 경기 (히어로) & 날짜별 그룹 */
   const liveMatches = useMemo(
