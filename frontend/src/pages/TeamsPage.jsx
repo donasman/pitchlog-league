@@ -10,7 +10,7 @@ import TeamBadge from '@/components/ui/TeamBadge'
 import FavoriteToggle from '@/components/ui/FavoriteToggle'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
-import HScroller from '@/components/ui/HScroller'
+import HScroller, { HScrollerHeaderControls } from '@/components/ui/HScroller'
 import { getLocalizedName, getLocalizedCompetitionName } from '@/utils/localization'
 
 export default function TeamsPage() {
@@ -42,19 +42,28 @@ export default function TeamsPage() {
         </div>
 
         <div style={{ display: 'grid', gap: 32 }}>
-          {(groups ?? []).map(({ comp, teams }) => (
+          {(groups ?? []).map(({ comp, teams }, idx) => (
             <section key={comp.slug}>
-              <h2
-                className="t-cap"
-                style={{ marginBottom: 12, letterSpacing: '.04em', display: 'flex', alignItems: 'center', gap: 8 }}
-              >
-                {getLocalizedCompetitionName(comp, locale)}
-                <span style={{ fontWeight: 400, opacity: 0.7 }}>{teams.length}</span>
-              </h2>
               <HScroller
                 rows={2}
                 gap={10}
                 ariaLabel={`${getLocalizedCompetitionName(comp, locale)} — ${t('nav.teams')}`}
+                autoPlay
+                intervalMs={5000}
+                startDelayMs={idx * 1000}
+                showPauseToggle
+                header={(ctrl) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <h2
+                      className="t-cap"
+                      style={{ margin: 0, letterSpacing: '.04em', display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}
+                    >
+                      {getLocalizedCompetitionName(comp, locale)}
+                      <span style={{ fontWeight: 400, opacity: 0.7 }}>{teams.length}</span>
+                    </h2>
+                    <HScrollerHeaderControls {...ctrl} />
+                  </div>
+                )}
               >
                 {teams.map(team => {
                   const isUCL = team.competitions?.includes('champions-league')

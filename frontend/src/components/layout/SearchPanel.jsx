@@ -67,6 +67,9 @@ export default function SearchPanel({ onClose }) {
   }
 
   function go(item) {
+    // iOS 는 input 포커스 상태에서 라우트가 바뀌어도 확대 상태·소프트 키보드를 붙잡고 있다.
+    // 이동 직전에 blur 로 확실히 놓아준다.
+    inputRef.current?.blur()
     const path = item.type === 'team'    ? `/teams/${item.slug}`
       : item.type === 'player'           ? `/players/${item.slug}`
       : `/competitions/${item.slug}`

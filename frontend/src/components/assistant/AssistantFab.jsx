@@ -1,6 +1,6 @@
 /**
  * AI 어시스턴트 진입 버튼 (FAB)
- * 우하단 고정. 알림 토스트(우하단)와 겹치지 않도록 토스트보다 낮은 z-index.
+ * 우하단 고정. 토큰 --pl-z-fab 이 층을 정한다 — 드로어보다 아래, 스티키보다 위.
  * 패널이 열려 있으면 숨긴다.
  */
 
@@ -22,7 +22,7 @@ export default function AssistantFab() {
         position: 'fixed',
         bottom: 24,
         right: 24,
-        zIndex: 6000,
+        zIndex: 'var(--pl-z-fab)',
         height: 52,
         borderRadius: 999,
         padding: '0 20px',

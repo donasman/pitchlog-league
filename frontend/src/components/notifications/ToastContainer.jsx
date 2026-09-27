@@ -29,7 +29,7 @@ export default function ToastContainer() {
         position: 'fixed',
         bottom: 24,
         right: 24,
-        zIndex: 9000,
+        zIndex: 'var(--pl-z-toast)',
         display: 'grid',
         gap: 10,
         justifyItems: 'end',
