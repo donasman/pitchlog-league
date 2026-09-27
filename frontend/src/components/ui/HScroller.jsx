@@ -74,11 +74,16 @@ export function shouldAutoTick({
 /**
  * step 별 이동량 계산 (순수).
  *   page: clientWidth * 0.9
- *   card: 첫 자식 offsetWidth + gap (0 이하면 clientWidth * 0.9 폴백)
+ *   card: stridePx (실측된 자식 배치 간격 · children[1].offsetLeft-children[0].offsetLeft) 우선.
+ *         stridePx 가 없으면 cardWidth + gap 폴백. 둘 다 없으면 page 폴백.
+ *
+ * stridePx 우선 이유: 그리드 track 폭이 CSS 로 강제된 상황에서 offsetWidth+gap 을 쓰면
+ * 실제 stride(칸 폭+gap) 와 어긋나 카드가 겹치거나 스냅이 어긋난다 (운영 실측 · 1843px zoom 1.25).
  */
-export function computeStepDelta({ step, clientWidth, cardWidth, gap }) {
-  if (step === 'card' && Number.isFinite(cardWidth) && cardWidth > 0) {
-    return cardWidth + (Number.isFinite(gap) && gap > 0 ? gap : 0)
+export function computeStepDelta({ step, clientWidth, cardWidth = 0, gap = 0, stridePx }) {
+  if (step === 'card') {
+    if (Number.isFinite(stridePx) && stridePx > 0) return stridePx
+    if (Number.isFinite(cardWidth) && cardWidth > 0) return cardWidth + (Number.isFinite(gap) && gap > 0 ? gap : 0)
   }
   return clientWidth * 0.9
 }
@@ -101,17 +106,34 @@ export function computeAutoScrollTarget({ scrollLeft, clientWidth, scrollWidth, 
  * 현재 스냅 위치(round(scrollLeft / stepDelta))에서 다음 카드로 정확히 옮기려면 절대 좌표가 안전.
  * 끝에 도달했으면 { atEnd:true, left:0 } — 소비자가 wrap 애니메이션을 실행.
  */
-export function computeCardStepTarget({ scrollLeft, clientWidth, scrollWidth, cardWidth, gap }) {
+export function computeCardStepTarget({ scrollLeft, clientWidth, scrollWidth, cardWidth = 0, gap = 0, stridePx }) {
   const atEnd = scrollLeft + clientWidth >= scrollWidth - 1
   if (atEnd) return { atEnd: true, left: 0 }
-  // 카드 폭이 유효하지 않으면 현재 위치 유지 — 폴백은 소비자(autoTick)가 결정
-  if (!Number.isFinite(cardWidth) || cardWidth <= 0) return { atEnd: false, left: scrollLeft }
-  const stepPx = cardWidth + (Number.isFinite(gap) ? gap : 0)
+  // stridePx 우선 · 없으면 cardWidth+gap 폴백 · 둘 다 없으면 현재 위치 유지
+  const stepPx = Number.isFinite(stridePx) && stridePx > 0
+    ? stridePx
+    : (Number.isFinite(cardWidth) && cardWidth > 0 ? cardWidth + (Number.isFinite(gap) ? gap : 0) : 0)
   if (stepPx <= 0) return { atEnd: false, left: scrollLeft }
   const currentSnap = Math.round(scrollLeft / stepPx) * stepPx
   const maxLeft = Math.max(0, scrollWidth - clientWidth)
   const nextLeft = Math.min(currentSnap + stepPx, maxLeft)
   return { atEnd: false, left: nextLeft }
+}
+
+/**
+ * 트랙 자식들의 실제 배치 간격을 측정 (순수 · 소비 전 DOM 조회는 소비자 몫).
+ * 자식 2개 이상: children[1].offsetLeft - children[0].offsetLeft (grid track 폭 + gap 반영).
+ * 자식 1개: offsetWidth + gap (근사).
+ * 자식 0개: 0.
+ * @param {HTMLElement} el
+ * @param {number} gap
+ */
+export function measureCardStride(el, gap) {
+  if (!el) return 0
+  const c = el.children
+  if (c.length >= 2) return c[1].offsetLeft - c[0].offsetLeft
+  if (c.length === 1) return c[0].offsetWidth + (Number.isFinite(gap) ? gap : 0)
+  return 0
 }
 
 function prefersReducedMotion() {
@@ -138,6 +160,9 @@ export default function HScroller({
   intervalMs = 5000,
   startDelayMs = 0,
   step = 'page',
+  /* step='card' 일 때 그리드 track 폭 (px). CSS 가 `grid-auto-columns: var(--pl-hs-card-w, 260px)` 로 소비.
+     이 폭이 track visible=5 기준 자동 계산치보다 크면 카드가 서로 겹치지 않는다. */
+  cardWidth,
   showPauseToggle = false,
   header,
   children,
@@ -226,14 +251,16 @@ export default function HScroller({
     const el = trackRef.current
     if (!el) return
     const behavior = prefersReducedMotion() ? 'auto' : 'smooth'
-    const cardWidth = effectiveStep === 'card' ? (el.firstElementChild?.offsetWidth ?? 0) : 0
-    // R4 · CSS gap 이 --pl-hs-gap 변수·미디어 쿼리로 바뀌므로 실측값을 우선. props.gap 은 폴백.
     const measured = measureGapPx(el)
+    // step='card' 이면 실측 stride 우선 (grid track 폭 + gap 반영)
+    const stridePx = effectiveStep === 'card' ? measureCardStride(el, measured > 0 ? measured : gap) : 0
+    const measuredCardWidth = effectiveStep === 'card' ? (el.firstElementChild?.offsetWidth ?? 0) : 0
     const stepDelta = computeStepDelta({
       step: effectiveStep,
       clientWidth: el.clientWidth,
-      cardWidth,
+      cardWidth: measuredCardWidth,
       gap: measured > 0 ? measured : gap,
+      stridePx,
     })
     el.scrollBy({ left: dir * stepDelta, behavior })
   }, [effectiveStep, gap])
@@ -244,14 +271,16 @@ export default function HScroller({
     const behavior = prefersReducedMotion() ? 'auto' : 'smooth'
 
     if (effectiveStep === 'card') {
-      const cardWidth = el.firstElementChild?.offsetWidth ?? 0
       const measured = measureGapPx(el)
+      const stridePx = measureCardStride(el, measured > 0 ? measured : gap)
+      const measuredCardWidth = el.firstElementChild?.offsetWidth ?? 0
       const t = computeCardStepTarget({
         scrollLeft: el.scrollLeft,
         clientWidth: el.clientWidth,
         scrollWidth: el.scrollWidth,
-        cardWidth,
+        cardWidth: measuredCardWidth,
         gap: measured > 0 ? measured : gap,
+        stridePx,
       })
       // 절대 좌표로 이동 — scrollBy 로 delta 를 진행 중 애니메이션에 더하지 않는다.
       el.scrollTo({ left: t.left, behavior })
@@ -345,6 +374,9 @@ export default function HScroller({
 
   const trackStyle = { '--pl-hs-rows': rows, '--pl-hs-gap': `${gap}px` }
   if (rows > 1) trackStyle['--pl-hs-cols'] = cols
+  if (step === 'card' && Number.isFinite(cardWidth) && cardWidth > 0) {
+    trackStyle['--pl-hs-card-w'] = `${cardWidth}px`
+  }
 
   return (
     <div className="pl-hscroller">
