@@ -420,6 +420,51 @@ export function normalizeMatch(dto) {
   }
 }
 
+/**
+ * 라이브 폴링 응답 정규화 — `GET /api/live` 항목 하나.
+ *
+ * normalizeMatch 와 필드 규약이 겹치는 부분(id · competitionIds · score · displayState) 은 재사용하되,
+ * `LiveMatchDto` 에 없는 필드(round · venue · statsState · events 등) 는 담지 않는다 —
+ * B 판의 liveMerge 가 원본 상세를 유지한 채 라이브 값만 덮어쓰기 때문에, 여기서 null 을 채우면
+ * 원본이 밀린다.
+ *
+ * minute 규약:
+ *   - live/halftime 이 아니면 null (끝난 경기에 90' 을 찍지 않는 `normalizeMatch` 규약과 대칭)
+ *   - live 이고 elapsed 가 숫자면 elapsed(number)
+ *   - live 이고 extraElapsed>0 이면 `${elapsed}+${extraElapsed}` 문자열
+ *   - live 여도 elapsed=null 이면 null (아직 백엔드가 값 없음)
+ *
+ * statsState 는 이 응답에 없다 (`normalizeMatch` 의 3상태 판정과 다른 경로) —
+ * 폴링 대상은 진행 중 경기이므로 'NONE' 을 넘겨 진행/halftime 여부만 결정한다.
+ *
+ * @param {object} dto  LiveMatchDto
+ * @returns {object}    { id, competitionId, competitionSlug, competitionName, date, homeTeam, awayTeam,
+ *                        score, statusCode, displayState, minute, asOf, dataVersion }
+ */
+export function normalizeLiveMatch(dto) {
+  const displayState = getDisplayState(dto.statusShort, 'NONE')
+  const live = isLive(displayState)
+  let minute = null
+  if (live && dto.elapsed !== null && dto.elapsed !== undefined) {
+    minute = (dto.extraElapsed !== null && dto.extraElapsed !== undefined && dto.extraElapsed > 0)
+      ? `${dto.elapsed}+${dto.extraElapsed}`
+      : dto.elapsed
+  }
+  return {
+    id: String(dto.id),
+    ...competitionIds(dto.competition),
+    date: dto.kickoffAt,
+    homeTeam: normalizeTeam(dto.home),
+    awayTeam: normalizeTeam(dto.away),
+    score: { home: dto.goals?.home ?? null, away: dto.goals?.away ?? null },
+    statusCode: dto.statusShort,
+    displayState,
+    minute,
+    asOf: dto.asOf,
+    dataVersion: dto.dataVersion,
+  }
+}
+
 /** 종료로 치는 표시 상태 — 취소도 그 라운드에서는 더 진행될 것이 없다 */
 function isSettled(state) {
   return isFinished(state) || state === 'cancelled'

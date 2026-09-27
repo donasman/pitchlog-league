@@ -10,11 +10,13 @@
  *   - 라인업 포메이션: 세로(모바일) / 가로(데스크톱)
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
-import { fetchMatchDetail } from '@/services/api'
+import { useLiveMatches } from '@/hooks/useLiveMatches'
+import { fetchMatchDetail, invalidateMatchDetail } from '@/services/api'
+import { mergeLive } from '@/utils/liveMerge'
 import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import TeamBadge from '@/components/ui/TeamBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
@@ -949,7 +951,29 @@ export default function MatchPage() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
 
-  const { data, loading, error } = useData(() => fetchMatchDetail(fixtureId), [fixtureId])
+  const [reloadKey, setReloadKey] = useState(0)
+  const { data, loading, error } = useData(() => fetchMatchDetail(fixtureId), [fixtureId, reloadKey])
+
+  const { liveMap } = useLiveMatches()
+  const mergedMatch = useMemo(
+    () => data?.match ? mergeLive([data.match], liveMap)[0] : null,
+    [data?.match, liveMap]
+  )
+
+  // live/halftime → final/recheck/confirmed 로 넘어가는 순간 상세 캐시 무효화 + 재요청.
+  // 이벤트·라인업·통계가 라이브 폴링에는 없으므로, 종료 직후에는 상세 API 를 다시 불러야 반영된다.
+  const prevStateRef = useRef(null)
+  useEffect(() => {
+    const prev = prevStateRef.current
+    const cur  = mergedMatch?.displayState
+    const wasLive     = prev === 'live' || prev === 'halftime'
+    const nowFinished = cur === 'final' || cur === 'recheck' || cur === 'confirmed'
+    if (wasLive && nowFinished) {
+      invalidateMatchDetail(fixtureId)
+      setReloadKey(k => k + 1)
+    }
+    prevStateRef.current = cur
+  }, [mergedMatch?.displayState, fixtureId])
 
   if (loading) {
     return (
@@ -994,8 +1018,8 @@ export default function MatchPage() {
         </div>
 
         <div style={{ display: 'grid', gap: 10 }}>
-          {/* 스코어보드 */}
-          <ScoreBanner match={match} t={t} locale={locale} />
+          {/* 스코어보드 — 라이브 폴링 값이 있으면 병합본으로 그린다 */}
+          <ScoreBanner match={mergedMatch ?? match} t={t} locale={locale} />
 
           {/* 상태 안내 (재검증/확정/종료) */}
           {showStatus && <StatusNotice state={match.displayState} t={t} />}
