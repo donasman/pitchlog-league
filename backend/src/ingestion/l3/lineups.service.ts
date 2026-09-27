@@ -81,13 +81,57 @@ export class L3LineupsService {
     const env = await this.api.get<ApiFixtureLineupItem[]>('/fixtures/lineups', { fixture: apiFixtureId });
     const items = env.response ?? [];
 
+    return this.persist(matchId, apiFixtureId, items, { promote: true });
+  }
+
+  /**
+   * 외부 호출을 뺀 저장 경로 — 판 B(L4 라이브) 가 자기 시점에서 부를 수 있게 뽑아냈다.
+   * items 는 이미 fetch 된 결과. opts.promote=false 면 승격 헬퍼를 부르지 않는다
+   * (라이브에선 아직 다른 갈래가 채워지지 않았을 수 있음).
+   *
+   * run() 과 동일한 진입 검사·저장 로직을 그대로 유지한다.
+   */
+  async persist(
+    matchId: number,
+    apiFixtureId: number,
+    items: ApiFixtureLineupItem[],
+    opts: { promote: boolean },
+  ): Promise<L3LineupsResult> {
+    // 1) 매치 존재·자격 확인. detail_eligible=false 는 여기서 건너뛴다 (D19)
+    const match = await this.prisma.match.findUnique({
+      where: { id: matchId },
+      select: {
+        id: true,
+        apiFixtureId: true,
+        detailEligible: true,
+        homeTeamId: true,
+        awayTeamId: true,
+      },
+    });
+    if (!match) {
+      this.logger.warn(`L3 lineups: match id=${matchId} 없음 — skip`);
+      return { ok: false, reason: 'match-not-found' };
+    }
+    if (match.apiFixtureId !== apiFixtureId) {
+      this.logger.warn(
+        `L3 lineups: match id=${matchId} 의 apiFixtureId ${match.apiFixtureId} 가 인자 ${apiFixtureId} 와 다르다 — skip`,
+      );
+      return { ok: false, reason: 'fixture-id-mismatch' };
+    }
+    if (!match.detailEligible) {
+      this.logger.warn(`L3 lineups: match id=${matchId} 는 detail_eligible=false — skip`);
+      return { ok: false, reason: 'not-eligible' };
+    }
+
     // 3) 빈 응답 → hasLineups=false 마감 + 승격 시도 (D3)
     if (items.length === 0) {
       await this.prisma.match.updateMany({
         where: { id: matchId, detailEligible: true },
         data: { hasLineups: false },
       });
-      const promoted = await promoteIfAllDetailsChecked(this.prisma, matchId);
+      const promoted = opts.promote
+        ? await promoteIfAllDetailsChecked(this.prisma, matchId)
+        : { promoted: false };
       return { ok: true, hasLineups: false, lineups: 0, entries: 0, promoted: promoted.promoted };
     }
 
@@ -237,7 +281,9 @@ export class L3LineupsService {
     });
 
     // 9) 승격 시도 (다른 has_* 가 아직 NULL 이면 조용히 no-op)
-    const promoted = await promoteIfAllDetailsChecked(this.prisma, matchId);
+    const promoted = opts.promote
+      ? await promoteIfAllDetailsChecked(this.prisma, matchId)
+      : { promoted: false };
 
     const reason = missingTeams.length > 0 ? `missing-teams:${missingTeams.join(',')}` : undefined;
     return {

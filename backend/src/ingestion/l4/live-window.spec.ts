@@ -17,6 +17,7 @@ function emptyMemory(): MemoryFilter {
 
 function row(id: number, kickoffAt: Date, overrides: Partial<LiveDbRow> = {}): LiveDbRow {
   return {
+    id,
     apiFixtureId: id,
     kickoffAt,
     statusShort: 'NS',
@@ -24,6 +25,7 @@ function row(id: number, kickoffAt: Date, overrides: Partial<LiveDbRow> = {}): L
     extraElapsed: null,
     goalsHome: null,
     goalsAway: null,
+    competitionSeasonId: 100,
     ...overrides,
   };
 }

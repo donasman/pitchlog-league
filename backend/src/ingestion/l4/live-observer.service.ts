@@ -33,12 +33,15 @@ import type {
   LastSeen,
 } from './live-window.js';
 import { LiveWriterService } from './live-writer.service.js';
+import { LiveFinalizerService } from './live-finalizer.service.js';
 
 export type LivePollerMode = 'observe' | 'write';
 
 export interface TickOpts {
   fetchStatus: boolean;
   mode: LivePollerMode;
+  /** L4 3판 — FT/AET/PEN 시 finalizer 호출 여부. LIVE_FT_DETAILS_ENABLED env 로 결정. */
+  finalizeEnabled: boolean;
 }
 
 export interface TickTransition {
@@ -75,6 +78,10 @@ export interface TickResult {
   written: number;
   /** 역행 가드로 UPDATE 가 0행 반환한 수 (mode='write' 에서만 증가). */
   blocked: number;
+  /** L4 3판 — 이번 tick 에 finalize 로 넘긴 매치 수 (mode='write' + finalizeEnabled 에서만 증가). */
+  finalized: number;
+  /** L4 3판 — 이번 tick 끝에 refresh 한 순위표 행 수 합계. */
+  standingsRefreshed: number;
   isProbe: boolean;
   transitions: TickTransition[];
   details: TickDetail[];
@@ -116,10 +123,16 @@ const LIVE_EXCLUDE_STATUSES: readonly string[] = [
 export class LiveObserverService {
   private readonly logger = new Logger(LiveObserverService.name);
 
+  /** 이번 UTC day 안에 이미 finalizer 를 부른 matchId (중복 방지). UTC 자정에 clear. */
+  private readonly finalized = new Set<number>();
+  /** finalized set 롤오버 감지용. tick 진입 시 now(UTC ymd) 와 다르면 clear. */
+  private lastFinalizedUtcYmd: string | null = null;
+
   constructor(
     private readonly api: ApiFootballClient,
     private readonly prisma: PrismaService,
     @Optional() private readonly writer?: LiveWriterService,
+    @Optional() private readonly finalizer?: LiveFinalizerService,
   ) {}
 
   async tick(
@@ -130,6 +143,13 @@ export class LiveObserverService {
     opts: TickOpts,
   ): Promise<TickResult> {
     const start = Date.now();
+
+    // 0) UTC-day 롤오버 감지 — finalized dedup set 을 자정에 클리어 (3판)
+    const nowYmd = now.toISOString().slice(0, 10);
+    if (this.lastFinalizedUtcYmd !== null && this.lastFinalizedUtcYmd !== nowYmd) {
+      this.finalized.clear();
+    }
+    this.lastFinalizedUtcYmd = nowYmd;
 
     // 1) DB 창 조회
     const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
@@ -142,6 +162,7 @@ export class LiveObserverService {
         competitionSeason: { competition: { isTracked: true } },
       },
       select: {
+        id: true,
         apiFixtureId: true,
         kickoffAt: true,
         statusShort: true,
@@ -149,6 +170,7 @@ export class LiveObserverService {
         extraElapsed: true,
         goalsHome: true,
         goalsAway: true,
+        competitionSeasonId: true,
       },
     });
     const dbRows: LiveDbRow[] = dbRowsRaw;
@@ -185,6 +207,8 @@ export class LiveObserverService {
         wouldWrite: 0,
         written: 0,
         blocked: 0,
+        finalized: 0,
+        standingsRefreshed: 0,
         isProbe: false,
         transitions: [],
         details: [],
@@ -208,6 +232,8 @@ export class LiveObserverService {
     let wouldWrite = 0;
     let written = 0;
     let blocked = 0;
+    let finalizedCount = 0;
+    const finalizedCsIds = new Set<number>();
     const transitions: TickTransition[] = [];
     const details: TickDetail[] = [];
 
@@ -224,7 +250,10 @@ export class LiveObserverService {
           id: number;
           status: { short: string; long?: string | null; elapsed: number | null; extra: number | null };
         };
-        const teams = item.teams as { home: { name: string }; away: { name: string } };
+        const teams = item.teams as {
+          home: { id: number; name: string; winner: boolean | null };
+          away: { id: number; name: string; winner: boolean | null };
+        };
         const goals = item.goals as { home: number | null; away: number | null };
         const score = (item.score ?? {}) as {
           halftime?: { home: number | null; away: number | null } | null;
@@ -261,7 +290,19 @@ export class LiveObserverService {
           }
         }
 
+        // 전이 분류 (kind) 를 먼저 계산 — write 블록 안 finalize 조건에서 참조 (3판)
+        const kind = classifyTransition(prev, next);
+        const isFirstObs = prev === null;
+        const isFirstTerminal =
+          isFirstObs && (FINAL_TERMINAL_STATUSES as readonly string[]).includes(next.statusShort);
+
         // 쓰기 모드 — probe 는 절대 쓰지 않는다. diff 있을 때만 조건부 UPDATE 시도.
+        const winnerApiTeamId =
+          teams.home.winner === true
+            ? teams.home.id
+            : teams.away.winner === true
+              ? teams.away.id
+              : null;
         if (shouldWrite && opts.mode === 'write' && this.writer) {
           const prevForLog =
             prev?.statusShort ?? dbRowMap.get(id)?.statusShort ?? '?';
@@ -284,6 +325,7 @@ export class LiveObserverService {
               etAway: score.extratime?.away ?? null,
               penHome: score.penalty?.home ?? null,
               penAway: score.penalty?.away ?? null,
+              winnerApiTeamId,
             });
             written += r.written;
             blocked += r.blocked;
@@ -292,6 +334,36 @@ export class LiveObserverService {
                 `live-poller write · ${id} ${teams.home.name}-${teams.away.name} ` +
                   `${prevForLog}→${next.statusShort} ${next.goalsHome ?? 0}-${next.goalsAway ?? 0}`,
               );
+
+              // 3판: FT/AET/PEN 첫 진입 시 finalizer 로 4갈래 저장 + standings 재계산은 tick 끝에.
+              // probe 는 write 블록 자체가 안 걸리므로 여기까지 오지 않는다 (2판 규칙 그대로).
+              const row = dbRowMap.get(id);
+              const shouldFinalize =
+                opts.finalizeEnabled &&
+                opts.mode === 'write' &&
+                !isProbeFixture &&
+                (FINAL_TERMINAL_STATUSES as readonly string[]).includes(next.statusShort) &&
+                row !== undefined &&
+                !this.finalized.has(row.id) &&
+                (isFirstTerminal || kind === 'status' || kind === 'both');
+
+              if (shouldFinalize && this.finalizer && row !== undefined) {
+                this.finalized.add(row.id);
+                try {
+                  const res = await this.finalizer.onFinal(row.id, id, item);
+                  this.logger.log(
+                    `live-poller finalize · ${id} ${teams.home.name}-${teams.away.name} ` +
+                      `lineups=${res.counts.lineups} events=${res.counts.events} ` +
+                      `teamStats=${res.counts.teamStats} playerStats=${res.counts.playerStats} ` +
+                      `winner=${winnerApiTeamId ?? 'null'}`,
+                  );
+                  finalizedCount += 1;
+                  finalizedCsIds.add(row.competitionSeasonId);
+                } catch (e) {
+                  const msg = e instanceof Error ? e.message : String(e);
+                  this.logger.error(`live-poller finalize error · ${id}: ${msg}`);
+                }
+              }
             } else {
               this.logger.log(
                 `live-poller blocked · ${id} ${prevForLog}(${prevElapsedForLog ?? '-'})` +
@@ -304,8 +376,7 @@ export class LiveObserverService {
           }
         }
 
-        // 전이
-        const kind = classifyTransition(prev, next);
+        // 전이 push (kind 는 위에서 계산됨)
         if (kind !== 'none') {
           transitions.push({
             apiFixtureId: id,
@@ -319,10 +390,7 @@ export class LiveObserverService {
           });
         }
 
-        // detail 트리거: 전이가 있거나 · 첫 관측이며 FT/AET/PEN
-        const isFirstObs = prev === null;
-        const isFirstTerminal =
-          isFirstObs && (FINAL_TERMINAL_STATUSES as readonly string[]).includes(next.statusShort);
+        // detail 트리거: 전이가 있거나 · 첫 관측이며 FT/AET/PEN (isFirstTerminal 은 위에서 이미 계산)
         const shouldDetail = kind !== 'none' || isFirstTerminal;
         if (shouldDetail) {
           details.push({
@@ -354,6 +422,17 @@ export class LiveObserverService {
       }
     }
 
+    // 3판: tick 끝에 finalize 된 대회시즌들의 순위표를 재계산. dedup 은 finalizedCsIds Set 이 이미 함.
+    let standingsRefreshed = 0;
+    if (finalizedCsIds.size > 0 && this.finalizer) {
+      try {
+        standingsRefreshed = await this.finalizer.refreshStandings([...finalizedCsIds]);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.error(`live-poller standings error · ${msg}`);
+      }
+    }
+
     return {
       targets: allTargets.length,
       liveCount,
@@ -364,6 +443,8 @@ export class LiveObserverService {
       wouldWrite,
       written,
       blocked,
+      finalized: finalizedCount,
+      standingsRefreshed,
       isProbe,
       transitions,
       details,

@@ -53,6 +53,8 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
   private probeIds: number[] = [];
   /** LIVE_POLLER_MODE env — onModuleInit 에서 1회 읽는다. */
   private mode: 'observe' | 'write' = 'observe';
+  /** LIVE_FT_DETAILS_ENABLED env (L4 3판) — onModuleInit 에서 1회 읽는다. mode='write' 여야 효과. */
+  private finalizeEnabled = false;
   private registered = false;
   private destroyed = false;
 
@@ -86,11 +88,13 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
     );
 
     this.mode = this.config.get('LIVE_POLLER_MODE', { infer: true }) as 'observe' | 'write';
+    this.finalizeEnabled =
+      this.config.get('LIVE_FT_DETAILS_ENABLED', { infer: true }) === 'true';
     this.state.markLivePollerEnabled();
     this.state.markLivePollerMode(this.mode);
     this.registered = true;
     this.logger.log(
-      `live-poller registered · mode=${this.mode} · period=${this.cfg.periodSec}s · slowAt=${this.cfg.slowAt} · stopAt=${this.cfg.stopAt}`,
+      `live-poller registered · mode=${this.mode} · finalize=${this.finalizeEnabled} · period=${this.cfg.periodSec}s · slowAt=${this.cfg.slowAt} · stopAt=${this.cfg.stopAt}`,
     );
     if (this.probeIds.length > 0) {
       this.logger.log(
@@ -189,6 +193,7 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
       result = await this.observer.tick(now, this.memory, this.probes, this.lastSeen, {
         fetchStatus,
         mode: this.mode,
+        finalizeEnabled: this.finalizeEnabled,
       });
       if (fetchStatus && result.used !== null) this.lastStatusAt = now;
     } catch (err) {
@@ -204,6 +209,8 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
         wouldWrite: 0,
         written: 0,
         blocked: 0,
+        finalized: 0,
+        standingsRefreshed: 0,
         isProbe: false,
         transitions: [],
         details: [],
@@ -231,6 +238,8 @@ export class LivePollerJob implements OnModuleInit, OnModuleDestroy {
       wouldWrite: result.wouldWrite,
       written: result.written,
       blocked: result.blocked,
+      finalized: result.finalized,
+      standingsRefreshed: result.standingsRefreshed,
       windowOpen: nowOpen,
       periodSec: dec.periodSec,
       error,
