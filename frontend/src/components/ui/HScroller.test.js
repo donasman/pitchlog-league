@@ -18,6 +18,7 @@ import {
   computeAutoScrollTarget,
   computeCardStepTarget,
   computeStepDelta,
+  measureCardStride,
 } from './HScroller.jsx'
 
 describe('HScroller computeCols — row-first column count', () => {
@@ -133,6 +134,17 @@ describe('HScroller computeStepDelta — page vs card', () => {
   it('T-D4: step=card with negative gap treats gap as 0', () => {
     expect(computeStepDelta({ step: 'card', clientWidth: 800, cardWidth: 300, gap: -5 })).toBe(300)
   })
+
+  it('T-D5: step=card prefers measured stridePx over cardWidth+gap (grid track width case)', () => {
+    // grid-auto-columns = 144, gap = 8 → measured stride 152 ≠ cardWidth(260)+gap(8)=268.
+    // Real placement wins.
+    expect(computeStepDelta({ step: 'card', clientWidth: 752, cardWidth: 260, gap: 8, stridePx: 152 })).toBe(152)
+  })
+
+  it('T-D6: step=card ignores non-finite stridePx and falls back to cardWidth+gap', () => {
+    expect(computeStepDelta({ step: 'card', clientWidth: 800, cardWidth: 300, gap: 12, stridePx: NaN })).toBe(312)
+    expect(computeStepDelta({ step: 'card', clientWidth: 800, cardWidth: 300, gap: 12, stridePx: 0 })).toBe(312)
+  })
 })
 
 describe('HScroller computeAutoScrollTarget — step=card', () => {
@@ -192,5 +204,45 @@ describe('HScroller computeCardStepTarget — snap-aligned absolute target', () 
       scrollLeft: 400, clientWidth: 800, scrollWidth: 2400, cardWidth: 0, gap: 12,
     })
     expect(r).toEqual({ atEnd: false, left: 400 })
+  })
+
+  it('T-CT6: measured stridePx overrides cardWidth+gap (matches actual grid stride)', () => {
+    // 운영 실측 케이스 회귀 잠금: cardWidth 260 · gap 8 · 그리드 stride 152
+    // 첫 tick 은 152 로 이동해야 카드 경계와 일치 (기존은 268 로 갔다).
+    const r = computeCardStepTarget({
+      scrollLeft: 0, clientWidth: 752, scrollWidth: 4560,
+      cardWidth: 260, gap: 8, stridePx: 152,
+    })
+    expect(r).toEqual({ atEnd: false, left: 152 })
+  })
+
+  it('T-CT7: mid-animation with stridePx snaps to next grid position, not cardWidth+gap', () => {
+    // scrollLeft=100 mid-animation from 0 to 152 · currentSnap=round(100/152)=152 · next=304
+    const r = computeCardStepTarget({
+      scrollLeft: 100, clientWidth: 752, scrollWidth: 4560,
+      cardWidth: 260, gap: 8, stridePx: 152,
+    })
+    expect(r.left).toBe(304)
+  })
+})
+
+describe('HScroller measureCardStride — DOM-based stride measurement', () => {
+  /** minimal child stub: { offsetLeft, offsetWidth } */
+  const el = (children) => ({ children: { length: children.length, ...children } })
+
+  it('T-MS1: two children — stride = children[1].offsetLeft - children[0].offsetLeft', () => {
+    expect(measureCardStride(el([{ offsetLeft: 0, offsetWidth: 260 }, { offsetLeft: 152, offsetWidth: 260 }]), 8)).toBe(152)
+  })
+
+  it('T-MS2: one child — falls back to offsetWidth + gap', () => {
+    expect(measureCardStride(el([{ offsetLeft: 0, offsetWidth: 260 }]), 8)).toBe(268)
+  })
+
+  it('T-MS3: zero children returns 0', () => {
+    expect(measureCardStride(el([]), 8)).toBe(0)
+  })
+
+  it('T-MS4: null el returns 0', () => {
+    expect(measureCardStride(null, 8)).toBe(0)
   })
 })

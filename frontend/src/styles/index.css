@@ -235,6 +235,12 @@
   grid-auto-columns: var(--pl-hs-item-w);
 }
 
+/* step='card' 는 그리드 칸 폭을 카드 폭으로 고정 (기본 260px · JSX 에서 --pl-hs-card-w 로 override).
+   selector 를 [data-flow][data-step] 조합으로 만들어 위 data-flow="column" 의 grid-auto-columns 를 확실히 이긴다. */
+.pl-hscroller-track[data-flow="column"][data-step="card"] {
+  grid-auto-columns: var(--pl-hs-card-w, 260px);
+}
+
 /* 2줄 이상 (rows>=2) — 행 방향 흐름 + 열 수 명시. cols = ceil(n/rows) 는 JS 가 계산해서 --pl-hs-cols 로 넘긴다. */
 .pl-hscroller-track[data-flow="row"] {
   grid-auto-flow: row;

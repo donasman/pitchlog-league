@@ -305,11 +305,14 @@ function FocusRow({ ariaLabel, titleKey, emptyKey, items, autoDelayMs, resetKey,
       ) : (
         /* key=resetKey — 대회 필터 변경 시 HScroller 인스턴스 자체를 리마운트 → scrollLeft 0 · 자동재생 타이머 재시작.
            스코어 갱신(mergeLive) 은 key 를 안 바꾸므로 그대로 유지. */
+        /* cardWidth=260 → 트랙 grid-auto-columns 가 260px 로 고정 · 카드가 칸을 뚫어 겹치던 회귀 잠금.
+           eagerLogo — 가로 슬라이드 안 배지는 뷰포트 교차 없어 lazy 면 로고 로드 실패 (팀 탭 관례). */
         <HScroller
           key={resetKey}
           rows={1}
           gap={8}
           step="card"
+          cardWidth={260}
           ariaLabel={ariaLabel}
           autoPlay
           intervalMs={4000}
@@ -322,8 +325,8 @@ function FocusRow({ ariaLabel, titleKey, emptyKey, items, autoDelayMs, resetKey,
           )}
         >
           {items.map(m => (
-            <div key={m.id} style={{ width: 260, flexShrink: 0 }}>
-              <MatchCard match={m} compact />
+            <div key={m.id} style={{ minWidth: 0 }}>
+              <MatchCard match={m} compact eagerLogo />
             </div>
           ))}
         </HScroller>
