@@ -183,6 +183,25 @@
   .hero-cta > .pl-btn { width: 100%; justify-content: center; min-height: 48px; }
 }
 
+/* iOS Safari 는 font-size < 16px 인 input/textarea/select 에 포커스하면 자동 확대한다 —
+   상세 페이지로 라우트 이동해도 확대 상태가 그대로 남아 왼쪽이 잘려 보이는 버그가 있었다.
+   모바일(<768) 에서만 최소 16px 을 강제. 데스크톱은 각 컴포넌트 크기(text-sm/pl-chip 등)를
+   그대로 유지 — 1280→1600 zoom 보간은 데스크톱 전용이라 모바일 값에 영향 없음.
+   viewport 메타의 maximum-scale/user-scalable 은 접근성상 추가하지 않는다.
+   checkbox·radio·range·color 는 font-size 영향이 없지만 명시 제외로 안전.
+
+   !important 는 접근성 하드 플로어라 정당화된다:
+   - .pl-chip (특이성 0,1,0) > select (0,0,1) 로 우리 규칙이 진다
+   - AssistantPanel <input> 은 inline style.fontSize:14 를 준다 (∞ 특이성)
+   이 두 경우를 모두 이기려면 !important 가 필요하다. 디자인 선호가 아니라 확대 방지 안전망. */
+@media (max-width: 767.98px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
 /* ── HScroller — 공용 가로 슬라이드 (components/ui/HScroller.jsx) ────────────
    grid-auto-columns 로 "보이는 칸 수"(--pl-hs-visible) 만큼 자동 폭 계산.
    scroll-snap x mandatory · overscroll-behavior x contain · 스크롤바 숨김.
