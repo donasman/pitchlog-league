@@ -492,6 +492,50 @@ curl -s -D - localhost:3000/api/matches -o /dev/null | grep -i cache-control
 # → Cache-Control: public, max-age=60
 ```
 
+### 3판 스위치 (FT 즉시 상세 저장 · winner · standings 갱신)
+
+기본은 `false` (기존 2판 동작 유지). `MODE=write` 여야 3판 효과.
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_POLLER_MODE=write
+# LIVE_FT_DETAILS_ENABLED=true
+sudo systemctl restart pitchlog-backend
+curl -s localhost:3000/health | jq '.scheduler.jobs.livePoller | {mode, finalizedToday, standingsRefreshedToday}'
+# → { "mode": "write", "finalizedToday": 0, "standingsRefreshedToday": 0 }
+```
+
+**되돌리기 (문제 시)**
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_FT_DETAILS_ENABLED=false
+sudo systemctl restart pitchlog-backend
+# 이미 저장된 상세는 남는다. 승격(detail_checked_at) 은 24h 뒤 백필 워커가 4콜로 마감.
+```
+
+### 3판 로그 앵커 (grep · 2판 앵커 위에 추가)
+
+```
+live-poller registered · mode=<observe|write> · finalize=<true|false> · period=15s · slowAt=6000 · stopAt=7000
+live-poller finalize · <apiFixtureId> <home>-<away> lineups=<N> events=<N> teamStats=<N> playerStats=<N> winner=<teamId|null>
+live-poller standings · <competition label> rows=<N>
+live-poller finalize error · <apiFixtureId> <gate>: <message>
+```
+
+FT 직후 확인:
+```bash
+sudo journalctl -u pitchlog-backend --since "10 min ago" | grep -E "live-poller (finalize|standings)"
+curl -s localhost:3000/health | jq '.scheduler.jobs.livePoller | {finalizedToday, standingsRefreshedToday}'
+```
+
+### 3판 동작 세부
+
+- **호출 조건**: `MODE=write` AND `LIVE_FT_DETAILS_ENABLED=true` AND !probe AND status ∈ {FT,AET,PEN} 첫 진입 (`isFirstTerminal` OR `kind='status'`) AND `finalized Set` 에 없음. 조건 하나라도 어긋나면 finalize 스킵.
+- **API 콜**: FT 상세 저장은 **추가 콜 0** (ids 응답을 그대로 사용). 순위표 재계산은 tick 끝에서 dedup 된 대회시즌당 1콜 (`Competition.format=KNOCKOUT` 만 스킵 · `LEAGUE_PHASE_KNOCKOUT` 은 대상).
+- **승격 보류**: 4갈래 저장은 `{promote:false}` — `detail_checked_at·stats_state=CONFIRMED` 은 24h 뒤 백필 워커가 4콜로 마감. FT 직후 개별 엔드포인트가 준비되지 않은 편차를 흡수하기 위함.
+- **winner_team_id**: FT/AET/PEN 상태에서만 CASE 로 SET. `teams.winner=true` 로 판정 · 무승부 NULL. 팀 매핑 실패도 NULL — L2 매일이 다음날 정정.
+- **finalized Set**: matchId 단위 tick 사이 유지 · UTC 자정 롤오버에 clear.
+
 ---
 
 ## L4 라이브 폴러 (관측 모드 · 1판)

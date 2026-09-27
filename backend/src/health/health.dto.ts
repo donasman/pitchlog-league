@@ -142,6 +142,12 @@ export class LivePollerStateDto {
 
   @ApiProperty({ description: '오늘(UTC) 누적 역행 가드 차단 수 (조건부 UPDATE 0행)' })
   blockedToday!: number;
+
+  @ApiProperty({ description: 'L4 3판 — 오늘(UTC) 누적 finalize 성공 매치 수 (LIVE_FT_DETAILS_ENABLED)' })
+  finalizedToday!: number;
+
+  @ApiProperty({ description: 'L4 3판 — 오늘(UTC) 누적 순위표 재계산 행 수 합계' })
+  standingsRefreshedToday!: number;
 }
 
 export class SchedulerJobsDto {
