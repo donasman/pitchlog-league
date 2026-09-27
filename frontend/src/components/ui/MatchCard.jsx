@@ -15,7 +15,7 @@ import { isLive } from '@/utils/matchStatus'
 import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
 import { isMatchWinner } from '@/utils/matchWinner'
 
-function TeamRow({ team, score, win, live, compact, locale }) {
+function TeamRow({ team, score, win, live, compact, locale, eagerLogo = false }) {
   const name = compact
     ? getLocalizedShortName(team, locale) || team?.shortName || team?.name
     : getLocalizedName(team, locale) || team?.name
@@ -37,6 +37,7 @@ function TeamRow({ team, score, win, live, compact, locale }) {
         logoUrl={team?.logoUrl}
         size={compact ? 'xs' : 'sm'}
         name={team?.name}
+        loading={eagerLogo ? 'eager' : 'lazy'}
       />
       <span
         className="tname"
@@ -69,7 +70,7 @@ function TeamRow({ team, score, win, live, compact, locale }) {
   )
 }
 
-export default function MatchCard({ match, compact = false }) {
+export default function MatchCard({ match, compact = false, eagerLogo = false }) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
 
@@ -121,6 +122,7 @@ export default function MatchCard({ match, compact = false }) {
         live={live}
         compact={compact}
         locale={locale}
+        eagerLogo={eagerLogo}
       />
 
       {/* 원정팀 행 */}
@@ -132,6 +134,7 @@ export default function MatchCard({ match, compact = false }) {
           live={live}
           compact={compact}
           locale={locale}
+          eagerLogo={eagerLogo}
         />
       </div>
 
