@@ -149,7 +149,18 @@
     "statusScheduled": "Upcoming",
     "statusFinished": "Finished",
     "liveMatchCount": "{{count}} live",
-    "matchCount": "{{count}} matches"
+    "matchCount": "{{count}} matches",
+    "focus": {
+      "recent": "Recent results",
+      "upcoming": "Upcoming matches",
+      "noRecent": "No recent results yet.",
+      "noUpcoming": "No upcoming matches."
+    },
+    "showPast": "Show past ({{count}} days · {{matches}} matches)",
+    "showPast_one": "Show past ({{count}} day · {{matches}} matches)",
+    "showPast_other": "Show past ({{count}} days · {{matches}} matches)",
+    "hidePast": "Hide past matches",
+    "futureEmpty": "No matches scheduled from today. Use the button above to see past matches."
   },
   "standings": {
     "title": "Standings",
