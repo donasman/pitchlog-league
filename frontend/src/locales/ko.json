@@ -149,7 +149,18 @@
     "statusScheduled": "예정",
     "statusFinished": "종료",
     "liveMatchCount": "진행 중 {{count}}",
-    "matchCount": "{{count}}경기"
+    "matchCount": "{{count}}경기",
+    "focus": {
+      "recent": "최근 결과",
+      "upcoming": "다가오는 경기",
+      "noRecent": "표시할 최근 결과가 없습니다.",
+      "noUpcoming": "다가오는 경기가 없습니다."
+    },
+    "showPast": "지난 경기 보기 ({{count}}일 · {{matches}}경기)",
+    "showPast_one": "지난 경기 보기 ({{count}}일 · {{matches}}경기)",
+    "showPast_other": "지난 경기 보기 ({{count}}일 · {{matches}}경기)",
+    "hidePast": "지난 경기 접기",
+    "futureEmpty": "오늘 이후 예정된 경기가 없습니다. 위 버튼을 눌러 지난 경기를 확인하세요."
   },
   "standings": {
     "title": "순위",
