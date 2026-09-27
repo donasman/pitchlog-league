@@ -180,6 +180,19 @@ frontend/
 - `rating` · `expectedGoals` · `goalsPrevented` 는 null 유지. 컴포넌트가 "—" 로 렌더.
 - Mock 은 기존 `mocks/lineups.js`·`mocks/matchStats.js` 형태 유지 (mock 은 따라오는 쪽).
 
+### 라이브 갱신 (GET /api/live 폴링)
+
+`GET /api/live` 는 진행 중 경기 + 최근 종료 경기(킥오프 5h 이내)를 준다. 응답 헤더는 `Cache-Control: public, max-age=0, s-maxage=5` — 엣지 5초 캐시만 걸린다.
+
+- `services/live.js:fetchLiveMatches({signal})` 는 `_cachedGet` 을 **우회**한다 (`apiGet` 직접). 프론트 TTL 60s 가 서버 s-maxage=5 를 무의미하게 만들지 않도록.
+- `services/normalize.js:normalizeLiveMatch(dto)` 는 라이브 DTO 만 소비하는 별도 함수 — `normalizeMatch` 를 손대지 않는다. round·venue·statsState 등 상세 필드는 만들지 않는다 (병합 시 원본 유지).
+- `hooks/useLiveMatches` 훅이 폴링을 관리한다 — 라이브 있음 15s · 없음 60s · `document.visibilityState==='hidden'` 이면 정지 + 언마운트 abort · `visibilitychange` 로 즉시 재개.
+- **누적 스냅샷**: 한 번 받은 id 의 마지막 값을 세션 동안 유지한다. fixture 가 5h 창 밖으로 밀려도 삭제하지 않아, 캐시된 `/api/matches` 의 옛 라이브 상태로 되돌아가지 않는다.
+- **오류 시**: 이전 data 유지 + `stale:true` 노출. LiveTicker 우측에 `live.stale` (`갱신 지연`) 배지가 뜬다. 다음 성공에 해제. 무음 catch 금지.
+- `utils/liveMerge.js:mergeLive(list, liveMap)` 순수 유틸이 목록·상세에 라이브 값을 덮는다. **덮는 필드는 6개** — `score · minute · statusCode · displayState · asOf · dataVersion`. 나머지(round · venue · events · homeTeam · awayTeam 등) 는 원본 유지. `dataVersion` 이 낮은 라이브 응답은 무시.
+- 상세(MatchPage)가 `live/halftime → final/recheck/confirmed` 로 전환될 때 `invalidateMatchDetail(id)` 로 캐시 두 키(`/api/matches/:id` · `/api/matches/:id/detail`)만 지우고 상세를 한 번 재요청 — L4 3판이 저장한 FT 상세가 바로 보이게.
+- Mock 모드(`VITE_USE_MOCK=true`)는 `mocks/overview.js:LIVE_PULSE` 를 LiveMatchDto 로 변환해 결정적으로 minute 을 올리는 폴링 응답을 낸다. 검증용.
+
 ## 6. 빌드와 품질 기준
 
 기본 명령은 다음과 같이 구성함.

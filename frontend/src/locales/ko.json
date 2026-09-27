@@ -540,6 +540,10 @@
     "remove": "{{name}} 즐겨찾기 해제",
     "limit_reached": "즐겨찾기는 최대 {{limit}}개까지 저장할 수 있습니다."
   },
+  "live": {
+    "lastUpdated": "마지막 갱신 {{time}}",
+    "stale": "갱신 지연"
+  },
   "errors": {
     "notImplemented": "아직 백엔드에 없는 데이터입니다 ({{what}})",
     "networkFailed": "백엔드에 연결하지 못했습니다: {{detail}}",

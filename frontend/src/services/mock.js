@@ -25,7 +25,7 @@ import {
   getCompetitionAssisters,
 } from '@/mocks/players'
 import { ASSISTANT_SAMPLES } from '@/mocks/assistant'
-import { apiIdFromAlias, normalizePlayerDetail } from './normalize'
+import { apiIdFromAlias, normalizeLiveMatch, normalizePlayerDetail } from './normalize'
 
 // ─── 대회 ──────────────────────────────────────────────────────
 
@@ -425,3 +425,86 @@ export async function askAssistant(question) {
     model:     'mock',
   }
 }
+
+// ─── 라이브 폴링 ───────────────────────────────────────────────
+
+/**
+ * 매 호출 카운터 — 모듈 스코프라 리렌더로 씻기지 않는다.
+ * B 판 훅이 폴링을 걸었을 때 elapsed 가 올라가는 착시를 만든다.
+ */
+let _liveCallCount = 0
+
+/**
+ * Mock 라이브 폴링 — `LIVE_PULSE` 를 `LiveMatchDto` 로 변환한 뒤 `normalizeLiveMatch` 로 정규화한다.
+ *
+ * 결정론적 애니메이션 규약:
+ *   - 매 호출마다 카운터 +1.
+ *   - elapsed = elapsedBase + (count % 20) — 20 콜마다 순환 (HMR·다중 마운트로 90 에 못 붙게).
+ *   - 45 ≤ elapsed < 47 구간에서 extraElapsed = count % 4 (그 밖은 null).
+ *   - goalBump = floor(count / 4) — 매 4번째 호출마다 첫 항목 home 골 +1.
+ *   - dataVersion = 1 + goalBump — 스코어가 바뀔 때만 오른다.
+ *
+ * apiId 는 실 API 와 겹치지 않도록 900000+ 대역을 쓴다. 로고는 null.
+ * mock 은 network 를 안 타므로 signal 은 무시.
+ *
+ * @param {{ signal?: AbortSignal }} [_opts]
+ * @returns {Promise<{ asOf: string, matches: Array<ReturnType<typeof normalizeLiveMatch>> }>}
+ */
+export async function fetchLiveMatches(_opts) {
+  _liveCallCount++
+  const bump = _liveCallCount
+  const goalBump = Math.floor(bump / 4)
+  const nowIso = new Date().toISOString()
+  const matches = LIVE_PULSE.map((p, i) => {
+    const elapsedBase = p.minute ?? 0
+    const elapsed = elapsedBase + (bump % 20)
+    const extra = elapsed >= 45 && elapsed < 47 ? (bump % 4) : 0
+    const homeScoreBase = p.home.score ?? 0
+    const awayScoreBase = p.away.score ?? 0
+    return {
+      id: 900000 + i,
+      kickoffAt: DATA_AS_OF,
+      competition: {
+        ref: `mock-${p.competitionSlug}`,
+        apiId: 100 + i,
+        displayName: p.competitionSlug,
+        shortDisplayName: p.competitionSlug,
+        originalName: p.competitionSlug,
+        type: 'LEAGUE',
+        format: 'ROUND_ROBIN',
+      },
+      home: {
+        ref: `mock-team-${i}h`,
+        apiId: 1000 + i * 2,
+        displayName: p.home.name,
+        shortDisplayName: p.home.initials,
+        originalName: p.home.name,
+        logoUrl: null,
+      },
+      away: {
+        ref: `mock-team-${i}a`,
+        apiId: 1001 + i * 2,
+        displayName: p.away.name,
+        shortDisplayName: p.away.initials,
+        originalName: p.away.name,
+        logoUrl: null,
+      },
+      statusShort: p.displayState === 'halftime' ? 'HT' : '2H',
+      elapsed,
+      extraElapsed: extra > 0 ? extra : null,
+      goals: {
+        home: i === 0 ? homeScoreBase + goalBump : homeScoreBase,
+        away: awayScoreBase,
+      },
+      dataVersion: 1 + goalBump,
+      asOf: nowIso,
+    }
+  })
+  return { asOf: nowIso, matches: matches.map(normalizeLiveMatch) }
+}
+
+/**
+ * Mock 경기 상세 캐시 무효화 — Mock 은 `_cachedGet` 계층을 안 타므로 실제로 지울 것이 없다.
+ * live 구현과 시그니처만 맞춘다 (B 판 훅이 스위치 뒤 API 를 그대로 소비).
+ */
+export function invalidateMatchDetail(_id) {}

@@ -3,6 +3,7 @@ import {
   zoneOf,
   teamColor,
   myTeamCard,
+  normalizeLiveMatch,
   normalizeMatch,
   normalizeSearchResults,
   normalizeStanding,
@@ -1146,5 +1147,86 @@ describe('normalizeSearchResults', () => {
       players: [], competitions: [],
     })
     expect(out.teams[0].label).toBe('LocalizedName')
+  })
+})
+
+// ─── normalizeLiveMatch — LiveMatchDto (GET /api/live) → 라이브 폴링 소비 shape ─
+//
+// feat/live-polling A 판. B 판(훅·화면)이 소비할 필드 규약을 이 블록에서 잠근다.
+// 백엔드 계약 (LiveMatchDto):
+//   { id:number, kickoffAt:ISO, competition:{apiId,ref,displayName,shortDisplayName,originalName,type,format},
+//     home:{apiId,ref,displayName,shortDisplayName,originalName,logoUrl}, away:same,
+//     statusShort:string, elapsed:number|null, extraElapsed:number|null,
+//     goals:{home:number|null,away:number|null}, dataVersion:number, asOf:ISO }
+
+describe('normalizeLiveMatch', () => {
+  /** dto 하나를 매번 만들지 않도록 공장 — 각 케이스가 필요한 필드만 덮는다 */
+  const liveDto = (overrides = {}) => ({
+    id: 1000001,
+    kickoffAt: '2026-11-22T15:00:00Z',
+    competition: {
+      apiId: 39, ref: '39-premier-league',
+      displayName: 'Premier League', shortDisplayName: 'EPL', originalName: 'Premier League',
+      type: 'LEAGUE', format: 'ROUND_ROBIN',
+    },
+    home: {
+      apiId: 33, ref: '33-x',
+      displayName: 'H', shortDisplayName: 'H', originalName: 'H', logoUrl: null,
+    },
+    away: {
+      apiId: 42, ref: '42-y',
+      displayName: 'A', shortDisplayName: 'A', originalName: 'A', logoUrl: null,
+    },
+    statusShort: 'NS',
+    elapsed: null,
+    extraElapsed: null,
+    goals: { home: null, away: null },
+    dataVersion: 1,
+    asOf: '2026-11-22T15:00:00Z',
+    ...overrides,
+  })
+
+  it('coerces the numeric dto.id to a string', () => {
+    const out = normalizeLiveMatch(liveDto({ id: 1234567 }))
+    expect(out.id).toBe('1234567')
+  })
+
+  it("maps statusShort '1H' to displayState 'live' and keeps elapsed as minute", () => {
+    const out = normalizeLiveMatch(liveDto({ statusShort: '1H', elapsed: 30, extraElapsed: null }))
+    expect(out.displayState).toBe('live')
+    expect(out.minute).toBe(30)
+  })
+
+  it("maps statusShort 'HT' to displayState 'halftime' and keeps elapsed as minute", () => {
+    const out = normalizeLiveMatch(liveDto({ statusShort: 'HT', elapsed: 45, extraElapsed: null }))
+    expect(out.displayState).toBe('halftime')
+    expect(out.minute).toBe(45)
+  })
+
+  it("maps statusShort 'FT' to displayState 'final' and nulls the minute", () => {
+    const out = normalizeLiveMatch(liveDto({ statusShort: 'FT', elapsed: 90, extraElapsed: null }))
+    expect(out.displayState).toBe('final')
+    expect(out.minute).toBeNull()
+  })
+
+  it('leaves minute null when elapsed is null even during a live match', () => {
+    const out = normalizeLiveMatch(liveDto({ statusShort: '2H', elapsed: null, extraElapsed: null }))
+    expect(out.displayState).toBe('live')
+    expect(out.minute).toBeNull()
+  })
+
+  it("formats minute as '{elapsed}+{extra}' when extraElapsed > 0", () => {
+    const out = normalizeLiveMatch(liveDto({ statusShort: '1H', elapsed: 45, extraElapsed: 2 }))
+    expect(out.minute).toBe('45+2')
+  })
+
+  it('passes dataVersion through unchanged from the dto', () => {
+    const out = normalizeLiveMatch(liveDto({ dataVersion: 7 }))
+    expect(out.dataVersion).toBe(7)
+  })
+
+  it("maps competition apiId=39 to the alias slug 'premier-league'", () => {
+    const out = normalizeLiveMatch(liveDto())
+    expect(out.competitionSlug).toBe('premier-league')
   })
 })
