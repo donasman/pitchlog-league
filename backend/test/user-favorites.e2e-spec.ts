@@ -83,18 +83,22 @@ describe('GET/PUT /api/me/favorites (e2e)', () => {
     // 사전 세션 데이터 정리
     await prisma.userFavoriteTeam.deleteMany({ where: { userId: { in: TEST_USER_IDS } } });
 
-    // 팀 3개 실측 (l0 이 이미 넣어 둔 EPL 상수). 없으면 스킵 이유를 알리고 실패.
-    const t33 = await prisma.team.findFirst({ where: { apiTeamId: 33 } });
-    const t40 = await prisma.team.findFirst({ where: { apiTeamId: 40 } });
-    const t42 = await prisma.team.findFirst({ where: { apiTeamId: 42 } });
-    if (!t33 || !t40 || !t42) {
-      throw new Error(
-        'user-favorites e2e 는 apiTeamId 33·40·42 (Manchester United·Liverpool·Arsenal) 팀 데이터가 필요하다. L0 을 먼저 돌리거나 시드해 두어야 한다.',
-      );
+    // 팀 3개 self-seed — CI 는 fresh Postgres 라 L0 seed 가 없다. upsert 라 로컬 L0 seed 와도 안 부딪힌다.
+    const TEAM_SEEDS = [
+      { apiTeamId: 33, name: 'Manchester United', country: 'England' },
+      { apiTeamId: 40, name: 'Liverpool', country: 'England' },
+      { apiTeamId: 42, name: 'Arsenal', country: 'England' },
+    ];
+    for (const seed of TEAM_SEEDS) {
+      await prisma.team.upsert({
+        where: { apiTeamId: seed.apiTeamId },
+        create: seed,
+        update: {},
+      });
     }
-    ref33 = `${t33.apiTeamId}-${t33.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-    ref40 = `${t40.apiTeamId}-${t40.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-    ref42 = `${t42.apiTeamId}-${t42.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    ref33 = '33-manchester-united';
+    ref40 = '40-liverpool';
+    ref42 = '42-arsenal';
   }, 60_000);
 
   afterAll(async () => {
