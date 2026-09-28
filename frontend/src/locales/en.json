@@ -422,6 +422,12 @@
     "emptyTitle": "What can I find for you?",
     "emptyDesc": "Ask about fixtures, standings or player stats. Numbers come directly from the database.",
     "suggestLabel": "Suggested",
+    "suggested": {
+      "q1": "How is Son Heung-min doing this season?",
+      "q2": "When is Liverpool's next match?",
+      "q3": "Compare the last 5 matches of the EPL top 4",
+      "q4": "Which teams reached the Champions League Round of 16?"
+    },
     "disclaimer": "No predictions or opinions — only data that can be looked up.",
     "evidenceBtn": "Show source",
     "evidenceTool": "Tool",
@@ -544,7 +550,47 @@
     "scrollPrev": "Previous",
     "scrollNext": "Next",
     "pause": "Pause",
-    "play": "Play"
+    "play": "Play",
+    "position": {
+      "gk": "GK",
+      "def": "DEF",
+      "mid": "MID",
+      "fwd": "FWD",
+      "goalkeeper": "Goalkeeper",
+      "defender": "Defender",
+      "midfielder": "Midfielder",
+      "attacker": "Attacker"
+    }
+  },
+  "round": {
+    "regularSeason": "Matchday {{n}}",
+    "leaguePhaseMatchday": "League Stage · Matchday {{n}}",
+    "matchday": "Matchday {{n}}",
+    "oneOverN": "1/{{n}}-finals",
+    "roundOfN": "Round of {{n}}",
+    "quarterFinals": "Quarter-finals",
+    "semiFinals": "Semi-finals",
+    "grandFinal": "Grand Final",
+    "final": "Final",
+    "thirdPlaceFinal": "3rd-place final",
+    "groupX": "Group {{group}}",
+    "groupStage": "Group Stage",
+    "leaguePhase": "League Stage",
+    "knockoutPlayoffs": "Knockout Play-offs",
+    "preliminaryRound": "Preliminary Round",
+    "preliminaryFinal": "Preliminary Final",
+    "playoffs": "Play-offs",
+    "relegationPlayoff": "Relegation Play-off",
+    "promotionPlayoff": "Promotion Play-off",
+    "qualifyingRoundOrdinal": "Qualifying Round {{n}}",
+    "ordinalRound": "Round {{n}}"
+  },
+  "country": {
+    "England": "England",
+    "Scotland": "Scotland",
+    "Wales": "Wales",
+    "NorthernIreland": "Northern Ireland",
+    "World": "International"
   },
   "favorites": {
     "add": "Add {{name}} to favorites",

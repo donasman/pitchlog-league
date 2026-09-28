@@ -1002,8 +1002,8 @@ describe('scorerRowsFromRanking', () => {
     }
     const out = scorerRowsFromRanking(dto)
     expect(out).toHaveLength(2)
-    expect(out[0]).toEqual({ rank: 1, value: 22, playerName: 'Erling Haaland', teamName: 'Manchester City' })
-    expect(out[1]).toEqual({ rank: 2, value: 18, playerName: 'Mohamed Salah', teamName: 'Liverpool' })
+    expect(out[0]).toEqual({ rank: 1, value: 22, playerName: 'Erling Haaland', playerOriginalName: 'Erling Haaland', teamName: 'Manchester City', teamOriginalName: 'Manchester City' })
+    expect(out[1]).toEqual({ rank: 2, value: 18, playerName: 'Mohamed Salah', playerOriginalName: 'Mohamed Salah', teamName: 'Liverpool', teamOriginalName: 'Liverpool' })
   })
 
   // value=0 은 실제 값 · null 로 뭉개면 안 됨 (DATA_RULES 3장)

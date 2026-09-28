@@ -12,7 +12,7 @@ import { Zap, Clock, ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import TeamBadge from '@/components/ui/TeamBadge'
 import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
-import { getLocalizedShortName } from '@/utils/localization'
+import { getLocalizedShortName, pickLocalized } from '@/utils/localization'
 
 const EVENT_ICON = { goal:'⚽', yellow_card:'🟨', red_card:'🟥', substitution:'🔄', var:'📺' }
 
@@ -40,7 +40,7 @@ export default function LiveHeroCard({ match, fallbackMatch }) {
         className="block bg-card border border-border rounded-xl p-5 hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex items-center justify-between mb-3 text-xs text-muted-foreground">
-          <span className="font-semibold truncate mr-2">{m.competitionName}</span>
+          <span className="font-semibold truncate mr-2">{pickLocalized(m.competitionName, m.competitionOriginalName, locale)}</span>
           <span className="bg-muted px-2 py-0.5 rounded flex-shrink-0">
             {t('match.next')} · {toKSTTime(m.date, locale)} KST
           </span>
@@ -85,7 +85,7 @@ export default function LiveHeroCard({ match, fallbackMatch }) {
             <Clock size={11} aria-hidden="true" />
             <span>{m.minute}&apos;</span>
             <span>·</span>
-            <span className="truncate max-w-[100px] sm:max-w-none">{m.competitionName}</span>
+            <span className="truncate max-w-[100px] sm:max-w-none">{pickLocalized(m.competitionName, m.competitionOriginalName, locale)}</span>
           </div>
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground mt-0.5">

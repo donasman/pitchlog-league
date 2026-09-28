@@ -21,8 +21,8 @@ export default function StatsRanking({ title, unit, entries = [] }) {
       </div>
       <div className="space-y-0.5">
         {entries.map(entry => {
-          const teamName   = getLocalizedShortName({ id: entry.teamId, name: entry.teamName }, locale) || entry.teamName
-          const playerName = getLocalizedShortName({ id: entry.playerId, name: entry.playerName }, locale) || entry.playerName
+          const teamName   = getLocalizedShortName({ id: entry.teamId, name: entry.teamName, originalName: entry.teamOriginalName }, locale) || entry.teamName
+          const playerName = getLocalizedShortName({ id: entry.playerId, name: entry.playerName, originalName: entry.playerOriginalName }, locale) || entry.playerName
           return (
             <Link
               key={entry.playerId ?? entry.playerSlug}

@@ -24,7 +24,9 @@ import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
 import NotImplementedState from '@/components/ui/NotImplementedState'
 import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
-import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
+import { getLocalizedName, getLocalizedShortName, pickLocalized } from '@/utils/localization'
+import { formatRoundLabel } from '@/utils/roundLabel'
+import { formatPositionLabel } from '@/utils/positionLabel'
 import { isLive } from '@/utils/matchStatus'
 import { buildEventMapByRef } from '@/utils/matchEvents'
 import { computeBarPct } from './statsBar'
@@ -100,9 +102,9 @@ function ScoreBanner({ match, t, locale }) {
     >
       {/* 메타: 대회 · 시각 · 배지 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        <span className="t-cap">{match.competitionName}</span>
+        <span className="t-cap">{pickLocalized(match.competitionName, match.competitionOriginalName, locale)}</span>
         <span className="t-cap">·</span>
-        <span className="t-cap">{match.round ?? match.stage}</span>
+        <span className="t-cap">{formatRoundLabel(match.round ?? match.stage, t)}</span>
         {match.venue && (
           <>
             <span className="t-cap">·</span>
@@ -574,7 +576,7 @@ function BenchPanel({ teamName, players, t }) {
         >
           <span className="num t-sub" style={{ fontWeight: 700 }}>{p.number}</span>
           <span className="t-body" style={{ fontWeight: 600 }}>{p.name}</span>
-          <span className="t-cap">{p.position}</span>
+          <span className="t-cap">{formatPositionLabel(p.position, t)}</span>
         </div>
       ))}
     </div>
@@ -603,7 +605,7 @@ function TopRatedPanel({ players, t }) {
         </span>
         <div style={{ display: 'grid' }}>
           <span className="t-card">{top.name}</span>
-          <span className="t-cap">{top.position}</span>
+          <span className="t-cap">{formatPositionLabel(top.position, t)}</span>
         </div>
         {stats?.games?.rating != null && (
           <span
@@ -1014,7 +1016,7 @@ export default function MatchPage() {
           <Link to="/matches" className="pl-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44 }}>
             ← {t('match.matchList')}
           </Link>
-          <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>/ {match.competitionName}</span>
+          <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>/ {pickLocalized(match.competitionName, match.competitionOriginalName, locale)}</span>
         </div>
 
         <div style={{ display: 'grid', gap: 10 }}>
