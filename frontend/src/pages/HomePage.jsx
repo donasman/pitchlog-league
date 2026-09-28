@@ -17,6 +17,7 @@ import { useData } from '@/hooks/useData'
 import { useLiveMatches } from '@/hooks/useLiveMatches'
 import { fetchOverview } from '@/services/api'
 import { getLocalizedCompetitionName, getLocalizedCompetitionShortName, pickLocalized } from '@/utils/localization'
+import { formatRoundLabel } from '@/utils/roundLabel'
 import TeamBadge from '@/components/ui/TeamBadge'
 import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
@@ -293,7 +294,8 @@ function CompetitionCard({ comp, t, locale }) {
         <CompetitionEmblem comp={comp} locale={locale} />
         <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
           <span className="t-card tname" style={{ fontWeight: 600 }} title={compName}>{compName}</span>
-          <span className="t-cap">{compShort}</span>
+          {/* 원문 부제(compShort)는 ko 에서만 노출 — en 에서는 제목과 중복돼 카드가 겹쳐 보였다 */}
+          {locale === 'ko' && <span className="t-cap">{compShort}</span>}
         </div>
         <span style={{ flexShrink: 0 }}>
           {hasLive ? (
@@ -309,8 +311,8 @@ function CompetitionCard({ comp, t, locale }) {
         </span>
       </div>
 
-      {/* 라운드/스테이지 — 긴 문자열("Regular Season - 2" 등) 방어 · 트랙 좁아지면 말줄임 */}
-      <span className="t-sub tname" title={comp.stage?.label ?? ''}>{comp.stage?.label}</span>
+      {/* 라운드/스테이지 — API 원문("Regular Season - 5") 을 formatRoundLabel 로 로컬라이즈 */}
+      <span className="t-sub tname" title={comp.stage?.label ?? ''}>{formatRoundLabel(comp.stage?.label, t)}</span>
 
       {/* 구분선 + 선두 */}
       <div
