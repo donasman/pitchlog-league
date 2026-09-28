@@ -106,6 +106,12 @@ export class EnvironmentVariables {
   @MinLength(1)
   DATABASE_URL!: string;
 
+  /** Supabase 프로젝트 URL — JWKS/발급자 판정에 쓴다.
+   *  예: https://abcdefgh.supabase.co (path 없음). ES256 JWT 는 `${SUPABASE_URL}/auth/v1/.well-known/jwks.json` 을 참조.
+   *  issuer 는 `${SUPABASE_URL}/auth/v1` 로 검증한다 (SupabaseAuthGuard). */
+  @IsUrl({ require_tld: false, protocols: ['https', 'http'] })
+  SUPABASE_URL!: string;
+
   /** 수집 기능이 켜지기 전까지는 선택. L0 착수 시 필수로 올린다 */
   @IsOptional()
   @IsString()

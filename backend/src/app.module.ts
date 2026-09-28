@@ -24,6 +24,8 @@ import { StatisticsModule } from './statistics/statistics.module.js';
 import { SearchModule } from './search/search.module.js';
 import { AssistantModule } from './assistant/assistant.module.js';
 import { SchedulerModule } from './scheduler/scheduler.module.js';
+import { AuthModule } from './auth/auth.module.js';
+import { UserFavoritesModule } from './user-favorites/user-favorites.module.js';
 
 /**
  * 모듈 경계 (BACKEND_GUIDE):
@@ -63,6 +65,8 @@ import { SchedulerModule } from './scheduler/scheduler.module.js';
     StatisticsModule,
     SearchModule,
     AssistantModule,
+    AuthModule,
+    UserFavoritesModule,
   ],
 })
 export class AppModule {}

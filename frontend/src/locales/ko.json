@@ -27,7 +27,8 @@
     "leaguePhaseOngoing": "리그 페이즈 진행 중",
     "season": "시즌",
     "competitionsSection": "대회",
-    "language": "언어"
+    "language": "언어",
+    "accountSection": "계정"
   },
   "theme": {
     "toDark": "다크 모드로 전환",
@@ -595,7 +596,26 @@
   "favorites": {
     "add": "{{name}} 즐겨찾기 추가",
     "remove": "{{name}} 즐겨찾기 해제",
-    "limit_reached": "즐겨찾기는 최대 {{limit}}개까지 저장할 수 있습니다."
+    "limit_reached": "즐겨찾기는 최대 {{limit}}개까지 저장할 수 있습니다.",
+    "loginRequired": "로그인하면 응원 팀을 저장할 수 있어요.",
+    "loginCta": "Google 로 로그인",
+    "errors": {
+      "unknown_team": "존재하지 않는 팀입니다.",
+      "duplicate": "이미 목록에 있는 팀입니다.",
+      "network": "잠시 후 다시 시도해 주세요."
+    }
+  },
+  "auth": {
+    "signIn": "로그인",
+    "signInWithGoogle": "Google 로 계속하기",
+    "signOut": "로그아웃",
+    "profile": {
+      "email": "이메일"
+    },
+    "error": {
+      "signInCancelled": "로그인이 취소되었습니다.",
+      "signInFailed": "로그인에 실패했습니다. 잠시 후 다시 시도해 주세요."
+    }
   },
   "live": {
     "lastUpdated": "마지막 갱신 {{time}}",
@@ -610,7 +630,8 @@
     "feature": {
       "h2h": "상대 전적",
       "top_scorers": "득점 순위",
-      "top_assisters": "도움 순위"
+      "top_assisters": "도움 순위",
+      "favorites": "즐겨찾기"
     }
   }
 }

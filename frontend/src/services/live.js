@@ -12,7 +12,7 @@
  */
 
 import i18n from '@/i18n'
-import { apiGet, apiPost } from './http'
+import { apiGet, apiPost, apiPut } from './http'
 import {
   COMPETITION_LIST_API_IDS,
   MATCH_VISIBLE_COMPETITION_API_IDS,
@@ -809,3 +809,41 @@ export function invalidateMatchDetail(id) {
 }
 
 // UCL 녹아웃 대진표는 T 판 (feat/tournament-bracket) 에서 프론트 buildTies 로 이관 · fetchUCLKnockout 삭제.
+
+// ─── 즐겨찾기 (인증 필요) ──────────────────────────────────────
+//
+// GET  /api/me/favorites  → { asOf, items: [{ position, ref, apiId, displayName, shortDisplayName,
+//                                              originalName, code, country, founded, logoUrl }] }
+// PUT  /api/me/favorites  Body: { teamRefs: string[] } → GET 과 동일한 형태
+//
+// items 는 팀 요약 DTO 와 필드 이름이 같으므로 `normalizeTeam` 을 통과시켜 화면이 소비하는 형태로 맞춘다.
+// `position` 은 정규화 결과에 그대로 얹는다 — FavoritesContext 가 낙관적 갱신·재정렬에 쓴다.
+// 401 은 apiGet·apiPut 이 그대로 throw — 컨텍스트가 code/serverError 로 갈래를 그린다.
+//
+// `_cachedGet` 을 우회한다: 사용자 개인 목록이라 TTL 캐시로 다른 세션에 새는 것을 원천적으로 막는다.
+// locale 은 백엔드 로컬라이제이션 파라미터(현재 로그인 사용자의 팀 표기 언어).
+
+/**
+ * @param {{ token: string, locale?: string }} args
+ * @returns {Promise<{ asOf: string, items: Array<ReturnType<typeof normalizeTeam> & { position: number }> }>}
+ */
+export async function fetchMyFavorites({ token, locale }) {
+  const dto = await apiGet('/api/me/favorites', { locale }, { auth: token })
+  return {
+    asOf: dto.asOf,
+    items: (dto.items ?? []).map(it => ({ ...normalizeTeam(it), position: it.position })),
+  }
+}
+
+/**
+ * @param {{ token: string, teamRefs: string[], locale?: string }} args
+ * @returns {Promise<{ asOf: string, items: Array<ReturnType<typeof normalizeTeam> & { position: number }> }>}
+ */
+export async function putMyFavorites({ token, teamRefs, locale }) {
+  const path = locale ? `/api/me/favorites?locale=${encodeURIComponent(locale)}` : '/api/me/favorites'
+  const dto = await apiPut(path, { teamRefs }, { auth: token })
+  return {
+    asOf: dto.asOf,
+    items: (dto.items ?? []).map(it => ({ ...normalizeTeam(it), position: it.position })),
+  }
+}

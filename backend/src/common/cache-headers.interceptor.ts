@@ -24,11 +24,28 @@ export class CacheHeaderInterceptor implements NestInterceptor {
 
     const res = ctx.switchToHttp().getResponse<Response>();
 
+    // `/api/me/*` 는 사용자별 응답 — 어떤 캐시(브라우저·CDN·엣지)에도 넣지 않는다.
+    // Authorization 헤더가 요청마다 다르므로 Vary: Authorization 을 명시해 혹시라도
+    // 중간 캐시가 무시하면 안 되는 축을 알린다 (google-login 3판).
+    const isMe = req.url.startsWith('/api/me/');
+
     // POST 등 비-GET 은 캐시하지 않는다. Vercel 엣지가 Cache-Control: public 을 보고
     // POST /api/assistant 응답을 60초 캐시 → 같은 URL 로 오는 다른 질문에 첫 답 재사용
     // (2026-09-15 실측 · `x-vercel-cache: HIT` · 19ms · 같은 ETag). no-store 로 엣지 캐시 차단.
     if (req.method !== 'GET') {
-      res.setHeader('Cache-Control', 'no-store');
+      if (isMe) {
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('Vary', 'Authorization');
+      } else {
+        res.setHeader('Cache-Control', 'no-store');
+      }
+      return next.handle();
+    }
+
+    // GET /api/me/* — ETag/If-None-Match 로직을 건너뛴다 (개인 응답 · 캐시 금지).
+    if (isMe) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Vary', 'Authorization');
       return next.handle();
     }
 
