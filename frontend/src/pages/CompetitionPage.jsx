@@ -33,6 +33,8 @@ import { useSeasonParam } from '@/hooks/useSeasonParam'
 import { useRoundParam } from '@/hooks/useRoundParam'
 import { fetchCompetitionHub, fetchCompetitionsForStats, fetchSeasons } from '@/services/api'
 import { getLocalizedCompetitionName } from '@/utils/localization'
+import { localizeCountry } from '@/utils/countryName'
+import { formatRoundLabel } from '@/utils/roundLabel'
 import { selectableSeasons } from '@/utils/seasons'
 import { roundList, filterByRound } from '@/utils/schedule'
 import { buildTies, bracketRounds, defaultTab, isSuperCup } from '@/utils/ties'
@@ -382,10 +384,10 @@ export default function CompetitionPage() {
             <div style={{ display: 'grid', minWidth: 0, flex: '1 1 auto' }}>
               <h1 className="t-page" style={{ margin: 0, fontSize: 24, wordBreak: 'keep-all' }}>{getLocalizedCompetitionName(comp, locale)}</h1>
               <span className="t-sub">
-                {seasonLabelFor({ seasons: comp.seasons, seasonYear, standings, comp })} · {comp.country}
+                {seasonLabelFor({ seasons: comp.seasons, seasonYear, standings, comp })} · {localizeCountry(comp.country, locale, t)}
                 {standings?.stage && (
                   <span style={{ marginLeft: 8 }}>
-                    · {standings.stage.label}
+                    · {formatRoundLabel(standings.stage.label, t)}
                     <span style={{ marginLeft: 4, color: 'var(--pl-sub)' }}>
                       {t(standings.stage.status === 'ongoing' ? 'standings.stageOngoing' : 'standings.stageCompleted')}
                     </span>
