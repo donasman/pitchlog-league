@@ -10,12 +10,13 @@
 import { useTranslation } from 'react-i18next'
 import TieCard from './TieCard'
 import EmptyState from '@/components/ui/EmptyState'
+import { formatRoundLabel } from '@/utils/roundLabel'
 
-function TreeColumn({ round, locale }) {
+function TreeColumn({ round, locale, t }) {
   return (
     <div style={{ display: 'grid', gap: 8, alignContent: 'start', minWidth: 220 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span className="t-card" style={{ margin: 0 }}>{round.roundName}</span>
+        <span className="t-card" style={{ margin: 0 }}>{formatRoundLabel(round.roundName, t)}</span>
         <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>{round.ties.length}</span>
       </div>
       {round.ties.map(tie => {
@@ -35,11 +36,11 @@ function TreeColumn({ round, locale }) {
   )
 }
 
-function EarlyRound({ round, locale }) {
+function EarlyRound({ round, locale, t }) {
   return (
     <details style={{ border: '1px solid var(--pl-line)', borderRadius: 8, padding: '8px 12px' }}>
       <summary style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, minHeight: 32 }}>
-        <span className="t-card" style={{ margin: 0 }}>{round.roundName}</span>
+        <span className="t-card" style={{ margin: 0 }}>{formatRoundLabel(round.roundName, t)}</span>
         <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>{round.ties.length}</span>
       </summary>
       <div style={{ display: 'grid', gap: 8, padding: '12px 0 4px' }}>
@@ -87,7 +88,7 @@ export default function TournamentBracket({ rounds, locale }) {
             minWidth: 0,
           }}
         >
-          {trees.map(round => <TreeColumn key={round.roundName} round={round} locale={locale} />)}
+          {trees.map(round => <TreeColumn key={round.roundName} round={round} locale={locale} t={t} />)}
         </div>
       )}
       {trees.length === 0 && latestEarly && (
@@ -97,7 +98,7 @@ export default function TournamentBracket({ rounds, locale }) {
       )}
       {earlies.length > 0 && (
         <div style={{ display: 'grid', gap: 8 }}>
-          {earlies.map(round => <EarlyRound key={round.roundName} round={round} locale={locale} />)}
+          {earlies.map(round => <EarlyRound key={round.roundName} round={round} locale={locale} t={t} />)}
         </div>
       )}
       {/* isQualifier 라운드는 렌더 안 함 (D4) */}

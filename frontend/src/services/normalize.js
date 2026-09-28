@@ -135,6 +135,9 @@ export function normalizeCompetition(dto) {
 
     name:      dto.displayName,
     shortName: dto.shortDisplayName,
+    /* en 소비를 위한 원문 필드 — 백엔드가 항상 실어 준다 (없으면 en 폴백은 displayName) */
+    originalName:      dto.originalName ?? dto.displayName,
+    shortOriginalName: dto.originalName ?? dto.shortDisplayName ?? dto.displayName,
     country:   dto.country,
     countryCode: dto.countryCode,
     type:      dto.type,
@@ -171,6 +174,9 @@ export function normalizeTeam(dto) {
     // 백엔드 shortDisplayName 은 shortName 이 없으면 code(ARS) 로 떨어진다 — 카드에 "ARS ARS" 가 찍힌다.
     // code 와 같으면 이름을 쓴다. 진짜 짧은 이름은 localized_names 적재(NEXT_STEPS 11장) 때 온다
     shortName: dto.shortDisplayName && dto.shortDisplayName !== dto.code ? dto.shortDisplayName : dto.displayName,
+    /* en 소비를 위한 원문 필드 — 팀 원문은 백엔드가 실어 준다. 폴백은 displayName. */
+    originalName:      dto.originalName ?? dto.displayName,
+    shortOriginalName: dto.originalName ?? (dto.shortDisplayName && dto.shortDisplayName !== dto.code ? dto.shortDisplayName : dto.displayName),
     /** 로고가 못 뜰 때만 쓰인다 — code(MUN) 가 없으면 이름에서 만든다 */
     initials:  teamInitials(dto),
     logoUrl:   localLogo('teams', dto.apiId, dto.logoUrl),
@@ -368,6 +374,9 @@ function competitionIds(comp) {
     competitionId:   alias?.id   ?? comp?.ref ?? null,
     competitionSlug: alias?.slug ?? slugFromRef(comp?.ref),
     competitionName: comp?.displayName ?? null,
+    /* en 소비용 원문 · pickLocalized(name, original, locale) 로 화면에서 고른다 */
+    competitionOriginalName: comp?.originalName ?? comp?.displayName ?? null,
+    competitionShortName:    comp?.shortDisplayName ?? null,
   }
 }
 
@@ -511,6 +520,9 @@ export function normalizeStanding(row, { format, groupCount = 1 } = {}) {
     teamSlug: row.team.ref,
     teamApiId: row.team.apiId,
     teamName: row.team.displayName,
+    /* en pickLocalized 소비용 원문 · shortOriginalName 은 short 없으면 long 폴백 */
+    teamOriginalName:      row.team.originalName ?? row.team.displayName,
+    shortTeamOriginalName: row.team.originalName ?? row.team.shortDisplayName ?? row.team.displayName,
     teamInitials: teamInitials(row.team),
     teamColor: teamColor(row.team.apiId),
     // 로고는 파생 필드 — 화면·홈 카드가 손으로 localLogo 를 만들지 않도록 여기서 한 번에 만든다
@@ -551,8 +563,11 @@ function normalizePlayerSeasonStat(s) {
     key: `${competitionId}-${seasonLabel}-${teamName}`,
     competitionId,
     competitionName: s.competition?.displayName ?? null,
+    /* en pickLocalized 소비용 · 원문 없으면 displayName 폴백 */
+    competitionOriginalName: s.competition?.originalName ?? s.competition?.displayName ?? null,
     seasonLabel,
     teamName,
+    teamOriginalName: s.team?.originalName ?? s.team?.displayName ?? null,
     appearances:     s.appearances,
     starts:          s.starts,
     minutesPlayed:   s.minutes,
@@ -619,7 +634,9 @@ export function scorerRowsFromRanking(dto) {
     rank:       r.rank,
     value:      r.value,
     playerName: r.player?.displayName ?? '',
+    playerOriginalName: r.player?.originalName ?? r.player?.displayName ?? '',
     teamName:   r.team?.displayName ?? '',
+    teamOriginalName: r.team?.originalName ?? r.team?.displayName ?? '',
   }))
 }
 
@@ -641,6 +658,9 @@ export function normalizePlayerDetail(dto) {
       slug:        dto.ref,
       name:        dto.displayName,
       shortName:   dto.shortDisplayName,
+      /* en 소비 · 선수 원문(영문) 이름은 백엔드가 실어 준다. 없으면 displayName 폴백. */
+      originalName:      dto.originalName ?? dto.displayName,
+      shortOriginalName: dto.originalName ?? dto.shortDisplayName ?? dto.displayName,
       nationality: dto.nationality,
       dateOfBirth: dto.birthDate,
       position:    dto.position,
@@ -679,6 +699,9 @@ export function normalizePlayerDetail(dto) {
             competitionApiId:     b.competition?.apiId ?? null,
             competitionName:      b.competition?.displayName ?? '',
             competitionShortName: b.competition?.shortDisplayName ?? '',
+            /* en pickLocalized 소비용 · 원문 없으면 displayName 폴백 */
+            competitionOriginalName:      b.competition?.originalName ?? b.competition?.displayName ?? '',
+            competitionShortOriginalName: b.competition?.originalName ?? b.competition?.shortDisplayName ?? '',
             goals:   b.goals,
             assists: b.assists,
             apps:    b.apps,
@@ -720,12 +743,16 @@ export function normalizeStatsRow(dto) {
     playerSlug:   p?.ref ?? null,
     playerName:   p?.displayName ?? '',
     playerShortName: p?.shortDisplayName ?? '',
+    /* en pickLocalized 소비용 · 선수 원문 없으면 displayName 폴백 */
+    playerOriginalName: p?.originalName ?? p?.displayName ?? '',
     photoUrl:     p?.photoUrl ?? null,
 
     // team 표시 — 로고·색·이니셜은 파생 (StandingsTable · StatsRanking 대칭)
     teamRef:      t?.ref ?? null,
     teamApiId:    t?.apiId ?? null,
     teamName,
+    /* en pickLocalized 소비용 · 팀 원문 · short 없으면 long 폴백 */
+    teamOriginalName: t?.originalName ?? t?.shortDisplayName ?? t?.displayName ?? '',
     teamInitials: t?.code || deriveInitials(teamName),
     teamColor:    teamColor(t?.apiId),
     teamLogoUrl:  localLogo('teams', t?.apiId, t?.logoUrl),
@@ -794,6 +821,7 @@ export function myTeamCard(team, teamFixturesPayload, standingsShape) {
       ranking = {
         competitionSlug: standingsShape.competitionSlug,
         competitionName: standingsShape.competitionName,
+        competitionOriginalName: standingsShape.competitionOriginalName,
         rank:   row.rank,
         played: row.played,
         points: row.points,
@@ -821,6 +849,8 @@ function matchSummary(team, m) {
     id: m.id,
     competitionSlug: m.competitionSlug,
     competitionName: m.competitionName,
+    /* en 소비용 원문 · pickLocalized(name, original, locale) */
+    competitionOriginalName: m.competitionOriginalName,
     date: m.date,
     opponent: {
       name:     opponent?.name ?? '',

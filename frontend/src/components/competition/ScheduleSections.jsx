@@ -12,6 +12,7 @@
 import { useTranslation } from 'react-i18next'
 import MatchCard from '@/components/ui/MatchCard'
 import { splitSchedule, groupCupMatchesByRound } from '@/utils/schedule'
+import { formatRoundLabel } from '@/utils/roundLabel'
 
 const GRID_STYLE = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }
 
@@ -23,7 +24,7 @@ function MatchGrid({ list }) {
   )
 }
 
-function Section({ title, list, groupByRound }) {
+function Section({ title, list, groupByRound, t }) {
   if (list.length === 0) return null
 
   if (groupByRound) {
@@ -35,7 +36,7 @@ function Section({ title, list, groupByRound }) {
           ? <MatchGrid list={list} />
           : groups.map(([roundName, roundMatches]) => (
               <div key={roundName || '__blank'} style={{ display: 'grid', gap: 8 }}>
-                {roundName && <h3 className="t-card" style={{ margin: '4px 0 0' }}>{roundName}</h3>}
+                {roundName && <h3 className="t-card" style={{ margin: '4px 0 0' }}>{formatRoundLabel(roundName, t)}</h3>}
                 <MatchGrid list={roundMatches} />
               </div>
             ))}
@@ -56,9 +57,9 @@ export default function ScheduleSections({ matches, nowMs, groupByRound = false 
   const { live, upcoming, results } = splitSchedule(matches, nowMs)
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <Section title={t('competition.schedule.live')}     list={live}     groupByRound={groupByRound} />
-      <Section title={t('competition.schedule.upcoming')} list={upcoming} groupByRound={groupByRound} />
-      <Section title={t('competition.schedule.results')}  list={results}  groupByRound={groupByRound} />
+      <Section title={t('competition.schedule.live')}     list={live}     groupByRound={groupByRound} t={t} />
+      <Section title={t('competition.schedule.upcoming')} list={upcoming} groupByRound={groupByRound} t={t} />
+      <Section title={t('competition.schedule.results')}  list={results}  groupByRound={groupByRound} t={t} />
     </div>
   )
 }

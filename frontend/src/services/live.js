@@ -559,6 +559,9 @@ export async function fetchOverview() {
       stage:         deriveStage(matches, nowDate),
       leader: first
         ? { teamId: first.teamId, teamSlug: first.teamSlug, teamName: first.teamName,
+            /* en pickLocalized 소비용 — normalizeStanding 이 실어 준 원문·short 원문 */
+            teamOriginalName: first.teamOriginalName,
+            shortTeamOriginalName: first.shortTeamOriginalName,
             teamInitials: first.teamInitials, teamColor: first.teamColor,
             teamLogoUrl: first.teamLogoUrl, teamApiId: first.teamApiId,
             points: first.points }
@@ -580,7 +583,11 @@ export async function fetchOverview() {
   const nextMatch = allMatches.filter(upcoming).sort(byKickoff)[0] ?? null
   const nextKickoff = nextMatch
     ? { matchId: nextMatch.id, competitionSlug: nextMatch.competitionSlug,
-        homeName: nextMatch.homeTeam.name, awayName: nextMatch.awayTeam.name, date: nextMatch.date }
+        homeName: nextMatch.homeTeam.name, awayName: nextMatch.awayTeam.name,
+        /* en pickLocalized 소비용 — normalizeTeam 이 실어 준 원문 · 없으면 name 폴백 */
+        homeOriginalName: nextMatch.homeTeam.originalName ?? nextMatch.homeTeam.name,
+        awayOriginalName: nextMatch.awayTeam.originalName ?? nextMatch.awayTeam.name,
+        date: nextMatch.date }
     : null
 
   const epl = comps.find(c => c.slug === 'premier-league')
@@ -592,11 +599,13 @@ export async function fetchOverview() {
     const res = leagueScorersRes[i]
     const failed = res !== null && typeof res === 'object' && res.__error === true
     if (failed) {
-      return { competitionSlug, competitionName: competitionSlug, entries: null, error: res.message }
+      return { competitionSlug, competitionName: competitionSlug, competitionOriginalName: competitionSlug, entries: null, error: res.message }
     }
     return {
       competitionSlug,
-      competitionName: res?.competition?.displayName ?? competitionSlug,
+      competitionName:         res?.competition?.displayName ?? competitionSlug,
+      /* en pickLocalized 소비용 · 원문 없으면 displayName 폴백 */
+      competitionOriginalName: res?.competition?.originalName ?? res?.competition?.displayName ?? competitionSlug,
       entries: (res?.items ?? []).map(normalizeStatsRow),
       error: null,
     }

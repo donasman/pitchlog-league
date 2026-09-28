@@ -206,7 +206,7 @@ function DesktopTable({ rows, competitionSlug, t, locale }) {
           const zc   = ZONE_COLOR_VAR[zone]
           const pat  = ZONE_PAT[zone]
           const gd   = entry.goalDifference
-          const teamObj = { id: entry.teamId, name: entry.teamName, slug: entry.teamSlug }
+          const teamObj = { id: entry.teamId, name: entry.teamName, originalName: entry.teamOriginalName, shortOriginalName: entry.shortTeamOriginalName, slug: entry.teamSlug }
 
           return (
             <div
@@ -323,7 +323,7 @@ function MobileTable({ rows, t, locale }) {
           const zc       = ZONE_COLOR_VAR[zone]
           const pat      = ZONE_PAT[zone]
           const stickyBg = ZONE_STICKY_BG[zone] ?? 'bg-card'
-          const teamObj  = { id: entry.teamId, name: entry.teamName, slug: entry.teamSlug }
+          const teamObj  = { id: entry.teamId, name: entry.teamName, originalName: entry.teamOriginalName, shortOriginalName: entry.shortTeamOriginalName, slug: entry.teamSlug }
 
           return (
             <div
@@ -440,7 +440,7 @@ function CompactTable({ rows, competitionSlug, t, locale }) {
             const zc       = ZONE_COLOR_VAR[zone]
             const stickyBg = ZONE_STICKY_BG[zone] ?? 'bg-card'
             const gd       = entry.goalDifference
-            const teamObj  = { id: entry.teamId, name: entry.teamName, slug: entry.teamSlug }
+            const teamObj  = { id: entry.teamId, name: entry.teamName, originalName: entry.teamOriginalName, shortOriginalName: entry.shortTeamOriginalName, slug: entry.teamSlug }
             const rowBg    = zc ? `color-mix(in srgb, ${zc} 4%, transparent)` : undefined
 
             return (

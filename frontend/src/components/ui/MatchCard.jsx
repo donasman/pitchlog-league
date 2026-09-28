@@ -12,8 +12,9 @@ import TeamBadge from './TeamBadge'
 import MatchStatusBadge from './MatchStatusBadge'
 import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
 import { isLive } from '@/utils/matchStatus'
-import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
+import { getLocalizedName, getLocalizedShortName, pickLocalized } from '@/utils/localization'
 import { isMatchWinner } from '@/utils/matchWinner'
+import { formatRoundLabel } from '@/utils/roundLabel'
 
 function TeamRow({ team, score, win, live, compact, locale, eagerLogo = false }) {
   const name = compact
@@ -109,7 +110,7 @@ export default function MatchCard({ match, compact = false, eagerLogo = false })
         }}
       >
         <span className="t-cap" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {match.competition?.shortName ?? match.round ?? match.stage}
+          {match.competition?.shortName ?? formatRoundLabel(match.round ?? match.stage, t)}
         </span>
         <MatchStatusBadge state={match.displayState} />
       </div>

@@ -321,8 +321,8 @@
     "treeFromR16": "16강부터 대진표로 표시됩니다 · 현재 {{round}} 진행"
   },
   "home": {
-    "heroHeadline": "유럽 5대 리그와 UCL, 한 곳에서",
-    "heroSubtitle": "진행 중인 경기는 실시간으로, 끝난 경기는 공식 기록이 확정될 때까지 표시해 둡니다. EPL · 라리가 · 분데스리가 · 세리에 A · 리그 1 · UCL을 같은 기준으로 봅니다.",
+    "heroHeadline": "유럽 축구의 모든 기록, 한 곳에서",
+    "heroSubtitle": "리그부터 컵 대회, UEFA 대회까지. 경기 결과·순위·선수 기록을 실시간으로 확인하세요.",
     "btnTodayMatches": "오늘 경기 보기",
     "askPlaceholder": "선수 기록이나 순위를 물어보세요",
     "askCta": "질문하기",
@@ -423,6 +423,12 @@
     "emptyTitle": "무엇을 찾아드릴까요?",
     "emptyDesc": "일정 · 순위 · 선수 기록을 물어보세요. 숫자는 데이터베이스에서 직접 가져옵니다.",
     "suggestLabel": "예시 질문",
+    "suggested": {
+      "q1": "손흥민 이번 시즌 기록 알려줘",
+      "q2": "리버풀 다음 경기 언제야?",
+      "q3": "EPL 상위 4팀 최근 5경기 비교해줘",
+      "q4": "챔피언스리그 16강 올라간 팀은?"
+    },
     "disclaimer": "승부 예측이나 의견은 답하지 않습니다 — 조회할 수 있는 기록만 알려드립니다.",
     "evidenceBtn": "근거 보기",
     "evidenceTool": "조회",
@@ -545,7 +551,47 @@
     "scrollPrev": "이전",
     "scrollNext": "다음",
     "pause": "일시정지",
-    "play": "재생"
+    "play": "재생",
+    "position": {
+      "gk": "GK",
+      "def": "DEF",
+      "mid": "MID",
+      "fwd": "FWD",
+      "goalkeeper": "골키퍼",
+      "defender": "수비수",
+      "midfielder": "미드필더",
+      "attacker": "공격수"
+    }
+  },
+  "round": {
+    "regularSeason": "정규 리그 {{n}}라운드",
+    "leaguePhaseMatchday": "리그 페이즈 {{n}}라운드",
+    "matchday": "{{n}}라운드",
+    "oneOverN": "1/{{n}} 결선",
+    "roundOfN": "{{n}}강",
+    "quarterFinals": "8강",
+    "semiFinals": "4강",
+    "grandFinal": "결승",
+    "final": "결승",
+    "thirdPlaceFinal": "3·4위전",
+    "groupX": "{{group}}조",
+    "groupStage": "조별리그",
+    "leaguePhase": "리그 페이즈",
+    "knockoutPlayoffs": "녹아웃 플레이오프",
+    "preliminaryRound": "예선",
+    "preliminaryFinal": "예선 결승",
+    "playoffs": "플레이오프",
+    "relegationPlayoff": "강등 플레이오프",
+    "promotionPlayoff": "승격 플레이오프",
+    "qualifyingRoundOrdinal": "{{n}}차 예선",
+    "ordinalRound": "{{n}}라운드"
+  },
+  "country": {
+    "England": "잉글랜드",
+    "Scotland": "스코틀랜드",
+    "Wales": "웨일스",
+    "NorthernIreland": "북아일랜드",
+    "World": "국제"
   },
   "favorites": {
     "add": "{{name}} 즐겨찾기 추가",

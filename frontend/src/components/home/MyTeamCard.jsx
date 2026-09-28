@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import TeamBadge from '@/components/ui/TeamBadge'
 import { toKSTDateTime } from '@/utils/dateFormat'
+import { pickLocalized } from '@/utils/localization'
 
 export default function MyTeamCard({ card }) {
   const { t, i18n } = useTranslation()
@@ -42,7 +43,7 @@ export default function MyTeamCard({ card }) {
       <div style={{ display: 'grid', gap: 4 }}>
         {card.nextMatch ? (
           <div style={{ display: 'grid', gap: 2 }}>
-            <span className="t-cap">{card.nextMatch.competitionName ?? ''}</span>
+            <span className="t-cap">{pickLocalized(card.nextMatch.competitionName, card.nextMatch.competitionOriginalName, locale)}</span>
             <span className="t-body" style={{ fontWeight: 600 }}>
               {card.nextMatch.isHome ? 'vs ' : '@ '}
               {card.nextMatch.opponent.name}
@@ -58,7 +59,7 @@ export default function MyTeamCard({ card }) {
       <div style={{ display: 'grid', gap: 4, borderTop: '1px solid var(--pl-line)', paddingTop: 10 }}>
         {card.lastResult ? (
           <div style={{ display: 'grid', gap: 2 }}>
-            <span className="t-cap">{card.lastResult.competitionName ?? ''}</span>
+            <span className="t-cap">{pickLocalized(card.lastResult.competitionName, card.lastResult.competitionOriginalName, locale)}</span>
             <span className="t-body" style={{ fontWeight: 600 }}>
               {card.lastResult.isHome ? 'vs ' : '@ '}
               {card.lastResult.opponent.name}
@@ -76,7 +77,7 @@ export default function MyTeamCard({ card }) {
       <div style={{ display: 'grid', gap: 4, borderTop: '1px solid var(--pl-line)', paddingTop: 10 }}>
         {card.ranking ? (
           <span className="t-body">
-            <span className="t-cap" style={{ marginRight: 6 }}>{card.ranking.competitionName}</span>
+            <span className="t-cap" style={{ marginRight: 6 }}>{pickLocalized(card.ranking.competitionName, card.ranking.competitionOriginalName, locale)}</span>
             <span className="num" style={{ fontWeight: 700 }}>#{card.ranking.rank}</span>
             <span className="t-sub num" style={{ marginLeft: 6 }}>
               {t('home.ptsUnit', { pts: card.ranking.points })}
