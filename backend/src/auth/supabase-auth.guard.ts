@@ -37,15 +37,27 @@ export interface RequestWithUser extends Request {
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
   private readonly logger = new Logger(SupabaseAuthGuard.name);
-  private readonly issuer: string;
+  private cachedIssuer: string | null = null;
 
   constructor(
     @Inject(SUPABASE_JWKS) private readonly jwks: JWTVerifyGetKey,
-    config: ConfigService<EnvironmentVariables, true>,
-  ) {
-    const url = config.get('SUPABASE_URL', { infer: true });
-    // 마지막 슬래시 유무를 흡수 — env.validation 은 프로토콜만 검사한다
-    this.issuer = `${url.replace(/\/$/, '')}/auth/v1`;
+    private readonly config: ConfigService<EnvironmentVariables, true>,
+  ) {}
+
+  /**
+   * `${SUPABASE_URL}/auth/v1` — 마지막 슬래시 유무를 흡수한다.
+   *
+   * 첫 인증 시도로 미룬다 — SUPABASE_URL 이 없어도 Guard 자체는 인스턴스화되고,
+   * 실제 canActivate 때만 값이 필요하다. AuthModule 을 안 쓰는 다른 e2e 가
+   * SUPABASE_URL 없이 AppModule 을 띄워도 이 Guard 가 폭발하지 않도록.
+   * (env.validation.ts 는 SUPABASE_URL 을 필수로 잡지만 일부 e2e 가 override 함.)
+   */
+  private get issuer(): string {
+    if (this.cachedIssuer === null) {
+      const url = this.config.get('SUPABASE_URL', { infer: true });
+      this.cachedIssuer = `${url.replace(/\/$/, '')}/auth/v1`;
+    }
+    return this.cachedIssuer;
   }
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
