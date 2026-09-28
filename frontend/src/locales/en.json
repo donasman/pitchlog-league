@@ -27,7 +27,8 @@
     "leaguePhaseOngoing": "League Phase ongoing",
     "season": "season",
     "competitionsSection": "Competitions",
-    "language": "Language"
+    "language": "Language",
+    "accountSection": "Account"
   },
   "theme": {
     "toDark": "Switch to dark mode",
@@ -549,7 +550,26 @@
   "favorites": {
     "add": "Add {{name}} to favorites",
     "remove": "Remove {{name}} from favorites",
-    "limit_reached": "You can save up to {{limit}} favorites."
+    "limit_reached": "You can save up to {{limit}} favorites.",
+    "loginRequired": "Sign in to save your favourite teams.",
+    "loginCta": "Sign in with Google",
+    "errors": {
+      "unknown_team": "That team is not available.",
+      "duplicate": "This team is already in your list.",
+      "network": "Please try again in a moment."
+    }
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signInWithGoogle": "Continue with Google",
+    "signOut": "Sign out",
+    "profile": {
+      "email": "Email"
+    },
+    "error": {
+      "signInCancelled": "Sign-in cancelled.",
+      "signInFailed": "Sign-in failed. Please try again in a moment."
+    }
   },
   "live": {
     "lastUpdated": "Last updated {{time}}",
@@ -564,7 +584,8 @@
     "feature": {
       "h2h": "head-to-head",
       "top_scorers": "top scorers",
-      "top_assisters": "top assisters"
+      "top_assisters": "top assisters",
+      "favorites": "favorites"
     }
   }
 }
