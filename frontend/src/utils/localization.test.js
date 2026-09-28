@@ -34,6 +34,17 @@ describe('getLocalizedShortName', () => {
   it('ko with no shortName falls back to name', () => {
     expect(getLocalizedShortName({ name: NAME_KO }, 'ko')).toBe(NAME_KO)
   })
+  /* 실 API 회귀 잠금 — /api/competitions·/api/teams 는 shortOriginalName 을 안 준다.
+     shortDisplayName 은 ko (한글) · originalName 은 원문. en 에서 shortDisplayName 로 떨어지면 한글 노출. */
+  it('en team without shortOriginalName falls back to originalName, not ko shortName', () => {
+    const teamNoShortOrig = { shortName: SHORT_KO, name: NAME_KO, originalName: NAME_EN }
+    expect(getLocalizedShortName(teamNoShortOrig, 'en')).toBe(NAME_EN)
+  })
+  it('en competition without shortOriginalName falls back to originalName, not ko shortName', () => {
+    /* LaLiga 재현: shortDisplayName='라리가' (한글) · originalName='LaLiga' */
+    const comp = { shortName: 'KO_SHORT', name: 'KO_LONG', originalName: 'LaLiga' }
+    expect(getLocalizedShortName(comp, 'en')).toBe('LaLiga')
+  })
 })
 
 describe('pickLocalized', () => {
