@@ -16,6 +16,13 @@ function corsOrigins(): string[] {
 }
 
 export function setupApp(app: INestApplication): INestApplication {
+  // Express 기본 ETag 미들웨어 끔 — 우리 인터셉터가 캐시 가능한 GET 에만 수동으로 ETag 를 붙인다.
+  // `/api/me/*` 처럼 `private, no-store` 인 개인 응답에 Express 가 자동 ETag 를 붙이면
+  // 계약(ETag 없음)이 깨진다. Express 는 res.setHeader('ETag', ...) 가 이미 있으면 덮지 않아
+  // 우리 수동 ETag(map() 안에서 세팅)는 그대로 동작한다.
+  const expressApp = app.getHttpAdapter().getInstance() as { disable?: (name: string) => void };
+  expressApp.disable?.('etag');
+
   // 조회 API 는 /api 아래. /health 는 인프라 감시용이라 접두사 없이 둔다
   app.setGlobalPrefix('api', { exclude: ['health'] });
 
