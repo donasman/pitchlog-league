@@ -14,7 +14,7 @@ import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
 import { useData } from '@/hooks/useData'
 import { fetchCompetitionStats, fetchCompetitionsForStats } from '@/services/api'
-import { getLocalizedCompetitionName, getLocalizedName, pickLocalized } from '@/utils/localization'
+import { getLocalizedCompetitionName, getLocalizedCompetitionShortName, getLocalizedName, pickLocalized } from '@/utils/localization'
 
 /* ── coverage 뱃지 ── */
 function CoverageBadge({ coverage, t }) {
@@ -156,7 +156,7 @@ function CompetitionFilter({ competitions, slug, onChange, t, locale }) {
             aria-pressed={slug === c.slug}
             onClick={() => onChange(c.slug)}
           >
-            {c.shortName ?? getLocalizedCompetitionName(c, locale)}
+            {getLocalizedCompetitionShortName(c, locale) || c.shortName || getLocalizedCompetitionName(c, locale)}
           </button>
         ))}
         {rest.length > 0 && (

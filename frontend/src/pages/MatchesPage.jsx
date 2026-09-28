@@ -23,7 +23,7 @@ import StandingsTable from '@/components/ui/StandingsTable'
 import LiveHeroCard from '@/components/home/LiveHeroCard'
 import HScroller, { HScrollerHeaderControls } from '@/components/ui/HScroller'
 import { isLive } from '@/utils/matchStatus'
-import { getLocalizedCompetitionName } from '@/utils/localization'
+import { getLocalizedCompetitionName, getLocalizedCompetitionShortName } from '@/utils/localization'
 import { kstDateKey } from '@/utils/dateFormat'
 import { todayKstKey, tomorrowKstKey } from '@/services/clock'
 import { pickFocusMatchdays } from '@/utils/matchDays'
@@ -52,7 +52,7 @@ function groupByDate(matches) {
 function CompFilterRail({ competitions, activeComp, activeStatus, onCompChange, onStatusChange, t, locale }) {
   const compOptions = [
     { slug: 'all', label: t('matches.allCompetitions'), initials: 'ALL' },
-    ...(competitions ?? []).map(c => ({ slug: c.slug, label: getLocalizedCompetitionName(c, locale), initials: c.shortName })),
+    ...(competitions ?? []).map(c => ({ slug: c.slug, label: getLocalizedCompetitionName(c, locale), initials: getLocalizedCompetitionShortName(c, locale) || c.shortName })),
   ]
 
   const statusOptions = [
@@ -135,10 +135,10 @@ function CompFilterRail({ competitions, activeComp, activeStatus, onCompChange, 
 /* ─────────────────────────────────────────────────────────────
    MobileFilterBar — 모바일 가로 스크롤 필터 칩
 ───────────────────────────────────────────────────────────── */
-function MobileFilterBar({ competitions, activeComp, activeStatus, onCompChange, onStatusChange, t }) {
+function MobileFilterBar({ competitions, activeComp, activeStatus, onCompChange, onStatusChange, t, locale }) {
   const comps = [
     { slug: 'all', label: t('matches.allCompetitions') },
-    ...(competitions ?? []).map(c => ({ slug: c.slug, label: c.shortName })),
+    ...(competitions ?? []).map(c => ({ slug: c.slug, label: getLocalizedCompetitionShortName(c, locale) || c.shortName })),
   ]
   const statuses = [
     { value: 'all', label: t('matches.allStatuses') },
