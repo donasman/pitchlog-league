@@ -20,6 +20,7 @@
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { roundStatus } from '@/utils/schedule'
+import { formatRoundLabel } from '@/utils/roundLabel'
 
 const CHIP_BASE = {
   flexShrink: 0,
@@ -119,7 +120,11 @@ export default function RoundNavigator({ rounds, roundKey, onChange }) {
   const goPrev = () => { if (!prevDisabled) onChange(list[activeIndex - 1].key) }
   const goNext = () => { if (!nextDisabled) onChange(list[activeIndex + 1].key) }
 
-  const chipLabel = (r) => (r?.name && String(r.name).trim()) || (r?.ordinal != null ? String(r.ordinal) : '')
+  const chipLabel = (r) => {
+    const raw = r?.name && String(r.name).trim()
+    if (raw) return formatRoundLabel(raw, t)
+    return r?.ordinal != null ? String(r.ordinal) : ''
+  }
 
   return (
     <div
