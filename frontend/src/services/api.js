@@ -58,3 +58,9 @@ export const fetchSearch               = (...a) => impl.fetchSearch(...a)
 
 // 어시스턴트
 export const askAssistant              = (...a) => impl.askAssistant(...a)
+
+// 즐겨찾기 (인증 필요) — Mock 구현은 NotImplementedError. isFavoritesEnabled 스위치가 잠가 부르지 않는다
+export const favorites = {
+  list:    (...a) => impl.fetchMyFavorites(...a),
+  replace: (...a) => impl.putMyFavorites(...a),
+}

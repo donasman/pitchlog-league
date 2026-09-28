@@ -21,9 +21,11 @@ import { useTranslation } from 'react-i18next'
 import ThemeToggle from './ThemeToggle'
 import LanguageToggle from './LanguageToggle'
 import SearchPanel from './SearchPanel'
+import AuthMenu from './AuthMenu'
 import BrandMark from '@/components/ui/BrandMark'
 import NotificationPanel from '@/components/notifications/NotificationPanel'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   nextDrawerState,
   drawerMounted as isDrawerMounted,
@@ -44,6 +46,7 @@ export default function AppHeader() {
   const location = useLocation()
 
   const { unreadCount, panelOpen, togglePanel, closePanel } = useNotifications()
+  const { authError, isAuthEnabled } = useAuth()
   const bellRef = useRef(null)
   const headerRef = useRef(null)
 
@@ -286,6 +289,9 @@ export default function AppHeader() {
           {/* 테마 전환 */}
           <ThemeToggle />
 
+          {/* 인증 메뉴 (로그인 상태에 따라 로그인 버튼 · 아바타). 데스크톱은 짧은 버튼(size='sm'). */}
+          <AuthMenu size="sm" />
+
           {/* 모바일 메뉴 토글 (오른쪽) — 라벨/아이콘은 "의도된 열림 상태" 기준.
               closing 중에는 다시 ☰ 로 돌아가서 재-열기 시 reducer 가 open 으로 뒤집는다. */}
           <button
@@ -299,6 +305,27 @@ export default function AppHeader() {
             {intendedOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
+
+        {/* 모바일 인증 오류 배너 — 드로어가 닫힌 상태에서 authError 가 뜨면 헤더 바로 아래에 노출.
+            데스크톱은 AuthMenu 안의 인라인 힌트가 커버하므로 lg:hidden. HINT_MS 후 clearAuthError
+            로 자체 소멸(AuthMenu 의 타이머가 authError 를 지운다) — 이 배너는 authError 값을 그대로 읽는다. */}
+        {isAuthEnabled && authError && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="lg:hidden"
+            style={{
+              padding: '8px 14px',
+              background: 'var(--pl-card)',
+              color: 'var(--pl-text)',
+              borderTop: '1px solid var(--pl-line)',
+              fontSize: 13,
+              lineHeight: 1.4,
+            }}
+          >
+            {authError === 'cancelled' ? t('auth.error.signInCancelled') : t('auth.error.signInFailed')}
+          </div>
+        )}
       </header>
 
       {/* 모바일 드로어 — 오른쪽 슬라이드 · AssistantPanel 과 같은 모션.
@@ -338,6 +365,16 @@ export default function AppHeader() {
                 </NavLink>
               ))}
             </div>
+
+            {/* 계정 섹션 — 로그인 상태에 따라 로그인 CTA · 프로필 카드 (드로어 큰 버전 size='lg') */}
+            {isAuthEnabled && (
+              <div className="border-t border-border pt-4 space-y-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {t('header.accountSection')}
+                </h3>
+                <AuthMenu size="lg" />
+              </div>
+            )}
 
             {/* 언어·테마 (기존 유지) */}
             <div className="border-t border-border pt-4 flex items-center gap-3">

@@ -26,6 +26,7 @@ import {
 } from '@/mocks/players'
 import { ASSISTANT_SAMPLES } from '@/mocks/assistant'
 import { apiIdFromAlias, normalizeLiveMatch, normalizePlayerDetail } from './normalize'
+import { NotImplementedError } from './http'
 
 // ─── 대회 ──────────────────────────────────────────────────────
 
@@ -508,3 +509,20 @@ export async function fetchLiveMatches(_opts) {
  * live 구현과 시그니처만 맞춘다 (B 판 훅이 스위치 뒤 API 를 그대로 소비).
  */
 export function invalidateMatchDetail(_id) {}
+
+// ─── 즐겨찾기 (인증 필요) ──────────────────────────────────────
+//
+// Mock 모드에서는 즐겨찾기 서버 저장이 존재하지 않는다. Supabase 로그인·백엔드 JWT 검증이
+// Mock 파이프라인 밖이기 때문 — 여기서 빈 배열을 돌려주면 로그인·비로그인 갈래가 무의미해지고
+// 실 API 스위치에서 회귀가 났을 때 화면이 조용히 성공한 것처럼 보인다.
+// isFavoritesEnabled 자체가 `USE_MOCK !== 'true'` 로 잠기므로 Provider 는 이 함수를 부르지 않는다.
+// 함수를 남겨두는 이유: api.js 스위치가 두 구현의 export 세트를 대칭으로 유지.
+// 방어선으로 NotImplementedError 를 던진다 — 실수로 스위치가 뒤집혀도 화면에 이유가 드러난다.
+
+export async function fetchMyFavorites() {
+  throw new NotImplementedError('errors.feature.favorites')
+}
+
+export async function putMyFavorites() {
+  throw new NotImplementedError('errors.feature.favorites')
+}
