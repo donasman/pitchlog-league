@@ -66,7 +66,7 @@ export default function TeamFixturesPage() {
   if (!data) return null
 
   const { team, matches, competitions } = data
-  const teamName = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
+  const teamName = getLocalizedName(team, locale) || team.name
 
   const compOptions = [
     { slug: 'all', label: t('team.allCompetitions') },

@@ -18,6 +18,8 @@ import ErrorState from '@/components/ui/ErrorState'
 import { useData } from '@/hooks/useData'
 import { fetchTeamDetail } from '@/services/api'
 import { getLocalizedName, getLocalizedCompetitionShortName } from '@/utils/localization'
+import { formatPositionLabel } from '@/utils/positionLabel'
+import { localizeCountry } from '@/utils/countryName'
 
 export default function TeamPage() {
   const { slug } = useParams()
@@ -48,7 +50,7 @@ export default function TeamPage() {
   const upcoming = pickUpcoming(matches, 2)
   const recent = pickRecent(matches, 3)
 
-  const teamDisplayName = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
+  const teamDisplayName = getLocalizedName(team, locale) || team.name
 
   return (
     <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
@@ -167,9 +169,9 @@ export default function TeamPage() {
                 <span className="text-xs text-muted-foreground w-5 text-right flex-shrink-0">{p.number}</span>
                 <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
                   { GK:'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300', DEF:'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300', MID:'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300', FWD:'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' }[p.position]
-                }`}>{p.position}</span>
+                }`}>{formatPositionLabel(p.position, t)}</span>
                 <span className="text-sm text-foreground group-hover:text-primary transition-colors truncate">{p.name}</span>
-                <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">{p.nationality}</span>
+                <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">{localizeCountry(p.nationality, locale, t)}</span>
               </Link>
             )) : (
               <div className="p-4"><EmptyState description={t('team.noSquad')} /></div>
