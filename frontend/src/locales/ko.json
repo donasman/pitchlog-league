@@ -320,8 +320,8 @@
     "treeFromR16": "16강부터 대진표로 표시됩니다 · 현재 {{round}} 진행"
   },
   "home": {
-    "heroHeadline": "유럽 5대 리그와 UCL, 한 곳에서",
-    "heroSubtitle": "진행 중인 경기는 실시간으로, 끝난 경기는 공식 기록이 확정될 때까지 표시해 둡니다. EPL · 라리가 · 분데스리가 · 세리에 A · 리그 1 · UCL을 같은 기준으로 봅니다.",
+    "heroHeadline": "유럽 축구의 모든 기록, 한 곳에서",
+    "heroSubtitle": "리그부터 컵 대회, UEFA 대회까지. 경기 결과·순위·선수 기록을 실시간으로 확인하세요.",
     "btnTodayMatches": "오늘 경기 보기",
     "askPlaceholder": "선수 기록이나 순위를 물어보세요",
     "askCta": "질문하기",

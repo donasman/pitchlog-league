@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
 import { useLiveMatches } from '@/hooks/useLiveMatches'
 import { fetchOverview } from '@/services/api'
-import { getLocalizedCompetitionName, getLocalizedCompetitionShortName } from '@/utils/localization'
+import { getLocalizedCompetitionName, getLocalizedCompetitionShortName, pickLocalized } from '@/utils/localization'
 import TeamBadge from '@/components/ui/TeamBadge'
 import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
@@ -88,7 +88,7 @@ function LiveTicker({ livePulse, nextKickoff, dataAsOf, liveAsOf, liveStale, t, 
           <div style={{ display: 'grid', gap: 4 }}>
             <span className="t-cap">{t('home.nextKickoffLabel')}</span>
             <span className="t-sec">{toKSTTime(nextKickoff.date, locale)} KST</span>
-            <span className="t-body">{nextKickoff.homeName} vs {nextKickoff.awayName}</span>
+            <span className="t-body">{pickLocalized(nextKickoff.homeName, nextKickoff.homeOriginalName, locale)} vs {pickLocalized(nextKickoff.awayName, nextKickoff.awayOriginalName, locale)}</span>
           </div>
           <Link to="/matches" className="pl-link" style={{ justifySelf: 'start' }}>
             {t('home.viewSchedule')}
@@ -330,15 +330,15 @@ function CompetitionCard({ comp, t, locale }) {
               color={comp.leader.teamColor}
               logoUrl={comp.leader.teamLogoUrl}
               size="xs"
-              name={comp.leader.teamName}
+              name={pickLocalized(comp.leader.teamName, comp.leader.teamOriginalName, locale)}
               loading="eager"
             />
             <span
               className="tname t-body"
               style={{ fontWeight: 600, flex: 1 }}
-              title={comp.leader.teamName}
+              title={pickLocalized(comp.leader.teamName, comp.leader.teamOriginalName, locale)}
             >
-              {comp.leader.teamName}
+              {pickLocalized(comp.leader.teamName, comp.leader.teamOriginalName, locale)}
             </span>
             {comp.leader.points != null && (
               <span className="num t-body" style={{ fontWeight: 700, marginLeft: 'auto', flexShrink: 0 }}>
@@ -482,11 +482,11 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t, locale }) {
         color={e.teamColor}
         logoUrl={e.teamLogoUrl}
         sizePx={24}
-        name={e.teamName}
+        name={pickLocalized(e.teamName, e.teamOriginalName, locale)}
         loading="eager"
       />
     ),
-    label: e.teamName,
+    label: pickLocalized(e.teamName, e.teamOriginalName, locale),
     value: t('home.ptsUnit', { pts: e.points }),
   }))
 
@@ -498,11 +498,11 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t, locale }) {
         color={c.leader.teamColor}
         logoUrl={c.leader.teamLogoUrl}
         sizePx={24}
-        name={c.leader.teamName}
+        name={pickLocalized(c.leader.teamName, c.leader.teamOriginalName, locale)}
         loading="eager"
       />
     ) : null,
-    label: c.leader?.teamName ?? '-',
+    label: c.leader ? pickLocalized(c.leader.teamName, c.leader.teamOriginalName, locale) : '-',
     value: getLocalizedCompetitionShortName(c, locale) || c.shortName,
   }))
 
@@ -518,11 +518,11 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t, locale }) {
         color={e.teamColor}
         logoUrl={e.teamLogoUrl}
         sizePx={20}
-        name={e.teamName}
+        name={pickLocalized(e.teamName, e.teamOriginalName, locale)}
         loading="eager"
       />
     ),
-    label: `${e.playerName ?? '-'}${e.teamName ? ` · ${e.teamName}` : ''}`,
+    label: `${pickLocalized(e.playerName ?? '-', e.playerOriginalName, locale)}${e.teamName ? ` · ${pickLocalized(e.teamName, e.teamOriginalName, locale)}` : ''}`,
     value: t('home.goalsCountUnit', { goals: e.value }),
   }))
 
@@ -571,7 +571,7 @@ function ShortcutsSection({ eplTop3, competitions, leagueScorers, t, locale }) {
    LeagueScorersSection — 리그별 득점 순위 3열 (EPL·라리가·분데스)
    fetchOverview 응답의 leagueScorers 를 소비. 각 리그 카드에 상위 5명.
 ───────────────────────────────────────────────────────────── */
-function LeagueScorersSection({ leagueScorers, t }) {
+function LeagueScorersSection({ leagueScorers, t, locale }) {
   const cols = leagueScorers ?? []
   if (cols.length === 0) return null
 
@@ -586,7 +586,7 @@ function LeagueScorersSection({ leagueScorers, t }) {
         {cols.map(col => (
           <div key={col.competitionSlug} className="pl-card" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--pl-line)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="t-sec" style={{ fontSize: 16, flex: 1 }}>{col.competitionName}</span>
+              <span className="t-sec" style={{ fontSize: 16, flex: 1 }}>{pickLocalized(col.competitionName, col.competitionOriginalName, locale)}</span>
               <Link
                 to={`/stats?competition=${col.competitionSlug}`}
                 className="pl-link"
@@ -623,7 +623,7 @@ function LeagueScorersSection({ leagueScorers, t }) {
                       color={s.teamColor}
                       logoUrl={s.teamLogoUrl}
                       sizePx={20}
-                      name={s.teamName}
+                      name={pickLocalized(s.teamName, s.teamOriginalName, locale)}
                       loading="eager"
                     />
                   </span>
@@ -631,9 +631,9 @@ function LeagueScorersSection({ leagueScorers, t }) {
                     className="t-body tname"
                     style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   >
-                    {s.playerName}
+                    {pickLocalized(s.playerName, s.playerOriginalName, locale)}
                     <span className="t-cap" style={{ marginLeft: 6, color: 'var(--pl-sub)' }}>
-                      {s.teamName}
+                      {pickLocalized(s.teamName, s.teamOriginalName, locale)}
                     </span>
                   </span>
                   <span className="num t-body" style={{ fontWeight: 700, flexShrink: 0 }}>
@@ -857,7 +857,7 @@ export default function HomePage() {
         />
 
         {/* ③ + ½ 리그별 득점 순위 */}
-        <LeagueScorersSection leagueScorers={leagueScorers} t={t} />
+        <LeagueScorersSection leagueScorers={leagueScorers} t={t} locale={locale} />
 
         {/* ④ 차별점 3개 */}
         <DiffsSection t={t} />
