@@ -50,7 +50,7 @@ export default function TeamPage() {
   const upcoming = pickUpcoming(matches, 2)
   const recent = pickRecent(matches, 3)
 
-  const teamDisplayName = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
+  const teamDisplayName = getLocalizedName(team, locale) || team.name
 
   return (
     <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
