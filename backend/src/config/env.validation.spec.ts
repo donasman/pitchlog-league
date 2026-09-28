@@ -1,6 +1,10 @@
 import { validateEnv, NodeEnv, parseLivePollerProbeIds } from './env.validation.js';
 
-const base = { DATABASE_URL: 'postgresql://u:p@localhost:5432/db' };
+// SUPABASE_URL 은 google-login (B1) 에서 필수 필드로 승격. 기존 스펙과 호환되도록 base 에 포함.
+const base = {
+  DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
+  SUPABASE_URL: 'https://test-project.supabase.co',
+};
 
 describe('validateEnv', () => {
   it('필수값이 있으면 기본값을 채워 통과한다', () => {

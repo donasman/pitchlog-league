@@ -27,7 +27,10 @@ export function setupApp(app: INestApplication): INestApplication {
     // 브라우저 실측에서 X-Gemini-Requests 를 소비하려면 필수. 헤더 자체가 없으면 아무 일도 안 일어남.
     app.enableCors({
       origin: origins,
-      methods: ['GET'],
+      // GET (조회) · POST (assistant) · PUT (즐겨찾기 교체) · OPTIONS (프리플라이트)
+      methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+      // Authorization: 즐겨찾기 API 의 Bearer JWT. Content-Type: JSON body 프리플라이트 통과.
+      allowedHeaders: ['Authorization', 'Content-Type'],
       exposedHeaders: ['X-Gemini-Requests'],
       maxAge: 600,
     });

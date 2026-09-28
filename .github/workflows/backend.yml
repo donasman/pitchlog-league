@@ -20,6 +20,8 @@ defaults:
 
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pitchlog_test
+  # 부팅 검증용 더미 URL. SupabaseAuthGuard e2e 는 로컬 JWKS 로 override 한다
+  SUPABASE_URL: https://example.supabase.co
   NODE_ENV: test
   PORT: 3000
 

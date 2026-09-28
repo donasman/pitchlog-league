@@ -82,4 +82,27 @@ describe('CacheHeaderInterceptor', () => {
     expect(resHeaders['Cache-Control']).toBeUndefined();
     expect(resHeaders['ETag']).toBeUndefined();
   });
+
+  it('GET /api/me/favorites 는 private, no-store · Vary: Authorization · ETag 없음 (google-login)', async () => {
+    const { ctx, resHeaders } = makeCtx({ url: '/api/me/favorites' });
+    await firstValueFrom(interceptor.intercept(ctx, makeHandler({ asOf: 'x', items: [] })));
+    expect(resHeaders['Cache-Control']).toBe('private, no-store');
+    expect(resHeaders['Vary']).toBe('Authorization');
+    expect(resHeaders['ETag']).toBeUndefined();
+  });
+
+  it('PUT /api/me/favorites 도 private, no-store · Vary: Authorization', async () => {
+    const { ctx, resHeaders } = makeCtx({ url: '/api/me/favorites', method: 'PUT' });
+    await firstValueFrom(interceptor.intercept(ctx, makeHandler({ asOf: 'x', items: [] })));
+    expect(resHeaders['Cache-Control']).toBe('private, no-store');
+    expect(resHeaders['Vary']).toBe('Authorization');
+    expect(resHeaders['ETag']).toBeUndefined();
+  });
+
+  it('GET /api/competitions 는 public, max-age=60 (회귀)', async () => {
+    const { ctx, resHeaders } = makeCtx({ url: '/api/competitions' });
+    await firstValueFrom(interceptor.intercept(ctx, makeHandler({ items: [] })));
+    expect(resHeaders['Cache-Control']).toBe('public, max-age=60');
+    expect(resHeaders['ETag']).toMatch(/^W\/"[A-Za-z0-9+/=]+"$/);
+  });
 });

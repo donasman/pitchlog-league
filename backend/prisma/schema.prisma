@@ -159,25 +159,25 @@ enum RunStatus {
 // ─────────────────────────────────────────────────────────────
 
 model Competition {
-  id               Int               @id @default(autoincrement())
-  apiCompetitionId Int               @unique @map("api_competition_id")
-  name             String
-  country          String
-  countryCode      String?           @map("country_code")
-  logoUrl          String?           @map("logo_url")
-  type             CompetitionType
-  format           CompetitionFormat
+  id                     Int               @id @default(autoincrement())
+  apiCompetitionId       Int               @unique @map("api_competition_id")
+  name                   String
+  country                String
+  countryCode            String?           @map("country_code")
+  logoUrl                String?           @map("logo_url")
+  type                   CompetitionType
+  format                 CompetitionFormat
   /// 컵 → 그 나라 1부 리그. 컷오프 판정의 근거 (INGESTION_STRATEGY 2-2)
-  topFlightCompetitionId Int?        @map("top_flight_competition_id")
+  topFlightCompetitionId Int?              @map("top_flight_competition_id")
   /// 우리가 수집하는 12개 + 슈퍼컵 5개
-  isTracked        Boolean           @default(false) @map("is_tracked")
-  displayOrder     Int               @default(0) @map("display_order")
-  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  isTracked              Boolean           @default(false) @map("is_tracked")
+  displayOrder           Int               @default(0) @map("display_order")
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  topFlight        Competition?      @relation("TopFlight", fields: [topFlightCompetitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  cups             Competition[]     @relation("TopFlight")
-  seasons          CompetitionSeason[]
+  topFlight Competition?        @relation("TopFlight", fields: [topFlightCompetitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cups      Competition[]       @relation("TopFlight")
+  seasons   CompetitionSeason[]
 
   @@index([topFlightCompetitionId])
   @@index([isTracked, displayOrder])
@@ -186,8 +186,8 @@ model Competition {
 
 /// 연도 마스터만. 시작·종료·현재 여부는 대회에 종속된다 (설계검토 A-1)
 model Season {
-  id     Int  @id @default(autoincrement())
-  year   Int  @unique
+  id   Int @id @default(autoincrement())
+  year Int @unique
 
   competitionSeasons CompetitionSeason[]
 
@@ -195,39 +195,39 @@ model Season {
 }
 
 model CompetitionSeason {
-  id               Int             @id @default(autoincrement())
-  competitionId    Int             @map("competition_id")
-  seasonId         Int             @map("season_id")
+  id                  Int             @id @default(autoincrement())
+  competitionId       Int             @map("competition_id")
+  seasonId            Int             @map("season_id")
   /// API-Football 이 쓰는 값 (대개 = year)
-  apiSeasonValue   Int             @map("api_season_value")
-  startDate        DateTime?       @map("start_date") @db.Date
-  endDate          DateTime?       @map("end_date") @db.Date
-  status           SeasonStatus    @default(UPCOMING)
+  apiSeasonValue      Int             @map("api_season_value")
+  startDate           DateTime?       @map("start_date") @db.Date
+  endDate             DateTime?       @map("end_date") @db.Date
+  status              SeasonStatus    @default(UPCOMING)
   /// partial unique: (competition_id) WHERE is_current — SQL 로 직접 건다
-  isCurrent        Boolean         @default(false) @map("is_current")
+  isCurrent           Boolean         @default(false) @map("is_current")
   /// 참고용. 수집 조건으로 쓰지 않는다 (DATA_RULES 6장)
-  coverage         Json?
+  coverage            Json?
   /// 1부 팀 최초 등장 라운드 — 계산 결과 캐시
-  listFromRoundId  Int?            @map("list_from_round_id")
-  detailCutoffRoundId Int?         @map("detail_cutoff_round_id")
-  detailRetention  DetailRetention @default(FULL) @map("detail_retention")
-  asOf             DateTime?       @map("as_of") @db.Timestamptz(6)
-  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  listFromRoundId     Int?            @map("list_from_round_id")
+  detailCutoffRoundId Int?            @map("detail_cutoff_round_id")
+  detailRetention     DetailRetention @default(FULL) @map("detail_retention")
+  asOf                DateTime?       @map("as_of") @db.Timestamptz(6)
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competition      Competition     @relation(fields: [competitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  season           Season          @relation(fields: [seasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  rounds           CompetitionRound[]
-  entries          CompetitionEntry[]
-  matches          Match[]
-  ties             KnockoutTie[]
-  slots            BracketSlot[]
-  standings        Standing[]
+  competition       Competition        @relation(fields: [competitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  season            Season             @relation(fields: [seasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  rounds            CompetitionRound[]
+  entries           CompetitionEntry[]
+  matches           Match[]
+  ties              KnockoutTie[]
+  slots             BracketSlot[]
+  standings         Standing[]
   playerSeasonStats PlayerSeasonStat[]
-  teamSeasonStats  TeamSeasonStat[]
-  topRankings      TopRanking[]
-  injuries         Injury[]
-  backfillJob      BackfillJob?
+  teamSeasonStats   TeamSeasonStat[]
+  topRankings       TopRanking[]
+  injuries          Injury[]
+  backfillJob       BackfillJob?
 
   @@unique([competitionId, seasonId])
   @@index([seasonId])
@@ -239,24 +239,24 @@ model CompetitionSeason {
 
 /// 라운드를 테이블로 — 이름에서 순서가 유도되지 않는다 (SCHEMA_DESIGN 3-1)
 model CompetitionRound {
-  id                  Int      @id @default(autoincrement())
-  competitionSeasonId Int      @map("competition_season_id")
+  id                  Int       @id @default(autoincrement())
+  competitionSeasonId Int       @map("competition_season_id")
   /// API 원문. "Round of 16" · "1/8-finals" · "Regular Season - 12"
   name                String
   /// 시간순
   ordinal             Int
-  teamCount           Int?     @map("team_count")
-  matchCount          Int?     @map("match_count")
+  teamCount           Int?      @map("team_count")
+  matchCount          Int?      @map("match_count")
   /// 마지막 라운드부터 역순 연속 16팀 이하 → 16강 이상
-  isLateStage         Boolean  @default(false) @map("is_late_stage")
+  isLateStage         Boolean   @default(false) @map("is_late_stage")
   /// 1부 팀이 등장하는 라운드인가
-  hasTopFlight        Boolean  @default(false) @map("has_top_flight")
+  hasTopFlight        Boolean   @default(false) @map("has_top_flight")
   firstKickoffAt      DateTime? @map("first_kickoff_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  matches             Match[]
-  ties                KnockoutTie[]
-  slots               BracketSlot[]
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  matches           Match[]
+  ties              KnockoutTie[]
+  slots             BracketSlot[]
 
   @@unique([competitionSeasonId, name])
   @@index([competitionSeasonId, ordinal])
@@ -273,42 +273,59 @@ model Venue {
   surface    String?
   imageUrl   String? @map("image_url")
 
-  teams      Team[]
-  matches    Match[]
+  teams   Team[]
+  matches Match[]
 
   @@map("venues")
 }
 
 model Team {
-  id         Int     @id @default(autoincrement())
-  apiTeamId  Int     @unique @map("api_team_id")
-  name       String
-  shortName  String? @map("short_name")
-  code       String?
-  country    String?
-  founded    Int?
-  logoUrl    String? @map("logo_url")
-  venueId    Int?    @map("venue_id")
+  id                     Int      @id @default(autoincrement())
+  apiTeamId              Int      @unique @map("api_team_id")
+  name                   String
+  shortName              String?  @map("short_name")
+  code                   String?
+  country                String?
+  founded                Int?
+  logoUrl                String?  @map("logo_url")
+  venueId                Int?     @map("venue_id")
   /// 컵 하부팀 진단용 — 처음 어느 대회에서 봤나
-  firstSeenCompetitionId Int? @map("first_seen_competition_id")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  firstSeenCompetitionId Int?     @map("first_seen_competition_id")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  venue      Venue?  @relation(fields: [venueId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  entries    CompetitionEntry[]
-  squadEntries SquadEntry[]
-  coachTenures CoachTenure[]
-  homeMatches  Match[] @relation("HomeTeam")
-  awayMatches  Match[] @relation("AwayTeam")
-  standings    Standing[]
-  teamSeasonStats TeamSeasonStat[]
+  venue             Venue?             @relation(fields: [venueId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  entries           CompetitionEntry[]
+  squadEntries      SquadEntry[]
+  coachTenures      CoachTenure[]
+  homeMatches       Match[]            @relation("HomeTeam")
+  awayMatches       Match[]            @relation("AwayTeam")
+  standings         Standing[]
+  teamSeasonStats   TeamSeasonStat[]
   playerSeasonStats PlayerSeasonStat[]
-  topRankings  TopRanking[]
+  topRankings       TopRanking[]
+  favoritedBy       UserFavoriteTeam[]
 
   @@index([venueId])
   @@index([country])
   @@index([firstSeenCompetitionId])
   @@map("teams")
+}
+
+/// 사용자 즐겨찾기 팀 (google-login 3판). userId 는 Supabase auth.users.id — FK 없음.
+/// 순서는 position 컬럼. PUT 은 트랜잭션 안 DELETE + createMany 로 전체 교체.
+model UserFavoriteTeam {
+  userId    String   @db.Uuid
+  teamId    Int
+  position  Int
+  createdAt DateTime @default(now())
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([userId, teamId])
+  @@unique([userId, position])
+  @@index([userId])
+  @@index([teamId])
+  @@map("user_favorite_teams")
 }
 
 /// 1부 팀 집합의 근거. 컵 수집 판정 = 홈/원정이 1부 리그 시즌의 entries 에 있는가
@@ -317,8 +334,8 @@ model CompetitionEntry {
   competitionSeasonId Int @map("competition_season_id")
   teamId              Int @map("team_id")
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  team                Team @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team              Team              @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, teamId])
   @@index([teamId])
@@ -343,31 +360,31 @@ model ExternalId {
 // ─────────────────────────────────────────────────────────────
 
 model Player {
-  id           Int       @id @default(autoincrement())
-  apiPlayerId  Int       @unique @map("api_player_id")
-  name         String
-  firstname    String?
-  lastname     String?
-  birthDate    DateTime? @map("birth_date") @db.Date
-  birthPlace   String?   @map("birth_place")
-  birthCountry String?   @map("birth_country")
-  nationality  String?
-  heightCm     Int?      @map("height_cm")
-  weightKg     Int?      @map("weight_kg")
-  photoUrl     String?   @map("photo_url")
+  id               Int       @id @default(autoincrement())
+  apiPlayerId      Int       @unique @map("api_player_id")
+  name             String
+  firstname        String?
+  lastname         String?
+  birthDate        DateTime? @map("birth_date") @db.Date
+  birthPlace       String?   @map("birth_place")
+  birthCountry     String?   @map("birth_country")
+  nationality      String?
+  heightCm         Int?      @map("height_cm")
+  weightKg         Int?      @map("weight_kg")
+  photoUrl         String?   @map("photo_url")
   /// NULL 이면 라인업에서 이름만 보고 만든 행 (SCHEMA_DESIGN 2-4)
   profileFetchedAt DateTime? @map("profile_fetched_at") @db.Timestamptz(6)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  squadEntries   SquadEntry[]
-  lineupEntries  LineupEntry[]
-  matchStats     PlayerMatchStat[]
-  seasonStats    PlayerSeasonStat[]
-  events         MatchEvent[] @relation("EventPlayer")
-  assists        MatchEvent[] @relation("EventAssist")
-  injuries       Injury[]
-  topRankings    TopRanking[]
+  squadEntries  SquadEntry[]
+  lineupEntries LineupEntry[]
+  matchStats    PlayerMatchStat[]
+  seasonStats   PlayerSeasonStat[]
+  events        MatchEvent[]       @relation("EventPlayer")
+  assists       MatchEvent[]       @relation("EventAssist")
+  injuries      Injury[]
+  topRankings   TopRanking[]
 
   @@map("players")
 }
@@ -390,8 +407,8 @@ model SquadEntry {
   /// 임대 시 원소속
   parentTeamId Int?         @map("parent_team_id")
 
-  player       Player       @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  team         Team         @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([teamId, seasonYear])
   @@index([playerId])
@@ -407,8 +424,8 @@ model Coach {
   nationality String?
   photoUrl    String?   @map("photo_url")
 
-  tenures     CoachTenure[]
-  lineups     MatchLineup[]
+  tenures CoachTenure[]
+  lineups MatchLineup[]
 
   @@map("coaches")
 }
@@ -422,8 +439,8 @@ model CoachTenure {
   validTo    DateTime? @map("valid_to") @db.Date
   observedAt DateTime  @map("observed_at") @db.Timestamptz(6)
 
-  coach      Coach     @relation(fields: [coachId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  team       Team      @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  coach Coach @relation(fields: [coachId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([coachId])
   @@index([teamId])
@@ -464,36 +481,36 @@ model Match {
   leg                 MatchLeg?
 
   /// 컷오프 규칙 결과. false 면 상세 4콜을 부르지 않는다
-  detailEligible      Boolean   @default(false) @map("detail_eligible")
+  detailEligible  Boolean    @default(false) @map("detail_eligible")
   /// 3값 논리: NULL=미확인 · false=확인했고 없음 · true=있음 (DATA_RULES 3장 세 번째 상태)
-  hasEvents           Boolean?  @map("has_events")
-  hasLineups          Boolean?  @map("has_lineups")
-  hasTeamStats        Boolean?  @map("has_team_stats")
-  hasPlayerStats      Boolean?  @map("has_player_stats")
-  detailCheckedAt     DateTime? @map("detail_checked_at") @db.Timestamptz(6)
+  hasEvents       Boolean?   @map("has_events")
+  hasLineups      Boolean?   @map("has_lineups")
+  hasTeamStats    Boolean?   @map("has_team_stats")
+  hasPlayerStats  Boolean?   @map("has_player_stats")
+  detailCheckedAt DateTime?  @map("detail_checked_at") @db.Timestamptz(6)
   /// 통계 확정 상태. L2 는 기본값 NONE 만 쓰고 L5 가 RECHECK → CONFIRMED 로 올린다 (SCHEMA_DESIGN 3-3)
-  statsState          StatsState @default(NONE) @map("stats_state")
-  confirmedAt         DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  statsState      StatsState @default(NONE) @map("stats_state")
+  confirmedAt     DateTime?  @map("confirmed_at") @db.Timestamptz(6)
 
   /// 실시간 이벤트 순서 보장. WHERE data_version < ? 로 역행 갱신을 막는다
-  dataVersion         Int       @default(0) @map("data_version")
-  asOf                DateTime? @map("as_of") @db.Timestamptz(6)
-  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  dataVersion Int       @default(0) @map("data_version")
+  asOf        DateTime? @map("as_of") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  venue               Venue?    @relation(fields: [venueId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  homeTeam            Team      @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  awayTeam            Team      @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  tie                 KnockoutTie? @relation(fields: [tieId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  events              MatchEvent[]
-  lineups             MatchLineup[]
-  lineupEntries       LineupEntry[]
-  teamStats           TeamMatchStat[]
-  playerStats         PlayerMatchStat[]
-  slots               BracketSlot[]
-  injuries            Injury[]
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  round             CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  venue             Venue?            @relation(fields: [venueId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  homeTeam          Team              @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  awayTeam          Team              @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  tie               KnockoutTie?      @relation(fields: [tieId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  events            MatchEvent[]
+  lineups           MatchLineup[]
+  lineupEntries     LineupEntry[]
+  teamStats         TeamMatchStat[]
+  playerStats       PlayerMatchStat[]
+  slots             BracketSlot[]
+  injuries          Injury[]
 
   @@index([competitionSeasonId, kickoffAt])
   @@index([roundId])
@@ -523,10 +540,10 @@ model KnockoutTie {
   status              TieStatus  @default(SCHEDULED)
   updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  matches             Match[]
-  slots               BracketSlot[]
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  round             CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  matches           Match[]
+  slots             BracketSlot[]
 
   @@index([competitionSeasonId, roundId])
   @@index([homeTeamId])
@@ -552,10 +569,10 @@ model BracketSlot {
   /// "Round of 32 승자" · "예선 통과"
   placeholderLabel    String?   @map("placeholder_label")
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  round               CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  match               Match?    @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  tie                 KnockoutTie? @relation(fields: [tieId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  round             CompetitionRound  @relation(fields: [roundId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  match             Match?            @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  tie               KnockoutTie?      @relation(fields: [tieId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, roundId, slotIndex])
   @@index([matchId])
@@ -585,9 +602,9 @@ model MatchEvent {
   detail         String?
   comments       String?
 
-  match          Match   @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  player         Player? @relation("EventPlayer", fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  assist         Player? @relation("EventAssist", fields: [assistPlayerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  match  Match   @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player Player? @relation("EventPlayer", fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  assist Player? @relation("EventAssist", fields: [assistPlayerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, seq])
   @@index([matchId, minute])
@@ -604,8 +621,8 @@ model MatchLineup {
   formation String?
   coachId   Int?    @map("coach_id")
 
-  match     Match   @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  coach     Coach?  @relation(fields: [coachId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  match Match  @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  coach Coach? @relation(fields: [coachId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, teamId])
   @@index([coachId])
@@ -624,8 +641,8 @@ model LineupEntry {
   grid         String?
   isStarter    Boolean @map("is_starter")
 
-  match        Match   @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  player       Player  @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  match  Match  @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, playerId])
   @@index([matchId, teamId, isStarter])
@@ -660,7 +677,7 @@ model TeamMatchStat {
   expectedGoals    Decimal? @map("expected_goals") @db.Decimal(5, 2)
   goalsPrevented   Decimal? @map("goals_prevented") @db.Decimal(5, 2)
 
-  match            Match    @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  match Match @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, teamId])
   @@index([teamId])
@@ -713,8 +730,8 @@ model PlayerMatchStat {
   penaltySaved        Int      @default(0) @map("penalty_saved")
   offsides            Int      @default(0)
 
-  match               Match    @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  player              Player   @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  match  Match  @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([matchId, playerId])
   @@index([playerId, competitionSeasonId])
@@ -763,8 +780,8 @@ model Standing {
   asOf                DateTime @map("as_of") @db.Timestamptz(6)
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  team                Team     @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team              Team              @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, teamId, groupName])
   @@index([competitionSeasonId, rank])
@@ -801,9 +818,9 @@ model PlayerSeasonStat {
   source              StatsSource @default(AGGREGATED)
   asOf                DateTime    @map("as_of") @db.Timestamptz(6)
 
-  player              Player      @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  team                Team        @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player            Player            @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team              Team              @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([playerId, teamId, competitionSeasonId])
   @@index([competitionSeasonId, goals(sort: Desc)])
@@ -844,8 +861,8 @@ model TeamSeasonStat {
   cards               Json?
   asOf                DateTime @map("as_of") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  team                Team     @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team              Team              @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, teamId])
   @@index([teamId])
@@ -863,9 +880,9 @@ model TopRanking {
   value               Int
   asOf                DateTime        @map("as_of") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  player              Player          @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  team                Team            @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player            Player            @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team              Team              @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([competitionSeasonId, category, rank])
   @@index([playerId])
@@ -888,9 +905,9 @@ model Injury {
   fixtureDate         DateTime @map("fixture_date") @db.Date
   asOf                DateTime @map("as_of") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  player              Player   @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  match               Match?   @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player            Player            @relation(fields: [playerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  match             Match?            @relation(fields: [matchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([playerId, competitionSeasonId, fixtureDate])
   @@index([teamId])
@@ -911,7 +928,7 @@ model BackfillJob {
   startedAt           DateTime?     @map("started_at") @db.Timestamptz(6)
   updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  competitionSeason   CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  competitionSeason CompetitionSeason @relation(fields: [competitionSeasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([cursorMatchId])
   @@map("backfill_jobs")
@@ -936,10 +953,10 @@ model IngestionRun {
 
 /// /status 응답 적재. 경고선 6,000콜 판단과 구독 만료 감시
 model ApiQuotaSnapshot {
-  id         Int      @id @default(autoincrement())
-  capturedAt DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
-  callsUsed  Int      @map("calls_used")
-  limitDay   Int      @map("limit_day")
+  id         Int       @id @default(autoincrement())
+  capturedAt DateTime  @default(now()) @map("captured_at") @db.Timestamptz(6)
+  callsUsed  Int       @map("calls_used")
+  limitDay   Int       @map("limit_day")
   plan       String?
   expiresOn  DateTime? @map("expires_on") @db.Date
 
