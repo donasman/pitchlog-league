@@ -52,6 +52,8 @@ export function useMyTeams() {
             return {
               competitionSlug: leagueComp.slug,
               competitionName: leagueComp.name,
+              /* en pickLocalized 소비용 원문 · leagueComp 는 normalizeCompetition 통과본 */
+              competitionOriginalName: leagueComp.originalName ?? leagueComp.name,
               rows: table.entries,
             }
           } catch (err) {

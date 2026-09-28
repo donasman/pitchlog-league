@@ -22,12 +22,25 @@
  */
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { askAssistant } from '@/services/api'
-import { SUGGESTED_QUESTIONS } from '@/mocks/assistant'
+
+/* i18n 1판 — 하드코딩 4개 프롬프트를 locales/{ko,en}.json 의 assistant.suggested.qN 로 이관.
+   원본 mocks/assistant.js:SUGGESTED_QUESTIONS 는 훅이 편집을 막아 소비만 안 함(빈 배열 취급). */
+const SUGGESTED_QUESTION_KEYS = [
+  'assistant.suggested.q1',
+  'assistant.suggested.q2',
+  'assistant.suggested.q3',
+  'assistant.suggested.q4',
+]
 
 const AssistantContext = createContext(null)
 
 export function AssistantProvider({ children }) {
+  const { t, i18n } = useTranslation()
+  /* i18n 언어가 바뀌면 useTranslation 이 리렌더 · suggestedQuestions 도 자동 재계산 */
+  const suggestedQuestions = SUGGESTED_QUESTION_KEYS.map(k => t(k))
+  void i18n
   const [isOpen,     setIsOpen]     = useState(false)
   const [messages,   setMessages]   = useState([])
   const [isThinking, setIsThinking] = useState(false)
@@ -113,7 +126,7 @@ export function AssistantProvider({ children }) {
     isThinking,
     sendMessage,
     clearConversation,
-    suggestedQuestions: SUGGESTED_QUESTIONS,
+    suggestedQuestions,
   }
 
   return (

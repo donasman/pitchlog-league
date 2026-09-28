@@ -14,7 +14,7 @@ import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
 import { useData } from '@/hooks/useData'
 import { fetchCompetitionStats, fetchCompetitionsForStats } from '@/services/api'
-import { getLocalizedCompetitionName, getLocalizedName } from '@/utils/localization'
+import { getLocalizedCompetitionName, getLocalizedName, pickLocalized } from '@/utils/localization'
 
 /* ── coverage 뱃지 ── */
 function CoverageBadge({ coverage, t }) {
@@ -31,7 +31,8 @@ function CoverageBadge({ coverage, t }) {
 // StatsRanking.jsx 와 같은 규칙: playerSlug 가 있을 때만 /players/<slug> 로 이동 가능한 Link, 없으면 div.
 // 스타일(grid 레이아웃) 은 유지 · 밑줄 없음 · 색 상속.
 function StatRow({ rank, player, value, unit, locale, t }) {
-  const name = getLocalizedName({ id: player.playerSlug, name: player.playerName }, locale) || player.playerName
+  const name = getLocalizedName({ id: player.playerSlug, name: player.playerName, originalName: player.playerOriginalName }, locale) || player.playerName
+  const teamLabel = pickLocalized(player.teamName, player.teamOriginalName, locale)
   const rowStyle = {
     display: 'grid',
     gridTemplateColumns: '28px 1fr auto',
@@ -50,7 +51,7 @@ function StatRow({ rank, player, value, unit, locale, t }) {
         >
           {name}
           <span className="t-cap" style={{ marginLeft: 6, color: 'var(--pl-sub)' }}>
-            {player.teamName}
+            {teamLabel}
           </span>
         </span>
         {(player.appearances != null || player.minutes != null) && (

@@ -19,7 +19,9 @@ import { useData } from '@/hooks/useData'
 import { fetchPlayerDetail } from '@/services/api'
 import { formatStat, playerTotals } from '@/services/normalize'
 import { calcAge } from '@/utils/dateFormat'
-import { getLocalizedName } from '@/utils/localization'
+import { getLocalizedName, pickLocalized } from '@/utils/localization'
+import { formatPositionLabel } from '@/utils/positionLabel'
+import { localizeCountry } from '@/utils/countryName'
 
 /**
  * 얇은 표시 셀. 값의 종류를 판단하지 않는다 — `formatStat` 결과가 '-' 이면
@@ -83,7 +85,7 @@ export default function PlayerPage() {
     { value: 'all', label: t('player.filterAll') },
     ...allStats.map(s => ({
       value: s.key,
-      label: `${s.seasonLabel} ${s.competitionName}${s.teamName ? ` · ${s.teamName}` : ''}`,
+      label: `${s.seasonLabel} ${pickLocalized(s.competitionName, s.competitionOriginalName, locale)}${s.teamName ? ` · ${pickLocalized(s.teamName, s.teamOriginalName, locale)}` : ''}`,
     })),
   ]
 
@@ -106,16 +108,16 @@ export default function PlayerPage() {
 
       {/* 선수 헤더 */}
       <div className="bg-card border border-border rounded-xl p-6 flex items-start gap-5">
-        <PlayerAvatar name={player.name} position={player.position} size="lg" />
+        <PlayerAvatar name={getLocalizedName(player, locale) || player.name} position={player.position} size="lg" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-4xl font-black text-muted-foreground">#{player.number}</span>
             <h1 className="text-2xl font-bold text-foreground truncate">{player.name}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <span>{player.position}</span>
+            <span>{formatPositionLabel(player.position, t)}</span>
             <span>·</span>
-            <span>{player.nationality}</span>
+            <span>{localizeCountry(player.nationality, locale, t)}</span>
             {age != null && (
               <>
                 <span>·</span>
@@ -183,7 +185,7 @@ export default function PlayerPage() {
               {filtered.map(s => (
                 <tr key={s.key} className="border-b border-border/50 hover:bg-accent/50 transition-colors">
                   <td className="px-4 py-3 font-medium text-foreground">{s.seasonLabel}</td>
-                  <td className="px-4 py-3 text-muted-foreground" style={{ whiteSpace: 'nowrap' }}>{s.competitionName}{s.teamName ? ` · ${s.teamName}` : ''}</td>
+                  <td className="px-4 py-3 text-muted-foreground" style={{ whiteSpace: 'nowrap' }}>{pickLocalized(s.competitionName, s.competitionOriginalName, locale)}{s.teamName ? ` · ${pickLocalized(s.teamName, s.teamOriginalName, locale)}` : ''}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.appearances)}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.starts)}</td>
                   <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(s.goals)}</td>
@@ -198,7 +200,7 @@ export default function PlayerPage() {
       )}
 
       {/* 이번 시즌 — seasonTotals.breakdown 를 대회별로 분해해 표기 */}
-      <ThisSeasonSection seasonTotals={seasonTotals} t={t} />
+      <ThisSeasonSection seasonTotals={seasonTotals} t={t} locale={locale} />
     </div></div></div>
   )
 }
@@ -207,7 +209,7 @@ export default function PlayerPage() {
    ThisSeasonSection — 이번 시즌 (대회별 breakdown)
    normalizePlayerDetail 이 넣은 seasonTotals 를 소비. 없으면 안내 텍스트.
 ───────────────────────────────────────────────────────────── */
-function ThisSeasonSection({ seasonTotals, t }) {
+function ThisSeasonSection({ seasonTotals, t, locale }) {
   return (
     <section className="bg-card border border-border rounded-xl overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
@@ -240,7 +242,9 @@ function ThisSeasonSection({ seasonTotals, t }) {
             {(seasonTotals.breakdown ?? []).map(b => (
               <tr key={b.competitionRef ?? b.competitionApiId} className="border-b border-border/50">
                 <td className="px-4 py-3 font-medium text-foreground">
-                  {b.competitionShortName ?? b.competitionName}
+                  {locale === 'en'
+                    ? (b.competitionShortOriginalName || b.competitionOriginalName || b.competitionShortName || b.competitionName)
+                    : (b.competitionShortName || b.competitionName)}
                 </td>
                 <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(b.apps)}</td>
                 <td className="text-center px-3 py-3 text-muted-foreground">{formatStat(b.goals)}</td>
