@@ -332,7 +332,7 @@
     "nextKickoffLabel": "다음 킥오프",
     "viewAllLive": "진행 중인 경기 모두 보기",
     "viewSchedule": "오늘 일정 전체 보기",
-    "competitionSection": "6개 대회 현황",
+    "competitionSection": "주요 리그",
     "competitionSectionDesc": "카드를 누르면 해당 대회 순위로 이동합니다",
     "viewAllComps": "모든 대회 보기",
     "leaderLabel": "선두",
@@ -564,7 +564,7 @@
     }
   },
   "round": {
-    "regularSeason": "정규 리그 {{n}}라운드",
+    "regularSeason": "{{n}}라운드",
     "leaguePhaseMatchday": "리그 페이즈 {{n}}라운드",
     "matchday": "{{n}}라운드",
     "oneOverN": "1/{{n}} 결선",
