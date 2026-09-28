@@ -92,7 +92,9 @@ export default function PlayerPage() {
   // 필터 시 표 아래에 부분 합계를 남긴다 (표의 일부, 종합 요약 아님).
   const filteredTotals = filterComp === 'all' ? null : playerTotals(filtered)
 
-  const teamName = getLocalizedName({ id: team?.id, name: team?.name }, locale) || team?.name
+  /* 팀 객체 전체(originalName 포함) 를 넘겨 en 이 원문 "Manchester City" 로 떨어지게 한다.
+     이전 `{id, name}` 만 넘기던 관용구는 originalName 을 잃어 en → ko 로 폴백되던 회귀. */
+  const teamName = getLocalizedName(team, locale) || team?.name
 
   return (
     <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}><div className="pl-container" style={{ paddingBlock: '20px 48px' }}><div style={{ maxWidth: 960, margin: 0 }} className="space-y-5">
@@ -112,7 +114,7 @@ export default function PlayerPage() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-4xl font-black text-muted-foreground">#{player.number}</span>
-            <h1 className="text-2xl font-bold text-foreground truncate">{player.name}</h1>
+            <h1 className="text-2xl font-bold text-foreground truncate">{getLocalizedName(player, locale) || player.name}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             <span>{formatPositionLabel(player.position, t)}</span>

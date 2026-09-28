@@ -67,7 +67,8 @@ export default function TeamsPage() {
               >
                 {teams.map(team => {
                   const isUCL = team.competitions?.includes('champions-league')
-                  const name  = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
+                  /* team 객체 전체(originalName 포함) 를 넘겨 en 이 원문으로 떨어지게 · 이전 {id,name} 만 넘기던 관용구는 en → ko 폴백 회귀 */
+                  const name  = getLocalizedName(team, locale) || team.name
                   return (
                     <Link
                       key={team.id}
