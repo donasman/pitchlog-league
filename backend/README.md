@@ -1,10 +1,10 @@
 # backend — PitchLog Core API
 
-NestJS 기반 핵심 서비스. 외부 축구 API 수집, REST API, 실시간 Gateway, AI 조회 도구를
+NestJS 기반 핵심 서비스. 외부 축구 API 수집, REST API, 라이브 폴러, AI 조회 도구, 로그인 사용자 즐겨찾기를
 하나의 모듈형 모놀리스에서 운영한다.
 
-- 스택: NestJS + TypeScript, PostgreSQL + Prisma, Socket.io, vitest + Supertest
-- 실시간 이벤트는 DB commit 성공 후 이 애플리케이션의 Gateway가 직접 발행한다
+- 스택: NestJS + TypeScript, PostgreSQL(Supabase) + Prisma, `@nestjs/schedule`, `jose`(Supabase JWT 검증), vitest + Supertest
+- 실시간은 Socket.io Gateway 가 아니라 **REST 폴링**이다 — 프론트가 `GET /api/live` 를 15초마다 부른다 (09-27 PR #123). 서버 쪽은 DB commit 뒤 `data_version` 을 올리고, 프론트가 그 값으로 병합한다
 - 숫자·순위·비교·진출 판정은 전부 이 계층에서 확정한다
 - **외래키를 만들지 않는다** (`relationMode = "prisma"`). 참조 무결성은 이 계층 책임
 
@@ -12,21 +12,22 @@ NestJS 기반 핵심 서비스. 외부 축구 API 수집, REST API, 실시간 Ga
 [BACKEND_GUIDE.md](../docs/BACKEND_GUIDE.md)를 따른다.
 현재 진행 상황과 다음 순서는 [NEXT_STEPS.md](../docs/NEXT_STEPS.md)가 기준이다.
 
-## 상태 — Phase 1 진행 중 (2026-09-08)
+## 상태 — Phase 2 진행 중 (2026-10-07 · 09-28 PR #129 까지)
 
 | 영역 | 상태 |
 |---|---|
-| 스키마 | Prisma 모델 29 · enum 17 · 인덱스 90 · 외래키 0. partial unique 4개는 `prisma/sql/partial-indexes.sql` |
-| 수집 | **L0**(대회 17 · 대회시즌 83 · 팀 1,888) · **L1 스쿼드**(155팀) · **L2 5시즌**(라운드 1,070 · 경기 9,787 · 순위 654) · **L6 시즌 집계**(선수 통계 30,925 · 랭킹 2,335 · 팀 통계 489 · 선수 13,591) · 로고 자체 저장 |
-| 조회 API | `/api/competitions`(+`/:ref`) · `/api/teams`(+`/:ref`) · **`/api/matches`(+`/:ref`) · `/api/standings`** (09-07) · **`/api/players/:ref` · `/api/stats/{scorers,assisters}`** (09-09 PR #34·#36). Swagger `/docs` 가 계약 |
-| 백업 | `pg_dump` 주기 백업 + 복원 리허설 (로컬 보관 · 수동 실행) |
-| 테스트 | 단위 53 · e2e 10파일 85건 (`l0`·`l1`·`l2`·`l6` 는 로컬 DB·CI 에서만) |
-| 남은 것 | L3·L5 경기 상세(1장 3번) → 서버화·배포 → L4 실시간 (`docs/NEXT_STEPS.md` 1장) |
+| 스키마 | Prisma 모델 **30** (09-28 `UserFavoriteTeam` 추가) · enum 18 · 외래키 0. partial unique 는 `prisma/sql/partial-indexes.sql`. 09-28 마이그레이션 2개 — `enable_rls_public`(public 테이블 RLS) · `add_user_favorite_teams` |
+| 수집 | **L0** 19대회 · **L1 스쿼드** · **L2 5시즌** · **L3·L5 경기 상세 5시즌**(백필-2 · 09-24 서버 실측에서 완료 확인) · **L4 라이브**(관측 · 쓰기 · FT 즉시 상세) · **L6 시즌 집계** · 로고 자체 저장. 적재 수치는 `docs/NEXT_STEPS.md` 0장 |
+| 조회 API | 엔드포인트 17개 — 대회·팀(+`/:ref`) · 경기(+`/:ref` · `/:ref/detail`) · 순위 · 선수 · 통계(scorers·assisters) · 검색 · **`/api/live`** · **`GET/PUT /api/me/favorites`**(로그인 필요) · `POST /api/assistant` · `/health`. Swagger `/docs` 가 계약 |
+| 스케줄러 | `src/scheduler/` 잡 5개 — 백필 워커 · L2 매일 · L1 매주 · 라이브 폴러 · 쿼터 스냅숏. **전부 기본 꺼짐** (`SCHEDULER_ENABLED` 마스터 + 잡별 스위치 · `docs/DEPLOY.md`) |
+| 배포 | EC2 systemd (`infra/ec2/`) · 프론트는 Vercel `/api` rewrite. 백업은 EC2 타이머 → S3 매일 + PC 수동 `npm run backup` |
+| 테스트 | 10-07 정적 grep: 단위 31파일 288건 · e2e 20파일 206건 (`l0`·`l1`·`l2`·`l3`·`l5`·`l6` 등 쓰기 e2e 는 로컬 DB·CI 에서만) |
+| 남은 것 | 운영 L4 쓰기 모드 확인 · 실제 라운드 1회 무중단 관측 · L6 주기 잡 · 알림 (`docs/NEXT_STEPS.md` 1장 "10-07 기준 남은 것") |
 
 ## 실행
 
 ```bash
-cp .env.example .env      # DATABASE_URL · API_FOOTBALL_KEY 등을 채운다
+cp .env.example .env      # DATABASE_URL · SUPABASE_URL(필수 · 없으면 부팅 실패) · API_FOOTBALL_KEY 등을 채운다
 npm install
 npm run start:dev         # http://localhost:3000 · Swagger /docs · /health
 ```
@@ -34,8 +35,8 @@ npm run start:dev         # http://localhost:3000 · Swagger /docs · /health
 ### 검증
 
 ```bash
-npm run verify            # prisma validate · typecheck · lint · 단위 53건
-npm run test:e2e          # e2e 10파일 85건
+npm run verify            # prisma validate · typecheck · lint · 단위 테스트
+npm run test:e2e          # e2e (10-07 기준 20파일)
 ```
 
 `l0`·`l1`·`l2`·`l6` e2e 는 도메인 테이블에 가짜 행을 쓴다. **원격 DB 에서는 스스로 거부한다** —
@@ -66,12 +67,14 @@ npm run ingest -- logos   # 로고를 받아 ../frontend/public/logos 에 저장
 `--only=` 로 갈래 하나만 돌리면 **`backfill_jobs` 를 닫지 않는다** — 일부만 받아 놓고
 `dataState` 가 COMPLETE 라고 말하면 시즌 선택기가 빈 화면을 노출한다.
 
-스케줄러는 아직 없다. Phase 2 에서 붙인다.
+운영에서는 같은 서비스를 스케줄러 잡(`src/scheduler/`)이 부른다 — 백필 워커(`backfill`) · L2 매일 · L1 매주.
+스케줄러 자리에서는 `--all-seasons` 를 쓰지 않는다. 켜고 끄는 방법과 상태 확인(`/health` 의 scheduler 블록)은 `docs/DEPLOY.md`.
 
 ### 어시스턴트 (MCP)
 
 `backend/src/assistant/` — 조회 서비스 10개를 LLM 이 부를 수 있는 **MCP 도구**로 감싼 계층.
-직접 부르는 채팅 UI 는 없다 (후속 판). stdio 서버로 Claude Desktop 등 외부 MCP 클라이언트가 접속한다.
+같은 도구를 두 곳에서 쓴다 — 사이트의 `POST /api/assistant`(Gemini · 프론트 `AssistantPanel`, 09-09 PR #41)와
+stdio MCP 서버(Claude Desktop 등 외부 MCP 클라이언트).
 
 ```bash
 npm run mcp   # nest build && node dist/cli/mcp.js — stdout 은 JSON-RPC 전용, 로그는 stderr
@@ -101,8 +104,8 @@ Flash 3.x 계열(3·3.5·3.6·3.7·3.8) 과 2.5-Flash 는 전부 RPD 20 이라 �
 Flash Lite 계열(3.1-flash-lite · 3.5-flash-lite) 만 RPD 500(TPM 250K · RPM 15).
 근거: `docs/NEXT_STEPS.md` "429 원인 재판정" 절 (AI Studio 대시보드 실측 표).
 09-09 기록 "gemini-2.5-flash 404 (신규 프로젝트에 제공되지 않는다)" 는 낡았다 — 지금은
-한도가 잡혀 있다(3.x-flash 와 같은 취급 · RPD 20). `env.validation.ts` 코드 기본값은
-여전히 `gemini-3.5-flash` — 별도 판에서 lite 로 옮긴다.
+한도가 잡혀 있다(3.x-flash 와 같은 취급 · RPD 20). `env.validation.ts:144` 코드 기본값은
+10-07 에도 `gemini-3.5-flash` (`.env.example` 은 `gemini-3.6-flash`) — 운영은 `infra/ec2/backend.env.example` 의 lite 를 쓴다. 기본값 이관은 별도 판.
 
 ### 경기 상세 백필 (L3·L5)
 
@@ -127,7 +130,7 @@ npm run ingest -- backfill --season=2025 --limit=200 # 특정 시즌만
 `--season` 없으면 화면 6대회 현재 시즌만 (`isCurrent:true` + `screenCompetitionWhere`).
 `--limit` 없으면 오늘 남은 상한(5,700 - used)까지. 매 경기 앞에 상한 재확인.
 
-**관문**: 첫 대량 쓰기 전 `npm run backup` 필수. 무인 실행(나머지 4시즌)은 백업 자동화 이후.
+**관문**: 첫 대량 쓰기 전 `npm run backup` 필수. 무인 실행(나머지 4시즌)은 백업 자동화(09-16 S3) 뒤에 스케줄러 백필 워커로 돌았고, 09-24 서버 실측에서 완료 상태였다.
 
 중단 사유 6종(`quota_exhausted` · `daily_cap` · `limit_reached` · `no_targets` · `done` · `error`)은
 stdout 요약에 대회시즌별 `processed`·`failed`·`stoppedReason` 으로 표시된다.
@@ -147,16 +150,26 @@ npm run backup:verify     # 일회용 postgres 컨테이너에 복원해 운영 
 
 ```
 src/
-├── competition/ team/ match/ standing/ player/ statistics/  조회 API
-├── assistant/               MCP 도구 층 (조회 서비스 wrapper)
+├── competition/ team/ match/ standing/ player/ statistics/ search/  조회 API
+├── live/                  GET /api/live (진행 중 + 최근 종료 — kickoff 5h 이내 ≈ FT 후 3h)
+├── auth/                  Supabase Auth JWT 가드 (ES256 · JWKS DI 토큰 SUPABASE_JWKS)
+├── user-favorites/        GET/PUT /api/me/favorites
+├── assistant/             MCP 도구 층 (조회 서비스 wrapper) + POST /api/assistant
+├── scheduler/             잡 5개 + SchedulerState (/health 노출)
 ├── ingestion/
 │   ├── api-football/      HTTP client · 쿼터 스냅샷
 │   ├── l0/                대회·시즌·팀·경기장 + 카탈로그
 │   ├── l1/                스쿼드 스냅샷 + diff (squad-diff.ts 는 순수 함수)
+│   ├── l2/                라운드·경기·순위
+│   ├── l3/ l5/            경기 상세 — 라인업 · 이벤트 · 팀/선수 통계
+│   ├── l4/                라이브 폴러 — live-window · observer · writer(역행 가드) · finalizer(FT 상세)
+│   ├── l6/                시즌 집계 — 선수 통계 · 랭킹 · 팀 통계
+│   ├── backfill/          MatchDetailsBackfillService (backfill_jobs 체크포인트)
+│   ├── probe/             실측 전용 (쓰기 없음)
 │   ├── logos/             로고 자체 저장
 │   └── screen-scope.ts    "화면에 나오는 대회" 단일 정의
-├── prisma/                PrismaService · batch-upsert · IntegrityService
-├── cli/                   ingest CLI
+├── prisma/                PrismaService · batch-upsert(updateWhere) · IntegrityService
+├── cli/                   ingest · mcp · check-details · seed-localized-names
 └── common/ config/ health/
 scripts/                   backup.mjs · restore-check.mjs (앱과 무관하게 돈다)
 ```
