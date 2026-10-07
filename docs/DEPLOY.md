@@ -16,6 +16,7 @@
 | DATABASE_URL | 채워야 함 | Supabase Session Pooler 5432 · `sslmode=require` |
 | GEMINI_API_KEY | 채워야 함 | AI Studio |
 | API_FOOTBALL_KEY | 채워야 함 | rapidapi (서버는 조회만이면 비워도 됨) |
+| SUPABASE_URL | 채워야 함 (09-28 #129 부터 **필수**) | `https://<프로젝트>.supabase.co` — 없으면 env 검증에서 부팅 실패 (`env.validation.ts:113`). 아래 "Google 로그인" 절 |
 
 ## 첫 배포 (1회)
 
@@ -48,7 +49,7 @@ sudo bash ec2/bootstrap.sh
 sudoedit /etc/pitchlog/backend.env
 ```
 
-필수: `DATABASE_URL` · `GEMINI_API_KEY` · `API_FOOTBALL_KEY`. 나머지는 기본값. `GEMINI_MODEL=gemini-3.5-flash-lite` 확인 (RPD 500).
+필수: `DATABASE_URL` · `SUPABASE_URL`(09-28 #129 부터) · `GEMINI_API_KEY` · `API_FOOTBALL_KEY`. 나머지는 기본값. `GEMINI_MODEL=gemini-3.5-flash-lite` 확인 (RPD 500).
 
 ### 4. 저장소 clone
 
@@ -65,7 +66,15 @@ git clone https://github.com/donasman/pitchlog-league.git .
 bash /opt/pitchlog/infra/ec2/deploy.sh
 ```
 
-`main` 기준. `npm ci` → `prisma generate` → `nest build` → systemd 재시작 → health 30초 대기.
+인자가 없으면 `main` 기준 (`deploy.sh:22` `REF="${1:-main}"`). `npm ci` → `prisma generate` → `nest build` → systemd 재시작 → health 30초 대기.
+
+> ⚠️ **10-07 기준 운영 배포는 `dev` 다** — `main` 은 09-07(#4) 에 멈춰 있고 `infra/ec2/` 도 없다(`infra/README.md` 뿐).
+> `dev` → `main` 릴리즈 PR 을 한 번도 내지 않았으므로 `bash /opt/pitchlog/infra/ec2/deploy.sh dev` 로 배포한다.
+> Vercel Production Branch 도 `dev` (아래 Vercel 절 4번).
+>
+> **`deploy.sh` 는 마이그레이션을 적용하지 않는다** (`prisma migrate` 단계 없음). 새 마이그레이션이 든 판은
+> 배포 전에 따로 적용해야 한다 — 09-28 #129 의 `20260928120000_enable_rls_public` · `20260928120100_add_user_favorite_teams`.
+> 적용 여부는 10-07 문서에 기록 없음.
 
 ### 6. 확인
 
@@ -83,6 +92,7 @@ sudo systemctl status pitchlog-backend
 3. **Environment Variables**:
    - `VITE_USE_MOCK=false`
    - `VITE_API_BASE_URL` 은 **비워 둔다** (same-origin · `services/http.js:15` 이 빈 값이면 `/api/...` 상대경로로 fetch)
+   - `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` (09-28 #129) — **둘 다 있어야 로그인 UI 가 뜬다.** 하나라도 비면 로그인·즐겨찾기가 조용히 꺼진다(콘솔 경고 1회 · `frontend/.env.example`). 빌드 시점에 박히므로 값을 바꾸면 재배포
 4. **Production Branch**: `dev` — 저장소 기본 브랜치가 `dev` 이므로 Vercel Settings → Git → Production Branch 를 `dev` 로 (main 은 뒤처져 있어 `vercel.json` 이 없다)
 5. **SPA fallback rewrite 필수** — `vercel.json` 에 `/((?!api/|assets/).*)` → `/index.html` 규칙이 있어야 딥링크(주소창 직접 진입·새로고침·북마크) 가 404 안 뜬다. `/api/` 규칙 뒤 순서 유지. `/assets/` 는 Vite 빌드 정적 자산이라 명시 제외 (Vercel filesystem 매치가 rewrite 앞선다지만 안전 보장 위해 · root 정적 favicon 등은 filesystem 우선 매치에 의존).
 6. 배포 후 확인:
@@ -615,6 +625,27 @@ sudo systemctl restart pitchlog-backend
 - [ ] `journalctl -u pitchlog-backend --since today | grep "live-poller error"` — 0 (있으면 원인 조사 · `lastError` 는 메시지만 저장, 스택 없음)
 - [ ] `journalctl -u pitchlog-backend --since today | grep "live-poller stop"` — used ≥ 7000 에 실제로 도달했는지
 
+## Google 로그인 (Supabase Auth · 09-28 PR #129)
+
+로그인과 서버 저장 즐겨찾기(`GET/PUT /api/me/favorites`)가 이 판에서 들어왔다. 배포 쪽에서 필요한 것:
+
+| 자리 | 값 | 코드 근거 |
+|---|---|---|
+| EC2 `/etc/pitchlog/backend.env` | `SUPABASE_URL=https://<프로젝트>.supabase.co` (path 없음) — **필수** | `env.validation.ts:113` · JWKS `${SUPABASE_URL}/auth/v1/.well-known/jwks.json` · issuer `${SUPABASE_URL}/auth/v1` |
+| Vercel env | `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` | `frontend/.env.example` |
+| DB | 마이그레이션 2개 — `enable_rls_public` · `add_user_favorite_teams` (`deploy.sh` 가 적용하지 않음) | `backend/prisma/migrations/20260928*` |
+| Supabase 대시보드 | Google provider 켜기 · Redirect URLs 에 Vercel 도메인 허용 — 프론트가 `redirectTo = origin + pathname` 으로 보내므로 경로까지 허용해야 한다 (예: `https://<앱>.vercel.app/**`) | `AuthContext.jsx:78-84` |
+
+`infra/ec2/backend.env.example` 에는 아직 `SUPABASE_URL` 줄이 없다 (10-07) — 템플릿으로 새 서버를 만들면 부팅이 실패한다.
+위 네 자리의 **운영 설정 여부는 10-07 문서에 기록이 없다.**
+
+확인:
+
+```bash
+curl -i http://localhost:3000/health                      # 부팅 성공 = SUPABASE_URL 통과
+curl -i http://localhost:3000/api/me/favorites            # 토큰 없이 401 이 정상
+```
+
 ## 실측 체크리스트 (첫 배포 후)
 
 - [ ] **(a) 백엔드 직결**: `curl -i http://3.36.159.128:3000/health` — 200 · `db:true`
@@ -651,9 +682,9 @@ sudo systemctl restart pitchlog-backend
 
 ### 이 판이 하지 않은 것
 
-- **GitHub Actions 자동 배포** — 4-a-2 후속 판
-- **백업 자동화 · S3 이전 · IAM 역할** — `docs/NEXT_STEPS.md` 4장 **4-c** 후속 판
-- **스케줄러 · 워커 (백필-2 무인)** — 4-b
+- **GitHub Actions 자동 배포** — 4-a-2 후속 판 (10-07 기준 여전히 수동 `deploy.sh`)
+- ~~**백업 자동화 · S3 이전 · IAM 역할**~~ — ✅ 09-16 PR #72 (위 "백업 자동화 (S3)" 절)
+- ~~**스케줄러 · 워커 (백필-2 무인)**~~ — ✅ 09-16 PR #78·#79 (위 "백필 워커" 절) · 백필-2 는 09-24 서버 실측에서 완료 상태
 - **Caddy · 도메인 · 80/443 · CloudFront** — 필요 시 별도
 - **Dockerfile** — Docker 안 씀 결정
 - **프론트 코드 변경** — `vercel.json` 만
