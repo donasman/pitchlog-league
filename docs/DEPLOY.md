@@ -132,7 +132,7 @@ bash /opt/pitchlog/infra/ec2/deploy.sh dev      # dev 브랜치
 bash /opt/pitchlog/infra/ec2/deploy.sh v1-...   # 태그
 ```
 
-이전 dist 는 자동으로 `dist.prev` 로 보존된다. health 실패 시 스크립트가 롤백 명령을 출력한다.
+이전 dist 는 자동으로 `dist.prev` 로 보존된다 — **배포 시작 시점에 서비스가 health 를 통과할 때만** 갱신하므로, 실패한 배포를 반복해도 마지막 성공본이 남는다 (10-07). health 실패 시 스크립트가 롤백 명령을 출력한다.
 
 ## 롤백
 
@@ -636,7 +636,8 @@ sudo systemctl restart pitchlog-backend
 | DB | 마이그레이션 2개 — `enable_rls_public` · `add_user_favorite_teams` (`deploy.sh` 가 적용하지 않음) | `backend/prisma/migrations/20260928*` |
 | Supabase 대시보드 | Google provider 켜기 · Redirect URLs 에 Vercel 도메인 허용 — 프론트가 `redirectTo = origin + pathname` 으로 보내므로 경로까지 허용해야 한다 (예: `https://<앱>.vercel.app/**`) | `AuthContext.jsx:78-84` |
 
-`infra/ec2/backend.env.example` 에는 아직 `SUPABASE_URL` 줄이 없다 (10-07) — 템플릿으로 새 서버를 만들면 부팅이 실패한다.
+`infra/ec2/backend.env.example` 에 `SUPABASE_URL` 줄을 넣었다 (10-07). 그 전 템플릿으로 만든 서버는 `/etc/pitchlog/backend.env` 에 직접 추가해야 한다 —
+10-07 운영 EC2 가 이 줄 없이 재시작 루프에 빠졌다 (`SUPABASE_URL must be a URL address`). 값만 넣고 `sudo systemctl restart pitchlog-backend` 하면 된다 (재빌드 불필요).
 위 네 자리의 **운영 설정 여부는 10-07 문서에 기록이 없다.**
 
 확인:
