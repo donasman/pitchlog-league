@@ -1,7 +1,7 @@
 # PitchLog League — Claude Code 가이드
 
 > 유럽 5대 리그 + UEFA Champions League 축구 데이터 서비스 (PitchLog v2)
-> 확정 범위: 12대회(5대 리그 + UCL + 국내 컵 6개) × 최근 5시즌 (2026-09-04 확정, `docs/INGESTION_STRATEGY.md` 1장)
+> 확정 범위: ~~12대회~~ → **19대회**(5대 리그 + UCL + 국내 컵 6 + 슈퍼컵 5 + UEL + UECL) × 최근 5시즌 (2026-09-17 확장 · PR #85, `docs/INGESTION_STRATEGY.md` 1장)
 > Repository: https://github.com/donasman/pitchlog-league
 > 환경: Windows Git Bash
 > 전신: `donasman/pitchlog`(2026 WC 아카이브, `47f3749`에서 동결) — 설계 근거는
@@ -16,9 +16,11 @@
 pitchlog-league/                 ← 모노레포 루트
 ├── backend/                     ← NestJS + TypeScript + Prisma
 │   ├── src/
-│   │   ├── competition/ team/ match/ standing/ player/ statistics/ search/   ← 조회 API
+│   │   ├── competition/ team/ match/ standing/ player/ statistics/ search/ live/   ← 조회 API
+│   │   ├── auth/ user-favorites/ ← Supabase Auth JWT 가드 · GET/PUT /api/me/favorites
+│   │   ├── scheduler/           ← 백필 워커 · L2 매일 · L1 매주 · 라이브 폴러 · 쿼터 스냅숏
 │   │   ├── assistant/           ← LLM 도구 층 + POST /api/assistant (Gemini)
-│   │   ├── ingestion/           ← api-football · l0 · l1 · l2 · l3 · l5 · l6 · backfill · probe · logos · screen-scope.ts
+│   │   ├── ingestion/           ← api-football · l0 · l1 · l2 · l3 · l4 · l5 · l6 · backfill · probe · logos · screen-scope.ts
 │   │   ├── cli/                 ← ingest · mcp(stdio 서버) · check-details · seed-localized-names
 │   │   └── common/ config/ prisma/ health/
 │   ├── prisma/                  ← schema · migration · partial-indexes.sql
@@ -26,16 +28,16 @@ pitchlog-league/                 ← 모노레포 루트
 │   └── test/                    ← e2e — l0·l1·l2·l3·l5·l6·assistant·search·match-detail 등. 단위는 src 안 *.spec.ts
 ├── frontend/                    ← React + Vite + JavaScript, Node 22 고정
 │   └── src/
-│       ├── pages/               ← competitions · teams · players · matches · standings · stats · notifications · UCLKnockout · Match
+│       ├── pages/               ← competitions · teams · players · matches · standings · stats · notifications · Match (UCL 대진표는 대회 페이지 탭으로 흡수 · #104)
 │       ├── routes/              ← React Router 라우트 정의
-│       ├── components/          ← ui · home · assistant · layout · notifications
-│       ├── contexts/            ← AssistantContext · FavoritesContext · NotificationContext
+│       ├── components/          ← ui · home · competition · assistant · layout · notifications
+│       ├── contexts/            ← AssistantContext · AuthContext · FavoritesContext · NotificationContext
 │       ├── services/            ← api(전환 스위치) · mock · live · normalize · http · favorites · clock · env
 │       ├── mocks/               ← 화면 검증용 Mock Data
 │       └── layouts/ lib/ styles/ utils/ hooks/ i18n/ locales/ assets/
 │   └── public/logos/            ← 자체 저장 로고 (teams · competitions)
 ├── design/                      ← Web Foundation 토큰·다크 테마
-├── infra/                       ← 배포 설정 (docker-compose.yml 은 예정)
+├── infra/ec2/                   ← EC2 배포 — bootstrap · deploy · systemd 유닛(백엔드·백업 타이머) · S3 백업 (Docker 안 씀)
 ├── docs/
 │   ├── BACKEND_GUIDE.md         ← 백엔드 개발 기준 (ADR-001 기반, 현재 기준)
 │   ├── FRONTEND_GUIDE.md        ← 프론트엔드 개발 기준 (현재 기준)
@@ -270,14 +272,15 @@ API-Football API 키는 환경변수로만 주입한다.
 
 | Phase | 내용 | 검증 기준 | 상태 |
 |---|---|---|---|
-| **0** | 안전장치 + 배포 (PoC 는 재정의 — Railway + Pages + CORS) | 8-2 DoD 4항목 | 🚧 CI·Ruleset·pre-commit·Supabase·스켈레톤 완료 / 배포는 `NEXT_STEPS` 1장 4번 |
+| **0** | 안전장치 + 배포 (~~Railway + Pages~~ → **EC2 + Vercel**, 09-15 결정) | 8-2 DoD 4항목 | ✅ CI·Ruleset·pre-commit·Supabase·스켈레톤 · **배포 운영 중(09-16 · `dev` 기준)** / `main` 릴리즈·Phase 태그 미실시 |
 | **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — L0 · L1 스쿼드 · 조회 API · 백업·복원 리허설 / L1 #9~#11 남음 |
-| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | 🚧 **백필-1 완료(09-08)** · L3·L5 쓰기 코드 + **현재 시즌 6대회 상세 CONFIRMED**(09-10 PR #46) / 과거 4시즌 상세는 서버화(`NEXT_STEPS` 1장 4번) 뒤 무인 (1장 3~5번) |
-| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 — 실 API 연결 · 경기 상세 3탭(#47) · 팀 상세 배선 + 홈 득점 순위 + 리그 순위 일반화(#48) · 레이아웃 정렬(#49) · 전역 검색 + 한국어 시드(#50) · 어시스턴트(도구 층 + LLM + 근거 카드) · 어시스턴트 응답 압축(#52) · 즐겨찾기(로컬) · 로고 적용 / UCL 녹아웃 대진(2027-02) · 알림 · 배포 미착수 |
-| **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🚧 L6 수집 코드는 09-08 에 들어갔다(백필-1). 주기 보정은 스케줄러 뒤 |
+| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | 🚧 백필-1(09-08) · L3·L5(#46) · **백필-2 완료(09-24 확인)** · 스케줄러 L2 매일·L1 매주(#109) · **L4 실시간 코드 4판**(#111~#123) / 운영 쓰기 모드 확인 · **실제 라운드 1회 무중단 관측** 남음 |
+| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 — 실 API 연결 · 경기 상세 3탭(#47) · 팀 상세 배선 + 홈 득점 순위 + 리그 순위 일반화(#48) · 레이아웃 정렬(#49) · 전역 검색 + 한국어 시드(#50) · 어시스턴트(도구 층 + LLM + 근거 카드) · 어시스턴트 응답 압축(#52) · 로고 적용 · 배포(EC2+Vercel) · 대진표 탭(#104) · 라이브 15초 폴링(#123) · 언어별 이름(#126) · **Google 로그인 + 서버 저장 즐겨찾기**(#129) / **알림**(Mock 만) 남음 |
+| **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🚧 L6 수집 코드는 09-08 에 들어갔다(백필-1). 스케줄러는 있으나 L6 주기 잡은 없다 |
 
 > ⚠️ **범위가 바뀌었다 (2026-09-04~06).** 원래 Phase 1은 EPL 단독이었고 Phase 4가 다중화였으나,
 > 실측 이후 **12대회(5대 리그 + UCL + 국내 컵 6개) × 최근 5시즌**이 Phase 1부터 범위에 들어왔다.
+> 09-17 에 슈퍼컵 5 · UEL · UECL 이 더해져 **19대회**가 됐다 (PR #85).
 > Phase 4의 실질 내용은 다중화가 아니라 보정·알림·예산 실측이다.
 > 수집 범위와 콜 예산은 `docs/INGESTION_STRATEGY.md`, 테이블은 `docs/SCHEMA_DESIGN.md`가 기준이다.
 > **외래키를 사용하지 않는다** — 참조 무결성은 백엔드 책임 (`docs/BACKEND_GUIDE.md`).
@@ -286,9 +289,10 @@ Phase 0 DoD, PR 단위 분해(#1~#6), Phase 1의 구체적 작업 순서는 `V2_
 
 Phase 3은 백엔드보다 먼저 Mock Data 기반으로 진행했다. `services/api.js` 는 이제
 **`VITE_USE_MOCK` 으로 `mock.js`·`live.js` 중 하나를 고르는 전환 스위치**다 (09-07).
-대회·팀·경기·순위·선수·통계·경기 상세·전역 검색·어시스턴트는 실 API 를 타고,
-**UCL 녹아웃 대진**(백엔드 없음, 2027-02)·**알림**은 아직 없어 `NotImplementedError` 로 드러난다.
-남은 것은 배포와 과거 4시즌 경기 상세 백필 둘이다.
+대회·팀·경기·순위·선수·통계·경기 상세·전역 검색·어시스턴트·라이브·즐겨찾기는 실 API 를 탄다.
+UCL 대진표는 백엔드 tie 없이 프론트 `buildTies` 가 경기 목록에서 만든다 (#104 · 백엔드 영속화는 2027-02).
+**알림**만 백엔드가 없고 `NotificationContext` 가 Mock 을 직접 읽는다.
+배포(09-16)와 과거 4시즌 경기 상세 백필(09-24)은 끝났다 (10-07 문서 동기화).
 **09-07 중간 점검(`docs/PLAN_REVIEW.md`)** 이 순서를 확정했다 — 기록 백필 먼저, 실시간은 그 뒤.
 현재 진행 상황과 다음 순서는 `docs/NEXT_STEPS.md` 1장이 기준이다.
 
