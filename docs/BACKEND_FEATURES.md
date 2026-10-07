@@ -6,6 +6,9 @@
 >
 > ✅ L0·L1 엔드포인트는 **실제 호출로 검증됐다** — L0 99콜(09-06) · L1 155콜(09-07).
 > 나머지 계층은 착수 시 확인하고 이 문서를 갱신한다.
+>
+> **2026-10-07 갱신** — 09-28 PR #129 까지 반영: L4 라이브(1장 L4 · 3장) · 스케줄러(L2 매일 #14 · L6 주기) ·
+> 조회 API 구현 목록 · 사용자 API(2장 "사용자") · AI 도구(6장).
 
 ---
 
@@ -85,7 +88,7 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 | # | 기능 | API | 콜 수 | 비고 |
 |---|---|---|---|---|
 | 13 | 시즌 전체 일정 수집 | `/fixtures?league=&season=` | 6 | ✅ 09-07 구현(`l2.service.ts`). 시즌 초 1회 |
-| 14 | 일정 변경 반영 | 같음 | 6 | ✅ 같은 코드의 재실행. 주 1회. 연기·재편성이 흔하다 |
+| 14 | 일정 변경 반영 | 같음 | 6 | ✅ 같은 코드의 재실행. ~~주 1회~~ → **매일** 스케줄러 잡 (09-24 PR #109 · `L2_DAILY_CRON="10 4 * * *"` UTC · 기본 꺼짐). 연기·재편성이 흔하다 |
 | 15 | 라운드 번호 정규화 | `/fixtures/rounds?league=&season=` | 6 | ✅ 09-07 구현(`l2/round-scope.ts`). 응답 **순서**가 ordinal 이다. 문자열 파싱은 하지 않는다 — 리그마다 형식이 달라 위험 |
 | 16 | UCL 스테이지·leg·tie 연결 | — | 0 | 녹아웃 1·2차전을 `tie_id`로 묶음. **L2-b** — 검증할 실 데이터가 2027년 2월에야 생긴다 |
 | 17 | **오늘의 경기 목록 산출** | — | 0 | L4 스케줄러의 입력. KST 기준 |
@@ -95,8 +98,10 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 - **소유권 경계.** L2 는 일정·스코어를 쓰지만 `has_*`·`detail_checked_at`·`data_version`·
   `tie_id`·`leg` 은 갱신 목록에서 뺀다. L3~L5 와 #16 의 것이고, 주 1회 재실행이
   저쪽 진행 상태를 지우면 안 된다.
-- ⚠ L4 가 붙기 전까지는 **L2 가 유일한 스코어 소스**다. L4(라이브 폴링) 도입 시
-  진행 중 경기의 주인이 바뀌므로 이 규칙을 다시 본다 (`data_version`).
+- ~~⚠ L4 가 붙기 전까지는 **L2 가 유일한 스코어 소스**다. L4(라이브 폴링) 도입 시
+  진행 중 경기의 주인이 바뀌므로 이 규칙을 다시 본다 (`data_version`).~~
+  ✅ 09-26 PR #115·#116 — L4 쓰기 모드가 진행 중 경기의 주인이다. L2 는 `batchUpsert.updateWhere` 로
+  L4 가 최근에 쓴 경기를 덮지 않는다 (보호 6시간 만료). L4 가 쓴 값은 다음 L2 매일이 공식값으로 정정한다.
 
 ### L3 — 경기 직전 · 킥오프 1시간 전
 
@@ -109,19 +114,21 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 ### L4 — 실시간 · 10~15초
 
 > **시점: 백필-2 뒤 (2026-09-07).** 폴링과 백필은 같은 일일 한도를 쓴다. L5 의 확정 코드가 백필-2 로 먼저 검증되고, L4 는 그것을 하루 지연 대신 10초 지연으로 부른다 (`INGESTION_STRATEGY` 6장 머리).
+>
+> **구현 (09-24~27 · `ingestion/l4/` · `scheduler/live-poller.job.ts`)** — 1판 관측(#111 · #113) · 2판 쓰기 + 역행 가드 + `/api/live`(#115 · #116) · 3판 FT 즉시 상세(#122). 운영 스위치는 `LIVE_POLLER_ENABLED` · `LIVE_POLLER_MODE=observe|write`(기본 observe) · `LIVE_FT_DETAILS_ENABLED` (`DEPLOY.md` L4 절). 운영값은 10-07 미확인.
 
 | # | 기능 | API | 콜 수 | 비고 |
 |---|---|---|---|---|
-| 21 | **라이브 스코어 폴링** | `/fixtures?live=39-140-78-135-61-2` | **1콜** | ⚠ `live=all` 아님 (검토 C-2) |
-| 22 | 경기 상태 전이 판정 | — | 0 | `NS→1H→HT→2H→FT` / `ET`·`PEN` |
-| 23 | 경기 이벤트 수집 | `/fixtures/events?fixture=` | 경기당 1 | 골·카드·교체. 변화 감지 시만 |
-| 24 | 라이브 순위 갱신 | `/standings?league=&season=` | 대회당 1 (10분 주기) | 윈도우 중에만 |
-| 25 | **변경분 이벤트 발행** | — | 0 | DB 커밋 **이후** Socket.io |
-| 26 | 스케줄러 모드 전환 | — | 0 | `IDLE → LINEUP → LIVE → IDLE` |
+| 21 | **라이브 스코어 폴링** | ~~`/fixtures?live=39-140-78-135-61-2`~~ → **`/fixtures?ids=`** (20개 청크) | 청크당 1 | ✅ #111 — 계획과 달라졌다. 폴링 창(`live-window.ts`) 안의 경기 id 를 20개씩 묶어 부른다 (`live-observer.service.ts`) |
+| 22 | 경기 상태 전이 판정 | — | 0 | ✅ #115 `status-rank.ts` — 역행(예: FT → 2H) 은 쓰지 않는다 |
+| 23 | 경기 이벤트 수집 | ~~`/fixtures/events?fixture=`~~ | **0** | ✅ #122 — `/fixtures?ids=` 응답에 lineups·events·statistics·players 4배열이 이미 들어 있어 FT 첫 진입 때 L3·L5 `persist` 로 저장 (`live-finalizer.service.ts` · 추가 콜 없음) |
+| 24 | 라이브 순위 갱신 | `/standings?league=&season=` | 대회당 1 | ✅ #122 — 10분 주기가 아니라 **FT 가 난 대회만** tick 끝에 갱신 (`L2.collectStandings` 재사용 · KNOCKOUT 제외) |
+| 25 | ~~**변경분 이벤트 발행**~~ | — | 0 | Socket.io 를 쓰지 않는다 — 조건부 UPDATE 로 `data_version+1`, 프론트가 `GET /api/live` 를 15초마다 폴링해 그 값으로 병합 (#123 · 3장) |
+| 26 | 스케줄러 모드 전환 | — | 0 | ✅ #111 — `IDLE → LINEUP → LIVE` 상태기 대신 **폴링 창 개폐** (`live-window.ts` · kickoff 기준 #116) + 강등 `LIVE_POLLER_SLOW_AT`(6000) · 정지 `LIVE_POLLER_STOP_AT`(7000) |
 
-- #21은 대회 수와 무관하게 **1콜 고정**이다. 늘어나는 건 페이로드와 파싱 시간.
-- #26의 경계 조건이 회고가 지목한 테스트 필수 영역이다.
-- ⚠ **오버랩 방지 락 필요.** 처리 지연 시 다음 주기와 겹치면 안 된다 (V2_DESIGN 3-2 ⚠).
+- ~~#21은 대회 수와 무관하게 **1콜 고정**이다.~~ `ids=` 방식이라 동시 진행 경기 20개마다 1콜이다.
+- #26의 경계 조건이 회고가 지목한 테스트 필수 영역이다 — `live-window.spec.ts`.
+- ✅ **오버랩 방지** — in-memory 겹침 방지 + tick 처리 시간 계측(`lastTickMs` · `maxTickMsToday`) (#111).
 
 ### L5 — 종료 후 확정 · 경기당 1회
 
@@ -157,7 +164,7 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 
 | # | 기능 | 주기 | 콜 수 | 상태 |
 |---|---|---|---|---|
-| 35 | 전일 경기 재확인 | 일 1회 | 전일 경기 수 | 스케줄러(1장 4번) |
+| 35 | 전일 경기 재확인 | 일 1회 | 전일 경기 수 | ✅ 사실상 겸함 — L2 매일 잡(#109)이 상태를 갱신하면 백필 워커가 24시간 지난 FT 경기 상세를 받는다 |
 | 36 | **랭킹 갱신** ★ | 주 1회 (경기일엔 더 자주) | **24 / 시즌** | ✅ 09-08 `l6/rankings.service.ts` |
 | 36-1 | 선수 시즌 통계 전체 보정 | 주 1회 | **1,504 / 5시즌** | ✅ 09-08 `l6/player-season-stats.service.ts` |
 | 36-2 | 팀 시즌 통계 | 주 1회 | 팀 수 | ✅ 09-08 `l6/team-season-stats.service.ts` |
@@ -166,7 +173,8 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 | 39 | 시즌 롤오버 | 연 1회 (대회별) | L0 재실행 | — |
 
 ✅ 는 **수집 코드**가 들어갔다는 뜻이다 — "주기" 열의 주 1회는 아직 없다. 스케줄러는
-1장 4번(서버화)에서 붙는다. 지금은 CLI 수동 실행이다.
+09-16 에 붙었지만(`src/scheduler/` — 백필 워커 · L2 매일 · L1 매주 · 라이브 폴러 · 쿼터 스냅숏)
+**L6 잡은 없다** (10-07). L6 는 여전히 CLI 수동 실행이다.
 
 세 개를 `npm run ingest -- l6` 한 명령이 묶는다 (`--all-seasons` · `--season=` · `--only=`).
 대회시즌 하나가 세 갈래를 다 끝내면 `backfill_jobs.phase = DONE` 을 세운다.
@@ -229,7 +237,7 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 | `GET /competitions/:slug` | 대회 상세 | |
 | ~~`GET /competitions/:slug/hub`~~ | 대회 허브 | **만들지 않는다 (09-07)** — 프론트 `live.js` 가 `/matches` · `/standings` · `/teams` 를 조합한다. 홈도 같다 |
 | `GET /stats/scorers?competition=&season=&limit=&locale=` · `/stats/assisters` | 통계 랭킹 (득점·도움) | 소스 `player_match_stats` **자체 집계** (2026-09-17 · feat/statistics-self-aggregation · DATA_RULES 8장). 모드 A(competition 지정): 그 대회시즌의 선수별 SUM → 값 내림차순 → rank. 모드 B(생략): 그 시즌의 추적 대회 19개 전부에서 선수별 SUM → 값 내림차순 → 한 번만 자름 (대회별 상위 N 을 자른 뒤 SUM 하지 않는다). `items[].team` = 그 범위 최다 출전 팀. 동점은 (값→출전 수 적은 순→player id) 결정적. 응답에 `coverage: {finished, collected, ratio}` 포함 — 이 통계가 몇 %의 경기를 근거로 하는지 |
-| `GET /competitions/champions-league/knockout` | UCL 녹아웃 | 대진·합산·진출 |
+| ~~`GET /competitions/champions-league/knockout`~~ | UCL 녹아웃 | **아직 없다** — 09-22 PR #104 대진표 탭은 프론트 `buildTies` 가 `/matches` 결과로 tie 를 만든다. 백엔드 tie 영속화(#16 · L2-b)는 2027-02 |
 
 ### 경기
 
@@ -265,6 +273,15 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 | 엔드포인트 | 화면 | 비고 |
 |---|---|---|
 | `GET /home` | 홈 | 현재 프론트가 `fetchHomeData` 한 번으로 6종을 받는다 |
+| `GET /live` | 홈·경기 목록·경기 상세 라이브 갱신 | ✅ 09-26 PR #115·#116 — 진행 중 + 최근 종료(kickoff 5h 이내 ≈ FT 후 3h). `Cache-Control: public, max-age=0, s-maxage=5`. 프론트 15초 폴링(#123) |
+
+### 사용자 (로그인 필요 · 09-28 PR #129)
+
+| 엔드포인트 | 화면 | 비고 |
+|---|---|---|
+| `GET /me/favorites` · `PUT /me/favorites` | 즐겨찾기 팀 (홈 `MyTeamsSection` · 팀 토글) | Supabase Auth JWT (`Authorization: Bearer` · ES256 · `iss=${SUPABASE_URL}/auth/v1` · `aud=authenticated`) — `auth/supabase-auth.guard.ts`. PUT 은 전체 교체, 상한 **10팀**. 400 `code` 3종 `favorites_limit_exceeded` · `favorites_duplicate` · `favorites_unknown_team`. 응답 `Cache-Control: private, no-store` · `Vary: Authorization` · ETag 없음. 테이블 `user_favorite_teams` + RLS (마이그레이션 `20260928120000_enable_rls_public` · `20260928120100_add_user_favorite_teams`) |
+
+로컬 즐겨찾기(`localStorage`)는 #129 에서 폐기됐다 — 로그인하지 않으면 즐겨찾기가 없다.
 
 **모든 응답 공통 규칙 (검토 C-1 · 2026-09-07 확정, 코드는 `backend/src/common/`):**
 
@@ -288,12 +305,18 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 - **대회시즌마다 `dataState`** — `NONE`(아직 안 받음) · `PARTIAL`(백필 중) · `COMPLETE`. `backfill_jobs.phase` 에서 계산.
   프론트 시즌 선택기는 `COMPLETE` 만 노출한다. `status`(UPCOMING/IN_PROGRESS/FINISHED)는 시즌 진행 상태라 별개다.
 - `ref` 형식 오류 400 · 없는 것 404 · 모르는 쿼리 파라미터 400 (`forbidNonWhitelisted`). 오류를 빈 배열로 바꾸지 않는다.
-- 구현됨: `GET /api/competitions` · `/api/competitions/:ref` · `/api/teams?competition=&season=` · `/api/teams/:ref` · **`/api/matches` · `/api/matches/:ref` · `/api/standings` (09-07)** · **`/api/players/:ref` · `/api/stats/scorers` · `/api/stats/assisters` (09-09 PR #34·#36)**. 나머지는 데이터가 들어오는 계층과 같이.
+- 구현됨 (10-07 · 엔드포인트 17개): `GET /api/competitions` · `/api/competitions/:ref` · `/api/teams?competition=&season=` · `/api/teams/:ref` · **`/api/matches` · `/api/matches/:ref` · `/api/standings` (09-07)** · **`/api/players/:ref` · `/api/stats/scorers` · `/api/stats/assisters` (09-09 PR #34·#36)** · **`/api/matches/:ref/detail` (09-10 #47)** · **`/api/search` (09-10 #50)** · **`POST /api/assistant` (09-09 #41)** · **`/api/live` (09-26 #115)** · **`GET/PUT /api/me/favorites` (09-28 #129)** · `/health`. 위 표의 `/teams/by-competition` · `/teams/:slug/fixtures` · `/players/:slug/stats` · `/home` · UCL knockout 은 만들지 않았다 — 프론트 `live.js` 가 있는 엔드포인트를 조합한다.
 - 상태는 백엔드가 만들지 않는다 — `statusShort` 원문 + `statsState` 를 주고 프론트 `normalize.js` 의 진리표가 `displayState` 를 만든다(PRD 4-2). 백엔드가 `displayState` 를 주면 두 곳에서 규칙이 갈린다.
 
 ---
 
 ## 3. 실시간 전달 (realtime)
+
+> ⚠️ **아래 Socket.io 설계는 구현하지 않았다 (10-07 기준).** 실제 전달은 REST 폴링이다 —
+> 프론트가 `GET /api/live` 를 15초마다 부르고(09-27 PR #123 · `hooks/useLiveMatches.js`),
+> `dataVersion` 으로 병합하며, FT 로 바뀐 경기는 상세를 다시 요청한다. 백엔드에 Gateway 는 없다
+> (`socket.io` 의존성 0). 아래 표에서 실제로 지킨 것은 #43(커밋 이후 · 조건부 UPDATE 뒤에만 노출) ·
+> #44(`data_version`) · #45(역순 무시 — 서버 `status-rank.ts` · 프론트 `utils/liveMerge.js`) 다.
 
 | # | 기능 | 비고 |
 |---|---|---|
@@ -323,6 +346,9 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 
 **발송 시점은 L4·L5에 붙는다.** 골·킥오프는 L4(#25 발행)에서, 경기 종료·기록 확정은
 L5(#28·#34)에서 트리거한다. 별도 스케줄러를 두지 않는다.
+
+(10-07) 푸시 알림은 미착수. 로그인은 09-28 PR #129 로 생겼다 — 아래 경고의 전제("로그인이 없는데")가
+바뀌었으므로 착수 시 `owner_key` 대신 Supabase `auth.uid()` 연결을 먼저 검토한다.
 
 ⚠ **로그인이 없는데 사용자별 레코드가 생긴다.** 계정은 아니지만 브라우저 단위 식별자이고
 관심 팀이 함께 저장되므로, 보관 기간과 삭제 경로를 정해야 한다.
@@ -365,12 +391,14 @@ L5(#28·#34)에서 트리거한다. 별도 스케줄러를 두지 않는다.
 
 ## 6. AI 조회 도구 (Phase 5)
 
-| # | 기능 |
-|---|---|
-| 61 | 결정적 조회 도구 세트 (일정·순위·선수 기록·비교) |
-| 62 | 도구 호출 인자·결과·기준 시각 기록 |
-| 63 | LLM 오케스트레이터 |
-| 64 | 근거 카드 응답 포맷 |
+| # | 기능 | 상태 |
+|---|---|---|
+| 61 | 결정적 조회 도구 세트 (일정·순위·선수 기록·비교) | ✅ 09-08 PR #38 — `assistant/tools/` 10개 · stdio MCP 서버 |
+| 62 | 도구 호출 인자·결과·기준 시각 기록 | ✅ 도구 반환 `{ tool, args, asOf, data }` · 응답 최상위 `asOf` (#43) |
+| 63 | LLM 오케스트레이터 | ✅ 09-09 PR #41 — `POST /api/assistant` (Gemini · 실행 상한 8 #43) |
+| 64 | 근거 카드 응답 포맷 | ✅ 09-09 PR #43 — 프론트가 `data[]` 를 도구별 컴포넌트로 |
+
+선수·감독 이름 검색 도구는 아직 없다 (`NEXT_STEPS` 1장 "어시스턴트 후속 판 예약").
 
 **LLM은 DB·외부 API에 직접 접근하지 않는다.** 집계·비교·순위·진출 판정은 전부 결정적 계층.
 
@@ -382,7 +410,7 @@ L5(#28·#34)에서 트리거한다. 별도 스케줄러를 두지 않는다.
 |---|---|---|
 | **0** | 57·58 + 스켈레톤 | CI 통과, **API 3콜 실호출 확인** (검토 B-1) |
 | **1** | L0(1~6) · L1(7~11) · 48~52 · 53~56 · 조회 API 일부 | **스쿼드 diff 테스트가 이적 시나리오 통과** |
-| **2** | L2(13~17) · L3(18~20) · L5(27~34) · 백필 → **그 뒤** L4(21~26) · 40~47 (순서 09-07 확정) | 5시즌 완전 + **실제 라운드 1회 무중단 관측** |
+| **2** | L2(13~17) · L3(18~20) · L5(27~34) · 백필 → **그 뒤** L4(21~26) · 40~47 (순서 09-07 확정) — 10-07: 백필 · L4 코드 완료, 40~47 은 REST 폴링으로 대체(3장) | 5시즌 완전(✅ 09-24) + **실제 라운드 1회 무중단 관측**(미확인) |
 | **3+** | 47-1~47-6 푸시 알림 | 구독 등록 → 골 이벤트 → 기기 수신 확인 |
 | **3** | 조회 API 전체 · 배포 | 언어 전환, 백엔드 다운 시 오류 노출 |
 | **4** | L6(35~39) · 보정·푸시 알림 | 최종 API 예산 실측 (6대회는 Phase 1 에서 이미 활성화) |
