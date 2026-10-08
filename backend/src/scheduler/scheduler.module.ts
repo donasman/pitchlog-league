@@ -16,7 +16,8 @@
  *   이미 분리되어 있어(L2 는 스코어·라운드·순위 · L3~L5 는 detail_*, l2.service.ts L18-19)
  *   같은 시각에 돌아도 안전하다. 각 잡은 자기 겹침만 in-memory 플래그로 방지.
  *   quota 는 백필 워커만 매 경기 앞에서 /status 로 확인 — L2/L1 는 소요 콜 수가 예산 대비
- *   미미해(L2 대회당 3콜 × 12 ≈ 36, L1 팀당 1콜) 별도 방어를 두지 않는다.
+ *   미미해(L2 현재 시즌 19대회 — 리그 5·UEFA 3 × 3콜 + 컵·슈퍼컵 11 × 2콜 = 최대 46콜
+ *   + missingTeams 시 대회시즌당 /teams 1콜 · L1 팀당 1콜) 별도 방어를 두지 않는다.
  *
  * @Global — SchedulerStateService 는 어디서든 inject 가능 (HealthController 가 씀).
  * 한 번만 등록되도록 app.module 에서만 forRoot() 호출.

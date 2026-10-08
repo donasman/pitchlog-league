@@ -1,7 +1,8 @@
 /**
  * L2 — 라운드 · 경기 · 순위 (BACKEND_FEATURES #13·#15, INGESTION_STRATEGY 2-2)
  *
- * 기본은 **화면 6대회의 현재 시즌**이다. 대회당 3콜(rounds · fixtures · standings).
+ * 기본은 **수집 범위(`ingestScopeWhere` = isTracked) 19대회의 현재 시즌**이다.
+ * 리그 5·UEFA 3 은 대회시즌당 3콜(rounds · fixtures · standings), 컵 6·슈퍼컵 5(KNOCKOUT)는 standings 없이 2콜.
  * `--all-seasons` 는 같은 코드를 `SEASON_YEARS` 5시즌으로 돌린다 (백필-1, NEXT_STEPS 8-b) —
  * 최신 시즌부터 역순(INGESTION_STRATEGY 5-3). 녹아웃 tie·대진표 슬롯은 L2-b 다 (8-d).
  *
@@ -18,9 +19,9 @@
  * `has_player_stats`·`detail_checked_at`·`data_version`·`tie_id`·`leg` 은 건드리지 않는다 —
  * L3~L5 와 L2-b 의 것이다. 재실행이 저쪽 진행 상태를 지우면 안 된다.
  *
- * ⚠ 지금은 L4·L5 가 없어 **L2 가 유일한 스코어 소스**다. L4(라이브 폴링)를 붙일 때
- * 이 규칙을 다시 본다 — 그때는 진행 중 경기의 스코어 주인이 L4 이고,
- * L2 가 캐시된 옛 값으로 덮어쓰면 안 된다 (SCHEMA_DESIGN 충돌 ①, `data_version`).
+ * ⚠ L4(라이브 폴링)가 붙은 뒤로 진행 중 경기의 스코어 주인은 L4 다. L2 의 matches upsert 는
+ * `updateWhere` 로 "진행 중 9종 상태 AND 킥오프 6시간 이내" 행을 덮지 않는다
+ * (아래 collectOne · SCHEMA_DESIGN 충돌 ①, `data_version`).
  *
  * missingTeams 시 /teams 1회 재수집 (L0 위임) · 현재 시즌만 — 대회시즌당 최대 1콜. 팀·경기장·참가 쓰기는 L0 코드가 한다 (SCHEMA_DESIGN 5장).
  */

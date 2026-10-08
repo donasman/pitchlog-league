@@ -29,7 +29,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 
 연결된 폴더 셸은 리눅스 VM 이고 **네트워크가 없다.**
 
-- `npm run verify`(`validate:data` → `check:i18n` → `lint` → `build`) 는 **의존성이 이미 설치돼 있으면** 시도한다. 실패하면 이유를 그대로 적는다
+- `npm run verify`(`validate:data` → `check:i18n` → `lint` → `test` → `build`) 는 **의존성이 이미 설치돼 있으면** 시도한다. 실패하면 이유를 그대로 적는다
 - `npm install` · `npm run dev` · `git push` 금지
 - 돌리지 못한 검증은 "실행 못 함 — 이유" 로 보고하고 Windows·CI 로 넘긴다
 

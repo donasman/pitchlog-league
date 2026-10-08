@@ -74,7 +74,8 @@ bash /opt/pitchlog/infra/ec2/deploy.sh
 >
 > **`deploy.sh` 는 마이그레이션을 적용하지 않는다** (`prisma migrate` 단계 없음). 새 마이그레이션이 든 판은
 > 배포 전에 따로 적용해야 한다 — 09-28 #129 의 `20260928120000_enable_rls_public` · `20260928120100_add_user_favorite_teams`.
-> 적용 여부는 10-07 문서에 기록 없음.
+> **10-08 운영 DB 에 적용** — 백업(`pitchlog-20261008-1500.dump` · 18.7 MB) 뒤 `prisma migrate deploy` 로 미적용 3개
+> (`20260910120000_search_indexes` 포함) 적용, `migrate status` = up to date. 아래 "Google 로그인" 절.
 
 ### 6. 확인
 
@@ -132,7 +133,7 @@ bash /opt/pitchlog/infra/ec2/deploy.sh dev      # dev 브랜치
 bash /opt/pitchlog/infra/ec2/deploy.sh v1-...   # 태그
 ```
 
-이전 dist 는 자동으로 `dist.prev` 로 보존된다 — **배포 시작 시점에 서비스가 health 를 통과할 때만** 갱신하므로, 실패한 배포를 반복해도 마지막 성공본이 남는다 (10-07). health 실패 시 스크립트가 롤백 명령을 출력한다.
+이전 dist 는 자동으로 `dist.prev` 로 보존된다 — **배포 시작 시점에 서비스가 health 를 통과할 때만** 갱신하므로, 실패한 배포를 반복해도 마지막 성공본이 남는다 (10-07 결함 실측 · 10-08 PR #133). health 실패 시 스크립트가 롤백 명령을 출력한다.
 
 ## 롤백
 
@@ -363,7 +364,9 @@ BACKFILL_WORKER_CRON="*/10 * * * *"
 
 **완료 판정**: 모든 시즌이 `no_targets` 이고 `total=0` 이면 로그 `all seasons done` 한 줄이 뜨고 `lastOutcome=no_targets` 로 수렴. 이후 재시작 없이 이 상태가 지속되면 백필-2 완료.
 
-**대상 범위**: 워커는 `screenCompetitionWhere` (displayOrder ≤ 100) 만 순회 — **리그 5개 + UCL 만. 국내 컵 6개 (displayOrder 110~) 는 워커 순회에서 제외** (컵 경기의 `detail_eligible` 규칙 자체는 L2 가 세팅하지만 워커가 그 대회시즌을 SELECT 하지 않음). 컵 백필 여부는 별도 결정 사항.
+**대상 범위**: ~~워커는 `screenCompetitionWhere` (displayOrder ≤ 100) 만 순회 — 리그 5개 + UCL 만. 국내 컵 6개는 워커 순회에서 제외~~ →
+09-17 4층 분리(`19a2ac8`) 이후 워커가 부르는 `MatchDetailsBackfillService` 는 `ingestScopeWhere`(isTracked 전부 · **19대회**)를 순회한다
+(`match-details-backfill.service.ts:130`). 컵·슈퍼컵·UEL·UECL 경기도 `detail_eligible` 이면 워커 대상이다.
 
 ### 안전장치
 
@@ -377,7 +380,7 @@ BACKFILL_WORKER_CRON="*/10 * * * *"
 
 `L2Service.run()` · `L1Service.run()` 을 `@Cron` 트리거로 부른다. 백필 워커가 어제 경기(FT/AET/PEN · kickoff < now-24h) 를 잡으려면 L2 가 그전에 상태를 갱신해 둬야 한다 — 그게 이 잡이다. L1 은 이적·부상으로 스쿼드가 바뀌었을 때 다음 라운드에 반영되도록 주 1회 돈다.
 
-**동시 실행 정책**: 세 이송 잡(backfill · l2-daily · l1-weekly)은 완전 독립이다. matches 컬럼 소유권이 이미 분리(L2 = 스코어·라운드·순위 / L3~L5 = detail_*, `l2.service.ts` 소유권 경계) 되어 있어 같은 시각에 돌아도 안전. 각 잡은 자기 겹침만 in-memory 플래그로 막는다. quota 는 백필 워커만 매 경기 앞에서 `/status` 로 확인 — L2 는 대회당 3콜 × 12 ≈ 36, L1 은 팀당 1콜로 예산 대비 미미해 별도 방어를 두지 않는다.
+**동시 실행 정책**: 세 이송 잡(backfill · l2-daily · l1-weekly)은 완전 독립이다. matches 컬럼 소유권이 이미 분리(L2 = 스코어·라운드·순위 / L3~L5 = detail_*, `l2.service.ts` 소유권 경계) 되어 있어 같은 시각에 돌아도 안전. 각 잡은 자기 겹침만 in-memory 플래그로 막는다. quota 는 백필 워커만 매 경기 앞에서 `/status` 로 확인 — L2 는 ~~대회당 3콜 × 12 ≈ 36~~ → 현재 시즌 19대회(리그 5·UEFA 3 × 3콜 + 컵·슈퍼컵 11 × 2콜 = 최대 46콜 · missingTeams 시 대회시즌당 `/teams` +1콜, 10-08 #135), L1 은 팀당 1콜로 예산 대비 미미해 별도 방어를 두지 않는다.
 
 ### 켜기 (개별 스위치)
 
@@ -422,6 +425,10 @@ curl -s http://localhost:3000/health | jq '.scheduler.jobs'
 
 - `ok`      — partial 없음
 - `partial` — 일부 대회·팀이 안 들어감 (unknownRounds · missingTeams 등 진짜 이상). journalctl 요약 줄에 `skipped=[...]`.
+  10-08 실측: Copa del Rey 2026 Round of 128 에 3~5부 9팀이 teams 에 없어 54경기 중 9경기 누락 → `l2Daily=partial`.
+  그날은 `ingest -- l0`(19대회 · 대회시즌 94 · 팀 7814 · 경기장 7290 · 참가 7814 — L0 요약 = 대회시즌별 upsert 합계 · 고유 수 아님 · 경고 `Coupe de France: 시즌 미제공 2026`) 뒤
+  `ingest -- l2` 재실행으로 54/54 · partial 0 (pending `FA Cup 2026 (no_top_flight)`). 같은 날 PR #135 부터는 L2 가
+  현재 시즌의 missingTeams 를 만나면 그 대회시즌 `/teams` 1콜을 스스로 다시 받는다 (결과 필드 `teamsRefreshed`).
 - `error`   — `run()` throw. 다음 트리거에서 재시도.
 
 **pending** (L2 만) — outcome 과 별개로 요약 로그 끝에 `pending=[...]` 로 표기된다. "정상 진행 중 대기" 대회시즌 (FA Cup·Copa del Rey 가 1월 본선 진입 전 등 예선 단계) 이 여기 들어간다. outcome 은 `ok` 로 유지 — 매일 partial 로 찍혀 진짜 이상을 가리던 문제를 분리하기 위함 (fix/l2-pending-not-partial).
@@ -633,12 +640,25 @@ sudo systemctl restart pitchlog-backend
 |---|---|---|
 | EC2 `/etc/pitchlog/backend.env` | `SUPABASE_URL=https://<프로젝트>.supabase.co` (path 없음) — **필수** | `env.validation.ts:113` · JWKS `${SUPABASE_URL}/auth/v1/.well-known/jwks.json` · issuer `${SUPABASE_URL}/auth/v1` |
 | Vercel env | `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` | `frontend/.env.example` |
-| DB | 마이그레이션 2개 — `enable_rls_public` · `add_user_favorite_teams` (`deploy.sh` 가 적용하지 않음) | `backend/prisma/migrations/20260928*` |
+| DB | 마이그레이션 2개 — `enable_rls_public` · `add_user_favorite_teams` (`deploy.sh` 가 적용하지 않음 · 운영 적용 10-08) | `backend/prisma/migrations/20260928*` |
 | Supabase 대시보드 | Google provider 켜기 · Redirect URLs 에 Vercel 도메인 허용 — 프론트가 `redirectTo = origin + pathname` 으로 보내므로 경로까지 허용해야 한다 (예: `https://<앱>.vercel.app/**`) | `AuthContext.jsx:78-84` |
 
-`infra/ec2/backend.env.example` 에 `SUPABASE_URL` 줄을 넣었다 (10-07). 그 전 템플릿으로 만든 서버는 `/etc/pitchlog/backend.env` 에 직접 추가해야 한다 —
+`infra/ec2/backend.env.example` 에 `SUPABASE_URL` 줄을 넣었다 (10-08 PR #133). 그 전 템플릿으로 만든 서버는 `/etc/pitchlog/backend.env` 에 직접 추가해야 한다 —
 10-07 운영 EC2 가 이 줄 없이 재시작 루프에 빠졌다 (`SUPABASE_URL must be a URL address`). 값만 넣고 `sudo systemctl restart pitchlog-backend` 하면 된다 (재빌드 불필요).
-위 네 자리의 **운영 설정 여부는 10-07 문서에 기록이 없다.**
+
+**운영 설정 완료 (10-08)** — 위 네 자리 전부:
+
+| 자리 | 10-08 실제 |
+|---|---|
+| EC2 env | 10-07 `SUPABASE_URL` 추가로 재시작 루프 복구 |
+| DB | 백업 `pitchlog-20261008-1500.dump`(18.7 MB) 뒤 `prisma migrate deploy` — 미적용 3개 `20260910120000_search_indexes` · `20260928120000_enable_rls_public` · `20260928120100_add_user_favorite_teams` 적용 · `migrate status` up to date · Supabase REST 무키 요청 401 확인 |
+| Vercel env | `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` — Production · Preview, Type=Config |
+| Supabase 대시보드 | Google provider · Redirect URLs `https://pitchlog-league.vercel.app/**` · `https://pitchlog-league-git-*-donasman.vercel.app/**` |
+
+preview 실측과 운영 사용자 확인으로 **운영 Google 로그인·서버 저장 즐겨찾기 개시 (10-08)**.
+
+Vercel preview 는 Deployment Protection(SSO) 이 걸려 있어 `site.webmanifest` 요청이 콘솔에 CORS 오류로 찍힌다 —
+보호 페이지로 리다이렉트되는 것이고 운영 도메인에서는 200 이다. 로그인 결함이 아니다.
 
 확인:
 
@@ -663,7 +683,10 @@ curl -i http://localhost:3000/api/me/favorites            # 토큰 없이 401 �
 - **정상 경로 (Vercel 도메인)**: 안전. Vercel 이 클라이언트 IP 로 X-Forwarded-For 를 설정한다.
 - **직결 (EC2:3000)**: 보안 그룹이 3000 을 0.0.0.0/0 으로 열어놨으므로 누구나 `curl -H "X-Forwarded-For: 1.2.3.4"` 로 임의 IP 를 넣어 어시스턴트 rate limit 을 우회할 수 있다.
 
-**현 구성에서 감수한다.** 위조로 얻는 것은 어시스턴트 10회/분·IP 밖 호출 능력이 전부고, 백엔드는 조회 API 뿐이라 손실 크지 않음.
+**현 구성에서 감수한다.** 위조로 얻는 것은 어시스턴트 10회/분·IP 밖 호출 능력이 전부다 (IP 기반 제한은 `AssistantRateLimitGuard` 하나뿐).
+~~백엔드는 조회 API 뿐이라~~ → 09-28 #129 부터 인증된 쓰기 `PUT /api/me/favorites` 가 있다. 이 쓰기는 IP 가 아니라
+Supabase JWT 로 사용자를 가르고(`SupabaseAuthGuard`) 사용자당 10팀 상한·사용자 단위 advisory lock(10-08 #134)이 걸려 있다.
+X-Forwarded-For 는 이 쓰기의 인가·상한 어디에도 쓰이지 않아 위조로 남의 즐겨찾기를 바꿀 수는 없다. 손실 판단은 그대로다.
 
 **4-a-2 후속 판** 에서 둘 중 택일:
 1. Vercel 프록시가 공유 비밀 헤더 (`X-Proxy-Secret`) 를 추가 → 백엔드가 검사, 없으면 429 상수화 or 403
