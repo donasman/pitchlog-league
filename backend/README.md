@@ -12,17 +12,17 @@ NestJS 기반 핵심 서비스. 외부 축구 API 수집, REST API, 라이브 �
 [BACKEND_GUIDE.md](../docs/BACKEND_GUIDE.md)를 따른다.
 현재 진행 상황과 다음 순서는 [NEXT_STEPS.md](../docs/NEXT_STEPS.md)가 기준이다.
 
-## 상태 — Phase 2 진행 중 (2026-10-07 · 09-28 PR #129 까지)
+## 상태 — Phase 2 진행 중 (2026-10-08 · PR #135 까지)
 
 | 영역 | 상태 |
 |---|---|
-| 스키마 | Prisma 모델 **30** (09-28 `UserFavoriteTeam` 추가) · enum 18 · 외래키 0. partial unique 는 `prisma/sql/partial-indexes.sql`. 09-28 마이그레이션 2개 — `enable_rls_public`(public 테이블 RLS) · `add_user_favorite_teams` |
-| 수집 | **L0** 19대회 · **L1 스쿼드** · **L2 5시즌** · **L3·L5 경기 상세 5시즌**(백필-2 · 09-24 서버 실측에서 완료 확인) · **L4 라이브**(관측 · 쓰기 · FT 즉시 상세) · **L6 시즌 집계** · 로고 자체 저장. 적재 수치는 `docs/NEXT_STEPS.md` 0장 |
+| 스키마 | Prisma 모델 **30** (09-28 `UserFavoriteTeam` 추가) · enum 18 · 외래키 0. partial unique 는 `prisma/sql/partial-indexes.sql`. 09-28 마이그레이션 2개 — `enable_rls_public`(public 테이블 RLS) · `add_user_favorite_teams`. **운영 DB 적용 10-08** — 백업 `pitchlog-20261008-1500.dump`(18.7 MB) 뒤 `prisma migrate deploy` 로 미적용 3개(`20260910120000_search_indexes` 포함) 적용 · `migrate status` up to date |
+| 수집 | **L0** 19대회 · **L1 스쿼드** · **L2 5시즌** · **L3·L5 경기 상세 5시즌**(백필-2 · 09-24 서버 실측에서 완료 확인) · **L4 라이브**(관측 · 쓰기 · FT 즉시 상세) · **L6 시즌 집계** · 로고 자체 저장. L2 는 DB 에 없는 팀(missingTeams)을 만나면 현재 시즌만 그 대회시즌 `/teams` 1콜 재수집(L0 위임 · 10-08 PR #135). 적재 수치는 `docs/NEXT_STEPS.md` 0장 |
 | 조회 API | 엔드포인트 17개 — 대회·팀(+`/:ref`) · 경기(+`/:ref` · `/:ref/detail`) · 순위 · 선수 · 통계(scorers·assisters) · 검색 · **`/api/live`** · **`GET/PUT /api/me/favorites`**(로그인 필요) · `POST /api/assistant` · `/health`. Swagger `/docs` 가 계약 |
-| 스케줄러 | `src/scheduler/` 잡 5개 — 백필 워커 · L2 매일 · L1 매주 · 라이브 폴러 · 쿼터 스냅숏. **전부 기본 꺼짐** (`SCHEDULER_ENABLED` 마스터 + 잡별 스위치 · `docs/DEPLOY.md`) |
+| 스케줄러 | `src/scheduler/` 잡 5개 — 백필 워커 · L2 매일 · L1 매주 · 라이브 폴러 · 쿼터 스냅숏. **전부 기본 꺼짐** (`SCHEDULER_ENABLED` 마스터 + 잡별 스위치 4개 `BACKFILL_WORKER_ENABLED`·`L2_DAILY_ENABLED`·`L1_WEEKLY_ENABLED`·`LIVE_POLLER_ENABLED` · `docs/DEPLOY.md`). 쿼터 스냅숏은 개별 스위치가 없다 — 마스터가 켜지고 API 키가 있으면 등록 (`scheduler.module.ts`) |
 | 배포 | EC2 systemd (`infra/ec2/`) · 프론트는 Vercel `/api` rewrite. 백업은 EC2 타이머 → S3 매일 + PC 수동 `npm run backup` |
-| 테스트 | 10-07 정적 grep: 단위 31파일 288건 · e2e 20파일 206건 (`l0`·`l1`·`l2`·`l3`·`l5`·`l6` 등 쓰기 e2e 는 로컬 DB·CI 에서만) |
-| 남은 것 | 운영 L4 쓰기 모드 확인 · 실제 라운드 1회 무중단 관측 · L6 주기 잡 · 알림 (`docs/NEXT_STEPS.md` 1장 "10-07 기준 남은 것") |
+| 테스트 | 10-08 정적 grep: 단위 31파일 289건(`it(` · `it.each` 1 별도) · e2e 20파일 210건(`it` 191 + `it.skipIf` 19). 원격 DB 가드 10파일 — 아래 "검증" |
+| 남은 것 | 운영 L4 쓰기 모드 확인 · 실제 라운드 1회 무중단 관측 · L6 주기 잡 · 알림 (`docs/NEXT_STEPS.md` 1장 "10-08 기준 남은 것") |
 
 ## 실행
 
@@ -36,10 +36,12 @@ npm run start:dev         # http://localhost:3000 · Swagger /docs · /health
 
 ```bash
 npm run verify            # prisma validate · typecheck · lint · 단위 테스트
-npm run test:e2e          # e2e (10-07 기준 20파일)
+npm run test:e2e          # e2e (10-08 기준 20파일)
 ```
 
-`l0`·`l1`·`l2`·`l6` e2e 는 도메인 테이블에 가짜 행을 쓴다. **원격 DB 에서는 스스로 거부한다** —
+도메인 테이블에 가짜 행을 쓰는 e2e 는 **원격 DB 에서 스스로 멈춘다** (10-08 `E2E_ALLOW_REMOTE_DB` grep 기준 10파일) —
+`l0`·`l1`·`l2`·`l3`·`l5`·`l6`·`backfill-details`·`user-favorites` 8파일은 `beforeAll` 에서 throw 로 거부하고,
+`match-detail`·`search` 2파일은 `it.skipIf(skipIfRemote())` 로 건너뛴다.
 로컬 Postgres 를 쓰거나 CI 에서 돌린다 (2026-09-07 에 Supabase dev 로 돌려 가짜 팀이
 실 데이터에 섞인 적이 있다). 뚫어야 할 때만 `E2E_ALLOW_REMOTE_DB=1`.
 
@@ -52,7 +54,7 @@ npm run test:e2e          # e2e (10-07 기준 20파일)
 npm run ingest -- status  # API 쿼터 스냅샷
 npm run ingest -- l0      # 대회·시즌·팀·경기장
 npm run ingest -- l1      # 스쿼드 스냅샷 + diff (155콜)
-npm run ingest -- l2      # 라운드·경기·순위 — 화면 6대회 현재 시즌 (18콜)
+npm run ingest -- l2      # 라운드·경기·순위 — 수집 범위(isTracked) 19대회 현재 시즌 (리그·UEFA 8 × 3콜 + 컵·슈퍼컵 11 × 2콜 = 최대 46콜 · missingTeams 시 대회시즌당 /teams 최대 1콜)
 npm run ingest -- l2 --all-seasons     # 5시즌 전부
 npm run ingest -- l2 --season=2024     # 한 시즌만 (플래그는 등호 형태다)
 npm run ingest -- l6 --all-seasons     # 시즌 집계 — 선수 통계·랭킹·팀 통계
@@ -127,7 +129,7 @@ npm run ingest -- backfill                           # 오늘 남은 상한까�
 npm run ingest -- backfill --season=2025 --limit=200 # 특정 시즌만
 ```
 
-`--season` 없으면 화면 6대회 현재 시즌만 (`isCurrent:true` + `screenCompetitionWhere`).
+`--season` 없으면 수집 범위 19대회의 현재 시즌만 (`isCurrent:true` + `ingestScopeWhere` · `match-details-backfill.service.ts:130`).
 `--limit` 없으면 오늘 남은 상한(5,700 - used)까지. 매 경기 앞에 상한 재확인.
 
 **관문**: 첫 대량 쓰기 전 `npm run backup` 필수. 무인 실행(나머지 4시즌)은 백업 자동화(09-16 S3) 뒤에 스케줄러 백필 워커로 돌았고, 09-24 서버 실측에서 완료 상태였다.
@@ -167,7 +169,7 @@ src/
 │   ├── backfill/          MatchDetailsBackfillService (backfill_jobs 체크포인트)
 │   ├── probe/             실측 전용 (쓰기 없음)
 │   ├── logos/             로고 자체 저장
-│   └── screen-scope.ts    "화면에 나오는 대회" 단일 정의
+│   └── screen-scope.ts    수집·노출 범위 4층 — ingestScopeWhere · matchVisibleWhere · competitionVisibleWhere · squadScopeWhere
 ├── prisma/                PrismaService · batch-upsert(updateWhere) · IntegrityService
 ├── cli/                   ingest · mcp · check-details · seed-localized-names
 └── common/ config/ health/

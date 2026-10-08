@@ -648,7 +648,7 @@ INDEX(entity_type, locale)
 |---|---|---|---|---|---|---|---|---|
 | competitions · seasons · competition_seasons | **C/U** | | | | | | U | C/U |
 | competition_rounds | | | **C/U** | | | | U | C/U |
-| teams · venues · competition_entries | **C/U** | U | | | | | | C/U |
+| teams · venues · competition_entries | **C/U** | U | C/U ¹ | | | | | C/U |
 | players | | **C/U** | | U | | U | U | C/U |
 | squad_entries | | **C/U** | | | | | | C |
 | coach_tenures | | **C/U** | | | | | | C |
@@ -656,10 +656,13 @@ INDEX(entity_type, locale)
 | match_events | | | | | **C/U** | U | | C |
 | match_lineups · lineup_entries | | | | **C** | | U | U | C |
 | team_match_stats · player_match_stats | | | | | | **C/U** | U | C |
-| standings | | | | | U | **U** | U | C/U |
+| standings | | | C/U/D ² | | U | **U** | U | C/U |
 | player_season_stats · team_season_stats | | | | | | U | **U** | C/U |
 | top_rankings | | | | | | | **U** | C/U |
 | injuries | | **C/U** | | | | | U | C |
+
+¹ L2 는 `venues` 를 경기 응답의 경기장으로 직접 upsert 한다(name·city · `l2.service.ts` venues `batchUpsert`). `teams`·`venues`·`competition_entries` 는 10-08 PR #135 부터 **현재 시즌·missingTeams 일 때만** L2 가 `L0Service.refreshTeamsForSeason` 에 위임해 L0 코드로 쓴다 — 팀 쓰기 소유는 L0 그대로.
+² L2 `collectStandings`(`l2.service.ts:398`)는 한 트랜잭션에서 순위 행을 upsert 하고, 그 대회시즌에서 이번 응답에 없는 옛 행(`(team_id, group_name)`)을 DELETE 한다(`:452-456`). KNOCKOUT 대회는 부르지 않는다(`:385-386`). L4 의 FT 뒤 순위 갱신(#122)도 같은 함수를 재사용한다.
 
 **충돌 지점 세 곳이 보인다.**
 
