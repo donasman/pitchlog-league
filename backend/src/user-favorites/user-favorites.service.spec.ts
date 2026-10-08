@@ -5,9 +5,14 @@
  *   1. teamRefs.length === 11 → 400 favorites_limit_exceeded
  *   2. 다른 문자열이지만 같은 apiId 두 개 → 400 favorites_duplicate
  *   3. 없는 ref (parseRef 실패 또는 team miss) → 400 favorites_unknown_team + details 원문 ref
- *   4. 정상 3개 → 200 · items.length===3 · position 0/1/2
+ *   4. 정상 3개 → 200 · items.length===3 · position 0/1/2 · tx 안 순서 lock → deleteMany → createMany
+ *      · advisory lock SQL 과 보간 값([userId])
  *   5. GET · 즐겨찾기 없음 → items===[]
  *   6. GET · 즐겨찾기 3개 → position 순 정렬
+ *   7. PUT 빈 배열 → lock → deleteMany 만 (createMany 없음) · items===[]
+ *
+ * $transaction 은 interactive(콜백) 형태로 흉내낸다. 최상위 deleteMany/createMany 는 throw —
+ * 쓰기가 tx 밖으로 새면 바로 드러난다.
  */
 import { BadRequestException } from '@nestjs/common';
 import { UserFavoritesService } from './user-favorites.service.js';
@@ -29,16 +34,58 @@ interface UserFavRow {
   };
 }
 
+interface TransactionCalls {
+  deleteCount: number;
+  createCount: number;
+  createData: unknown[];
+  /** tx 안 호출 순서 — 'lock' · 'deleteMany' · 'createMany' */
+  order: string[];
+  /** $executeRaw 템플릿 조각을 '?' 로 이은 SQL */
+  lockSql: string[];
+  /** $executeRaw 보간 값 */
+  lockValues: unknown[][];
+}
+
 function makePrismaMock(opts: {
   findManyReturn?: UserFavRow[];
   teamFindManyReturn?: { id: number; apiTeamId: number }[];
 } = {}): {
   prisma: unknown;
-  transactionCalls: { deleteCount: number; createCount: number; createData: unknown[] };
+  transactionCalls: TransactionCalls;
   findManyCalls: unknown[];
 } {
   const findManyCalls: unknown[] = [];
-  const transactionCalls = { deleteCount: 0, createCount: 0, createData: [] as unknown[] };
+  const transactionCalls: TransactionCalls = {
+    deleteCount: 0,
+    createCount: 0,
+    createData: [],
+    order: [],
+    lockSql: [],
+    lockValues: [],
+  };
+
+  // interactive 트랜잭션 콜백이 받는 tx — 쓰기는 반드시 여기로 와야 한다.
+  const tx = {
+    $executeRaw: async (strings: TemplateStringsArray, ...values: unknown[]): Promise<number> => {
+      transactionCalls.order.push('lock');
+      transactionCalls.lockSql.push(strings.join('?'));
+      transactionCalls.lockValues.push(values);
+      return 1;
+    },
+    userFavoriteTeam: {
+      deleteMany: async (): Promise<{ count: number }> => {
+        transactionCalls.order.push('deleteMany');
+        transactionCalls.deleteCount += 1;
+        return { count: 0 };
+      },
+      createMany: async (arg: { data: unknown[] }): Promise<{ count: number }> => {
+        transactionCalls.order.push('createMany');
+        transactionCalls.createCount += 1;
+        transactionCalls.createData = arg.data;
+        return { count: arg.data.length };
+      },
+    },
+  };
 
   const prisma = {
     userFavoriteTeam: {
@@ -46,17 +93,12 @@ function makePrismaMock(opts: {
         findManyCalls.push(args);
         return opts.findManyReturn ?? [];
       },
+      // 트랜잭션 밖 쓰기는 계약 위반 — tx 를 써야 한다.
       deleteMany: () => {
-        // 트랜잭션 안에서 실행될 promise-like 를 흉내낸다.
-        return {
-          _kind: 'deleteMany',
-        };
+        throw new Error('must use tx inside $transaction');
       },
-      createMany: (arg: { data: unknown[] }) => {
-        return {
-          _kind: 'createMany',
-          data: arg.data,
-        };
+      createMany: () => {
+        throw new Error('must use tx inside $transaction');
       },
     },
     team: {
@@ -66,18 +108,7 @@ function makePrismaMock(opts: {
     localizedName: {
       findMany: async (): Promise<[]> => [],
     },
-    $transaction: async (
-      ops: Array<{ _kind: string; data?: unknown[] }>,
-    ): Promise<unknown[]> => {
-      for (const op of ops) {
-        if (op._kind === 'deleteMany') transactionCalls.deleteCount += 1;
-        if (op._kind === 'createMany') {
-          transactionCalls.createCount += 1;
-          transactionCalls.createData = op.data ?? [];
-        }
-      }
-      return [];
-    },
+    $transaction: async <T>(fn: (t: typeof tx) => Promise<T>): Promise<T> => fn(tx),
   };
 
   return { prisma, transactionCalls, findManyCalls };
@@ -187,6 +218,22 @@ describe('UserFavoritesService.replace — 정상 (Prisma mock)', () => {
       { userId: USER_ID, teamId: 2, position: 1 },
       { userId: USER_ID, teamId: 3, position: 2 },
     ]);
+    // 사용자 단위 advisory xact lock 이 쓰기보다 먼저 · 같은 tx 안에서
+    expect(transactionCalls.order).toEqual(['lock', 'deleteMany', 'createMany']);
+    expect(transactionCalls.lockSql[0]).toContain('pg_advisory_xact_lock');
+    expect(transactionCalls.lockSql[0]).toContain("hashtext('user_favorites')");
+    expect(transactionCalls.lockValues[0]).toEqual([USER_ID]);
+  });
+
+  it('7. 빈 배열 → lock · deleteMany 만 (createMany 없음) · items===[]', async () => {
+    const { prisma, transactionCalls } = makePrismaMock({ findManyReturn: [] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new UserFavoritesService(prisma as any);
+    const out = await svc.replace(USER_ID, { teamRefs: [] }, 'ko');
+
+    expect(transactionCalls.order).toEqual(['lock', 'deleteMany']);
+    expect(transactionCalls.createCount).toBe(0);
+    expect(out.items).toEqual([]);
   });
 });
 

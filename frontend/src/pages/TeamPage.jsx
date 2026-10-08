@@ -61,7 +61,7 @@ export default function TeamPage() {
         <div className="flex-1 min-w-0">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
             <h1 className="text-2xl font-bold text-foreground truncate" style={{ margin: 0, minWidth: 0 }}>{teamDisplayName}</h1>
-            <FavoriteToggle slug={slug} label={teamDisplayName} size="md" />
+            <FavoriteToggle slug={team.ref} label={teamDisplayName} size="md" />
           </div>
           <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
             {/* 값이 있는 것만 그린다 — 백엔드가 안 준 것을 "미정"·"-" 로 위장하지 않는다 */}

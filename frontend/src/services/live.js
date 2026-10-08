@@ -818,7 +818,7 @@ export function invalidateMatchDetail(id) {
 //
 // items 는 팀 요약 DTO 와 필드 이름이 같으므로 `normalizeTeam` 을 통과시켜 화면이 소비하는 형태로 맞춘다.
 // `position` 은 정규화 결과에 그대로 얹는다 — FavoritesContext 가 낙관적 갱신·재정렬에 쓴다.
-// 401 은 apiGet·apiPut 이 그대로 throw — 컨텍스트가 code/serverError 로 갈래를 그린다.
+// 401 은 apiGet·apiPut 이 그대로 throw — 컨텍스트가 code 로 loadError(GET) · actionError(PUT) 갈래를 그린다.
 //
 // `_cachedGet` 을 우회한다: 사용자 개인 목록이라 TTL 캐시로 다른 세션에 새는 것을 원천적으로 막는다.
 // locale 은 백엔드 로컬라이제이션 파라미터(현재 로그인 사용자의 팀 표기 언어).

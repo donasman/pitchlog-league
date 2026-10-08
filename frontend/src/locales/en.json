@@ -602,7 +602,9 @@
     "errors": {
       "unknown_team": "That team is not available.",
       "duplicate": "This team is already in your list.",
-      "network": "Please try again in a moment."
+      "network": "Please try again in a moment.",
+      "load_failed": "Couldn't load your favorites.",
+      "session_missing": "We couldn't verify your sign-in. Please sign in again."
     }
   },
   "auth": {
