@@ -21,6 +21,8 @@
  * ⚠ 지금은 L4·L5 가 없어 **L2 가 유일한 스코어 소스**다. L4(라이브 폴링)를 붙일 때
  * 이 규칙을 다시 본다 — 그때는 진행 중 경기의 스코어 주인이 L4 이고,
  * L2 가 캐시된 옛 값으로 덮어쓰면 안 된다 (SCHEMA_DESIGN 충돌 ①, `data_version`).
+ *
+ * missingTeams 시 /teams 1회 재수집 (L0 위임) · 현재 시즌만 — 대회시즌당 최대 1콜. 팀·경기장·참가 쓰기는 L0 코드가 한다 (SCHEMA_DESIGN 5장).
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -35,6 +37,7 @@ import { CompetitionFormat, IngestionLayer } from '../../generated/prisma/client
 import type { ApiFixture, ApiStandings } from '../api-football/api-football.types.js';
 import { resolveRoundScope, type FixtureRef } from './round-scope.js';
 import { standingKeepKeys } from './standings-keep.js';
+import { L0Service } from '../l0/l0.service.js';
 
 export interface L2CompetitionResult {
   name: string;
@@ -47,6 +50,8 @@ export interface L2CompetitionResult {
   droppedRounds: number;
   unknownRounds: string[];
   missingTeams: number[];
+  /** /teams 재수집으로 해소된 팀 수. 재수집을 안 했으면 undefined */
+  teamsRefreshed?: number;
   /** 이 대회시즌이 온전히 들어가지 않았다 — 시즌 단위 ingestion_runs 가 PARTIAL 로 남는다 */
   partial?: boolean;
   /**
@@ -82,6 +87,7 @@ export class L2Service {
     private readonly prisma: PrismaService,
     private readonly api: ApiFootballClient,
     private readonly runs: IngestionRunService,
+    private readonly l0: L0Service,
   ) {}
 
   /**
@@ -214,7 +220,7 @@ export class L2Service {
   }
 
   private async collectOne(
-    cs: { id: number; seasonId: number; competitionId: number; competition: { name: string; apiCompetitionId: number; format: CompetitionFormat; topFlightCompetitionId: number | null }; season: { year: number } },
+    cs: { id: number; seasonId: number; competitionId: number; isCurrent: boolean; competition: { name: string; apiCompetitionId: number; format: CompetitionFormat; topFlightCompetitionId: number | null }; season: { year: number } },
     teamIdByApi: Map<number, number>,
   ): Promise<L2CompetitionResult> {
     const league = cs.competition.apiCompetitionId;
@@ -307,45 +313,39 @@ export class L2Service {
     const venueIdByApi = new Map(venueRes.returned.map((v) => [v.api_venue_id, v.id]));
 
     // 3. 경기
-    const missing = new Set<number>();
-    const matchRows = fixtures
-      .filter((f) => roundIdByName.has(f.league.round))
-      .map((f) => {
-        const home = teamIdByApi.get(f.teams.home.id);
-        const away = teamIdByApi.get(f.teams.away.id);
-        if (home === undefined) missing.add(f.teams.home.id);
-        if (away === undefined) missing.add(f.teams.away.id);
-        if (home === undefined || away === undefined) return null;
-        const winner = f.teams.home.winner === true ? home : f.teams.away.winner === true ? away : null;
-        return {
-          api_fixture_id: f.fixture.id,
-          competition_season_id: cs.id,
-          round_id: roundIdByName.get(f.league.round) as number,
-          kickoff_at: f.fixture.date,
-          status_short: f.fixture.status.short,
-          status_long: f.fixture.status.long,
-          elapsed: f.fixture.status.elapsed,
-          extra_elapsed: f.fixture.status.extra,
-          venue_id: f.fixture.venue.id ? (venueIdByApi.get(f.fixture.venue.id) ?? null) : null,
-          referee: f.fixture.referee,
-          home_team_id: home,
-          away_team_id: away,
-          goals_home: f.goals.home,
-          goals_away: f.goals.away,
-          ht_home: f.score.halftime.home,
-          ht_away: f.score.halftime.away,
-          ft_home: f.score.fulltime.home,
-          ft_away: f.score.fulltime.away,
-          et_home: f.score.extratime.home,
-          et_away: f.score.extratime.away,
-          pen_home: f.score.penalty.home,
-          pen_away: f.score.penalty.away,
-          winner_team_id: winner,
-          detail_eligible: detailByName.get(f.league.round) ?? false,
-          as_of: new Date().toISOString(),
-        };
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null);
+    let { rows: matchRows, missing } = buildMatchRows(fixtures, cs, roundIdByName, detailByName, venueIdByApi, teamIdByApi);
+
+    // DB 에 없는 팀 — 컵 하부 팀이 L0 이후 참가팀 목록에 추가된 경우다 (10-08 Copa del Rey R128 실측).
+    // 팀·경기장·참가는 L0 소유라 L0 코드에 위임해 /teams 를 1회만 다시 받는다 (SCHEMA_DESIGN 5장)
+    // 현재 시즌만 — 재수집은 참가팀 전부의 name·logo·venue_id 와 venues 를 그 시즌 값으로 덮는다.
+    // L0 는 오래된→최신 순이라 최신 값이 남지만(l0.service run() 주석) L2 전 시즌 모드는 최신→오래된 순이라
+    // 과거 시즌에서 재수집하면 옛 값이 현재 팀 정보를 덮는다
+    if (missing.size > 0 && cs.isCurrent !== true) {
+      this.logger.warn(`${label}: DB 에 없는 팀 ${missing.size}개 — 과거 시즌이라 /teams 재수집 안 함 (L0 수동 실행)`);
+    }
+    if (missing.size > 0 && cs.isCurrent === true) {
+      const before = missing.size;
+      try {
+        const r = await this.l0.refreshTeamsForSeason({
+          competitionSeasonId: cs.id,
+          competitionId: cs.competitionId,
+          apiCompetitionId: league,
+          year: season,
+          label: cs.competition.name,
+        });
+        // 공유 맵 — 같은 실행의 순위·뒤 대회시즌도 혜택을 본다
+        for (const [apiId, id] of r.teamIdByApi) teamIdByApi.set(apiId, id);
+        ({ rows: matchRows, missing } = buildMatchRows(fixtures, cs, roundIdByName, detailByName, venueIdByApi, teamIdByApi));
+        result.teamsRefreshed = before - missing.size;
+        this.logger.log(`${label}: DB 에 없는 팀 ${before}개 → /teams 재수집 → ${before - missing.size}개 해소`);
+      } catch (err) {
+        // 일일 한도는 run() 루프가 끊어야 한다 — 삼키지 않는다
+        if (err instanceof ApiQuotaExhaustedError) throw err;
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`${label}: /teams 재수집 실패 — ${msg} · 빠진 팀은 partial 로 남긴다`);
+      }
+    }
+
     result.missingTeams = [...missing].sort((a, b) => a - b);
     if (missing.size > 0) {
       this.logger.warn(`${label}: DB 에 없는 팀 ${missing.size}개 — 그 경기는 건너뛴다. L0 를 다시 돌린다`);
@@ -459,4 +459,58 @@ export class L2Service {
     if (deleted > 0) this.logger.log(`${label}: 순위 옛 행 삭제 ${deleted}`);
     return upserted;
   }
+}
+
+/**
+ * 경기 행 계산 — 저장 라운드에 속한 경기만. DB 에 없는 팀이 낀 경기는 건너뛰고 그 API 팀 id 를 `missing` 에 모은다.
+ * collectOne 이 /teams 재수집 뒤 한 번 더 부르므로 순수 함수로 둔다 (DB·API 접근 없음).
+ */
+function buildMatchRows(
+  fixtures: ApiFixture[],
+  cs: { id: number },
+  roundIdByName: Map<string, number>,
+  detailByName: Map<string, boolean>,
+  venueIdByApi: Map<number, number>,
+  teamIdByApi: Map<number, number>,
+) {
+  const missing = new Set<number>();
+  const rows = fixtures
+    .filter((f) => roundIdByName.has(f.league.round))
+    .map((f) => {
+      const home = teamIdByApi.get(f.teams.home.id);
+      const away = teamIdByApi.get(f.teams.away.id);
+      if (home === undefined) missing.add(f.teams.home.id);
+      if (away === undefined) missing.add(f.teams.away.id);
+      if (home === undefined || away === undefined) return null;
+      const winner = f.teams.home.winner === true ? home : f.teams.away.winner === true ? away : null;
+      return {
+        api_fixture_id: f.fixture.id,
+        competition_season_id: cs.id,
+        round_id: roundIdByName.get(f.league.round) as number,
+        kickoff_at: f.fixture.date,
+        status_short: f.fixture.status.short,
+        status_long: f.fixture.status.long,
+        elapsed: f.fixture.status.elapsed,
+        extra_elapsed: f.fixture.status.extra,
+        venue_id: f.fixture.venue.id ? (venueIdByApi.get(f.fixture.venue.id) ?? null) : null,
+        referee: f.fixture.referee,
+        home_team_id: home,
+        away_team_id: away,
+        goals_home: f.goals.home,
+        goals_away: f.goals.away,
+        ht_home: f.score.halftime.home,
+        ht_away: f.score.halftime.away,
+        ft_home: f.score.fulltime.home,
+        ft_away: f.score.fulltime.away,
+        et_home: f.score.extratime.home,
+        et_away: f.score.extratime.away,
+        pen_home: f.score.penalty.home,
+        pen_away: f.score.penalty.away,
+        winner_team_id: winner,
+        detail_eligible: detailByName.get(f.league.round) ?? false,
+        as_of: new Date().toISOString(),
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+  return { rows, missing };
 }

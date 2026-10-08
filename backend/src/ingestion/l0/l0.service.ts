@@ -173,6 +173,18 @@ export class L0Service {
     };
   }
 
+  /** L2 위임용 — 대회시즌 하나의 /teams 1콜 → venues · teams · competition_entries. 팀 쓰기는 L0 소유를 유지한다 */
+  async refreshTeamsForSeason(input: {
+    competitionSeasonId: number;
+    competitionId: number;
+    apiCompetitionId: number;
+    year: number;
+    label: string;
+  }): Promise<{ teams: number; venues: number; entries: number; teamIdByApi: Map<number, number> }> {
+    // ingestion_runs wrap 을 하지 않는다 — 호출자(L2 의 대회시즌 wrap) 안에서 돈다
+    return this.upsertTeamsFor(input.competitionSeasonId, input.competitionId, input.apiCompetitionId, input.year, input.label);
+  }
+
   /**
    * /teams?league=&season= 1콜 → venues · teams · competition_entries — 테이블당 1문장, 총 3문장.
    *
@@ -180,12 +192,18 @@ export class L0Service {
    * 인터랙티브 트랜잭션은 Supabase 왕복(≈60ms)이 쌓이면 5초 한도를 넘긴다 (2026-09-07 실측).
    * 부모-먼저 순서(SCHEMA_DESIGN 2-4)만 지키면 고아 행은 생기지 않는다.
    */
-  private async upsertTeamsFor(competitionSeasonId: number, competitionId: number, apiCompetitionId: number, year: number, label: string) {
+  private async upsertTeamsFor(
+    competitionSeasonId: number,
+    competitionId: number,
+    apiCompetitionId: number,
+    year: number,
+    label: string,
+  ): Promise<{ teams: number; venues: number; entries: number; teamIdByApi: Map<number, number> }> {
     const { response } = await this.api.get<ApiTeam[]>('/teams', { league: apiCompetitionId, season: year });
     if (response.length === 0) {
       // 시즌 등록 전이거나 컵 참가팀 미확정. 실패가 아니라 "아직 없음"
       this.logger.warn(`${label} ${year}: 팀 0건`);
-      return { teams: 0, venues: 0, entries: 0 };
+      return { teams: 0, venues: 0, entries: 0, teamIdByApi: new Map<number, number>() };
     }
 
     // 1. venues — 같은 경기장을 두 팀이 쓰는 경우(공유 구장)는 헬퍼가 dedupe 한다
@@ -228,6 +246,7 @@ export class L0Service {
     }, entryRows);
 
     this.logger.log(`${label} ${year}: 팀 ${teams.rows} · 경기장 ${venues.rows} · 참가 ${entries.rows}`);
-    return { teams: teams.rows, venues: venues.rows, entries: entries.rows };
+    const teamIdByApi = new Map(teams.returned.map((t) => [t.api_team_id, t.id]));
+    return { teams: teams.rows, venues: venues.rows, entries: entries.rows, teamIdByApi };
   }
 }
