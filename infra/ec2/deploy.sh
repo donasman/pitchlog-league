@@ -62,9 +62,16 @@ cd "$BACKEND_DIR"
 
 # 이전 dist 를 보존 — 빌드 실패 시 기존 dist 도 살아있게 (mv 아니라 cp -a).
 # npm ci · prisma generate · nest build 가 죽어도 기존 서비스는 계속 돈다.
+# 지금 서비스가 health 를 통과할 때만 dist.prev 를 갱신한다. 실패한 배포 뒤에 다시 배포하면
+# 깨진 dist 가 dist.prev 를 덮어 롤백할 성공본이 사라지던 결함 (2026-10-07 EC2 실측 · SUPABASE_URL 누락).
 if [[ -d dist ]]; then
-  rm -rf dist.prev
-  cp -a dist dist.prev
+  if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+    rm -rf dist.prev
+    cp -a dist dist.prev
+    echo "▶ 현재 서비스 health 통과 → dist.prev 갱신"
+  else
+    echo "▶ 현재 서비스 health 실패 → dist.prev 유지 (마지막 성공본)"
+  fi
 fi
 
 echo "▶ npm ci (devDeps 포함 · nest build 가 필요)"
