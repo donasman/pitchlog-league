@@ -30,7 +30,7 @@ import { ApiFootballClient } from '../src/ingestion/api-football/api-football.cl
 import { L2Service } from '../src/ingestion/l2/l2.service.js';
 import { ApiQuotaExhaustedError } from '../src/ingestion/api-football/api-football.errors.js';
 import { CompetitionFormat, CompetitionType } from '../src/generated/prisma/client.js';
-import type { ApiEnvelope, ApiFixture, ApiStandingRow } from '../src/ingestion/api-football/api-football.types.js';
+import type { ApiEnvelope, ApiFixture, ApiStandingRow, ApiTeam } from '../src/ingestion/api-football/api-football.types.js';
 
 /** 카탈로그·다른 e2e 와 겹치지 않는 대역 (l1 은 990_xxx 를 쓴다) */
 const LEAGUE_API_ID = 991_140;
@@ -43,6 +43,10 @@ const TF = [992_001, 992_002, 992_003, 992_004];
 const KO = Array.from({ length: 20 }, (_, i) => 991_001 + i);
 /** 일부러 DB 에 만들지 않는 팀 — missingTeams 보고 경로 */
 const MISSING_TEAM = 991_999;
+/** 과거 시즌(2025) 컵에만 나오는 DB 에 없는 팀 — 과거 시즌은 /teams 재수집을 하지 않는다 (15-a) */
+const PAST_MISSING_TEAM = 995_999;
+/** `/teams` 픽스처에 넣는 팀 — 재수집이 INSERT 할 수 있으니 afterAll 에서 지운다 */
+const REFRESH_TEAM_API_IDS = [MISSING_TEAM, PAST_MISSING_TEAM];
 const VENUE_API_ID = 993_001;
 
 /**
@@ -152,6 +156,12 @@ const standingRow = (rank: number, apiTeamId: number, group: string): ApiStandin
   away: { played: 1, win: 0, draw: 1, lose: 0, goals: { for: 1, against: 1 } },
 });
 
+/** `/teams` 응답 한 행. 경기장 id·이름을 null 로 둬 새 venues 행이 생기지 않게 한다 */
+const apiTeam = (id: number, name: string): ApiTeam => ({
+  team: { id, name, code: null, country: 'Testland', founded: null, national: false, logo: null },
+  venue: { id: null, name: null, address: null, city: null, capacity: null, surface: null, image: null },
+});
+
 class FakeApiFootballClient {
   calls: string[] = [];
   rounds = new Map<number, string[]>();
@@ -164,6 +174,8 @@ class FakeApiFootballClient {
   failKeys = new Set<string>();
   /** 이 `${league}:${season}` 은 **일일 한도 소진**으로 던진다 — 루프가 끊기는지 본다 */
   quotaKeys = new Set<string>();
+  /** `/teams` 응답 — 키 `${league}:${season}`. 없으면 빈 응답 (모르는 league 는 빈 응답) */
+  teamsByKey = new Map<string, ApiTeam[]>();
 
   get callCount(): number {
     return this.calls.length;
@@ -182,7 +194,8 @@ class FakeApiFootballClient {
     else if (path === '/standings') {
       const groups = this.standings.get(league);
       response = groups ? [{ league: { id: league, season: Number(query.season), standings: groups } }] : [];
-    } else throw new Error(`가짜 클라이언트가 모르는 경로: ${path}`);
+    } else if (path === '/teams') response = this.teamsByKey.get(key) ?? [];
+    else throw new Error(`가짜 클라이언트가 모르는 경로: ${path}`);
     const n = Array.isArray(response) ? response.length : 1;
     return { get: path, parameters: {}, errors: [], results: n, paging: { current: 1, total: 1 }, response: response as T };
   }
@@ -418,6 +431,9 @@ describe('L2 라운드·경기·순위 (e2e, 가짜 API)', () => {
       await prisma.ingestionRun.deleteMany({ where: { competitionSeasonId: { in: csIds } } });
       await prisma.competitionSeason.deleteMany({ where: { id: { in: csIds } } });
     }
+    // 16번이 /teams 재수집(L0 위임)으로 INSERT 한 팀 — 참가 행은 위에서 대회시즌 단위로 이미 지웠다 (자식 먼저).
+    // l0.e2e 가 팀·참가를 전역으로 센다
+    await prisma.team.deleteMany({ where: { apiTeamId: { in: REFRESH_TEAM_API_IDS } } });
     // 컵이 리그를 top_flight 로 참조한다 — 참조를 끊고 지운다
     await prisma.competition.updateMany({ where: { apiCompetitionId: { in: [CUP_API_ID, S_CUP_API_ID] } }, data: { topFlightCompetitionId: null } });
     await prisma.competition.deleteMany({
@@ -443,14 +459,22 @@ describe('L2 라운드·경기·순위 (e2e, 가짜 API)', () => {
 
   const matchCountOf = (csId: number) => prisma.match.count({ where: { competitionSeasonId: csId } });
 
+  /** 이 대회의 `/teams` 콜 수 — 재수집(L0 위임)은 대회시즌당 최대 1회다 */
+  const teamsCallsFor = (apiId: number, year = SEASON_YEAR) =>
+    fake.calls.filter((c) => c === `/teams?league=${apiId}&season=${year}`).length;
+
   it('1. 컵 — 컷 앞 라운드는 라운드도 경기도 저장되지 않는다', async () => {
+    fake.calls = [];
     const summary = await l2.run();
     const cup = resultFor(summary, 'L2 Fixture Cup');
 
     expect(cup.cutRound).toBe('Round of 16');
     expect(cup.droppedRounds).toBe(1);
     expect(cup.unknownRounds).toEqual([UNLISTED_ROUND]);
+    // /teams 응답에도 이 팀이 없다 — 재수집을 1회 해도 남고 partial 로 보고된다
     expect(cup.missingTeams).toEqual([MISSING_TEAM]);
+    expect(cup.partial).toBe(true);
+    expect(teamsCallsFor(CUP_API_ID)).toBe(1);
 
     const rounds = await roundsOf(cupCsId);
     expect(rounds.map((r) => r.name)).toEqual(['Round of 16', 'Quarter-finals']);
@@ -715,5 +739,64 @@ describe('L2 라운드·경기·순위 (e2e, 가짜 API)', () => {
     expect(summary.skipped.some((m) => m.includes(String(OUT_OF_RANGE_YEAR)))).toBe(false);
     expect(fake.calls.some((c) => c.endsWith(`season=${OUT_OF_RANGE_YEAR}`))).toBe(false);
     expect(seasonsCalledFor(S_LEAGUE_API_ID)).toEqual(['2024', '2025', '2026']);
+  }, 180_000);
+
+  it('15-a. 과거 시즌은 DB 에 없는 팀이 있어도 /teams 를 다시 받지 않는다 — 옛 값이 현재 팀 정보를 덮지 않게', async () => {
+    // 재수집은 참가팀 전부의 name·logo·venue_id 를 그 시즌 값으로 덮는다. 전 시즌 모드는 최신→오래된 순이라
+    // 과거 시즌에서 재수집하면 옛 값이 남는다. /teams 응답에 그 팀을 넣어 둬서, 조건이 빠지면 해소돼 버리게 한다
+    const key = `${S_CUP_API_ID}:2025`;
+    const original = fake.seasonFixtures.get(key)!;
+    fake.seasonFixtures.set(key, [...original, fx(S_CUP_API_ID, S_CUP_ROUNDS[1], S_LOW[2], PAST_MISSING_TEAM)]);
+    fake.teamsByKey.set(key, [apiTeam(PAST_MISSING_TEAM, 'Past Missing FC')]);
+    fake.calls = [];
+    try {
+      const summary = await l2.run({ seasonYear: 2025 });
+      const cup = summary.competitions.find((c) => c.name === 'L2 Season Cup' && c.seasonYear === 2025);
+      expect(cup).toBeDefined();
+
+      expect(teamsCallsFor(S_CUP_API_ID, 2025)).toBe(0);
+      expect(fake.calls.some((c) => c.startsWith('/teams'))).toBe(false);
+      expect(cup!.missingTeams).toEqual([PAST_MISSING_TEAM]);
+      expect(cup!.teamsRefreshed).toBeUndefined();
+      expect(cup!.partial).toBe(true);
+      expect(await prisma.team.count({ where: { apiTeamId: PAST_MISSING_TEAM } })).toBe(0);
+    } finally {
+      fake.seasonFixtures.set(key, original);
+      fake.teamsByKey.delete(key);
+    }
+  }, 180_000);
+
+  // ⚠ 맨 뒤에 둔다 — 이 케이스가 MISSING_TEAM 을 teams 에 INSERT 하므로, 앞에 두면
+  // 1번(missingTeams=[MISSING_TEAM])처럼 "DB 에 없는 팀" 을 기대하는 케이스가 깨진다. 팀 행은 afterAll 이 지운다
+  it('16. ★ DB 에 없는 팀 → /teams 1회 재수집(L0 위임)으로 해소되고 그 경기가 들어온다 (10-08 Copa del Rey R128)', async () => {
+    const teamsKey = `${CUP_API_ID}:${SEASON_YEAR}`;
+    const cupFixtures = fake.fixtures.get(CUP_API_ID)!;
+    fake.teamsByKey.set(teamsKey, [apiTeam(MISSING_TEAM, 'Missing Fixture FC')]);
+    // 목록 밖 라운드 경기는 unknownRounds 로 partial 을 만든다 — 이 케이스는 팀 재수집만 보므로 잠시 뺀다
+    fake.fixtures.set(CUP_API_ID, cupFixtures.filter((f) => f.league.round !== UNLISTED_ROUND));
+    fake.calls = [];
+    try {
+      const summary = await l2.run();
+      const cup = resultFor(summary, 'L2 Fixture Cup');
+
+      expect(cup.unknownRounds).toEqual([]);
+      expect(cup.missingTeams).toEqual([]);
+      expect(cup.teamsRefreshed).toBe(1);
+      expect(cup.partial).toBeFalsy();
+      // 16강 8 + 8강 4 — 빠졌던 1경기가 들어왔다
+      expect(await matchCountOf(cupCsId)).toBe(12);
+      expect(cup.matches).toBe(12);
+      expect(teamsCallsFor(CUP_API_ID)).toBe(1);
+
+      // 팀·참가 쓰기는 L0 코드가 했다 — 참가 관계까지 생긴다
+      const team = await prisma.team.findUniqueOrThrow({ where: { apiTeamId: MISSING_TEAM } });
+      expect(team.name).toBe('Missing Fixture FC');
+      expect(await prisma.competitionEntry.count({ where: { competitionSeasonId: cupCsId, teamId: team.id } })).toBe(1);
+      const missingMatch = await prisma.match.count({ where: { competitionSeasonId: cupCsId, awayTeamId: team.id } });
+      expect(missingMatch).toBe(1);
+    } finally {
+      fake.teamsByKey.delete(teamsKey);
+      fake.fixtures.set(CUP_API_ID, cupFixtures);
+    }
   }, 180_000);
 });
