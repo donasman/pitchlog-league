@@ -2,7 +2,7 @@
  * 사용자 즐겨찾기 팀 서비스.
  *
  * GET  → { asOf, items[] }, position 오름차순.
- * PUT  → 단일 트랜잭션 안에서 DELETE + createMany 로 전체 교체.
+ * PUT  → 단일 interactive 트랜잭션 안에서 사용자 단위 advisory lock 후 DELETE + createMany 로 전체 교체.
  *
  * 검증 순서 (엄격히 이 순서 · 첫 실패에서 400):
  *   1) teamRefs.length > 10 → favorites_limit_exceeded
@@ -10,7 +10,7 @@
  *   3) 성공한 apiId 로 prisma.team.findMany select id,apiTeamId → apiId→teamId 맵
  *   4) 매핑 miss apiId 의 원문 ref → unknown 에 병합. unknown.length>0 → favorites_unknown_team
  *   5) teamId (=apiId 기준) 중복 → favorites_duplicate
- *   6) 트랜잭션: deleteMany → createMany. position = 배열 index
+ *   6) 트랜잭션: advisory xact lock → deleteMany → createMany (같은 사용자 동시 PUT 직렬화). position = 배열 index
  *   7) GET 조립 함수 재사용
  *
  * 참조 무결성:
@@ -118,12 +118,16 @@ export class UserFavoritesService {
       teamId: apiIdToTeamId.get(p.apiId)!,
       position: index,
     }));
-    await this.prisma.$transaction([
-      this.prisma.userFavoriteTeam.deleteMany({ where: { userId } }),
-      ...(rowsToCreate.length > 0
-        ? [this.prisma.userFavoriteTeam.createMany({ data: rowsToCreate })]
-        : []),
-    ]);
+    // 같은 사용자 동시 PUT 직렬화 — 락 없이 두 트랜잭션이 엇갈리면 createMany 가 PK (userId, teamId)
+    // 또는 unique (userId, position) 에 부딪혀 P2002 → 500. advisory xact lock 은 커밋/롤백 시 자동 해제.
+    // $executeRaw 여야 한다 — $queryRaw 는 void(OID 2278) 결과를 adapter-pg 가 UnsupportedNativeDataType 으로 던진다.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('user_favorites'), hashtext(${userId}))`;
+      await tx.userFavoriteTeam.deleteMany({ where: { userId } });
+      if (rowsToCreate.length > 0) {
+        await tx.userFavoriteTeam.createMany({ data: rowsToCreate });
+      }
+    });
 
     // (7) 조립 재사용
     return this.list(userId, locale);

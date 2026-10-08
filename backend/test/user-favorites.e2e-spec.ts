@@ -4,6 +4,9 @@
  * SUPABASE_JWKS provider 를 로컬 JWKS 로 override 하고, 같은 ES256 개인키로 서명한 토큰을 붙인다.
  * 실제 Supabase 네트워크 호출 없음. 원격 DB 가드는 l1.e2e-spec.ts 규약 그대로.
  *
+ * 픽스처 id 대역: 팀 989_xxx (989_000~989_999) — 실제 팀 apiId 를 쓰지 않는다.
+ *   beforeAll 이 대역을 먼저 비우고 989_001~003 을 심는다. afterAll 이 즐겨찾기 → 대역 팀 순으로 지운다.
+ *
  * 케이스:
  *   1. GET (즐겨찾기 없음) → asOf · items===[]
  *   2. PUT 3개 → items.length===3 · position 0/1/2
@@ -11,7 +14,10 @@
  *   4. PUT 상한 초과 (11개) → 400 favorites_limit_exceeded
  *   5. PUT 없는 ref → 400 favorites_unknown_team + details 원문
  *   6. PUT 중복 apiId → 400 favorites_duplicate
- *   7. PUT 트랜잭션 — 실패 후 GET 이 이전 상태를 유지
+ *   7. PUT 400(검증 실패) 뒤 GET 이 이전 상태를 유지 — 검증은 트랜잭션 진입 전
+ *   8. 인증 없음 → 401
+ *   9. 사용자 격리 — USER_B 의 GET/PUT 이 USER_A 에 닿지 않음
+ *  10. 같은 사용자 동시 PUT 3개 × 3라운드 → 전부 200 · 최종 상태가 셋 중 하나 · position 연속
  */
 import 'dotenv/config';
 import { Test } from '@nestjs/testing';
@@ -31,6 +37,23 @@ const USER_A = '00000000-0000-0000-0000-999000000001';
 const USER_B = '00000000-0000-0000-0000-999000000002';
 const TEST_USER_IDS = [USER_A, USER_B];
 
+/** 이 스펙 전용 팀 apiId 대역 */
+const BAND_MIN = 989_000;
+const BAND_MAX = 989_999;
+const TEAM_SEEDS = [
+  { apiTeamId: 989_001, name: 'Favorites Fixture Alpha', country: 'Testland' },
+  { apiTeamId: 989_002, name: 'Favorites Fixture Beta', country: 'Testland' },
+  { apiTeamId: 989_003, name: 'Favorites Fixture Gamma', country: 'Testland' },
+];
+// toRef(apiTeamId, name) 결과와 같다 (src/common/ref.ts)
+const REF_A = '989001-favorites-fixture-alpha';
+const REF_B = '989002-favorites-fixture-beta';
+const REF_C = '989003-favorites-fixture-gamma';
+/** REF_A 와 같은 apiId · 다른 슬러그 */
+const REF_DUP = '989001-alpha-alt';
+/** 대역 안이지만 심지 않은 apiId */
+const REF_MISSING = '989999-nonexistent-team';
+
 const ISSUER_HOST = process.env.SUPABASE_URL ?? 'https://test-project.supabase.co';
 const KID = 'user-favorites-e2e-kid';
 
@@ -38,9 +61,6 @@ describe('GET/PUT /api/me/favorites (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let privateKey: PrivateKeyType;
-  let ref33: string; // Manchester United (apiId 33)
-  let ref40: string; // Liverpool (apiId 40)
-  let ref42: string; // Arsenal (apiId 42)
 
   async function sign(userId: string): Promise<string> {
     return new SignJWT({ role: 'authenticated', email: `${userId}@example.com` })
@@ -80,15 +100,11 @@ describe('GET/PUT /api/me/favorites (e2e)', () => {
     await app.init();
     prisma = app.get(PrismaService);
 
-    // 사전 세션 데이터 정리
+    // 이전 실행 잔여물 정리 — 자식(즐겨찾기) 먼저, 그다음 대역 팀 (Restrict 에뮬레이션)
     await prisma.userFavoriteTeam.deleteMany({ where: { userId: { in: TEST_USER_IDS } } });
+    await prisma.team.deleteMany({ where: { apiTeamId: { gte: BAND_MIN, lte: BAND_MAX } } });
 
-    // 팀 3개 self-seed — CI 는 fresh Postgres 라 L0 seed 가 없다. upsert 라 로컬 L0 seed 와도 안 부딪힌다.
-    const TEAM_SEEDS = [
-      { apiTeamId: 33, name: 'Manchester United', country: 'England' },
-      { apiTeamId: 40, name: 'Liverpool', country: 'England' },
-      { apiTeamId: 42, name: 'Arsenal', country: 'England' },
-    ];
+    // 팀 3개 self-seed — CI 는 fresh Postgres 라 L0 seed 가 없다.
     for (const seed of TEAM_SEEDS) {
       await prisma.team.upsert({
         where: { apiTeamId: seed.apiTeamId },
@@ -96,9 +112,6 @@ describe('GET/PUT /api/me/favorites (e2e)', () => {
         update: {},
       });
     }
-    ref33 = '33-manchester-united';
-    ref40 = '40-liverpool';
-    ref42 = '42-arsenal';
   }, 60_000);
 
   afterAll(async () => {
@@ -106,13 +119,25 @@ describe('GET/PUT /api/me/favorites (e2e)', () => {
       try {
         await prisma.userFavoriteTeam.deleteMany({ where: { userId: { in: TEST_USER_IDS } } });
       } catch (cause) {
-        console.warn('[user-favorites e2e] 픽스처 정리 실패:', cause);
+        console.warn('[user-favorites e2e] 즐겨찾기 정리 실패:', cause);
+      }
+      try {
+        await prisma.team.deleteMany({ where: { apiTeamId: { gte: BAND_MIN, lte: BAND_MAX } } });
+      } catch (cause) {
+        console.warn('[user-favorites e2e] 대역 팀 정리 실패:', cause);
       }
     }
-    await app?.close();
+    try {
+      await app?.close();
+    } catch (cause) {
+      console.warn('[user-favorites e2e] app.close 실패:', cause);
+    }
   }, 60_000);
 
   const auth = async (userId: string): Promise<string> => `Bearer ${await sign(userId)}`;
+  const apiIdsOf = (body: { items: { apiId: number }[] }): number[] => body.items.map((i) => i.apiId);
+  const positionsOf = (body: { items: { position: number }[] }): number[] =>
+    body.items.map((i) => i.position);
 
   it('1. GET — 즐겨찾기 없음 → asOf · items===[]', async () => {
     const res = await request(app.getHttpServer())
@@ -132,11 +157,11 @@ describe('GET/PUT /api/me/favorites (e2e)', () => {
       .put('/api/me/favorites?locale=ko')
       .set('Authorization', await auth(USER_A))
       .set('Content-Type', 'application/json')
-      .send({ teamRefs: [ref33, ref40, ref42] })
+      .send({ teamRefs: [REF_A, REF_B, REF_C] })
       .expect(200);
     expect(res.body.items).toHaveLength(3);
-    expect(res.body.items.map((i: { position: number }) => i.position)).toEqual([0, 1, 2]);
-    expect(res.body.items.map((i: { apiId: number }) => i.apiId)).toEqual([33, 40, 42]);
+    expect(positionsOf(res.body)).toEqual([0, 1, 2]);
+    expect(apiIdsOf(res.body)).toEqual([989001, 989002, 989003]);
     expect(res.headers['cache-control']).toBe('private, no-store');
   });
 
@@ -145,12 +170,13 @@ describe('GET/PUT /api/me/favorites (e2e)', () => {
       .get('/api/me/favorites?locale=ko')
       .set('Authorization', await auth(USER_A))
       .expect(200);
-    expect(res.body.items.map((i: { apiId: number }) => i.apiId)).toEqual([33, 40, 42]);
-    expect(res.body.items.map((i: { position: number }) => i.position)).toEqual([0, 1, 2]);
+    expect(apiIdsOf(res.body)).toEqual([989001, 989002, 989003]);
+    expect(positionsOf(res.body)).toEqual([0, 1, 2]);
   });
 
   it('4. PUT — 상한 초과 (11개) → 400 favorites_limit_exceeded', async () => {
-    const many = Array.from({ length: 11 }, (_, i) => `${100 + i}-team-${i}`);
+    // 대역 안 미시드 apiId 989100~989110 — 상한 검사가 DB 조회보다 먼저지만, 순서가 바뀌어도 실제 팀에 닿지 않게
+    const many = Array.from({ length: 11 }, (_, i) => `${989_100 + i}-team-${i}`);
     const res = await request(app.getHttpServer())
       .put('/api/me/favorites')
       .set('Authorization', await auth(USER_B))
@@ -161,36 +187,34 @@ describe('GET/PUT /api/me/favorites (e2e)', () => {
   });
 
   it('5. PUT — 없는 ref → 400 favorites_unknown_team + details 원문', async () => {
-    const unknownRef = '99999999-nonexistent-team';
     const res = await request(app.getHttpServer())
       .put('/api/me/favorites')
       .set('Authorization', await auth(USER_A))
       .set('Content-Type', 'application/json')
-      .send({ teamRefs: [ref33, unknownRef] })
+      .send({ teamRefs: [REF_A, REF_MISSING] })
       .expect(400);
     expect(res.body.code).toBe('favorites_unknown_team');
-    expect(res.body.details).toEqual([unknownRef]);
+    expect(res.body.details).toEqual([REF_MISSING]);
   });
 
   it('6. PUT — 중복 apiId (다른 슬러그) → 400 favorites_duplicate', async () => {
-    const alt = `33-mufc-alt`;
     const res = await request(app.getHttpServer())
       .put('/api/me/favorites')
       .set('Authorization', await auth(USER_A))
       .set('Content-Type', 'application/json')
-      .send({ teamRefs: [ref33, alt] })
+      .send({ teamRefs: [REF_A, REF_DUP] })
       .expect(400);
     expect(res.body.code).toBe('favorites_duplicate');
   });
 
-  it('7. PUT — 실패 후 GET 이 이전 상태를 유지 (트랜잭션 계약)', async () => {
-    // 케이스 2 에서 저장한 [33, 40, 42] 가 그대로 남아 있어야 한다.
+  it('7. PUT 400(검증 실패) 뒤 GET 이 이전 상태를 유지 — 검증은 트랜잭션 진입 전', async () => {
+    // 케이스 2 에서 저장한 [A, B, C] 가 그대로 남아 있어야 한다.
     // 5·6 은 검증 단계에서 실패해 트랜잭션에 진입하지 않는다.
     const res = await request(app.getHttpServer())
       .get('/api/me/favorites?locale=ko')
       .set('Authorization', await auth(USER_A))
       .expect(200);
-    expect(res.body.items.map((i: { apiId: number }) => i.apiId)).toEqual([33, 40, 42]);
+    expect(apiIdsOf(res.body)).toEqual([989001, 989002, 989003]);
   });
 
   it('8. 인증 없음 → 401', async () => {
@@ -200,4 +224,54 @@ describe('GET/PUT /api/me/favorites (e2e)', () => {
       .send({ teamRefs: [] })
       .expect(401);
   });
+
+  it('9. 사용자 격리 — USER_B 의 GET/PUT 이 USER_A 에 닿지 않음', async () => {
+    // 이 시점 USER_A = [A, B, C] (케이스 2·7). USER_B 는 beforeAll 이 비웠고 그 뒤 USER_B 로 성공한 PUT 이 없어 비어 있다.
+    const bGet = await request(app.getHttpServer())
+      .get('/api/me/favorites?locale=ko')
+      .set('Authorization', await auth(USER_B))
+      .expect(200);
+    expect(bGet.body.items).toEqual([]);
+
+    const bPut = await request(app.getHttpServer())
+      .put('/api/me/favorites?locale=ko')
+      .set('Authorization', await auth(USER_B))
+      .set('Content-Type', 'application/json')
+      .send({ teamRefs: [REF_B] })
+      .expect(200);
+    expect(apiIdsOf(bPut.body)).toEqual([989002]);
+
+    const aGet = await request(app.getHttpServer())
+      .get('/api/me/favorites?locale=ko')
+      .set('Authorization', await auth(USER_A))
+      .expect(200);
+    expect(apiIdsOf(aGet.body)).toEqual([989001, 989002, 989003]);
+  });
+
+  it('10. 같은 사용자 동시 PUT 3개 × 3라운드 → 전부 200 · 최종 상태가 셋 중 하나 · position 연속', async () => {
+    const bodies = [[REF_A, REF_B], [REF_C], [REF_B, REF_C, REF_A]];
+    const expectedApiIds = [[989001, 989002], [989003], [989002, 989003, 989001]];
+
+    for (let round = 0; round < 3; round++) {
+      const token = await auth(USER_A);
+      const results = await Promise.all(
+        bodies.map((teamRefs) =>
+          request(app.getHttpServer())
+            .put('/api/me/favorites?locale=ko')
+            .set('Authorization', token)
+            .set('Content-Type', 'application/json')
+            .send({ teamRefs }),
+        ),
+      );
+      expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
+
+      const res = await request(app.getHttpServer())
+        .get('/api/me/favorites?locale=ko')
+        .set('Authorization', token)
+        .expect(200);
+      const ids = apiIdsOf(res.body);
+      expect(expectedApiIds).toContainEqual(ids);
+      expect(positionsOf(res.body)).toEqual(ids.map((_, i) => i));
+    }
+  }, 60_000);
 });
