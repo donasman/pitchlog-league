@@ -22,7 +22,7 @@ VITE_API_BASE_URL=http://localhost:3000
 ## 검증
 
 ```bash
-npm run verify           # validate:data → check:i18n → lint → build
+npm run verify           # validate:data → check:i18n → lint → test → build
 ```
 
 커밋 전에 통과해야 한다. CI `frontend-verify` 가 같은 것을 돈다.

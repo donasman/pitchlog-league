@@ -12,7 +12,7 @@ tools: Read, Grep, Glob, Bash
 ## 할 일
 
 1. diff 의 모든 변경을 계약표·`docs/FRONTEND_GUIDE.md` 와 대조한다. 어긋나면 `파일:줄` 과 근거 절을 적는다.
-2. **검증 명령을 실제로 실행한다.** `npm run verify`(`validate:data` → `check:i18n` → `lint` → `build`). 출력을 그대로 보고에 넣는다. 못 돌리면 "실행 못 함 — 이유" 로 적고 CI 로 넘긴다.
+2. **검증 명령을 실제로 실행한다.** `npm run verify`(`validate:data` → `check:i18n` → `lint` → `test` → `build`). 출력을 그대로 보고에 넣는다. 못 돌리면 "실행 못 함 — 이유" 로 적고 CI 로 넘긴다.
 3. 지시문의 "건드릴 파일" 밖이 바뀌었는지 본다. `backend/` 가 바뀌었으면 그 자체가 문제다.
 
 ## 프론트 고정 원칙 위반 — 반드시 찾는다

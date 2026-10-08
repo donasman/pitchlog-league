@@ -52,7 +52,7 @@ import { ingestScopeWhere } from '../screen-scope.js';
 import { IngestionLayer } from '../../generated/prisma/client.js';
 
 export interface BackfillDetailsOptions {
-  /** 없으면 화면 6대회의 현재 시즌만 */
+  /** 없으면 수집 범위(ingestScopeWhere · isTracked 19대회)의 현재 시즌만 (run() where) */
   season?: number;
   /** 처리할 경기 수 상한. 실제 상한은 min(limit, 남은 예산/4) */
   limit?: number;
