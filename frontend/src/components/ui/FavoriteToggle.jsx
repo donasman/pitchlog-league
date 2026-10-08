@@ -8,12 +8,19 @@
  * 세 갈래:
  *   - 컨텍스트 off (env·supabase 미설치) → 아예 렌더하지 않는다.
  *   - 로그인 안 됨: 별을 그린다. 클릭하면 로그인 힌트 팝업 + Google 로그인 CTA. toggle 은 호출하지 않는다.
- *   - 로그인 됨:  기존 별·토글·상한 안내. serverError 는 별 아래 힌트로 매핑
- *      · limit_exceeded → favorites.limit_reached
+ *   - 로그인 됨:  별·토글. 컨텍스트의 actionError 를 별 아래 힌트로 매핑한다.
+ *      · limit_exceeded → favorites.limit_reached   (상한 초과 — toggle 이 actionError 를 세운다)
  *      · unknown_team   → favorites.errors.unknown_team
  *      · duplicate      → favorites.errors.duplicate
  *      · network        → favorites.errors.network
- *   isSyncing 이면 별을 disabled 회색으로 그린다 — 연타 방지 겸 시각 피드백.
+ *      · not_authenticated 는 힌트 없음 (ERROR_KEY 에 없다)
+ *     힌트는 actionError.ref === slug 인 인스턴스에서만 뜬다 — 같은 화면의 다른 별에는 뜨지 않는다.
+ *     띄운 뒤 clearActionError(slug) 로 그 ref 의 오류만 지운다.
+ *
+ * disabled = isLoggedIn && (isSyncing || loadState 'idle' | 'loading')
+ *   PUT 진행 중이거나 첫 로드가 끝나기 전에는 별을 회색으로 그리고 클릭을 받지 않는다.
+ *   loadState 'error' 는 disabled 가 아니다 — 클릭하면 favorites.errors.load_failed 힌트를 띄우고
+ *   toggle 은 부르지 않는다 (첫 로드 실패를 빈 목록으로 숨기지 않는다).
  *
  * @param {{ slug:string, label:string, size?:'sm'|'md' }} props  slug 값은 실제로는 팀 ref.
  */
@@ -33,11 +40,15 @@ const ERROR_KEY = {
   unknown_team:   'favorites.errors.unknown_team',
   duplicate:      'favorites.errors.duplicate',
   network:        'favorites.errors.network',
+  load_failed:    'favorites.errors.load_failed',
 }
 
 export default function FavoriteToggle({ slug, label, size = 'md' }) {
   const { t } = useTranslation()
-  const { isFavoritesEnabled, isLoggedIn, isFavorite, toggle, limit, isSyncing, serverError, clearServerError } = useFavorites()
+  const {
+    isFavoritesEnabled, isLoggedIn, isFavorite, toggle, limit,
+    isSyncing, loadState, actionError, clearActionError,
+  } = useFavorites()
   const { signInWithGoogle } = useAuth()
   const [hint, setHint] = useState({ visible: false, kind: null })
   const timerRef = useRef(null)
@@ -49,35 +60,38 @@ export default function FavoriteToggle({ slug, label, size = 'md' }) {
     ? t('favorites.remove', { name: label })
     : t('favorites.add', { name: label })
 
-  // isSyncing 중에도 hover/pressed 상태를 잃지 않으려고 별 자체는 그대로 그린다. click 만 막는다.
-  const disabled = isSyncing
+  // 별 자체는 그대로 그린다(hover/pressed 를 잃지 않게). click 만 막는다.
+  // loadState 'error' 는 여기 들지 않는다 — 클릭 시 load_failed 힌트로 드러낸다.
+  const disabled = isLoggedIn && (isSyncing || loadState === 'idle' || loadState === 'loading')
 
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current)
   }, [])
 
+  // 타이머 종료 시 지역 힌트만 숨긴다. 컨텍스트 actionError 는 띄우는 순간 이미 지웠다.
   const showHint = (kind) => {
     if (timerRef.current) clearTimeout(timerRef.current)
     setHint({ visible: true, kind })
     timerRef.current = setTimeout(() => {
       setHint({ visible: false, kind: null })
       timerRef.current = null
-      // 서버 오류도 힌트가 사라질 때 함께 지운다 — 다음 클릭 때 잔상이 남지 않게.
-      if (kind !== 'login_required') clearServerError()
     }, HINT_MS)
   }
 
-  // serverError 변화 감지 — toggle 이 낙관적으로 통과한 뒤 서버가 400/네트워크로 죽었을 때 힌트.
-  // 로그인 요구는 서버 오류가 아니라 CTA 로 다르게 그리므로 별도 갈래.
+  // actionError 감지 — 상한 초과(toggle 즉시) 또는 PUT 실패(400·네트워크) 때 컨텍스트가 세운다.
+  // 이 별의 ref 에서 난 오류만 힌트로 띄우고, 띄운 뒤 그 ref 의 오류만 지운다.
+  // not_authenticated 는 ERROR_KEY 에 없어 힌트가 없다.
   //
   // 훅 규칙 상 early return 위에 있어야 한다 (isFavoritesEnabled=false 렌더 스킵 분기 위).
   useEffect(() => {
-    if (!serverError || serverError === 'not_authenticated') return
-    if (!ERROR_KEY[serverError]) return
-    showHint(serverError)
+    if (!actionError || actionError.ref !== slug) return
+    if (!ERROR_KEY[actionError.code]) return
+    showHint(actionError.code)
+    clearActionError(slug)
     // showHint 는 안정 참조가 아니지만 이 자리는 상수처럼 쓴다 (렌더마다 새로 만들어도 setTimeout 하나만 남는다).
+    // clearActionError 는 컨텍스트의 useCallback([]) 안정 참조다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverError])
+  }, [actionError, slug])
 
   // 컨텍스트 off — 별 자체를 그리지 않는다 (env·mock 모드). 훅 호출은 위에 다 마쳤다.
   if (!isFavoritesEnabled) return null
@@ -95,12 +109,14 @@ export default function FavoriteToggle({ slug, label, size = 'md' }) {
       return
     }
 
-    const result = toggle(slug)
-    if (!result?.ok && result?.reason === 'limit_reached') {
-      showHint('limit_exceeded')
+    // 첫 로드 실패 — toggle 을 부르지 않고 힌트로 드러낸다.
+    if (loadState === 'error') {
+      showHint('load_failed')
+      return
     }
-    // 실제 서버 오류(unknown_team·duplicate·network) 는 컨텍스트가 serverError 를 세우고
-    // 위 useEffect 가 힌트를 띄운다.
+
+    // 상한 초과·서버 오류는 컨텍스트가 actionError 를 세우고 위 useEffect 가 힌트를 띄운다 (경로 하나).
+    toggle(slug)
   }
 
   const hintText = (() => {
