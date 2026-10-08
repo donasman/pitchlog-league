@@ -4,7 +4,8 @@
  * 순서 (SCHEMA_DESIGN 2-4 부모-먼저):
  *   competitions → seasons → competition_seasons → venues → teams → competition_entries
  *
- * 콜: /leagues?id= 17콜 (시즌 없이 부르면 전 시즌이 온다) + /teams 17대회 × 5시즌 = 약 100콜
+ * 콜: /leagues?id= 19콜 (카탈로그 19대회 · 시즌 없이 부르면 전 시즌이 온다) + /teams 대회시즌당 1콜
+ *     (19대회 × 5시즌 중 API 가 주는 것 — 10-08 실측 대회시즌 94 · Coupe de France 2026 미제공) ≈ 113콜
  * 멱등: 전부 api_*_id 기준 upsert. 두 번 돌려도 같은 결과.
  * 쿼리: 대회·시즌은 Prisma upsert(대회당 ≈11쿼리), 팀·경기장·참가는 batchUpsert 로 대회시즌당 3문장.
  *

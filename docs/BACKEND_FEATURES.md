@@ -9,6 +9,7 @@
 >
 > **2026-10-07 갱신** — 09-28 PR #129 까지 반영: L4 라이브(1장 L4 · 3장) · 스케줄러(L2 매일 #14 · L6 주기) ·
 > 조회 API 구현 목록 · 사용자 API(2장 "사용자") · AI 도구(6장).
+> **2026-10-08 갱신** — PR #135 L2 missingTeams 재수집(1장 L2) · L2 `updateWhere` 실제 조건 · #21 콜 수 · `/competitions`·`/matches` 범위(2장).
 
 ---
 
@@ -44,14 +45,15 @@
 
 | # | 기능 | API | 콜 수 | 멱등 키 |
 |---|---|---|---|---|
-| 1 | 대회 등록 | `/leagues?id=` | 6 | `api_competition_id` |
+| 1 | 대회 등록 | `/leagues?id=` | ~~6~~ → 19 (카탈로그 19대회) | `api_competition_id` |
 | 2 | 시즌 등록·대회별 현재 시즌 판정 | `/leagues` 응답의 seasons | 위에 포함 | `(competition_id, season_id)` |
-| 3 | 참가 팀 수집 | `/teams?league=&season=` | 6 | `api_team_id` |
+| 3 | 참가 팀 수집 | `/teams?league=&season=` | ~~6~~ → 대회시즌당 1 (10-08 실측 대회시즌 94) | `api_team_id` |
 | 4 | 대회 참가 관계 생성 | 위 응답에서 파생 | 0 | `(competition_id, season_id, team_id)` |
 | 5 | 경기장 정보 | `/teams` 응답에 포함 | 0 | `team_id` |
 | 6 | 대회 스테이지 정의 (UCL) | 수기 시드 또는 `/fixtures` 역산 | 0~1 | `(competition_id, season_id, stage_type)` |
 
-- 6개 대회 × 팀 수집 = **약 12콜.** 1회성이라 예산 무관.
+- ~~6개 대회 × 팀 수집 = **약 12콜.**~~ → 19대회 × 5시즌 — `/leagues` 19 + `/teams` 대회시즌 수(10-08 수동 실행 94 · `Coupe de France: 시즌 미제공 2026` 경고) ≈ 113콜. 시즌당 1회라 예산 무관.
+- 10-08 PR #135 부터 L2 가 현재 시즌 missingTeams 시 `L0Service.refreshTeamsForSeason` 으로 #3~#5 를 그 대회시즌 하나만 다시 돈다 (1장 L2).
 - ⚠ 시즌은 **대회별로 다르다** (검토 A-1). `is_current`를 전역 플래그로 두지 않는다.
 - UCL 참가 팀은 리그 페이즈 조 추첨 후에야 확정된다. 국내 리그와 수집 시점이 다르다.
 
@@ -87,11 +89,13 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 
 | # | 기능 | API | 콜 수 | 비고 |
 |---|---|---|---|---|
-| 13 | 시즌 전체 일정 수집 | `/fixtures?league=&season=` | 6 | ✅ 09-07 구현(`l2.service.ts`). 시즌 초 1회 |
-| 14 | 일정 변경 반영 | 같음 | 6 | ✅ 같은 코드의 재실행. ~~주 1회~~ → **매일** 스케줄러 잡 (09-24 PR #109 · `L2_DAILY_CRON="10 4 * * *"` UTC · 기본 꺼짐). 연기·재편성이 흔하다 |
-| 15 | 라운드 번호 정규화 | `/fixtures/rounds?league=&season=` | 6 | ✅ 09-07 구현(`l2/round-scope.ts`). 응답 **순서**가 ordinal 이다. 문자열 파싱은 하지 않는다 — 리그마다 형식이 달라 위험 |
+| 13 | 시즌 전체 일정 수집 | `/fixtures?league=&season=` | ~~6~~ → 19 (대회시즌당 1 · 현재 시즌) | ✅ 09-07 구현(`l2.service.ts`). 시즌 초 1회 |
+| 14 | 일정 변경 반영 | 같음 | ~~6~~ → 19 (대회시즌당 1 · 현재 시즌) | ✅ 같은 코드의 재실행. ~~주 1회~~ → **매일** 스케줄러 잡 (09-24 PR #109 · `L2_DAILY_CRON="10 4 * * *"` UTC · 기본 꺼짐). 연기·재편성이 흔하다 |
+| 15 | 라운드 번호 정규화 | `/fixtures/rounds?league=&season=` | ~~6~~ → 19 (대회시즌당 1 · 현재 시즌) | ✅ 09-07 구현(`l2/round-scope.ts`). 응답 **순서**가 ordinal 이다. 문자열 파싱은 하지 않는다 — 리그마다 형식이 달라 위험 |
 | 16 | UCL 스테이지·leg·tie 연결 | — | 0 | 녹아웃 1·2차전을 `tie_id`로 묶음. **L2-b** — 검증할 실 데이터가 2027년 2월에야 생긴다 |
 | 17 | **오늘의 경기 목록 산출** | — | 0 | L4 스케줄러의 입력. KST 기준 |
+
+- L2 1회 현재 시즌 합계 (산식 · 실측 아님): `/fixtures/rounds` 19 + `/fixtures` 19 + `/standings` 8 (리그 5·UEFA 3 — KNOCKOUT 11 은 순위 없음 · `l2.service.ts:385-386`) = **최대 46콜** + missingTeams 시 대회시즌당 `/teams` 최대 1 (#135).
 
 - #17이 **L4 윈도우를 여닫는 근거**다. 오늘 경기가 없으면 라이브 폴링을 아예 안 돌린다.
 - #16은 API가 대진을 직접 주지 않으면 팀 조합으로 매칭해야 한다. **테스트 필수.**
@@ -101,7 +105,14 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 - ~~⚠ L4 가 붙기 전까지는 **L2 가 유일한 스코어 소스**다. L4(라이브 폴링) 도입 시
   진행 중 경기의 주인이 바뀌므로 이 규칙을 다시 본다 (`data_version`).~~
   ✅ 09-26 PR #115·#116 — L4 쓰기 모드가 진행 중 경기의 주인이다. L2 는 `batchUpsert.updateWhere` 로
-  L4 가 최근에 쓴 경기를 덮지 않는다 (보호 6시간 만료). L4 가 쓴 값은 다음 L2 매일이 공식값으로 정정한다.
+  **DB 행의 `status_short` 가 진행 중 9종(`1H`·`HT`·`2H`·`ET`·`BT`·`P`·`SUSP`·`INT`·`LIVE`) AND 킥오프 6시간 이내**인
+  경기를 덮지 않는다 (`l2.service.ts` matches upsert 의 `updateWhere` — "L4 가 최근에 썼는지"를 보는 조건이 아니라 상태·킥오프 조건이다).
+  킥오프 6시간이 지나면 보호가 풀려 다음 L2 매일이 공식값으로 정정한다.
+- ✅ 10-08 PR #135 — L2 가 DB 에 없는 팀(missingTeams)을 만나면 **현재 시즌(`isCurrent`)만** 그 대회시즌 `/teams` 1콜을
+  다시 받는다. 팀·경기장·참가 쓰기는 `L0Service.refreshTeamsForSeason` 에 위임(팀 쓰기 소유는 L0 유지) · 결과 필드 `teamsRefreshed`.
+  과거 시즌은 재수집하면 옛 이름·로고가 현재 팀 정보를 덮으므로 하지 않는다.
+  계기: 10-08 health `l2Daily=partial` — Copa del Rey 2026 Round of 128 에 3~5부 9팀이 teams 에 없어 54경기 중 9경기 누락
+  (그날은 L0 수동 재실행 + L2 재실행으로 54/54 복구).
 
 ### L3 — 경기 직전 · 킥오프 1시간 전
 
@@ -126,7 +137,9 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 | 25 | ~~**변경분 이벤트 발행**~~ | — | 0 | Socket.io 를 쓰지 않는다 — 조건부 UPDATE 로 `data_version+1`, 프론트가 `GET /api/live` 를 15초마다 폴링해 그 값으로 병합 (#123 · 3장) |
 | 26 | 스케줄러 모드 전환 | — | 0 | ✅ #111 — `IDLE → LINEUP → LIVE` 상태기 대신 **폴링 창 개폐** (`live-window.ts` · kickoff 기준 #116) + 강등 `LIVE_POLLER_SLOW_AT`(6000) · 정지 `LIVE_POLLER_STOP_AT`(7000) |
 
-- ~~#21은 대회 수와 무관하게 **1콜 고정**이다.~~ `ids=` 방식이라 동시 진행 경기 20개마다 1콜이다.
+- ~~#21은 대회 수와 무관하게 **1콜 고정**이다.~~ `ids=` 방식이라 tick 마다 **폴링 창 안 경기 전부**(kickoff now-4h ~ now+5m ·
+  FT 관측 후 10분 유지 · `live-window.ts` `selectDbTargets`) + 창 안 probe 경기를 합쳐 20개 청크당 `/fixtures?ids=` 1콜,
+  `fetchStatus` 인 tick 은 `/status` 1콜이 더 붙는다 (`live-observer.service.ts` tick 흐름 4·5). 창이 비면 0콜.
 - #26의 경계 조건이 회고가 지목한 테스트 필수 영역이다 — `live-window.spec.ts`.
 - ✅ **오버랩 방지** — in-memory 겹침 방지 + tick 처리 시간 계측(`lastTickMs` · `maxTickMsToday`) (#111).
 
@@ -232,7 +245,7 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 
 | 엔드포인트 | 화면 | 비고 |
 |---|---|---|
-| `GET /competitions` | 헤더, 필터 | 6개 |
+| `GET /competitions` | 헤더, 필터 | ~~6개~~ → 19개 — `isTracked: true` 전부, `displayOrder` 순 (`competition.service.ts:32`). 대회 목록 노출(리그5+UCL)은 프론트 `COMPETITION_LIST_API_IDS` 가 거른다 (`live.js:135`) |
 | ~~`GET /competitions?includeStage=true`~~ | 홈, 대회 목록 | **없다** — `forbidNonWhitelisted` 라 보내면 400. 진행 상태(stage)는 프론트가 경기 목록에서 계산한다(`deriveStage`) |
 | `GET /competitions/:slug` | 대회 상세 | |
 | ~~`GET /competitions/:slug/hub`~~ | 대회 허브 | **만들지 않는다 (09-07)** — 프론트 `live.js` 가 `/matches` · `/standings` · `/teams` 를 조합한다. 홈도 같다 |
@@ -243,7 +256,7 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 
 | 엔드포인트 | 화면 |
 |---|---|
-| `GET /matches?competition=&season=&from=&to=&team=` | 경기 목록 — ✅ 09-07. 대회 생략 시 화면 6대회 · `from`/`to` 는 KST 날짜(`YYYY-MM-DD`, 양끝 포함, 역순·형식 오류 400) · 페이지 없음, 킥오프 오름차순. `state`·`date`·`round` 는 **없다** — 상태는 프론트가 `statusShort + statsState` 로 만든다 |
+| `GET /matches?competition=&season=&from=&to=&team=` | 경기 목록 — ✅ 09-07. 대회 생략 시 ~~화면 6대회~~ → `matchVisibleWhere`(isTracked 19대회 전부 · `match.service.ts:76`) · `from`/`to` 는 KST 날짜(`YYYY-MM-DD`, 양끝 포함, 역순·형식 오류 400) · 페이지 없음, 킥오프 오름차순. `state`·`date`·`round` 는 **없다** — 상태는 프론트가 `statusShort + statsState` 로 만든다 |
 | `GET /matches/:ref` | 경기 상세 — ✅ 09-07. 경기 행만(스코어 5종 · 상태 원문 · `statsState` · `has_*` 3값). 라인업·통계·H2H 는 L3~L5 뒤 — 프론트가 탭 단위로 "아직 없음" |
 
 ### 순위
@@ -282,6 +295,11 @@ API 가 과거 시즌에 이 값을 안 준다. `0` 으로 채우면 "실제 0" 
 | `GET /me/favorites` · `PUT /me/favorites` | 즐겨찾기 팀 (홈 `MyTeamsSection` · 팀 토글) | Supabase Auth JWT (`Authorization: Bearer` · ES256 · `iss=${SUPABASE_URL}/auth/v1` · `aud=authenticated`) — `auth/supabase-auth.guard.ts`. PUT 은 전체 교체, 상한 **10팀**. 400 `code` 3종 `favorites_limit_exceeded` · `favorites_duplicate` · `favorites_unknown_team`. 응답 `Cache-Control: private, no-store` · `Vary: Authorization` · ETag 없음. 테이블 `user_favorite_teams` + RLS (마이그레이션 `20260928120000_enable_rls_public` · `20260928120100_add_user_favorite_teams`) |
 
 로컬 즐겨찾기(`localStorage`)는 #129 에서 폐기됐다 — 로그인하지 않으면 즐겨찾기가 없다.
+
+✅ 10-08 PR #134 — 같은 사용자의 동시 PUT 을 트랜잭션 안 `pg_advisory_xact_lock(hashtext('user_favorites'), hashtext(userId))`
+로 직렬화한다 (`user-favorites.service.ts:125`). 프론트는 첫 로드 전·로드 실패 뒤 토글이 서버 목록을 지우던 결함을
+`loadState`·`loadError`·`actionError` 로 막았다. **운영 개시 10-08** — 운영 DB 마이그레이션 적용 · Vercel env · Supabase Google provider 설정 뒤
+preview 실측과 운영 사용자 확인 (`docs/NEXT_STEPS.md` 0장).
 
 **모든 응답 공통 규칙 (검토 C-1 · 2026-09-07 확정, 코드는 `backend/src/common/`):**
 

@@ -202,10 +202,10 @@ npm run dev
 npm run lint
 npm run build
 npm run preview
-npm run verify   ← 커밋 전 전체 점검 (validate:data + check:i18n + lint + build)
+npm run verify   ← 커밋 전 전체 점검 (validate:data + check:i18n + lint + test + build)
 ```
 
-- 커밋 전 `npm run verify` 를 실행해 검사 4종을 일괄 확인함
+- 커밋 전 `npm run verify` 를 실행해 검사 5종을 일괄 확인함
 - ESLint 오류가 없어야 함
 - `vite build`가 성공해야 함
 - 브라우저 콘솔 오류가 없어야 함
