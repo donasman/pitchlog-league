@@ -602,7 +602,9 @@
     "errors": {
       "unknown_team": "존재하지 않는 팀입니다.",
       "duplicate": "이미 목록에 있는 팀입니다.",
-      "network": "잠시 후 다시 시도해 주세요."
+      "network": "잠시 후 다시 시도해 주세요.",
+      "load_failed": "즐겨찾기를 불러오지 못했습니다.",
+      "session_missing": "로그인 정보를 확인하지 못했습니다. 다시 로그인해 주세요."
     }
   },
   "auth": {

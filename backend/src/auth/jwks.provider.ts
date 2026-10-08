@@ -5,6 +5,7 @@
  * jose 는 알아서 캐시하고 5분마다 재검증하므로 우리 층에서 캐시 관리하지 않는다.
  *
  * URL = `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`.
+ * SUPABASE_URL 끝 슬래시 흡수 — `https://x.supabase.co/` 도 `//auth` 가 되지 않게 (supabase-auth.guard.ts 의 issuer 와 같은 정리).
  *
  * URL 구성을 첫 호출로 미룬다 — SUPABASE_URL 이 없어도 부팅은 되고, 실제 인증을 시도할 때만
  * 실패한다. AuthModule 을 쓰지 않는 다른 e2e 가 SUPABASE_URL 없이 AppModule 을 띄워도
@@ -29,7 +30,9 @@ export const supabaseJwksProvider: Provider = {
     return async (protectedHeader, token) => {
       if (!cached) {
         const supabaseUrl = config.get('SUPABASE_URL', { infer: true });
-        cached = createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`));
+        cached = createRemoteJWKSet(
+          new URL(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json`),
+        );
       }
       return cached(protectedHeader, token);
     };
