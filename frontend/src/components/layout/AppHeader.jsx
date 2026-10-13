@@ -45,7 +45,7 @@ export default function AppHeader() {
   const isHome = useMatch('/')  // 홈에서 로고 밑줄 표시
   const location = useLocation()
 
-  const { unreadCount, panelOpen, togglePanel, closePanel } = useNotifications()
+  const { isNotificationsEnabled, unreadCount, panelOpen, togglePanel, closePanel } = useNotifications()
   const { authError, isAuthEnabled } = useAuth()
   const bellRef = useRef(null)
   const headerRef = useRef(null)
@@ -232,56 +232,59 @@ export default function AppHeader() {
             <Search size={18} aria-hidden="true" />
           </button>
 
-          {/* 벨 + 알림 패널 */}
-          <div ref={bellRef} style={{ position: 'relative' }}>
-            <button
-              onClick={togglePanel}
-              aria-label={t('notif.bell')}
-              aria-expanded={panelOpen}
-              style={{
-                width: 44,
-                height: 44,
-                display: 'grid',
-                placeItems: 'center',
-                position: 'relative',
-                color: 'var(--pl-text)',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                borderRadius: 8,
-              }}
-            >
-              <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-                <path d="M10 3.2a5 5 0 0 0-5 5V12l-1.6 2.6h13.2L15 12V8.2a5 5 0 0 0-5-5zM8 17.2h4" />
-              </svg>
-              {/* 안 읽음 배지 — 브랜드 파랑 (빨강 금지) */}
-              {unreadCount > 0 && (
-                <span
-                  className="num"
-                  style={{
-                    position: 'absolute',
-                    top: 5,
-                    right: 4,
-                    minWidth: 18,
-                    height: 18,
-                    padding: '0 5px',
-                    borderRadius: 999,
-                    background: 'var(--pl-primary)',
-                    color: 'var(--pl-on-primary)',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    display: 'grid',
-                    placeItems: 'center',
-                    boxShadow: '0 0 0 2px var(--pl-card)',
-                  }}
-                  aria-label={t('notif.unreadCount', { count: unreadCount })}
-                >
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </button>
-            {panelOpen && <NotificationPanel onClose={closePanel} containerRef={bellRef} />}
-          </div>
+          {/* 벨 + 알림 패널 — 알림 백엔드가 없어 실 API 모드에서는 렌더하지 않는다 (isNotificationsEnabled).
+              togglePanel 을 부르는 곳은 이 버튼뿐이라 실 모드에서는 panelOpen 이 열릴 경로가 없다. */}
+          {isNotificationsEnabled && (
+            <div ref={bellRef} style={{ position: 'relative' }}>
+              <button
+                onClick={togglePanel}
+                aria-label={t('notif.bell')}
+                aria-expanded={panelOpen}
+                style={{
+                  width: 44,
+                  height: 44,
+                  display: 'grid',
+                  placeItems: 'center',
+                  position: 'relative',
+                  color: 'var(--pl-text)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  borderRadius: 8,
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                  <path d="M10 3.2a5 5 0 0 0-5 5V12l-1.6 2.6h13.2L15 12V8.2a5 5 0 0 0-5-5zM8 17.2h4" />
+                </svg>
+                {/* 안 읽음 배지 — 브랜드 파랑 (빨강 금지) */}
+                {unreadCount > 0 && (
+                  <span
+                    className="num"
+                    style={{
+                      position: 'absolute',
+                      top: 5,
+                      right: 4,
+                      minWidth: 18,
+                      height: 18,
+                      padding: '0 5px',
+                      borderRadius: 999,
+                      background: 'var(--pl-primary)',
+                      color: 'var(--pl-on-primary)',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      display: 'grid',
+                      placeItems: 'center',
+                      boxShadow: '0 0 0 2px var(--pl-card)',
+                    }}
+                    aria-label={t('notif.unreadCount', { count: unreadCount })}
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              {panelOpen && <NotificationPanel onClose={closePanel} containerRef={bellRef} />}
+            </div>
+          )}
 
           {/* 언어 전환 */}
           <LanguageToggle />
