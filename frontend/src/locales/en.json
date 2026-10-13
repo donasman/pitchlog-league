@@ -633,7 +633,8 @@
       "h2h": "head-to-head",
       "top_scorers": "top scorers",
       "top_assisters": "top assisters",
-      "favorites": "favorites"
+      "favorites": "favorites",
+      "notifications": "notifications"
     }
   }
 }

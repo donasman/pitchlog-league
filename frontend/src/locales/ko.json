@@ -633,7 +633,8 @@
       "h2h": "상대 전적",
       "top_scorers": "득점 순위",
       "top_assisters": "도움 순위",
-      "favorites": "즐겨찾기"
+      "favorites": "즐겨찾기",
+      "notifications": "알림"
     }
   }
 }

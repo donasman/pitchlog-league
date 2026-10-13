@@ -35,7 +35,9 @@ Vite SPA와 NestJS API를 분리하는 방식이므로 사용하지 않음. 이�
 `VITE_USE_MOCK` 으로 Mock 과 실 API 를 전환함. **실 API 가 기본 운영 경로이고 Mock 은
 백엔드 없이 화면을 켜보거나 테스트 픽스처로 쓰는 따라오는 쪽**임 (L143·L148 과 같은 규칙).
 실 API 에 없는 기능은 빈 목록으로 위장하지 않고 `NotImplementedState` 로 드러냄
-(경기 상세 H2H · 팀 스쿼드 · 대회 득점·도움 순위).
+(경기 상세 H2H · 팀 스쿼드 · 대회 득점·도움 순위 · 알림 설정 페이지).
+알림은 백엔드가 없어 실 API 모드에서 헤더 종 버튼을 렌더하지 않는다 — `isNotificationsEnabled = USE_MOCK`
+(`NotificationContext.jsx` · 10-13 · 운영에 Mock 알림 배지 "3" 이 보이던 결함).
 
 **다국어 지원**: i18next + react-i18next로 한국어(기본)·영어 전환 구현 완료.  
 Header에 언어 전환 버튼 포함. 선택 언어는 `localStorage`('pitchlog-lang')에 저장.  

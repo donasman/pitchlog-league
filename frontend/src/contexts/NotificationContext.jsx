@@ -8,16 +8,23 @@
  *
  * 로그인이 없으므로 모든 상태는 이 세션(메모리)에만 존재.
  * 실 서비스에서는 localStorage + Service Worker로 교체.
+ *
+ * 실 API 모드(VITE_USE_MOCK=false)에서는 알림 목록을 비워 시작하고(안 읽음 0),
+ * 헤더 종 버튼·설정 화면은 isNotificationsEnabled 로 숨기거나 "준비 중" 으로 드러낸다.
  */
 
 import { createContext, useContext, useState, useCallback } from 'react'
 import { NOTIFICATIONS, NOTIFICATION_SETTINGS } from '@/mocks/notifications'
+import { USE_MOCK } from '@/services/env'
 
 const NotificationContext = createContext(null)
 
+/** 알림 백엔드가 없다 — 실 API 모드에서는 Mock 알림을 쓰지 않는다 (운영에 가짜 알림이 보이던 결함 · 10-13) */
+export const isNotificationsEnabled = USE_MOCK
+
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState(() =>
-    NOTIFICATIONS.map(n => ({ ...n }))
+    isNotificationsEnabled ? NOTIFICATIONS.map(n => ({ ...n })) : []
   )
   const [settings, setSettings] = useState(() => ({ ...NOTIFICATION_SETTINGS }))
   const [toasts, setToasts]   = useState([])     // active toast stack
@@ -84,6 +91,7 @@ export function NotificationProvider({ children }) {
   }, [])
 
   const value = {
+    isNotificationsEnabled,
     notifications,
     unreadCount,
     markAllRead,
