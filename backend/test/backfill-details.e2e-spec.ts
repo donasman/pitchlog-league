@@ -4,22 +4,31 @@
  * 실제 L3·L5 서비스를 통해 DB 에 쓴다. ApiFootballClient 는 픽스처 3개(1451160·1557387·1622630) 를
  * 로드해 fixture 마다 다른 응답을 준다. QuotaService 도 override — /status 를 안 부르고 스크립트로 준다.
  *
- * 검증 대상 13 케이스 (2026-09-10 재작성 — phase 안 쓰는 규약 반영):
+ * 검증 대상 18 케이스 · 19 it (2026-09-10 재작성 — phase 안 쓰는 규약 반영 ·
+ * 2026-10-15 커서 폐기 — 대상은 detailTargetWhere · 정렬 kickoff asc, id asc · 경기 단위 시도 횟수):
  *   1. 대상 SELECT 필터 — detailCheckedAt≠null · detailEligible=false · 24h 안 · status NS/LIVE ·
  *      다른 대회시즌 → 모두 제외. 자격 있는 것만 처리
- *   2. 커서 뒤만 처리 — backfillJob.cursorMatchId 세팅 시 그 뒤 id 만
+ *   2. 커서 무시 — backfillJob.cursorMatchId 가 세팅돼 있어도 20경기 전부 대상 · kickoff asc 앞 2경기 처리 · 커서 값 그대로
  *   3. --limit min(N, budget) — limit 이 작으면 limit 대로
  *   4a. 자율 상한 (daily_cap) — used=5692, limit=7500 → floor((5700-5692)/4)=2 경기 · daily_cap
  *   4b. API 상한 (quota_exhausted) — used=7496, limit=7500 → floor((7500-7496)/4)=1 경기 · quota_exhausted
- *   5. ApiQuotaExhaustedError 중단 — overallStopped=quota_exhausted · cursor 는 마지막 성공 경기
- *   6. 한 엔드포인트 실패 — 그 경기 failed=1 · 나머지 서비스 · 다음 경기 정상
+ *   5. ApiQuotaExhaustedError 중단 — overallStopped=quota_exhausted · 끊긴 경기는 시도로 안 셈 · cursor 안 씀
+ *   6. 한 엔드포인트 실패 — 그 경기 failed=1 · 시도 1 · 나머지 서비스 · 다음 경기 정상
  *   7. **모든 대상 매치가 detail_checked_at 이 채워진 대회시즌은 targeted=0 이라 skip** (phase 무관)
- *   8. dry-run — 실 API 안 부름 · targeted 만 계산
+ *   8. dry-run — 실 API 안 부름 · targeted 만 계산 · 시도 기록 없음
  *   9. no_targets — 이미 다 처리된 시즌 → job 생성 안 함 · stoppedReason='no_targets'
  *  10. season 지정 안 하면 isCurrent+screenCompetitionWhere 만
  *  11. 매 경기 앞 quota 재확인 — 시즌 시작 시 여유 있어도 경기 처리 중 quota 가 자율 상한 넘으면 그 경기 앞에서 중단
- *  12. **상세 백필은 backfill_jobs.phase 를 안 건드린다** — DONE 이 미리 세팅돼도 DONE 유지 · cursor/done/failed 만 갱신
- *  13. **cursor/total/done/failed 가 진행에 맞게 갱신된다** — 5경기 처리 후 진행 지표 정확
+ *  12. **상세 백필은 backfill_jobs.phase 를 안 건드린다** — DONE 이 미리 세팅돼도 DONE 유지 · done/failed 만 갱신 · cursor 는 null
+ *  13. **total/done/failed 가 진행에 맞게 갱신된다** — 5경기 처리 후 진행 지표 정확 · 시도 1 은 그 5경기만
+ *  14. id 가 작은데 늦게 끝난 경기 — PST 로 빠졌다가 FT 가 되면 다음 판이 처리 (커서였다면 영구 누락)
+ *  15. 실패 → 1h 백오프 — 백오프 안에서는 대상 밖 · 지나면 재시도·승격
+ *  16. 3회 실패 → 영구 제외 + '상세 재시도 포기' warn 정확히 1건 (2회 뒤 6h 백오프 포함)
+ *  17. quota 예외로 끊긴 경기는 시도로 안 셈 — 다음 판이 처음처럼 처리
+ *  18. 4갈래 전부 실패해도 시도 1 · updated_at 불변 (시도 기록은 raw UPDATE)
+ *
+ * 처리 순서는 kickoff asc 다. 시드 kickoff 가 oldKickoff - i시간이라 `ordered()` 의
+ * o[0] = FX 997_469 … o[19] = FX 997_450 — 새 DB 에서는 id asc 와 정반대다.
  *
  * 밴드 997_4xx (l3·l5 밴드 밖).
  *
@@ -30,7 +39,7 @@ import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Test } from '@nestjs/testing';
-import type { INestApplicationContext } from '@nestjs/common';
+import type { INestApplicationContext, Logger } from '@nestjs/common';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { ApiFootballClient } from '../src/ingestion/api-football/api-football.client.js';
 import { knownApiPlayerId } from '../src/ingestion/api-football/api-player-id.js';
@@ -108,8 +117,8 @@ class FakeApiFootballClient {
   calls: string[] = [];
   /** 이 fixture 에서 특정 path 를 부르면 ApiQuotaExhaustedError */
   quotaExhaustAt: { fixture: number; path: string } | null = null;
-  /** 이 fixture 에서 특정 path 를 부르면 ApiFootballError */
-  failEndpointAt: { fixture: number; path: string; message: string } | null = null;
+  /** 이 fixture 에서 특정 path(배열이면 그중 어느 것이든) 를 부르면 Error — case 18 은 4경로 전부 */
+  failEndpointAt: { fixture: number; path: string | readonly string[]; message: string } | null = null;
 
   get callCount(): number {
     return this.calls.length;
@@ -129,7 +138,9 @@ class FakeApiFootballClient {
     if (
       this.failEndpointAt !== null &&
       this.failEndpointAt.fixture === fixture &&
-      this.failEndpointAt.path === path
+      (typeof this.failEndpointAt.path === 'string'
+        ? this.failEndpointAt.path === path
+        : this.failEndpointAt.path.includes(path))
     ) {
       throw new Error(this.failEndpointAt.message);
     }
@@ -426,12 +437,14 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     await prisma.matchEvent.deleteMany({ where: { matchId: { in: allIds } } });
     await prisma.lineupEntry.deleteMany({ where: { matchId: { in: allIds } } });
     await prisma.matchLineup.deleteMany({ where: { matchId: { in: allIds } } });
-    // 정상 대상 20 경기는 초기 상태 (has_*=null · detail_checked_at=null · statsState=NONE)
+    // 정상 대상 20 경기는 초기 상태 (has_*=null · detail_checked_at=null · statsState=NONE · 시도 0 · FT)
+    // statusShort 는 case 14 가 PST 로 바꾼다 — 다음 테스트로 흘러가지 않게 FT 로 되돌린다
     await prisma.match.updateMany({
       where: { id: { in: [...matchIdByFx.values(), otherMatchId].filter((n) => n > 0) } },
       data: {
         hasLineups: null, hasEvents: null, hasTeamStats: null, hasPlayerStats: null,
         detailCheckedAt: null, confirmedAt: null, statsState: 'NONE',
+        detailAttempts: 0, detailLastAttemptAt: null, statusShort: 'FT',
       },
     });
     // 반례 경기들은 시드된 조건 (detailCheckedAt=997_481 만 세팅 등) 유지 — 대신 has_* 는 항상 null
@@ -440,6 +453,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
       data: {
         hasLineups: null, hasEvents: null, hasTeamStats: null, hasPlayerStats: null,
         confirmedAt: null, statsState: 'NONE',
+        detailAttempts: 0, detailLastAttemptAt: null,
       },
     });
     await prisma.backfillJob.deleteMany({
@@ -461,6 +475,48 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     if (!s) throw new Error(`perSeason 에 competitionSeasonId=${competitionSeasonId} 없음`);
     return s;
   };
+
+  /** 정상 20 경기를 대상 SELECT 와 같은 정렬(kickoff asc, id asc)로. o[0] = FX 997_469 … o[19] = FX 997_450 */
+  const ordered = () =>
+    prisma.match.findMany({
+      where: { id: { in: [...matchIdByFx.values()] } },
+      orderBy: [{ kickoffAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, apiFixtureId: true },
+    });
+
+  /** 마지막 시도 시각을 지금보다 ms 만큼 과거로 — 백오프 창을 시계 대신 데이터로 넘긴다 */
+  const backdate = async (id: number, ms: number) => {
+    await prisma.match.update({ where: { id }, data: { detailLastAttemptAt: new Date(Date.now() - ms) } });
+  };
+
+  /** 한 경기의 상세 상태 · 시도 기록 · updated_at */
+  const stateOf = (id: number) =>
+    prisma.match.findUniqueOrThrow({
+      where: { id },
+      select: {
+        hasLineups: true, hasEvents: true, hasTeamStats: true, hasPlayerStats: true,
+        detailCheckedAt: true, detailAttempts: true, detailLastAttemptAt: true, updatedAt: true,
+      },
+    });
+
+  /** 정상 20 경기 중 승격된(detail_checked_at 이 찬) id — 오름차순 */
+  const promotedIds = async () =>
+    (
+      await prisma.match.findMany({
+        where: { id: { in: [...matchIdByFx.values()] }, detailCheckedAt: { not: null } },
+        select: { id: true },
+      })
+    )
+      .map((m) => m.id)
+      .sort((a, b) => a - b);
+
+  /** 이 fixture 로 나간 가짜 API 콜 수 (resetSeason 이후 누적) */
+  const fixtureCalls = (apiFixtureId: number) =>
+    fake.calls.filter((c) => c.endsWith(`?fixture=${apiFixtureId}`)).length;
+
+  const asc = (ids: number[]) => [...ids].sort((a, b) => a - b);
+
+  const HOUR_MS = 60 * 60 * 1_000;
 
   const cleanupFixture = async () => {
     const matchIds = [...matchIdByFx.values(), ...excludedMatchIds, otherMatchId].filter((n) => n > 0);
@@ -554,7 +610,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     }
 
     // 처리된 3 경기는 promote 됐거나 has_* 채워짐 (실 서비스가 정상 응답이라 CONFIRMED)
-    // 첫 3 매치 id 순서 확인 — id asc
+    // 처리 순서는 대상 SELECT 의 kickoff asc — 여기서는 개수와 has_* 만 본다 (순서는 case 2)
     const processedMatches = await prisma.match.findMany({
       where: {
         competitionSeasonId,
@@ -574,36 +630,33 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
   }, 180_000);
 
   // ================================================================================================
-  // Case 2: 커서 뒤만 처리
+  // Case 2: 커서 무시 — cursor_match_id 는 읽지도 쓰지도 않는다
   // ================================================================================================
-  it('2. 커서 뒤만 — cursor_match_id 세팅 시 그 뒤 id 만 대상', async () => {
+  it('2. 커서 무시 — cursor_match_id 가 최대 id 여도 20 경기 전부 대상 · kickoff asc 앞 2경기 처리 · 커서 값 그대로', async () => {
     await resetSeason();
-    // 정렬된 매치 id 목록
-    const sorted = await prisma.match.findMany({
-      where: { competitionSeasonId, detailEligible: true, detailCheckedAt: null },
-      orderBy: { id: 'asc' },
-      select: { id: true },
-    });
-    expect(sorted.length).toBeGreaterThanOrEqual(10);
-    const cursorId = sorted[9].id; // 10 번째 매치를 커서로
+    const o = await ordered();
+    expect(o).toHaveLength(N_FIXTURES);
+    // 시드 kickoff 가 oldKickoff - i시간 — 가장 이른 경기가 마지막 FX
+    expect(o[0].apiFixtureId).toBe(FX_BASE + N_FIXTURES - 1);
+    expect(o[N_FIXTURES - 1].apiFixtureId).toBe(FX_BASE);
+    const maxId = Math.max(...o.map((m) => m.id));
 
     await prisma.backfillJob.create({
-      data: { competitionSeasonId, phase: BackfillPhase.DETAILS, cursorMatchId: cursorId },
+      data: { competitionSeasonId, phase: BackfillPhase.DETAILS, cursorMatchId: maxId },
     });
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 2 });
     const s = mySeason(res);
-    // targeted 는 cursor 뒤: 20 - 10 = 10
-    expect(s.targeted).toBe(N_FIXTURES - 10);
+    // 옛 코드(id > cursor)였다면 0 이었다
+    expect(s.targeted).toBe(N_FIXTURES);
     expect(s.processed).toBe(2);
 
-    // 처리된 매치는 sorted[10], sorted[11]
-    const processed = await prisma.match.findMany({
-      where: { competitionSeasonId, detailCheckedAt: { not: null }, id: { notIn: excludedMatchIds } },
-      orderBy: { id: 'asc' },
-      select: { id: true },
-    });
-    expect(processed.map((m) => m.id)).toEqual([sorted[10].id, sorted[11].id]);
+    // 처리된 매치는 kickoff 가 가장 이른 o[0], o[1]
+    expect(await promotedIds()).toEqual(asc([o[0].id, o[1].id]));
+
+    const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
+    expect(job.cursorMatchId).toBe(maxId); // 시드 값 그대로 — 갱신하지 않는다
+    expect(job.phase).toBe(BackfillPhase.DETAILS); // phase 도 그대로
   }, 180_000);
 
   // ================================================================================================
@@ -659,32 +712,33 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
   // ================================================================================================
   // Case 5: ApiQuotaExhaustedError 중단
   // ================================================================================================
-  it('5. ApiQuotaExhaustedError — 3번째 경기 lineups 에서 throw → overallStopped=quota_exhausted · cursor 는 3번째 경기', async () => {
+  it('5. ApiQuotaExhaustedError — 3번째 경기 lineups 에서 throw → quota_exhausted · 끊긴 경기는 시도로 안 셈 · cursor 안 씀', async () => {
     await resetSeason();
     fakeQuota.used = 0;
     fakeQuota.limit = 7_500;
 
-    // 3번째로 처리될 매치 (id 오름차순)
-    const sorted = await prisma.match.findMany({
-      where: { competitionSeasonId, detailEligible: true, detailCheckedAt: null },
-      orderBy: { id: 'asc' },
-      select: { id: true, apiFixtureId: true },
-    });
-    const thirdFx = sorted[2].apiFixtureId;
-    fake.quotaExhaustAt = { fixture: thirdFx, path: '/fixtures/lineups' };
+    // 3번째로 처리될 매치 (kickoff asc)
+    const o = await ordered();
+    fake.quotaExhaustAt = { fixture: o[2].apiFixtureId, path: '/fixtures/lineups' };
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 10 });
     const s = mySeason(res);
     expect(s.stoppedReason).toBe('quota_exhausted');
     expect(res.overallStopped).toBe('quota_exhausted');
-    // 3번째 경기까지 시도했고 lineups 에서 죽었다. cursor 는 그 경기 id
-    // (커서 갱신은 4엔드포인트가 다 지나간 뒤 · 이번엔 첫 엔드포인트에서 죽어 갱신 안 됨)
-    // 그러므로 cursor 는 2번째(sorted[1]) 경기 id
+    expect(s.processed).toBe(2); // 2 경기 완료 시도
+
     const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
-    expect(job.cursorMatchId).toBe(sorted[1].id);
     // 상세 백필은 phase 를 안 건드린다. 최초 create 는 default(PENDING) 로 남는다.
     expect(job.phase).toBe(BackfillPhase.PENDING);
-    expect(s.processed).toBe(2); // 2 경기 완료 시도
+    // 커서는 쓰지 않는다 — 재개는 대상 SELECT 가 맡는다
+    expect(job.cursorMatchId).toBeNull();
+
+    // 4콜을 다 시도한 두 경기만 시도 1. quota 로 끊긴 3번째는 시도로 안 센다
+    expect((await stateOf(o[0].id)).detailAttempts).toBe(1);
+    expect((await stateOf(o[1].id)).detailAttempts).toBe(1);
+    const third = await stateOf(o[2].id);
+    expect(third.detailAttempts).toBe(0);
+    expect(third.detailLastAttemptAt).toBeNull();
   }, 180_000);
 
   // ================================================================================================
@@ -695,13 +749,8 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     fakeQuota.used = 0;
     fakeQuota.limit = 7_500;
 
-    const sorted = await prisma.match.findMany({
-      where: { competitionSeasonId, detailEligible: true, detailCheckedAt: null },
-      orderBy: { id: 'asc' },
-      select: { id: true, apiFixtureId: true },
-    });
-    const secondFx = sorted[1].apiFixtureId;
-    fake.failEndpointAt = { fixture: secondFx, path: '/fixtures/events', message: 'test events fail' };
+    const o = await ordered();
+    fake.failEndpointAt = { fixture: o[1].apiFixtureId, path: '/fixtures/events', message: 'test events fail' };
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 3 });
     const s = mySeason(res);
@@ -712,31 +761,29 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     expect(res.overallStopped).toBe('limit_reached');
 
     // 2번째 매치는 has_lineups=true (부분 성공) · has_events 는 null (실패)
-    const second = await prisma.match.findUniqueOrThrow({
-      where: { id: sorted[1].id },
-      select: { hasLineups: true, hasEvents: true, hasTeamStats: true, hasPlayerStats: true, detailCheckedAt: true },
-    });
+    const second = await stateOf(o[1].id);
     expect(second.hasLineups).toBe(true);
     expect(second.hasEvents).toBeNull(); // 실패로 유지
     expect(second.hasTeamStats).toBe(true); // 다음 endpoint 진행됨
     expect(second.hasPlayerStats).toBe(true);
     // 승격 안 됨 (has_events NULL)
     expect(second.detailCheckedAt).toBeNull();
+    // 실패해도 시도는 센다 — 1h 뒤 다시 대상
+    expect(second.detailAttempts).toBe(1);
+    expect(second.detailLastAttemptAt).not.toBeNull();
 
     // 3번째 매치는 온전히 처리
-    const third = await prisma.match.findUniqueOrThrow({
-      where: { id: sorted[2].id },
-      select: { hasLineups: true, hasEvents: true, hasTeamStats: true, hasPlayerStats: true, detailCheckedAt: true },
-    });
+    const third = await stateOf(o[2].id);
     expect(third.hasLineups).toBe(true);
     expect(third.hasEvents).toBe(true);
     expect(third.hasTeamStats).toBe(true);
     expect(third.hasPlayerStats).toBe(true);
     expect(third.detailCheckedAt).not.toBeNull();
+    expect(third.detailAttempts).toBe(1);
 
-    // cursor 는 3번째 매치 (모두 시도 완료)
+    // 커서는 쓰지 않는다
     const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
-    expect(job.cursorMatchId).toBe(sorted[2].id);
+    expect(job.cursorMatchId).toBeNull();
   }, 180_000);
 
   // ================================================================================================
@@ -786,10 +833,15 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     expect(job).toBeNull();
     // quota snapshot 도 안 부름
     expect(fakeQuota.snapshotCount).toBe(0);
+    // 시도 기록도 안 남김
+    const untouched = await prisma.match.count({
+      where: { id: { in: [...matchIdByFx.values()] }, detailAttempts: 0 },
+    });
+    expect(untouched).toBe(N_FIXTURES);
   }, 60_000);
 
   // ================================================================================================
-  // Case 9: no_targets — 커서 뒤 대상 없으면 stoppedReason='no_targets' · job 자체 생성 안 함
+  // Case 9: no_targets — 대상 없으면 stoppedReason='no_targets' · job 자체 생성 안 함
   // (phase 를 안 쓰는 규약 — 대상 없으면 아무 상태도 남기지 않는다)
   // ================================================================================================
   it('9. no_targets — 이미 다 처리된 시즌 → job 생성 안 함 · stoppedReason=no_targets', async () => {
@@ -896,8 +948,8 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
     // phase 는 그대로 DONE — 상세 백필이 덮지 않는다
     expect(job.phase).toBe(BackfillPhase.DONE);
-    // cursor/done/failed 는 상세 백필이 갱신
-    expect(job.cursorMatchId).not.toBeNull();
+    // done/failed 는 상세 백필이 갱신 · cursor 는 쓰지 않아 시드 값(null) 그대로
+    expect(job.cursorMatchId).toBeNull();
     expect(job.done).toBe(3);
     expect(job.failed).toBe(0);
     // startedAt 도 유지 (create 안 됐고 update 만 됐다)
@@ -905,34 +957,228 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
   }, 180_000);
 
   // ================================================================================================
-  // Case 13: cursor/total/done/failed 가 진행에 맞게 갱신된다
+  // Case 13: total/done/failed 가 진행에 맞게 갱신된다
   // ================================================================================================
-  it('13. cursor·total·done·failed 가 진행에 맞게 갱신된다 (한 endpoint 실패 시 failed 증가)', async () => {
+  it('13. total·done·failed 가 진행에 맞게 갱신된다 (한 endpoint 실패 시 failed 증가) · 시도 1 은 처리한 5경기만', async () => {
     await resetSeason();
     fakeQuota.used = 0;
     fakeQuota.limit = 7_500;
 
-    // 정렬된 5 매치 중 2번째의 events 만 실패시키기
-    const sorted = await prisma.match.findMany({
-      where: { competitionSeasonId, detailEligible: true, detailCheckedAt: null },
-      orderBy: { id: 'asc' },
-      select: { id: true, apiFixtureId: true },
-    });
-    const secondFx = sorted[1].apiFixtureId;
-    fake.failEndpointAt = { fixture: secondFx, path: '/fixtures/events', message: 'test events fail' };
+    // kickoff asc 앞 5 매치 중 2번째의 events 만 실패시키기
+    const o = await ordered();
+    fake.failEndpointAt = { fixture: o[1].apiFixtureId, path: '/fixtures/events', message: 'test events fail' };
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 5 });
     const s = mySeason(res);
     expect(s.processed).toBe(5);
     expect(s.failed).toBe(1);
 
-    // job 진행 지표 확인 — cursor 는 5번째 매치 · done=5 · failed=1 · total=targeted
+    // job 진행 지표 확인 — done=5 · failed=1 · total=targeted · cursor 는 안 씀
     const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
-    expect(job.cursorMatchId).toBe(sorted[4].id);
     expect(job.done).toBe(5);
     expect(job.failed).toBe(1);
     expect(job.total).toBe(N_FIXTURES);
+    expect(job.cursorMatchId).toBeNull();
     // phase 는 create default(PENDING) 그대로 — 상세 백필이 안 건드림
     expect(job.phase).toBe(BackfillPhase.PENDING);
+
+    // 시도 기록 — 처리한 5경기(실패 1 포함)만 1, 나머지 15경기는 0
+    const ids = [...matchIdByFx.values()];
+    expect(await prisma.match.count({ where: { id: { in: ids }, detailAttempts: 1 } })).toBe(5);
+    expect(await prisma.match.count({ where: { id: { in: ids }, detailAttempts: 0 } })).toBe(N_FIXTURES - 5);
+  }, 180_000);
+
+  // ================================================================================================
+  // Case 14 (a): id 가 작은데 늦게 끝난 경기 — 커서였다면 영구히 빠졌다
+  // ================================================================================================
+  it('14. id 가 가장 작은 경기가 PST 로 빠졌다가 FT 가 되면 다음 판이 처리한다 (커서 시절엔 영구 누락)', async () => {
+    await resetSeason();
+    const o = await ordered();
+    const late = o.reduce((a, b) => (b.id < a.id ? b : a));
+    await prisma.match.update({ where: { id: late.id }, data: { statusShort: 'PST' } });
+
+    const run1 = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 5 }));
+    expect(run1.targeted).toBe(N_FIXTURES - 1);
+    expect(run1.processed).toBe(5);
+    // kickoff asc 앞 5경기 (late 제외)
+    const firstFive = o.filter((m) => m.id !== late.id).slice(0, 5).map((m) => m.id);
+    expect(await promotedIds()).toEqual(asc(firstFive));
+    const lateAfter1 = await stateOf(late.id);
+    expect(lateAfter1.detailCheckedAt).toBeNull();
+    expect(lateAfter1.detailAttempts).toBe(0);
+
+    // 경기가 끝났다 — 옛 커서(id > 5번째 처리 id)라면 late 는 영영 대상 밖이었다
+    await prisma.match.update({ where: { id: late.id }, data: { statusShort: 'FT' } });
+    const run2 = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 20 }));
+    expect(run2.targeted).toBe(N_FIXTURES - 5);
+    expect(run2.processed).toBe(N_FIXTURES - 5);
+    expect(run2.stoppedReason).toBe('done');
+    const lateAfter2 = await stateOf(late.id);
+    expect(lateAfter2.detailCheckedAt).not.toBeNull();
+    expect(lateAfter2.detailAttempts).toBe(1);
+
+    const job = await prisma.backfillJob.findUniqueOrThrow({ where: { competitionSeasonId } });
+    expect(job.cursorMatchId).toBeNull();
+  }, 180_000);
+
+  // ================================================================================================
+  // Case 15 (b): 실패 → 1시간 백오프
+  // ================================================================================================
+  it('15. 실패한 경기는 1시간 백오프 동안 대상 밖 · 지나면 다시 처리·승격', async () => {
+    await resetSeason();
+    const o = await ordered();
+    const fx0 = o[0].apiFixtureId;
+    fake.failEndpointAt = { fixture: fx0, path: '/fixtures/events', message: 'test events fail' };
+
+    // 1회 — 실패
+    const t0 = Date.now();
+    const run1 = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+    const t1 = Date.now();
+    expect(run1.processed).toBe(1);
+    expect(run1.failed).toBe(1);
+    const a1 = await stateOf(o[0].id);
+    expect(a1.detailAttempts).toBe(1);
+    expect(a1.detailCheckedAt).toBeNull();
+    const at1 = a1.detailLastAttemptAt?.getTime();
+    expect(at1).toBeGreaterThanOrEqual(t0);
+    expect(at1).toBeLessThanOrEqual(t1);
+
+    // 실패 해제 — 그래도 1h 안이라 o[0] 은 대상 밖. 다음 경기 o[1] 이 처리된다
+    fake.failEndpointAt = null;
+    const run2 = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+    expect(run2.targeted).toBe(N_FIXTURES - 1);
+    expect(run2.processed).toBe(1);
+    expect(await promotedIds()).toEqual([o[1].id]);
+    expect((await stateOf(o[0].id)).detailAttempts).toBe(1);
+
+    // 1h 지남 — o[0] 이 kickoff 가 가장 일러 먼저 처리되고 승격
+    await backdate(o[0].id, 61 * 60 * 1_000);
+    const run3 = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+    expect(run3.targeted).toBe(N_FIXTURES - 1);
+    expect(run3.processed).toBe(1);
+    const a3 = await stateOf(o[0].id);
+    expect(a3.detailCheckedAt).not.toBeNull();
+    expect(a3.detailAttempts).toBe(2);
+    // o[0] 콜: 1회 4 + 3회 4
+    expect(fixtureCalls(fx0)).toBe(8);
+  }, 180_000);
+
+  // ================================================================================================
+  // Case 16 (c): 3회 실패 → 영구 제외 + 포기 warn
+  // ================================================================================================
+  it('16. 3회 실패하면 영구 제외 · 상세 재시도 포기 warn 정확히 1건 (1회 뒤 1h · 2회 뒤 6h 백오프)', async () => {
+    await resetSeason();
+    const o = await ordered();
+    const fx0 = o[0].apiFixtureId;
+    // 테스트 내내 o[0] events 실패
+    fake.failEndpointAt = { fixture: fx0, path: '/fixtures/events', message: 'test events fail' };
+    const warn = vi.spyOn((backfill as unknown as { logger: Logger }).logger, 'warn');
+    const giveUps = () => warn.mock.calls.filter(([msg]) => String(msg).includes('상세 재시도 포기'));
+    try {
+      // 1회
+      let s = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+      expect(s.processed).toBe(1);
+      expect((await stateOf(o[0].id)).detailAttempts).toBe(1);
+
+      // 2회 — 1h 지나 재시도 · 또 실패 · 아직 포기 아님
+      await backdate(o[0].id, 61 * 60 * 1_000);
+      s = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+      expect(s.processed).toBe(1);
+      expect((await stateOf(o[0].id)).detailAttempts).toBe(2);
+      expect(giveUps()).toHaveLength(0);
+
+      // 2회 뒤 2h — 6h 백오프 안이라 o[0] 제외 · 다음 경기 o[1] 처리
+      await backdate(o[0].id, 2 * HOUR_MS);
+      s = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+      expect(s.targeted).toBe(N_FIXTURES - 1);
+      expect(s.processed).toBe(1);
+      expect((await stateOf(o[1].id)).detailCheckedAt).not.toBeNull();
+      expect((await stateOf(o[0].id)).detailAttempts).toBe(2);
+
+      // 3회 — 6h 지나 재시도 · 또 실패 → 포기 warn 1건
+      await backdate(o[0].id, 6 * HOUR_MS + 60 * 1_000);
+      s = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+      expect(s.targeted).toBe(N_FIXTURES - 1);
+      expect(s.processed).toBe(1);
+      expect((await stateOf(o[0].id)).detailAttempts).toBe(3);
+      const g = giveUps();
+      expect(g).toHaveLength(1);
+      expect(String(g[0][0])).toContain(`match ${o[0].id} (fixture ${fx0})`);
+
+      // 30일 뒤에도 제외 — 다음 경기 o[2] 처리 · warn 은 더 안 나온다
+      await backdate(o[0].id, 30 * 24 * HOUR_MS);
+      s = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+      expect(s.targeted).toBe(N_FIXTURES - 2);
+      expect(s.processed).toBe(1);
+      expect((await stateOf(o[2].id)).detailCheckedAt).not.toBeNull();
+      const a5 = await stateOf(o[0].id);
+      expect(a5.detailAttempts).toBe(3);
+      expect(a5.detailCheckedAt).toBeNull();
+      expect(giveUps()).toHaveLength(1);
+      // o[0] 콜: 1·2·3회 × 4
+      expect(fixtureCalls(fx0)).toBe(12);
+    } finally {
+      warn.mockRestore();
+    }
+  }, 180_000);
+
+  // ================================================================================================
+  // Case 17 (d): quota 예외로 끊긴 경기는 시도로 안 센다
+  // ================================================================================================
+  it('17. players 에서 quota 예외로 끊긴 경기는 시도 0 · job 도 없음 · 다음 판이 처음처럼 처리', async () => {
+    await resetSeason();
+    const o = await ordered();
+    fake.quotaExhaustAt = { fixture: o[0].apiFixtureId, path: '/fixtures/players' };
+
+    const res1 = await backfill.run({ season: SEASON_YEAR, limit: 3 });
+    const s1 = mySeason(res1);
+    expect(s1.processed).toBe(0);
+    expect(s1.stoppedReason).toBe('quota_exhausted');
+    expect(res1.overallStopped).toBe('quota_exhausted');
+    const a1 = await stateOf(o[0].id);
+    expect(a1.hasLineups).toBe(true);
+    expect(a1.hasEvents).toBe(true);
+    expect(a1.hasTeamStats).toBe(true);
+    expect(a1.hasPlayerStats).toBeNull();
+    expect(a1.detailCheckedAt).toBeNull();
+    expect(a1.detailAttempts).toBe(0);
+    expect(a1.detailLastAttemptAt).toBeNull();
+    expect(await prisma.backfillJob.findUnique({ where: { competitionSeasonId } })).toBeNull();
+
+    fake.quotaExhaustAt = null;
+    const s2 = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+    expect(s2.processed).toBe(1);
+    const a2 = await stateOf(o[0].id);
+    expect(a2.detailCheckedAt).not.toBeNull();
+    expect(a2.detailAttempts).toBe(1);
+  }, 180_000);
+
+  // ================================================================================================
+  // Case 18 (e): 4갈래 전부 실패해도 updated_at 은 그대로 — 시도 기록은 raw UPDATE
+  // ================================================================================================
+  it('18. 4갈래 전부 실패 → 시도 1 · has_* 전부 null · updated_at 불변', async () => {
+    await resetSeason();
+    const o = await ordered();
+    fake.failEndpointAt = {
+      fixture: o[0].apiFixtureId,
+      path: ['/fixtures/lineups', '/fixtures/events', '/fixtures/statistics', '/fixtures/players'],
+      message: 'test all fail',
+    };
+    const before = (await stateOf(o[0].id)).updatedAt;
+
+    const s = mySeason(await backfill.run({ season: SEASON_YEAR, limit: 1 }));
+    expect(s.processed).toBe(1);
+    expect(s.failed).toBe(1);
+
+    const a = await stateOf(o[0].id);
+    expect(a.detailAttempts).toBe(1);
+    expect(a.detailLastAttemptAt).not.toBeNull();
+    expect(a.hasLineups).toBeNull();
+    expect(a.hasEvents).toBeNull();
+    expect(a.hasTeamStats).toBeNull();
+    expect(a.hasPlayerStats).toBeNull();
+    expect(a.detailCheckedAt).toBeNull();
+    // Prisma update 였다면 @updatedAt 이 올라갔다
+    expect(a.updatedAt.getTime()).toBe(before.getTime());
   }, 180_000);
 });

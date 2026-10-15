@@ -3,10 +3,11 @@
  *
  * 이 파일 자체는 API-Football 을 부르지 않는다. 대상 경기를 골라 L3·L5 서비스에 위임한다.
  *
- * ## 대상 SELECT
+ * ## 대상 SELECT — `detailTargetWhere` (detail-retry.ts)
  *   `detail_eligible=true` · `detail_checked_at=null` · status ∈ {FT,AET,PEN} · kickoff < now - 24h
- *   여기에 `backfill_jobs.cursor_match_id` 뒤(id > cursor)만. cursor 는 경기 하나가 4콜을 다
- *   시도한 뒤 갱신된다 — 이 판이 죽어도 다음 판이 뒤부터.
+ *   · 재시도 창(0회 즉시 · 1회 실패 뒤 1h · 2회 실패 뒤 6h · 3회면 영구 제외).
+ *   커서는 없다 — `id > cursor` 는 id 가 작은데 늦게 끝난 경기와 실패한 경기를 영구히 건너뛰었다.
+ *   정렬은 `kickoff asc, id asc`. 이 판이 죽어도 다음 판의 대상 SELECT 가 미확정 경기를 다시 고른다.
  *
  * ## 예산 (INGESTION_STRATEGY 3-5)
  *   경기당 4콜 고정. 우리는 API 상한(Pro=7,500)보다 낮은 자율 상한(env `BACKFILL_DAILY_CAP` · 기본 5,700)을 지킨다 —
@@ -19,9 +20,10 @@
  *   같은 판 안에서 다른 시즌·다른 프로세스가 예산을 먹었을 수 있다.
  *
  * ## 소유권 (D18·D19·D20)
- *   여기서 matches 를 직접 갱신하지 않는다. L3·L5 가 각자의 has_* 를 세우고
- *   `promoteIfAllDetailsChecked` 가 detail_checked_at·stats_state 를 올린다.
- *   이 파일은 `backfill_jobs.cursor_match_id`·`total`·`done`·`failed`·`last_error` 만 쓴다.
+ *   L3·L5 가 각자의 has_* 를 세우고 `promoteIfAllDetailsChecked` 가 detail_checked_at·stats_state 를 올린다.
+ *   이 파일이 matches 에 쓰는 것은 `detail_attempts`·`detail_last_attempt_at` 둘뿐이다 (상세 백필 소유) —
+ *   raw UPDATE 로 써서 updated_at 을 건드리지 않는다 (Prisma update·updateMany 는 @updatedAt 을 올린다).
+ *   backfill_jobs 는 `total`·`done`·`failed`·`last_error` 만 쓴다.
  *
  * ## backfill_jobs.phase 는 읽지도 쓰지도 않는다
  *   L2·L6 백필-1 완료 표시(`dataStateOf` → 프론트 시즌 선택기)와 L1 락
@@ -34,7 +36,9 @@
  *
  * ## 트랜잭션
  *   여기는 트랜잭션이 없다. L3·L5 가 자체 트랜잭션을 짧게 잡는다.
- *   커서 갱신은 update 한 방 — 실패해도 다음 판이 같은 경기부터 재시도(멱등)한다.
+ *   시도 기록(detail_attempts +1)은 4콜 시도가 다 끝난 뒤 UPDATE 한 방 — quota 예외로 그 전에 끊긴
+ *   경기는 시도로 세지 않는다. 진행 지표 갱신도 update 한 방 — 실패해도 다음 판의 대상 SELECT 가
+ *   미확정 경기를 다시 고른다(멱등).
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -44,6 +48,7 @@ import { QuotaService } from '../api-football/quota.service.js';
 import { ApiQuotaExhaustedError } from '../api-football/api-football.errors.js';
 import { IngestionRunService } from '../ingestion-run.service.js';
 import { BackfillJobService } from './backfill-job.service.js';
+import { DETAIL_MAX_ATTEMPTS, detailTargetWhere, isDetailGiveUp } from './detail-retry.js';
 import { L3LineupsService } from '../l3/lineups.service.js';
 import { L3EventsService } from '../l3/events.service.js';
 import { L5TeamStatsService } from '../l5/team-stats.service.js';
@@ -73,7 +78,7 @@ export interface BackfillPerSeasonReport {
   competitionSeasonId: number;
   competitionName: string;
   seasonYear: number;
-  /** 커서 이후 대상 경기 수 (LIMIT 미적용) */
+  /** 백오프 대기·포기 경기를 뺀 대상 수 (LIMIT 미적용) */
   targeted: number;
   /** 4엔드포인트 시도가 다 끝난 경기 수 (일부 endpoint 실패 포함) */
   processed: number;
@@ -96,7 +101,6 @@ export interface BackfillDetailsResult {
 const PER_MATCH_CALLS = 4;
 // 일일 자율 상한은 env `BACKFILL_DAILY_CAP` (기본 5700). 하드 한도(Pro=7500)보다 낮다 —
 // 우리가 먼저 멈춘다. /status 카운터 약 2분 지연 실측 · 상한 초과분 최대 ~320콜.
-const RECENT_MATCH_LOCK_MS = 24 * 60 * 60 * 1_000;
 const PROGRESS_EVERY = 50;
 
 @Injectable()
@@ -164,10 +168,6 @@ export class MatchDetailsBackfillService {
         // skip 판정은 phase 가 아니라 대상 SELECT 로 한다 —
         //   detail_checked_at IS NULL 조건이 걸려 있어 이미 다 채운 시즌은 targets 가 0 이라
         //   자연히 continue. phase 는 우리 소유가 아니라 여기서 읽지 않는다.
-        // 다만 cursor 는 필요하므로 job 은 확인한다.
-        const existingJob = await this.prisma.backfillJob.findUnique({
-          where: { competitionSeasonId: cs.id },
-        });
 
         // 남은 예산 계산 (dry-run 은 quota 안 부름)
         let limitForThisSeason: number;
@@ -206,26 +206,18 @@ export class MatchDetailsBackfillService {
           }
         }
 
-        const cursor = existingJob?.cursorMatchId ?? 0;
-        // 24시간 컷은 이 판이 도는 동안 고정한다 — 대상 SELECT 와 count 가 다른 시각을 쓰면 어긋난다
-        const cutoff = new Date(Date.now() - RECENT_MATCH_LOCK_MS);
-        const targetWhere = {
-          competitionSeasonId: cs.id,
-          detailEligible: true,
-          detailCheckedAt: null,
-          statusShort: { in: ['FT', 'AET', 'PEN'] },
-          kickoffAt: { lt: cutoff },
-          id: { gt: cursor },
-        };
+        // now 는 이 대회시즌 동안 고정한다 — count 와 findMany 가 다른 시각을 쓰면 24h 컷·백오프 창이 어긋난다
+        const now = new Date();
+        const targetWhere = detailTargetWhere(cs.id, now);
 
         // targeted 는 LIMIT 없이 count — 요약과 done/limit_reached 판정에 쓴다
         const targeted = await this.prisma.match.count({ where: targetWhere });
 
         const targets = await this.prisma.match.findMany({
           where: targetWhere,
-          orderBy: { id: 'asc' },
+          orderBy: [{ kickoffAt: 'asc' }, { id: 'asc' }],
           take: Math.max(0, limitForThisSeason),
-          select: { id: true, apiFixtureId: true },
+          select: { id: true, apiFixtureId: true, detailAttempts: true },
         });
 
         if (targets.length === 0) {
@@ -259,7 +251,7 @@ export class MatchDetailsBackfillService {
           continue;
         }
 
-        // begin 호출 없음 — phase 는 우리 소유가 아니다. cursor·total·done·failed 만 쓴다.
+        // begin 호출 없음 — phase 는 우리 소유가 아니다. total·done·failed 만 쓴다.
 
         let processed = 0;
         let failed = 0;
@@ -291,7 +283,14 @@ export class MatchDetailsBackfillService {
 
             // 이 경기의 4엔드포인트를 순차로. ApiQuotaExhaustedError 는 시즌 중단
             let anyFailed = false;
-            const services: Array<{ name: string; fn: () => Promise<{ ok: boolean; reason?: string }> }> = [
+            // 어느 갈래든 승격을 보고하면 이 경기는 확정됐다 (승격은 마지막으로 채운 갈래가 보고한다)
+            let promoted = false;
+            // 포기 warn 에 남길 이 경기의 마지막 오류 — 시즌 lastError 와 별개
+            let matchError: string | undefined;
+            const services: Array<{
+              name: string;
+              fn: () => Promise<{ ok: boolean; reason?: string; promoted?: boolean }>;
+            }> = [
               { name: 'lineups', fn: () => this.lineups.run(m.id, m.apiFixtureId) },
               { name: 'events', fn: () => this.events.run(m.id, m.apiFixtureId) },
               { name: 'teamStats', fn: () => this.teamStats.run(m.id, m.apiFixtureId) },
@@ -300,11 +299,11 @@ export class MatchDetailsBackfillService {
             for (const s of services) {
               try {
                 const r = await s.fn();
+                if (r.promoted === true) promoted = true;
                 if (!r.ok) {
                   anyFailed = true;
-                  this.logger.warn(
-                    `${label}: match ${m.id} · ${s.name} ok=false${r.reason ? ` (${r.reason})` : ''}`,
-                  );
+                  matchError = `${s.name} ok=false${r.reason ? ` (${r.reason})` : ''}`;
+                  this.logger.warn(`${label}: match ${m.id} · ${matchError}`);
                 }
               } catch (err) {
                 if (err instanceof ApiQuotaExhaustedError) {
@@ -313,19 +312,36 @@ export class MatchDetailsBackfillService {
                 }
                 anyFailed = true;
                 lastError = err instanceof Error ? err.message : String(err);
+                matchError = `${s.name}: ${lastError}`;
                 this.logger.warn(
                   `${label}: match ${m.id} · ${s.name} 실패 — ${lastError}`,
                 );
               }
             }
 
+            // 시도 기록 — 4콜 시도가 다 끝난 경기만 온다 (ApiQuotaExhaustedError 는 위에서 throw 돼
+            // 여기 안 온다 → quota 로 끊긴 경기는 시도로 세지 않는다). 성공·실패 무관하게 센다.
+            // Prisma update 가 아니라 raw UPDATE — @updatedAt(updated_at) 을 올리지 않기 위해서다.
+            const rows = await this.prisma.$queryRaw<{ detail_attempts: number }[]>`
+              UPDATE "matches"
+              SET "detail_attempts" = "detail_attempts" + 1, "detail_last_attempt_at" = ${new Date()}
+              WHERE "id" = ${m.id}
+              RETURNING "detail_attempts"`;
+            const attemptsAfter = rows[0]?.detail_attempts ?? m.detailAttempts + 1;
+            // 실패 판정은 anyFailed 가 아니라 !promoted — 라이브 finalize 가 먼저 채운 has_* 덕분에
+            // 갈래 하나가 실패해도 승격될 수 있다.
+            if (isDetailGiveUp(promoted, attemptsAfter)) {
+              this.logger.warn(
+                `${label}: match ${m.id} (fixture ${m.apiFixtureId}) 상세 재시도 포기 — ${attemptsAfter}/${DETAIL_MAX_ATTEMPTS}회 실패 · 마지막 오류 ${(matchError ?? '-').slice(0, 200)} · 복구 UPDATE matches SET detail_attempts = 0, detail_last_attempt_at = NULL WHERE id = ${m.id}`,
+              );
+            }
+
             processed++;
             if (anyFailed) failed++;
 
-            // 커서·진행 지표 갱신 — 경기 하나 시도 완료마다. 다음 판이 여기부터 이어간다.
+            // 진행 지표 갱신 — 경기 하나 시도 완료마다. 재개는 대상 SELECT 가 맡는다 (커서 없음).
             // phase 는 건드리지 않는다 (updateDetailProgress 규약). lastError 는 유지(undefined).
             await this.jobs.updateDetailProgress(cs.id, {
-              cursorMatchId: m.id,
               total: targeted,
               done: processed,
               failed,
@@ -359,7 +375,7 @@ export class MatchDetailsBackfillService {
             seasonStop = 'error';
             overallStopped = 'error';
             lastError = err instanceof Error ? err.message : String(err);
-            // 상세 백필은 phase 를 안 건드린다. 오류만 lastError 에 남긴다 — 다음 판이 커서부터 이어간다.
+            // 상세 백필은 phase 를 안 건드린다. 오류만 lastError 에 남긴다 — 다음 판은 대상 SELECT 가 다시 고른다.
             await this.jobs.updateDetailProgress(cs.id, {
               total: targeted,
               done: processed,
