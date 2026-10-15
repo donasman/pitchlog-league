@@ -2,9 +2,10 @@
  * `backfill_jobs` writer — **처음 만든다.** 지금까지 이 테이블은 읽기만 있었다
  * (L1 의 락 · `dataStateOf`). 쓰는 쪽이 없어 phase 가 영원히 PENDING 이었다.
  *
- * ## 지금은 L6 만 쓴다
- * L2 는 이번 범위 밖이다 (백필-2 몫). `cursor_match_id` · `done` · `failed` · `total` 도
- * 백필-2 가 경기 상세를 돌 때 쓴다 — 여기서 건드리지 않는다.
+ * ## phase 를 세우는 것은 L6 뿐이다 (상세 백필의 최초 create 는 기본값 PENDING)
+ * L2 는 이번 범위 밖이다 (백필-2 몫). `done` · `failed` · `total` · `last_error` 는 백필-2(상세 백필)가
+ * `updateDetailProgress` 로 쓴다. 상세 백필은 `cursor_match_id` 를 읽지도 쓰지도 않는다 — 재개·재시도는
+ * 대상 SELECT 와 `matches.detail_attempts` 가 맡는다 (detail-retry.ts). 컬럼은 남겨 둔다.
  *
  * ## ⚠ `RANKINGS` 라는 이름이 내용과 안 맞는다
  * L6 가 담는 것은 시즌 집계 3종(선수 통계 · 랭킹 · 팀 통계)이지 랭킹만이 아니다.
@@ -89,7 +90,7 @@ export class BackfillJobService {
    *   - `l1.service.ts` 의 `BACKFILL_IN_PROGRESS` 가 DETAILS 를 포함해 그 대회시즌 팀 스쿼드를
    *     잠근다. 상세 백필이 며칠 도는 동안 L1 이 영원히 멈춘다.
    *   phase 는 L2·L6 백필-1 · L1 락과 공유되는 신호라 우리 소유가 아니다.
-   *   상세 백필은 cursor·total·done·failed·lastError 만 쓴다.
+   *   상세 백필은 total·done·failed·lastError 만 쓴다. cursor_match_id 는 읽지도 쓰지도 않는다(컬럼은 남김).
    *
    * `lastError` 규약: `undefined` = 그대로 유지 · `null` = 지움 · 문자열 = 2000자로 자름.
    * job 이 없으면 create 하되 phase 는 default(PENDING) 로 명시. 있으면 update 만 (phase 미포함).
@@ -97,14 +98,13 @@ export class BackfillJobService {
   async updateDetailProgress(
     competitionSeasonId: number,
     progress: {
-      cursorMatchId?: number;
       total?: number;
       done?: number;
       failed?: number;
       lastError?: string | null;
     },
   ): Promise<void> {
-    const { cursorMatchId, total, done, failed, lastError } = progress;
+    const { total, done, failed, lastError } = progress;
 
     const existing = await this.prisma.backfillJob.findUnique({
       where: { competitionSeasonId },
@@ -121,7 +121,6 @@ export class BackfillJobService {
           competitionSeasonId,
           phase: BackfillPhase.PENDING,
           startedAt: new Date(),
-          cursorMatchId: cursorMatchId ?? null,
           total: total ?? 0,
           done: done ?? 0,
           failed: failed ?? 0,
@@ -133,13 +132,11 @@ export class BackfillJobService {
 
     // update — 인자로 준 필드만. phase 는 절대 포함하지 않는다.
     const data: {
-      cursorMatchId?: number;
       total?: number;
       done?: number;
       failed?: number;
       lastError?: string | null;
     } = {};
-    if (cursorMatchId !== undefined) data.cursorMatchId = cursorMatchId;
     if (total !== undefined) data.total = total;
     if (done !== undefined) data.done = done;
     if (failed !== undefined) data.failed = failed;
