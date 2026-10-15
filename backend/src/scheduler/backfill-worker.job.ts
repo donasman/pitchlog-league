@@ -7,7 +7,7 @@
  *   error      : error | 예상치 못한 throw (quota.snapshot 실패 등)
  *
  * 겹침 방지: SchedulerStateService.running 플래그 · 이전 실행 중이면 skip.
- * 재시도 로직 없음 — 커서(backfill_jobs.cursor_match_id) 가 재개를 보장한다.
+ * 워커 자체 재시도 없음 — 대상 SELECT 가 미확정 경기를 다시 고르고, 경기 단위 상한은 matches.detail_attempts (detail-retry.ts).
  *
  * CronJob 은 SchedulerRegistry.addCronJob 으로 프로그램적 등록 — env 값을 부팅 시 검증할 수 있고
  * (잘못된 cron 은 CronJob 생성자가 throw), 조건부 등록도 SchedulerModule 이 결정한다.
