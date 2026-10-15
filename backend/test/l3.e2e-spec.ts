@@ -24,6 +24,7 @@ import { Test } from '@nestjs/testing';
 import type { INestApplicationContext } from '@nestjs/common';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { ApiFootballClient } from '../src/ingestion/api-football/api-football.client.js';
+import { knownApiPlayerId } from '../src/ingestion/api-football/api-player-id.js';
 import { L3LineupsService } from '../src/ingestion/l3/lineups.service.js';
 import { L3EventsService } from '../src/ingestion/l3/events.service.js';
 import {
@@ -235,11 +236,16 @@ describe('L3 라인업·이벤트 (e2e, 픽스처 기반)', () => {
     const playerIds = new Set<number>();
     for (const fx of [APIFX_A, APIFX_B, APIFX_C]) {
       for (const it of loadLineups(fx)) {
-        for (const e of [...it.startXI, ...it.substitutes]) playerIds.add(e.player.id);
+        for (const e of [...it.startXI, ...it.substitutes]) {
+          const k = knownApiPlayerId(e.player.id);
+          if (k !== null) playerIds.add(k);
+        }
       }
       for (const e of loadEvents(fx)) {
-        if (e.player.id !== null) playerIds.add(e.player.id);
-        if (e.assist.id !== null) playerIds.add(e.assist.id);
+        const kp = knownApiPlayerId(e.player.id);
+        if (kp !== null) playerIds.add(kp);
+        const ka = knownApiPlayerId(e.assist.id);
+        if (ka !== null) playerIds.add(ka);
       }
     }
     if (playerIds.size > 0) {
