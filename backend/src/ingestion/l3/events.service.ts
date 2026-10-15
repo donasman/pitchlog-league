@@ -14,6 +14,7 @@
  * ## Player 매핑 (D9)
  * `player.id` 가 lineups 응답에 없을 수 있다. 이름이 있으면 최소 upsert 로 만들고,
  * id 도 이름도 없으면 그냥 playerId = null 로 저장. assist 도 같음.
+ * id 0 도 id 없음으로 본다 (knownApiPlayerId).
  * team.id 나 time.elapsed 가 null 이면 그 행은 skip + warn (팀 없이는 방향을 못 잡는다).
  *
  * ## 소유권 (D18·D19·D20)
@@ -26,6 +27,7 @@ import { ApiFootballClient } from '../api-football/api-football.client.js';
 import { batchUpsert } from '../../prisma/batch-upsert.js';
 import { promoteIfAllDetailsChecked } from '../../common/match-detail-status.js';
 import type { ApiFixtureEventItem } from '../api-football/api-football.types.js';
+import { knownApiPlayerId } from '../api-football/api-player-id.js';
 
 export interface L3EventsResult {
   ok: boolean;
@@ -158,12 +160,12 @@ export class L3EventsService {
     // 6) Player 최소 upsert — id 가 있고 이름도 있는 것만 (id 있는데 이름 없는 경우도 실측 존재)
     const playerRowsMap = new Map<number, { api_player_id: number; name: string }>();
     for (const o of ordered) {
-      const pid = o.item.player.id;
+      const pid = knownApiPlayerId(o.item.player.id);
       const pname = o.item.player.name;
       if (pid !== null && pname !== null && pname !== '' && !playerRowsMap.has(pid)) {
         playerRowsMap.set(pid, { api_player_id: pid, name: pname });
       }
-      const aid = o.item.assist.id;
+      const aid = knownApiPlayerId(o.item.assist.id);
       const aname = o.item.assist.name;
       if (aid !== null && aname !== null && aname !== '' && !playerRowsMap.has(aid)) {
         playerRowsMap.set(aid, { api_player_id: aid, name: aname });
@@ -215,8 +217,10 @@ export class L3EventsService {
         this.logger.warn(`L3 events: match id=${matchId}, apiTeamId=${t} 팀 매핑 실패 — 이 행 skip`);
         continue;
       }
-      const playerId = o.item.player.id !== null ? (playerIdByApi.get(o.item.player.id) ?? null) : null;
-      const assistId = o.item.assist.id !== null ? (playerIdByApi.get(o.item.assist.id) ?? null) : null;
+      const apiPid = knownApiPlayerId(o.item.player.id);
+      const apiAid = knownApiPlayerId(o.item.assist.id);
+      const playerId = apiPid !== null ? (playerIdByApi.get(apiPid) ?? null) : null;
+      const assistId = apiAid !== null ? (playerIdByApi.get(apiAid) ?? null) : null;
       rows.push({
         match_id: matchId,
         seq: seq++,
