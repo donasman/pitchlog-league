@@ -16,6 +16,9 @@
  *   Coach·Player 최소 upsert 는 트랜잭션 밖. 재실행 안전하고 외부 참조가 없다.
  *   MatchLineup·LineupEntry·has_lineups 세팅만 한 트랜잭션에 짧게 넣는다.
  *
+ * ## id 없는 선수
+ *   player.id 가 null·0 인 엔트리는 저장하지 않는다 (skippedNoId · warn 1줄).
+ *
  * ## 오케스트레이터
  *   이 서비스는 단일 매치를 받는다. 여러 매치를 도는 루프·큐는 다음 판(오케스트레이터) 소관.
  *   실 API 는 여기서도 부르지 않는다 — 스케줄러 시점에만 호출한다는 규칙에 따라
@@ -27,6 +30,7 @@ import { ApiFootballClient } from '../api-football/api-football.client.js';
 import { batchUpsert } from '../../prisma/batch-upsert.js';
 import { promoteIfAllDetailsChecked } from '../../common/match-detail-status.js';
 import type { ApiFixtureLineupItem } from '../api-football/api-football.types.js';
+import { knownApiPlayerId } from '../api-football/api-player-id.js';
 
 export interface L3LineupsResult {
   ok: boolean;
@@ -39,6 +43,8 @@ export interface L3LineupsResult {
   entries?: number;
   /** 승격 결과 */
   promoted?: boolean;
+  /** player.id 가 없어(null·0) players·lineup_entries 에서 뺀 엔트리 수 */
+  skippedNoId?: number;
 }
 
 @Injectable()
@@ -132,7 +138,7 @@ export class L3LineupsService {
       const promoted = opts.promote
         ? await promoteIfAllDetailsChecked(this.prisma, matchId)
         : { promoted: false };
-      return { ok: true, hasLineups: false, lineups: 0, entries: 0, promoted: promoted.promoted };
+      return { ok: true, hasLineups: false, lineups: 0, entries: 0, promoted: promoted.promoted, skippedNoId: 0 };
     }
 
     // 4) Coach 최소 upsert (id 가 있는 것만). 트랜잭션 밖 (D9: null 이면 coachId=null 로 저장)
@@ -155,14 +161,29 @@ export class L3LineupsService {
       for (const r of res.returned) coachIdByApi.set(r.api_coach_id, r.id);
     }
 
-    // 5) Player 최소 upsert (startXI + substitutes 의 player.id 목록)
-    const playerRows = items.flatMap((it) =>
-      [...it.startXI, ...it.substitutes].map((e) => ({
-        api_player_id: e.player.id,
-        name: e.player.name,
-        photo_url: null as string | null,
-      })),
-    );
+    // 5) Player 최소 upsert (startXI + substitutes 의 player.id 목록).
+    //    id 가 null·0 인 엔트리는 뺀다 — NOT NULL·UNIQUE 컬럼이라 넣으면 실패하거나 합쳐진다
+    const playerRows: Array<{ api_player_id: number; name: string; photo_url: string | null }> = [];
+    let skippedNoId = 0;
+    const skippedLabels: string[] = [];
+    for (const it of items) {
+      for (const e of [...it.startXI, ...it.substitutes]) {
+        const apiPlayerId = knownApiPlayerId(e.player.id);
+        if (apiPlayerId === null) {
+          skippedNoId++;
+          skippedLabels.push(`${e.player.name}#${e.player.number}`);
+          continue;
+        }
+        playerRows.push({ api_player_id: apiPlayerId, name: e.player.name, photo_url: null });
+      }
+    }
+    if (skippedNoId > 0) {
+      const shown = skippedLabels.slice(0, 5).join(', ');
+      const more = skippedNoId > 5 ? ` 외 ${skippedNoId - 5}건` : '';
+      this.logger.warn(
+        `L3 lineups: match id=${matchId} apiFixtureId=${apiFixtureId} — player.id 없는 엔트리 ${skippedNoId}건 skip (${shown}${more})`,
+      );
+    }
     const playerIdByApi = new Map<number, number>();
     if (playerRows.length > 0) {
       const res = await batchUpsert<(typeof playerRows)[number], { id: number; api_player_id: number }>(this.prisma, {
@@ -218,7 +239,9 @@ export class L3LineupsService {
         coach_id: coachId,
       });
       for (const e of it.startXI) {
-        const playerId = playerIdByApi.get(e.player.id);
+        const apiPlayerId = knownApiPlayerId(e.player.id);
+        if (apiPlayerId === null) continue;
+        const playerId = playerIdByApi.get(apiPlayerId);
         if (playerId === undefined) continue;
         entryRows.push({
           match_id: matchId,
@@ -231,7 +254,9 @@ export class L3LineupsService {
         });
       }
       for (const e of it.substitutes) {
-        const playerId = playerIdByApi.get(e.player.id);
+        const apiPlayerId = knownApiPlayerId(e.player.id);
+        if (apiPlayerId === null) continue;
+        const playerId = playerIdByApi.get(apiPlayerId);
         if (playerId === undefined) continue;
         entryRows.push({
           match_id: matchId,
@@ -293,6 +318,7 @@ export class L3LineupsService {
       lineups: lineupsCount,
       entries: entriesCount,
       promoted: promoted.promoted,
+      skippedNoId,
     };
   }
 }
