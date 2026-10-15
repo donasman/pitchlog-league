@@ -263,7 +263,7 @@ describe('id 없는 선수 회귀 (e2e, 실측 fixture 1635690)', () => {
       const k = knownApiPlayerId(id);
       if (k !== null) playerIds.add(k);
     };
-    for (const it of fx.lineups) for (const e of [...it.startXI, ...it.substitutes]) add(e.player.id);
+    for (const it of fx.lineups) for (const e of [...(it.startXI ?? []), ...(it.substitutes ?? [])]) add(e.player.id);
     for (const e of fx.events) {
       add(e.player.id);
       add(e.assist.id);
@@ -274,7 +274,7 @@ describe('id 없는 선수 회귀 (e2e, 실측 fixture 1635690)', () => {
 
   it('1. lineups — id 없는 엔트리 1건 skip · 엔트리 45 · api_player_id 0 행 안 생김', async () => {
     const fx = loadFixture();
-    const all = fx.lineups.flatMap((it) => [...it.startXI, ...it.substitutes]);
+    const all = fx.lineups.flatMap((it) => [...(it.startXI ?? []), ...(it.substitutes ?? [])]);
     const known = all.filter((e) => knownApiPlayerId(e.player.id) !== null);
     expect(all).toHaveLength(46);
     expect(known).toHaveLength(45);
@@ -376,7 +376,7 @@ describe('id 없는 선수 회귀 (e2e, 실측 fixture 1635690)', () => {
     const fx = loadFixture();
     let patched = 0;
     for (const it of fx.lineups) {
-      for (const e of [...it.startXI, ...it.substitutes]) {
+      for (const e of [...(it.startXI ?? []), ...(it.substitutes ?? [])]) {
         if (knownApiPlayerId(e.player.id) === null) {
           expect(e.player.name).toBe('Adam Mouak');
           e.player.id = LATE_PLAYER_ID;

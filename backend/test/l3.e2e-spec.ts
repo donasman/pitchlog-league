@@ -236,7 +236,7 @@ describe('L3 라인업·이벤트 (e2e, 픽스처 기반)', () => {
     const playerIds = new Set<number>();
     for (const fx of [APIFX_A, APIFX_B, APIFX_C]) {
       for (const it of loadLineups(fx)) {
-        for (const e of [...it.startXI, ...it.substitutes]) {
+        for (const e of [...(it.startXI ?? []), ...(it.substitutes ?? [])]) {
           const k = knownApiPlayerId(e.player.id);
           if (k !== null) playerIds.add(k);
         }

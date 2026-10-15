@@ -8,9 +8,9 @@
  *   · matches 갱신은 `updateMany + detailEligible:true` 로 count === 1 확인.
  *
  * ## 응답 규약 (D3)
- *   200 + response.length > 0  → hasLineups = true, 라인업·엔트리 upsert
- *   200 + []                   → hasLineups = false (마감), 승격 시도
- *   에러·429·타임아웃          → NULL 유지 (throw). 다음 스케줄 주기가 재시도한다
+ *   200 + 선수 1명 이상                                              → hasLineups = true, 라인업·엔트리 upsert
+ *   200 + 빈 배열 또는 두 팀 모두 선수 0명(startXI·substitutes 없음) → hasLineups = false (미제공·마감), 승격 시도
+ *   에러·429·타임아웃                                                → NULL 유지 (throw). 다음 스케줄 주기가 재시도한다
  *
  * ## 트랜잭션 (pgbouncer 15 상한)
  *   Coach·Player 최소 upsert 는 트랜잭션 밖. 재실행 안전하고 외부 참조가 없다.
@@ -18,6 +18,9 @@
  *
  * ## id 없는 선수
  *   player.id 가 null·0 인 엔트리는 저장하지 않는다 (skippedNoId · warn 1줄).
+ *
+ * ## 명단 없는 라인업 — startXI·substitutes 키가 없거나 비면 빈 배열로 읽는다. 두 팀 모두 선수 0명이면
+ *   빈 응답과 같이 has_lineups=false(미제공)로 마감한다 (프론트는 ok+빈 명단을 안내 없이 빈 피치로 그린다 — MatchPage.jsx)
  *
  * ## 오케스트레이터
  *   이 서비스는 단일 매치를 받는다. 여러 매치를 도는 루프·큐는 다음 판(오케스트레이터) 소관.
@@ -31,6 +34,10 @@ import { batchUpsert } from '../../prisma/batch-upsert.js';
 import { promoteIfAllDetailsChecked } from '../../common/match-detail-status.js';
 import type { ApiFixtureLineupItem } from '../api-football/api-football.types.js';
 import { knownApiPlayerId } from '../api-football/api-player-id.js';
+
+/** 명단 키가 없거나 null 이면 빈 배열 (실측 fixture 1485809) */
+const startersOf = (it: ApiFixtureLineupItem) => it.startXI ?? [];
+const benchOf = (it: ApiFixtureLineupItem) => it.substitutes ?? [];
 
 export interface L3LineupsResult {
   ok: boolean;
@@ -129,8 +136,15 @@ export class L3LineupsService {
       return { ok: false, reason: 'not-eligible' };
     }
 
-    // 3) 빈 응답 → hasLineups=false 마감 + 승격 시도 (D3)
-    if (items.length === 0) {
+    // 3) 빈 응답 또는 두 팀 모두 선수 0명 → hasLineups=false 마감 + 승격 시도 (D3).
+    //    coaches·players upsert·트랜잭션보다 앞 — 이 경우 matches.has_lineups 외에는 아무것도 쓰지 않는다
+    const playerCount = items.reduce((n, it) => n + startersOf(it).length + benchOf(it).length, 0);
+    if (items.length === 0 || playerCount === 0) {
+      if (items.length > 0) {
+        this.logger.log(
+          `L3 lineups: match id=${matchId} apiFixtureId=${apiFixtureId} — 선수 명단 없는 라인업 ${items.length}팀 → has_lineups=false (미제공)`,
+        );
+      }
       await this.prisma.match.updateMany({
         where: { id: matchId, detailEligible: true },
         data: { hasLineups: false },
@@ -167,7 +181,7 @@ export class L3LineupsService {
     let skippedNoId = 0;
     const skippedLabels: string[] = [];
     for (const it of items) {
-      for (const e of [...it.startXI, ...it.substitutes]) {
+      for (const e of [...startersOf(it), ...benchOf(it)]) {
         const apiPlayerId = knownApiPlayerId(e.player.id);
         if (apiPlayerId === null) {
           skippedNoId++;
@@ -238,7 +252,7 @@ export class L3LineupsService {
         formation: it.formation ?? null,
         coach_id: coachId,
       });
-      for (const e of it.startXI) {
+      for (const e of startersOf(it)) {
         const apiPlayerId = knownApiPlayerId(e.player.id);
         if (apiPlayerId === null) continue;
         const playerId = playerIdByApi.get(apiPlayerId);
@@ -253,7 +267,7 @@ export class L3LineupsService {
           is_starter: true,
         });
       }
-      for (const e of it.substitutes) {
+      for (const e of benchOf(it)) {
         const apiPlayerId = knownApiPlayerId(e.player.id);
         if (apiPlayerId === null) continue;
         const playerId = playerIdByApi.get(apiPlayerId);

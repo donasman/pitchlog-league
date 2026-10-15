@@ -186,6 +186,7 @@ export interface ApiPlayerSeason {
  * `/fixtures/lineups?fixture=` — 팀당 한 항목, 총 2개.
  * `coach.id` 는 null 일 수 있다 (실측). substitutes 의 `grid` 는 항상 null (벤치).
  * `player.id` 는 null 이 온다 (실측 2026-10-15 fixture 1635690 교체 명단, name·number·pos 는 있음) — 판정은 `knownApiPlayerId`.
+ * 하위 리그 컵(실측 Coupe de France 2025 fixture 1485809)은 `startXI`·`substitutes` 키 없이 team·coach·formation(null)만 온다 — 읽을 때 `?? []`.
  */
 export interface ApiFixtureLineupItem {
   team: {
@@ -201,8 +202,8 @@ export interface ApiFixtureLineupItem {
     photo: string | null;
   };
   /** "4-2-3-1" 등 */
-  formation: string;
-  startXI: Array<{
+  formation: string | null;
+  startXI?: Array<{
     player: {
       id: number | null;
       name: string;
@@ -210,8 +211,8 @@ export interface ApiFixtureLineupItem {
       pos: string | null;
       grid: string | null;
     };
-  }>;
-  substitutes: Array<{
+  }> | null;
+  substitutes?: Array<{
     player: {
       id: number | null;
       name: string;
@@ -220,7 +221,7 @@ export interface ApiFixtureLineupItem {
       /** 벤치는 항상 null */
       grid: string | null;
     };
-  }>;
+  }> | null;
 }
 
 /**
