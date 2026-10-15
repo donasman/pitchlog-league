@@ -10,15 +10,16 @@
  *      다른 대회시즌 → 모두 제외. 자격 있는 것만 처리
  *   2. 커서 무시 — backfillJob.cursorMatchId 가 세팅돼 있어도 20경기 전부 대상 · kickoff asc 앞 2경기 처리 · 커서 값 그대로
  *   3. --limit min(N, budget) — limit 이 작으면 limit 대로
- *   4a. 자율 상한 (daily_cap) — used=5692, limit=7500 → floor((5700-5692)/4)=2 경기 · daily_cap
+ *   4a. 자율 상한 (daily_cap) — used=5692, limit=7500 → floor((5700-5692)/4)=2 경기 · 끝 경로 판정에서 daily_cap
  *   4b. API 상한 (quota_exhausted) — used=7496, limit=7500 → floor((7500-7496)/4)=1 경기 · quota_exhausted
  *   5. ApiQuotaExhaustedError 중단 — overallStopped=quota_exhausted · 끊긴 경기는 시도로 안 셈 · cursor 안 씀
  *   6. 한 엔드포인트 실패 — 그 경기 failed=1 · 시도 1 · 나머지 서비스 · 다음 경기 정상
  *   7. **모든 대상 매치가 detail_checked_at 이 채워진 대회시즌은 targeted=0 이라 skip** (phase 무관)
- *   8. dry-run — 실 API 안 부름 · targeted 만 계산 · 시도 기록 없음
+ *      · 사용량 확인도 안 함 (currentCount 0 · snapshotCount 0)
+ *   8. dry-run — 실 API 안 부름 · targeted 만 계산 · 시도 기록 없음 · 사용량 확인 없음 (snapshotCount 0 · currentCount 0)
  *   9. no_targets — 이미 다 처리된 시즌 → job 생성 안 함 · stoppedReason='no_targets'
  *  10. season 지정 안 하면 isCurrent+screenCompetitionWhere 만
- *  11. 매 경기 앞 quota 재확인 — 시즌 시작 시 여유 있어도 경기 처리 중 quota 가 자율 상한 넘으면 그 경기 앞에서 중단
+ *  11. 매 경기 앞 quota 재확인(current · 기록 없음) — 시즌 시작 시 여유 있어도 경기 처리 중 quota 가 자율 상한 넘으면 그 경기 앞에서 중단
  *  12. **상세 백필은 backfill_jobs.phase 를 안 건드린다** — DONE 이 미리 세팅돼도 DONE 유지 · done/failed 만 갱신 · cursor 는 null
  *  13. **total/done/failed 가 진행에 맞게 갱신된다** — 5경기 처리 후 진행 지표 정확 · 시도 1 은 그 5경기만
  *  14. id 가 작은데 늦게 끝난 경기 — PST 로 빠졌다가 FT 가 되면 다음 판이 처리 (커서였다면 영구 누락)
@@ -168,20 +169,36 @@ class FakeApiFootballClient {
  * Fake QuotaService — /status 실 호출 대신 스크립트로 주는 값을 돌려준다.
  * 인수 없는 constructor.
  *
- * `deltaPerSnapshot` 은 snapshot 이 리턴하기 직전에 used 를 이만큼 늘린다 —
+ * MDB 는 기록 없는 current() 만 부른다 (진입 · 매 경기 앞 · 끝 판정). snapshot() 은 남겨 두고
+ * 호출 수만 따로 센다 — MDB 가 snapshot 을 부르면 snapshotCount 로 드러난다.
+ *
+ * `deltaPerSnapshot` 은 snapshot·current 가 리턴하기 직전에 used 를 이만큼 늘린다 (둘이 공유) —
  * "매 경기 앞 재확인" 케이스에서 quota 소진 진행을 흉내낸다.
- * 다만 최초 snapshot 을 skipFirstDelta 번 만큼은 그대로 준다 — 시즌 진입 첫 snapshot 을
+ * 다만 최초 확인을 skipFirstDelta 번 만큼은 그대로 준다 — 시즌 진입 첫 확인을
  * 진짜 상태 그대로 보고 싶을 때 씀.
  */
 class FakeQuotaService {
   used = 0;
   limit = 7_500;
+  /** snapshot() 호출 수 (기록 있는 확인) */
   snapshotCount = 0;
+  /** current() 호출 수 (기록 없는 확인) */
+  currentCount = 0;
   deltaPerSnapshot = 0;
   skipFirstDelta = 0;
 
   async snapshot(): Promise<{ used: number; limit: number; overWarn: boolean; expiresOn: Date | null }> {
     this.snapshotCount++;
+    return this.read();
+  }
+
+  async current(): Promise<{ used: number; limit: number; overWarn: boolean; expiresOn: Date | null }> {
+    this.currentCount++;
+    return this.read();
+  }
+
+  /** snapshot·current 공유 — 지금 used 를 주고 delta 를 적용한다 */
+  private read(): { used: number; limit: number; overWarn: boolean; expiresOn: Date | null } {
     const snap = {
       used: this.used,
       limit: this.limit,
@@ -465,6 +482,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     fakeQuota.used = 0;
     fakeQuota.limit = 7_500;
     fakeQuota.snapshotCount = 0;
+    fakeQuota.currentCount = 0;
     fakeQuota.deltaPerSnapshot = 0;
     fakeQuota.skipFirstDelta = 0;
   };
@@ -687,7 +705,8 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     const res = await backfill.run({ season: SEASON_YEAR, limit: 100 });
     expect(res.totalProcessed).toBe(2);
     expect(mySeason(res).processed).toBe(2);
-    // 두 경기 처리 후 매 경기 앞 재확인에서 자율 상한에 도달 → daily_cap
+    // 진입 확인에서 take 가 예산(2경기)으로 잘린다 → 2경기 처리 후 루프가 끝나고,
+    // 끝 경로 판정(limitedBy=budget · used<limit)에서 daily_cap — 매 경기 앞 재확인은 두 번 다 통과
     expect(res.overallStopped).toBe('daily_cap');
     expect(mySeason(res).stoppedReason).toBe('daily_cap');
   }, 180_000);
@@ -809,6 +828,9 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     // backfillJob row 자체가 생성되지 않음 (오케스트레이터가 continue 로 통과)
     const job = await prisma.backfillJob.findUnique({ where: { competitionSeasonId } });
     expect(job).toBeNull();
+    // 대상 0 인 대회시즌은 사용량 확인(/status)을 하지 않는다 — 기록 없는 확인도, 기록도
+    expect(fakeQuota.currentCount).toBe(0);
+    expect(fakeQuota.snapshotCount).toBe(0);
   }, 60_000);
 
   // ================================================================================================
@@ -831,8 +853,9 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     // backfillJob 안 만듦
     const job = await prisma.backfillJob.findUnique({ where: { competitionSeasonId } });
     expect(job).toBeNull();
-    // quota snapshot 도 안 부름
+    // 사용량 확인도 안 부름 — 기록(snapshot) · 기록 없는 확인(current) 둘 다
     expect(fakeQuota.snapshotCount).toBe(0);
+    expect(fakeQuota.currentCount).toBe(0);
     // 시도 기록도 안 남김
     const untouched = await prisma.match.count({
       where: { id: { in: [...matchIdByFx.values()] }, detailAttempts: 0 },
@@ -891,7 +914,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
   it('11. 매 경기 앞 재확인 — used 가 진행 중 자율 상한 넘기면 그 경기 앞에서 daily_cap', async () => {
     await resetSeason();
     // 시즌 진입 시 used=5000 (자율 상한 5700 대비 700 여유 · 예산상 175 경기치)
-    // 시즌 진입 snapshot 은 skip. 매 경기 앞 snapshot 마다 used 를 232 씩 늘림 →
+    // 시즌 진입 확인(current) 은 skip. 매 경기 앞 확인(current) 마다 used 를 232 씩 늘림 →
     //   경기1 앞: used=5000 (통과, 5700-5000=700 >= 4) → 이후 5232
     //   경기2 앞: used=5232 (통과, 5700-5232=468 >= 4) → 이후 5464
     //   경기3 앞: used=5464 (통과, 5700-5464=236 >= 4) → 이후 5696
@@ -904,7 +927,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     //   확인: 3경기 처리, 4번째 경기 앞에서 중단
     fakeQuota.used = 5_000;
     fakeQuota.limit = 7_500;
-    fakeQuota.skipFirstDelta = 1; // 시즌 진입 snapshot 은 delta 적용 안 함
+    fakeQuota.skipFirstDelta = 1; // 시즌 진입 확인(current) 은 delta 적용 안 함
     fakeQuota.deltaPerSnapshot = 233;
 
     const res = await backfill.run({ season: SEASON_YEAR, limit: 100 });
