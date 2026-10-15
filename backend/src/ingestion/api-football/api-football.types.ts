@@ -185,6 +185,7 @@ export interface ApiPlayerSeason {
 /**
  * `/fixtures/lineups?fixture=` — 팀당 한 항목, 총 2개.
  * `coach.id` 는 null 일 수 있다 (실측). substitutes 의 `grid` 는 항상 null (벤치).
+ * `player.id` 는 null 이 온다 (실측 2026-10-15 fixture 1635690 교체 명단, name·number·pos 는 있음) — 판정은 `knownApiPlayerId`.
  */
 export interface ApiFixtureLineupItem {
   team: {
@@ -203,7 +204,7 @@ export interface ApiFixtureLineupItem {
   formation: string;
   startXI: Array<{
     player: {
-      id: number;
+      id: number | null;
       name: string;
       number: number;
       pos: string | null;
@@ -212,7 +213,7 @@ export interface ApiFixtureLineupItem {
   }>;
   substitutes: Array<{
     player: {
-      id: number;
+      id: number | null;
       name: string;
       number: number;
       pos: string | null;
@@ -274,6 +275,7 @@ export interface ApiFixtureStatisticsItem {
  * `/fixtures/players?fixture=` — 팀당 한 항목, 총 2개.
  * `players[].statistics` 는 실측상 길이 1 배열이지만 배열이다.
  * API 오타(`commited`)는 파일 규칙대로 그대로 둔다.
+ * `players[].player.id` 는 0 이 온다 (실측 2026-10-15 fixture 1635690 — lineups 에서 null 인 같은 선수) — 판정은 `knownApiPlayerId`.
  */
 export interface ApiFixturePlayersItem {
   team: {
@@ -284,7 +286,8 @@ export interface ApiFixturePlayersItem {
   };
   players: Array<{
     player: {
-      id: number;
+      /** 실측 0 이 온다 — lineups 에서 null 인 같은 선수가 여기서는 0 (fixture 1635690). 0 은 실제 id 가 아니다. 판정은 knownApiPlayerId */
+      id: number | null;
       name: string;
       photo: string;
     };

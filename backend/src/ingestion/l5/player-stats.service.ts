@@ -15,6 +15,7 @@
  * ## Player 최소 upsert (D9)
  *   lineups 응답과 다른 선수 집합이 올 수 있다 (예: /fixtures/players 에만 있는 선수).
  *   여기서 나오는 선수는 다 최소 upsert 한다. 트랜잭션 밖.
+ *   예외: player.id 가 null·0 인 선수는 players·player_match_stats 에 넣지 않는다 (knownApiPlayerId).
  *
  * ## 파싱 규칙 (D6)
  *   · rating: string|null → Decimal? — null 유지 (미출장·5분 이하). 절대 0 아님
@@ -34,6 +35,7 @@ import { ApiFootballClient } from '../api-football/api-football.client.js';
 import { batchUpsert } from '../../prisma/batch-upsert.js';
 import { promoteIfAllDetailsChecked } from '../../common/match-detail-status.js';
 import type { ApiFixturePlayersItem } from '../api-football/api-football.types.js';
+import { knownApiPlayerId } from '../api-football/api-player-id.js';
 
 export interface L5PlayerStatsResult {
   ok: boolean;
@@ -43,6 +45,8 @@ export interface L5PlayerStatsResult {
   players?: number;
   missingTeams?: number[];
   promoted?: boolean;
+  /** player.id 가 없어(null·0) players·player_match_stats 에서 뺀 선수 수 */
+  skippedNoId?: number;
 }
 
 /** null → 0 · number → 그대로 (정수 절삭) */
@@ -135,7 +139,10 @@ export function parsePlayerStats(
       continue;
     }
     for (const p of it.players) {
-      const playerId = ctx.playerIdByApi.get(p.player.id);
+      // id 가 null·0 이면 행을 만들지 않는다 — map 에 0 이 들어 있어도 막는 이중 방어
+      const apiPlayerId = knownApiPlayerId(p.player.id);
+      if (apiPlayerId === null) continue;
+      const playerId = ctx.playerIdByApi.get(apiPlayerId);
       if (playerId === undefined) continue;
       const stat = p.statistics[0];
       if (!stat) continue;
@@ -301,21 +308,44 @@ export class L5PlayerStatsService {
       const promoted = opts.promote
         ? await promoteIfAllDetailsChecked(this.prisma, matchId)
         : { promoted: false };
-      return { ok: true, hasPlayerStats: false, players: 0, missingTeams: [], promoted: promoted.promoted };
+      return {
+        ok: true,
+        hasPlayerStats: false,
+        players: 0,
+        missingTeams: [],
+        promoted: promoted.promoted,
+        skippedNoId: 0,
+      };
     }
 
     // 4) Player 최소 upsert (트랜잭션 밖. D9: lineups 와 다른 선수 집합이 올 수 있다)
+    //    id 가 null·0 인 선수는 뺀다 — 0 을 쓰면 서로 다른 무명 선수가 한 행으로 합쳐진다
     const playerRowsMap = new Map<number, { api_player_id: number; name: string; photo_url: string | null }>();
+    let skippedNoId = 0;
+    const skippedNames: string[] = [];
     for (const it of items) {
       for (const p of it.players) {
-        if (!playerRowsMap.has(p.player.id)) {
-          playerRowsMap.set(p.player.id, {
-            api_player_id: p.player.id,
+        const apiPlayerId = knownApiPlayerId(p.player.id);
+        if (apiPlayerId === null) {
+          skippedNoId++;
+          skippedNames.push(p.player.name);
+          continue;
+        }
+        if (!playerRowsMap.has(apiPlayerId)) {
+          playerRowsMap.set(apiPlayerId, {
+            api_player_id: apiPlayerId,
             name: p.player.name,
             photo_url: p.player.photo ?? null,
           });
         }
       }
+    }
+    if (skippedNoId > 0) {
+      const shown = skippedNames.slice(0, 5).join(', ');
+      const more = skippedNoId > 5 ? ` 외 ${skippedNoId - 5}명` : '';
+      this.logger.warn(
+        `L5 player-stats: match id=${matchId} apiFixtureId=${apiFixtureId} — player.id 없는(null·0) 선수 ${skippedNoId}명 skip (${shown}${more})`,
+      );
     }
     const playerIdByApi = new Map<number, number>();
     const playerRows = [...playerRowsMap.values()];
@@ -432,6 +462,7 @@ export class L5PlayerStatsService {
       players: rows.length,
       missingTeams,
       promoted: promoted.promoted,
+      skippedNoId,
     };
   }
 }

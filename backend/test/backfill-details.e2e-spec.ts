@@ -33,6 +33,7 @@ import { Test } from '@nestjs/testing';
 import type { INestApplicationContext } from '@nestjs/common';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { ApiFootballClient } from '../src/ingestion/api-football/api-football.client.js';
+import { knownApiPlayerId } from '../src/ingestion/api-football/api-player-id.js';
 import { QuotaService } from '../src/ingestion/api-football/quota.service.js';
 import { ApiQuotaExhaustedError } from '../src/ingestion/api-football/api-football.errors.js';
 import { MatchDetailsBackfillService } from '../src/ingestion/backfill/match-details-backfill.service.js';
@@ -489,14 +490,22 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     const playerIds = new Set<number>();
     for (const fx of REAL_FX) {
       for (const it of loadLineups(fx)) {
-        for (const e of [...it.startXI, ...it.substitutes]) playerIds.add(e.player.id);
+        for (const e of [...it.startXI, ...it.substitutes]) {
+          const k = knownApiPlayerId(e.player.id);
+          if (k !== null) playerIds.add(k);
+        }
       }
       for (const e of loadEvents(fx)) {
-        if (e.player.id !== null) playerIds.add(e.player.id);
-        if (e.assist.id !== null) playerIds.add(e.assist.id);
+        const kp = knownApiPlayerId(e.player.id);
+        if (kp !== null) playerIds.add(kp);
+        const ka = knownApiPlayerId(e.assist.id);
+        if (ka !== null) playerIds.add(ka);
       }
       for (const it of loadPlayers(fx)) {
-        for (const p of it.players) playerIds.add(p.player.id);
+        for (const p of it.players) {
+          const k = knownApiPlayerId(p.player.id);
+          if (k !== null) playerIds.add(k);
+        }
       }
     }
     if (playerIds.size > 0) {

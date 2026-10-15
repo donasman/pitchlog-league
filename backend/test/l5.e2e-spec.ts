@@ -26,6 +26,7 @@ import { Test } from '@nestjs/testing';
 import type { INestApplicationContext } from '@nestjs/common';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { ApiFootballClient } from '../src/ingestion/api-football/api-football.client.js';
+import { knownApiPlayerId } from '../src/ingestion/api-football/api-player-id.js';
 import { L5TeamStatsService } from '../src/ingestion/l5/team-stats.service.js';
 import { L5PlayerStatsService } from '../src/ingestion/l5/player-stats.service.js';
 import {
@@ -219,7 +220,10 @@ describe('L5 팀 통계·선수 통계 (e2e, 픽스처 기반)', () => {
     const playerIds = new Set<number>();
     for (const fx of [APIFX_A, APIFX_B, APIFX_C]) {
       for (const it of loadPlayers(fx)) {
-        for (const p of it.players) playerIds.add(p.player.id);
+        for (const p of it.players) {
+          const k = knownApiPlayerId(p.player.id);
+          if (k !== null) playerIds.add(k);
+        }
       }
     }
     if (playerIds.size > 0) {
