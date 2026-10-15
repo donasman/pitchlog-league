@@ -546,7 +546,7 @@ describe('MatchDetailsBackfillService (e2e, 픽스처 기반)', () => {
     const playerIds = new Set<number>();
     for (const fx of REAL_FX) {
       for (const it of loadLineups(fx)) {
-        for (const e of [...it.startXI, ...it.substitutes]) {
+        for (const e of [...(it.startXI ?? []), ...(it.substitutes ?? [])]) {
           const k = knownApiPlayerId(e.player.id);
           if (k !== null) playerIds.add(k);
         }
