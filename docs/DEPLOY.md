@@ -68,8 +68,8 @@ bash /opt/pitchlog/infra/ec2/deploy.sh
 
 인자가 없으면 `main` 기준 (`deploy.sh:22` `REF="${1:-main}"`). `npm ci` → `prisma generate` → `nest build` → systemd 재시작 → health 30초 대기.
 
-> ⚠️ **10-07 기준 운영 배포는 `dev` 다** — `main` 은 09-07(#4) 에 멈춰 있고 `infra/ec2/` 도 없다(`infra/README.md` 뿐).
-> `dev` → `main` 릴리즈 PR 을 한 번도 내지 않았으므로 `bash /opt/pitchlog/infra/ec2/deploy.sh dev` 로 배포한다.
+> ⚠️ **운영 배포는 `dev` 다** (09-16~) — `main` 은 09-07(#4) 에 멈춰 있다가 10-16 첫 릴리즈(#144 · 태그 `v2-phase2-scheduler`)로
+> `dev` 를 따라왔지만 배포 기준은 바꾸지 않았다. `bash /opt/pitchlog/infra/ec2/deploy.sh dev` 로 배포한다.
 > Vercel Production Branch 도 `dev` (아래 Vercel 절 4번).
 >
 > **`deploy.sh` 는 마이그레이션을 적용하지 않는다** (`prisma migrate` 단계 없음). 새 마이그레이션이 든 판은

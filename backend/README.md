@@ -22,7 +22,7 @@ NestJS 기반 핵심 서비스. 외부 축구 API 수집, REST API, 라이브 �
 | 스케줄러 | `src/scheduler/` 잡 5개 — 백필 워커 · L2 매일 · L1 매주 · 라이브 폴러 · 쿼터 스냅숏. **전부 기본 꺼짐** (`SCHEDULER_ENABLED` 마스터 + 잡별 스위치 4개 `BACKFILL_WORKER_ENABLED`·`L2_DAILY_ENABLED`·`L1_WEEKLY_ENABLED`·`LIVE_POLLER_ENABLED` · `docs/DEPLOY.md`). 쿼터 스냅숏은 개별 스위치가 없다 — 마스터가 켜지고 API 키가 있으면 등록 (`scheduler.module.ts`). `api_quota_snapshots` INSERT(`QuotaService.snapshot()`)는 이 하루 1회 잡(`50 23 * * *` UTC)과 CLI(`cli/ingest.ts`)에만 남았고, 상세 백필은 기록 없는 `current()` 를 쓴다(#141). 이 테이블을 읽는 코드는 없다. 쿼터 판단(라이브 폴러·상세 백필)은 `/status` 의 used 로 한다 |
 | 배포 | EC2 systemd (`infra/ec2/`) · 프론트는 Vercel `/api` rewrite. 백업은 EC2 타이머 → S3 매일 + PC 수동 `npm run backup` |
 | 테스트 | 10-16 정적 grep(`ce2ce1f`): 단위 34파일 304건(`it(` · `it.each` 3 별도) · e2e 21파일 221건(`it` 202 + `it.skipIf` 19). 원격 DB 가드 11파일 — 아래 "검증" |
-| 남은 것 | `dev` → `main` 첫 릴리즈 PR + 태그 `v2-phase2-scheduler` · 운영 DB `api_player_id=0` 선수 행 정리 · L6 주기 잡 · 알림 · 관측 후속 백로그 (`docs/NEXT_STEPS.md` 1장 "10-16 기준 남은 것") |
+| 남은 것 | 운영 DB `api_player_id=0` 선수 행 정리 · L6 주기 잡 · 알림 · 관측 후속 백로그 (`docs/NEXT_STEPS.md` 1장 "10-16 기준 남은 것") |
 
 ## 실행
 

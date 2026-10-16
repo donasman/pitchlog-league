@@ -1,6 +1,6 @@
 # PitchLog 다음 작업 순서
 
-> 갱신: 2026-10-16 (10-16 PR #141 까지 반영 — **Phase 2 관문 통과(10-15)** · 관측 중 운영 수정 #138~#141 · Pro 유지 결정(10-15) · 10-16 이력 재작성으로 문서 속 SHA 교체) ·
+> 갱신: 2026-10-16 (10-16 PR #144 까지 반영 — **Phase 2 관문 통과(10-15) · `main` 첫 릴리즈 + 태그 `v2-phase2-scheduler`(10-16)** · #143 원정 벤치 표시 · · 관측 중 운영 수정 #138~#141 · Pro 유지 결정(10-15) · 10-16 이력 재작성으로 문서 속 SHA 교체) ·
 > 2026-10-08 (10-08 PR #135 까지 반영 — 운영 로그인 개시 · 운영 DB 마이그레이션 · L2 missingTeams 자가 복구 · EC2 env) ·
 > 2026-10-07 (09-28 PR #130 까지 — 배포 · 백필-2 · 스케줄러 · L4 1~4판 · 로그인) · 3차 개정(09-07 중간 점검 — `PLAN_REVIEW.md`) 위에 덧쓴다.
 > 근거 문서: `INGESTION_STRATEGY.md` · `SCHEMA_DESIGN.md` · `DATA_RULES.md` ·
@@ -23,7 +23,7 @@
 | 프론트엔드 | 🚧 실 API 연결 완료 — 대회·팀·경기·순위·선수·통계·경기 상세·검색·어시스턴트. 09-21~28 추가: 대회 탭 재구성·컵 페이지(#97·#98) · 라운드 네비게이션(#101) · **대진표 탭**(#104 · `UCLKnockoutPage` 흡수) · **라이브 15초 폴링**(#123 · `/api/live`) · `/matches` 요약 칸(#124) · 이름·라운드·국가·포지션 언어별 표시(#126) · **Google 로그인 + 서버 저장 즐겨찾기**(#129 · 로컬 저장 폐기 · **운영 개시 10-08** — preview 실측 + 운영 사용자 확인) · 첫 로드 전·실패 뒤 토글이 서버 목록을 지우던 결함 수정(10-08 #134 · `loadState`·`loadError`·`actionError`). ~~**알림만 Mock** (`NotificationContext` 가 `@/mocks/notifications` 직접 import)~~ → **알림 백엔드는 여전히 없다.** 10-13 #137(`abb1a38`)부터 실 API 모드(`VITE_USE_MOCK=false` · 운영)에서는 헤더 종 버튼·패널을 렌더하지 않고 알림 목록은 `[]`, `/notifications/settings` 는 `NotImplementedState`("아직 백엔드에 없는 데이터입니다 (알림)"). Mock 모드만 그대로 `@/mocks/notifications` 를 읽는다 (`NotificationContext.jsx` `isNotificationsEnabled = USE_MOCK`). 테스트 ~~31파일 · 정적 grep 373건 (10-07)~~ → 10-08 정적 grep 32파일 · `it(` 391건 + `it.each` 10 (#134 `favoritesState.test.js` 추가 · 같은 셈법으로 10-07 시점 `2cc6af7` 은 31파일 · `it(` 370). `AuthContext`·`FavoritesContext` `.test.jsx` 2파일은 jsdom 미도입으로 `describe.skip` |
 | **백엔드** | 🚧 (10-15~16) **Phase 2 관문 통과**(10-15 사용자 판정 — 10장 "Phase 2 관문 실측" 소절) · 관측 중 드러난 운영 버그 넷 수정 — **ID 없는 선수 건너뜀**(#138 · `knownApiPlayerId`) · **상세 백필 커서 제거 + 경기 단위 재시도 상한 3**(#139 · `matches.detail_attempts`·`detail_last_attempt_at` · 마이그레이션 `20261015120000_match_detail_attempts` 운영 DB 10-15 적용) · **선수 명단 없는 라인업 → `has_lineups=false`**(#140) · **쿼터 확인 소음 제거**(#141 · `QuotaService.current()` — INSERT 없음). Prisma 모델 수 변화 없음(컬럼 2개 추가). (10-08) **L2 missingTeams 자가 복구**(#135 — 현재 시즌만 그 대회시즌 `/teams` 1콜 재수집 · `L0Service.refreshTeamsForSeason` 위임 · 결과 `teamsRefreshed`) · 즐겨찾기 동시 PUT 사용자 단위 `pg_advisory_xact_lock` 직렬화(#134) · **운영 DB 마이그레이션 적용**(백업 `pitchlog-20261008-1500.dump` 18.7 MB 뒤 `migrate deploy` 미적용 3개 · up to date). (10-07 갱신) 엔드포인트 **17개** (조회 GET 12 · `GET /api/live` · `GET/PUT /api/me/favorites` · `POST /api/assistant` · `/health` 포함) · Prisma **30**모델 · **스케줄러 잡 5개**(`backfill-worker` · `l2-daily` · `l1-weekly` · `live-poller` · `quota-snapshot`) · **백필-2 완료**(09-24 서버 실측 · `932def1` 본문) · **L4 1~3판**(관측 · 쓰기 · FT 즉시 상세) · **Supabase Auth JWT**(#129). 아래는 09-17 기준 적재 수치 — Nest 12 · ~~Prisma 29모델~~ · API 클라이언트 · 배치 upsert · **L0**(~~17대회 · 83대회시즌 · 팀 1,888~~ → **19대회 · 93대회시즌 · 팀 2,110** · 2026-09-17 확장) · **조회 API 10개**(대회·팀·경기·순위·**선수·통계 랭킹 09-09 PR #34·#36**) · **L1 스쿼드**(155팀, 관문 테스트 통과) · **L2 5시즌**(~~라운드 1,070 · 경기 9,787 · 순위 654~~ → **경기 13,724 · detail_eligible 13,710** · 2026-09-17 전 시즌 재적재) · **L6 시즌 집계**(선수 통계 30,925 · 랭킹 2,335 · 팀 통계 489 · 선수 13,591) · `backfill_jobs` 30 DONE |
 | CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, ~~단위 53 · e2e 10파일 85건~~ → ~~10-07 정적 grep: 단위 31파일 288건 · e2e 20파일 206건(`it` 187 + `it.skipIf` 19)~~ → ~~10-08 정적 grep: 단위 31파일 289건(`it(`) · e2e 20파일 210건(`it` 191 + `it.skipIf` 19)~~ → 10-16 정적 grep(`ce2ce1f`): 단위 34파일 304건(`it(`) · e2e 21파일 221건(`it` 202 + `it.skipIf` 19) · e2e 원격 DB 가드 11파일 — #138 `no-id-players` 추가) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` · 10-08 원격 브랜치 정리 — `dev`·`main` 만 남음 (워크트리 `pitchlog-auth`·`pitchlog-l4` 삭제) · **10-16 이력 재작성** — 커밋 메시지의 Claude 표기 줄(`Co-Authored-By: Claude …` · `Claude-Session: …`)을 지우고 저자가 Claude 인 커밋 8개를 사용자로 바꿔 `dev`·`main` 을 다시 썼다 (파일 내용·트리 불변 · 독립 검증 484쌍 불일치 0). **모든 커밋 SHA 가 바뀌었다** — 이 문서의 SHA 는 새 값이다. 이후 커밋·PR 에 attribution 줄을 붙이지 않는다 |
-| 배포 | ✅ 운영 중 (09-15~16 PR #68·#69·#71·#81) — **백엔드 AWS EC2**(t3.small · 서울 · systemd · Docker 안 씀) **+ 프론트 Vercel**(`/api/*` rewrite 프록시 → same-origin). 배포 브랜치는 **`dev`** — `dev` → `main` 릴리즈 PR 은 아직 한 번도 내지 않았다 (10-07 사용자 확인). Railway·Cloudflare Pages 는 폐기 (14장). 10-07 EC2 가 #129 이후 빌드에서 `SUPABASE_URL must be a URL address` 재시작 루프 → `/etc/pitchlog/backend.env` 에 `SUPABASE_URL` 추가로 복구 · 10-08 #133 템플릿에 필수 줄 + `deploy.sh` 는 서비스가 health 통과할 때만 `dist.prev` 갱신. 10-08 Vercel env `VITE_SUPABASE_*`(Production·Preview) · Supabase Google provider·Redirect URLs (`DEPLOY.md` "Google 로그인" 절). 10-15~16 `deploy.sh dev` 로 #138(`3857065`) · #139(`e6c09a6` — 운영 DB 마이그레이션 `20261015120000_match_detail_attempts` 적용 **뒤** 배포) · #140(`6fb12ac`) · #141(`ce2ce1f` · 10-16 00:22 UTC · health OK · 마이그레이션 없음) 반영. 10-16 이력 재작성 뒤 EC2 를 새 이력으로 1회 맞췄다 |
+| 배포 | ✅ 운영 중 (09-15~16 PR #68·#69·#71·#81) — **백엔드 AWS EC2**(t3.small · 서울 · systemd · Docker 안 씀) **+ 프론트 Vercel**(`/api/*` rewrite 프록시 → same-origin). 배포 브랜치는 **`dev`** — `main` 첫 릴리즈는 10-16 #144(태그 `v2-phase2-scheduler`)이고 배포 기준은 그대로 `dev` 다. Railway·Cloudflare Pages 는 폐기 (14장). 10-07 EC2 가 #129 이후 빌드에서 `SUPABASE_URL must be a URL address` 재시작 루프 → `/etc/pitchlog/backend.env` 에 `SUPABASE_URL` 추가로 복구 · 10-08 #133 템플릿에 필수 줄 + `deploy.sh` 는 서비스가 health 통과할 때만 `dist.prev` 갱신. 10-08 Vercel env `VITE_SUPABASE_*`(Production·Preview) · Supabase Google provider·Redirect URLs (`DEPLOY.md` "Google 로그인" 절). 10-15~16 `deploy.sh dev` 로 #138(`3857065`) · #139(`e6c09a6` — 운영 DB 마이그레이션 `20261015120000_match_detail_attempts` 적용 **뒤** 배포) · #140(`6fb12ac`) · #141(`ce2ce1f` · 10-16 00:22 UTC · health OK · 마이그레이션 없음) 반영. 10-16 이력 재작성 뒤 EC2 를 새 이력으로 1회 맞췄다 |
 | 백업 | ✅ 백업·복원 리허설 2회 통과 — 09-07 L0 만(10,062행) · **09-08 백필-1 직전(22,049행)**. **09-16 자동화** (PR #72) — EC2 systemd 타이머 매일 KST 04:00 `pg_dump` → S3 (수명 주기 30일 · `DEPLOY.md`) · 10-08 운영 마이그레이션 직전 수동 백업 `pitchlog-20261008-1500.dump` (18.7 MB) |
 
 ### 확정된 범위
@@ -173,7 +173,7 @@ search 는 3회만 기록됐고 warm 평균은 2회차 기준이다.
 |---|---|---|
 | 운영 확인 | ~~EC2 의 `LIVE_POLLER_ENABLED` · `L1_WEEKLY_ENABLED` 현재값 — 문서에 기록 없음~~ ✅ 10-16 `/etc/pitchlog/backend.env` — `SCHEDULER_ENABLED` · `BACKFILL_WORKER_ENABLED` · `L2_DAILY_ENABLED` · `L1_WEEKLY_ENABLED` · `LIVE_POLLER_ENABLED` 전부 `true` (`/health` 잡 5개 `enabled:true` 와 일치). ~~`LIVE_POLLER_MODE` · `LIVE_FT_DETAILS_ENABLED`~~ ✅ 10-16 `/etc/pitchlog/backend.env` 확인 — `LIVE_POLLER_MODE=write` · `LIVE_FT_DETAILS_ENABLED=true` · `/health` `livePoller.mode="write"` (00:22 UTC). 같은 파일에서 `BACKFILL_DAILY_CAP=6800` (코드 기본값 5,700 · `env.validation.ts:192`). 라이브 폴러 주기·임계 4종(`LIVE_POLLER_PERIOD_SEC` · `LIVE_POLLER_SLOW_PERIOD_SEC` · `LIVE_POLLER_SLOW_AT` · `LIVE_POLLER_STOP_AT`)은 운영 미지정 = env 기본값 15초 · 30초 · 6000 · 7000 (10-16 같은 파일 확인). ~~`L2_DAILY_ENABLED`~~ (10-08 health `l2Daily=partial` 결과로 운영에서 도는 것 확인) · ~~#129 배포 뒤 `SUPABASE_URL`·Vercel `VITE_SUPABASE_*` 설정 여부~~ ✅ 10-07~08 설정 (`DEPLOY.md` "Google 로그인" 절) | 6번 · `DEPLOY.md` |
 | ~~Phase 2 관문~~ | ~~실제 라운드 1회 무중단 관측 (L4 쓰기 모드)~~ ✅ 10-15 통과 (사용자 판정) | 13장 · 10장 |
-| 릴리즈 | `dev` → `main` 첫 릴리즈 PR + 태그 `v2-phase2-scheduler` — Phase 2 두 기준(5시즌 완전 · 실제 라운드 1회 무중단 관측)을 모두 충족했고 릴리즈·태그는 아직 안 했다. 그 밖의 Phase 태그(`v0-phase0` …)도 없다. 지금 태그는 `v0.5.x` 만 | `CLAUDE.md` Git 전략 · 13장 |
+| 릴리즈 | ~~`dev` → `main` 첫 릴리즈 PR + 태그 `v2-phase2-scheduler`~~ ✅ 10-16 #144 머지(`e970ac8` · merge commit · 427 커밋) + 태그 `v2-phase2-scheduler` push. 운영 배포는 여전히 `dev` 기준. 그 밖의 Phase 태그(`v0-phase0` · `v1-phase1-domain`)는 없다 — 원격 태그는 `v2-phase2-scheduler` 하나(`v0.5.x` 는 로컬에만) | `CLAUDE.md` Git 전략 · 13장 |
 | 운영 데이터 | 운영 DB `api_player_id=0` 선수 행 정리 (#138 범위 밖 · 운영 DB 쓰기 승인 필요). 이 행을 참조하는 테이블 10개, 그중 고아 검사 밖 5개(`match_events.player_id`·`assist_player_id` · `injuries` · `external_ids` · `localized_names`) | 10장 |
 | 수집 방어 | L5 응답 키 누락 방어 · `coach` 키 | 10장 |
 | 프론트 | 한 팀만 라인업이 있는 경기에서 화면 크래시 (ErrorBoundary 없음) | 10장 |
@@ -847,7 +847,7 @@ FT 뒤에 부를 L5 코드가 먼저 있어야 하기 때문이다.
 ### Phase 2 관문 실측 — 실제 라운드 1회 무중단 관측 (2026-10-15 통과)
 
 **판정**: 10-15 사용자가 검증 기준 "실제 라운드 1회 무중단 관측" 을 통과로 봤다. Phase 2 의 두 기준(5시즌 완전 · 이 관측)이 모두 충족됐다.
-남은 것은 `dev` → `main` 첫 릴리즈 PR + 태그 `v2-phase2-scheduler` 이고 아직 안 했다 (1장 "10-16 기준 남은 것").
+10-16 `dev` → `main` 첫 릴리즈(#144 · `e970ac8`) + 태그 `v2-phase2-scheduler` 로 Phase 2 를 닫았다.
 
 | 항목 | 실측 |
 |---|---|
@@ -975,9 +975,9 @@ FT 뒤에 부를 L5 코드가 먼저 있어야 하기 때문이다.
 
 | Phase | 이 문서의 단계 → 1장 번호 | 검증 |
 |---|---|---|
-| 0 | 2 → **1장 4번** (배포 재정의) | CI + 배포된 서버의 `/health` — ✅ 1장 4번 완료(09-16). Phase 태그는 `main` 릴리즈가 없어 아직 안 찍었다 |
+| 0 | 2 → **1장 4번** (배포 재정의) | CI + 배포된 서버의 `/health` — ✅ 1장 4번 완료(09-16). 태그 `v0-phase0` 는 찍지 않았다 — `main` 첫 릴리즈가 Phase 2 시점(10-16 #144)이었다 |
 | 1 | 3·4·5·6·9 | ✅ 스쿼드 diff 통과 (09-07). Localization 기반은 1장 7번으로 |
-| 2 | 8·10 → **1장 2~6번** | ✅ **관문 통과 (10-15)** — 백필-2 완료(✅ 09-24) + ~~**실제 라운드 1회 무중단 관측** (L4 — 10-07 미확인)~~ ✅ 10-15 (10장 "Phase 2 관문 실측"). 태그 `v2-phase2-scheduler` 는 `main` 릴리즈가 없어 아직 안 찍었다 |
+| 2 | 8·10 → **1장 2~6번** | ✅ **관문 통과 (10-15)** — 백필-2 완료(✅ 09-24) + ~~**실제 라운드 1회 무중단 관측** (L4 — 10-07 미확인)~~ ✅ 10-15 (10장 "Phase 2 관문 실측"). ✅ 10-16 `main` 첫 릴리즈 #144 + 태그 `v2-phase2-scheduler` |
 | 3 | 7·11 → **1장 1·4·7번** | 백엔드 다운 시 오류 노출 |
 | 4 | — | 최종 API 예산 실측 (6,000콜/일 경고선) |
 | 5 | — | AI 어시스턴트, 숫자 환각 0건 |
