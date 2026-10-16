@@ -97,6 +97,9 @@ feature/<이름>  ──PR──▶  dev  ──(검증 통과 후 PR)──▶ 
 
 **type 목록:** `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`
 
+**attribution 줄을 붙이지 않는다** — `Co-Authored-By: Claude …` · `Claude-Session:` · `Generated with [Claude Code]` 는
+커밋·PR 어디에도 넣지 않는다 (2026-10-16 사용자 결정 · 기존 이력과 PR 본문에서도 지웠다 — `docs/AGENT_RUNS.md` 10-16 행).
+
 **scope 예시:** `domain`, `ingest`, `api`, `frontend`, `db`, `deploy`, `config`
 
 **커밋 예시:**
@@ -279,7 +282,8 @@ API-Football API 키는 환경변수로만 주입한다.
 
 ## 선행조건 완료 현황
 
-- ✅ **S0 — API-Football 구독**: Pro 플랜 구독 완료 (2026-08-27). 26-27 시즌 데이터 접근 가능
+- ✅ **S0 — API-Football 구독**: Pro 플랜 구독 완료 (2026-08-27). 26-27 시즌 데이터 접근 가능.
+  10-15 **Pro(7,500콜/일) 유지** 결정 (실측 하루 최대 2,559콜) · 구독 만료 2026-10-22 — 갱신은 사용자 몫
 - ✅ **S1 — 저장소 이름**: `pitchlog-league`로 확정, 이 저장소가 그 결과물
 - Phase 0 착수를 막던 두 조건 모두 해소됨 → **PR #1(저장소 골격)부터 바로 진행 가능**
 
@@ -289,8 +293,8 @@ API-Football API 키는 환경변수로만 주입한다.
 |---|---|---|---|
 | **0** | 안전장치 + 배포 (~~Railway + Pages~~ → **EC2 + Vercel**, 09-15 결정) | 8-2 DoD 4항목 | ✅ CI·Ruleset·pre-commit·Supabase·스켈레톤 · **배포 운영 중(09-16 · `dev` 기준)** / `main` 릴리즈·Phase 태그 미실시 |
 | **1** | `Competition`/`Team`/`Season` 도메인 + `Player` + 스쿼드 수집 | 스쿼드 diff 테스트 통과 | 🚧 **관문 통과(09-07)** — L0 · L1 스쿼드 · 조회 API · 백업·복원 리허설 / L1 #9~#11 남음 |
-| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | 🚧 백필-1(09-08) · L3·L5(#46) · **백필-2 완료(09-24 확인)** · 스케줄러 L2 매일·L1 매주(#109) · **L4 실시간 코드 4판**(#111~#123) · L2 missingTeams 자가 복구(#135 · 10-08) / 운영 쓰기 모드 확인 · **실제 라운드 1회 무중단 관측** 남음 |
-| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 — 실 API 연결 · 경기 상세 3탭(#47) · 팀 상세 배선 + 홈 득점 순위 + 리그 순위 일반화(#48) · 레이아웃 정렬(#49) · 전역 검색 + 한국어 시드(#50) · 어시스턴트(도구 층 + LLM + 근거 카드) · 어시스턴트 응답 압축(#52) · 로고 적용 · 배포(EC2+Vercel) · 대진표 탭(#104) · 라이브 15초 폴링(#123) · 언어별 이름(#126) · **Google 로그인 + 서버 저장 즐겨찾기**(#129 · 운영 개시 10-08) / **알림**(Mock 만) 남음 |
+| **2** | 경기·라인업·순위 + 스케줄러 + 5개년 백필 → **그 뒤** 실시간 | 5시즌 완전 + 실제 라운드 1회 무중단 관측 | ✅ **관문 통과(10-15)** — 백필-1(09-08) · L3·L5(#46) · **백필-2 완료(09-24 확인)** · 스케줄러 L2 매일·L1 매주(#109) · **L4 실시간 코드 4판**(#111~#123) · L2 missingTeams 자가 복구(#135 · 10-08) · **실제 라운드 1회 무중단 관측**(10-09 18:00 ~ 10-15 00:00 UTC · 재시작 0 · 라이브 finalize 65/65) · 관측 중 운영 수정 #138~#141(10-15~16) / `main` 릴리즈·태그 `v2-phase2-scheduler` 미실시 |
+| **3** | 프론트(신규 디자인) + 배포 파이프라인 | Lighthouse, 백엔드 다운 시 에러 노출 | 🚧 진행 — 실 API 연결 · 경기 상세 3탭(#47) · 팀 상세 배선 + 홈 득점 순위 + 리그 순위 일반화(#48) · 레이아웃 정렬(#49) · 전역 검색 + 한국어 시드(#50) · 어시스턴트(도구 층 + LLM + 근거 카드) · 어시스턴트 응답 압축(#52) · 로고 적용 · 배포(EC2+Vercel) · 대진표 탭(#104) · 라이브 15초 폴링(#123) · 언어별 이름(#126) · **Google 로그인 + 서버 저장 즐겨찾기**(#129 · 운영 개시 10-08) / **알림**(백엔드 없음 — 실 API 모드에서는 숨김 #137 · Mock 모드만 Mock) 남음 |
 | **4** | L6 보정 · 푸시 알림 · 최종 예산 실측 | 6,000콜/일 경고선 | 🚧 L6 수집 코드는 09-08 에 들어갔다(백필-1). 스케줄러는 있으나 L6 주기 잡은 없다 |
 
 > ⚠️ **범위가 바뀌었다 (2026-09-04~06).** 원래 Phase 1은 EPL 단독이었고 Phase 4가 다중화였으나,
@@ -306,9 +310,11 @@ Phase 3은 백엔드보다 먼저 Mock Data 기반으로 진행했다. `services
 **`VITE_USE_MOCK` 으로 `mock.js`·`live.js` 중 하나를 고르는 전환 스위치**다 (09-07).
 대회·팀·경기·순위·선수·통계·경기 상세·전역 검색·어시스턴트·라이브·즐겨찾기는 실 API 를 탄다.
 UCL 대진표는 백엔드 tie 없이 프론트 `buildTies` 가 경기 목록에서 만든다 (#104 · 백엔드 영속화는 2027-02).
-**알림**만 백엔드가 없고 `NotificationContext` 가 Mock 을 직접 읽는다.
+**알림**만 백엔드가 없다 — 10-13 #137 부터 실 API 모드(`VITE_USE_MOCK=false` · 운영)에서는 헤더 종 버튼·패널을 렌더하지 않고
+알림 목록은 `[]`, `/notifications/settings` 는 `NotImplementedState` 다. Mock 모드에서만 `NotificationContext` 가 Mock 을 직접 읽는다.
 배포(09-16)와 과거 4시즌 경기 상세 백필(09-24)은 끝났다 (10-07 문서 동기화).
 운영 Google 로그인·서버 저장 즐겨찾기는 10-08 에 열렸다 (운영 DB 마이그레이션 · Vercel env · Supabase provider — `docs/DEPLOY.md`).
+Phase 2 관문(실제 라운드 1회 무중단 관측)은 10-15 에 통과했다 — 관측 중 드러난 운영 버그 넷은 #138~#141 로 고쳐 10-15~16 에 배포했다 (`docs/NEXT_STEPS.md` 10장 "Phase 2 관문 실측").
 **09-07 중간 점검(`docs/PLAN_REVIEW.md`)** 이 순서를 확정했다 — 기록 백필 먼저, 실시간은 그 뒤.
 현재 진행 상황과 다음 순서는 `docs/NEXT_STEPS.md` 1장이 기준이다.
 
@@ -341,7 +347,7 @@ git checkout dev && git pull origin dev
 
 ```bash
 npm run verify                  # prisma validate · typecheck · lint · 단위 테스트
-npm run test:e2e                # e2e — 원격 DB 가드 10파일: throw 8 (l0·l1·l2·l3·l5·l6·backfill-details·user-favorites) · skipIf 2 (match-detail·search). 로컬 DB·CI 에서만
+npm run test:e2e                # e2e — 원격 DB 가드 11파일: throw 9 (l0·l1·l2·l3·l5·l6·backfill-details·user-favorites·no-id-players) · skipIf 2 (match-detail·search). 로컬 DB·CI 에서만
 
 npm run ingest -- status        # API 쿼터 스냅샷
 npm run ingest -- l0            # 대회·시즌·팀·경기장

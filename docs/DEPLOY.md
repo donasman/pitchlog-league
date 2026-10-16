@@ -76,6 +76,9 @@ bash /opt/pitchlog/infra/ec2/deploy.sh
 > 배포 전에 따로 적용해야 한다 — 09-28 #129 의 `20260928120000_enable_rls_public` · `20260928120100_add_user_favorite_teams`.
 > **10-08 운영 DB 에 적용** — 백업(`pitchlog-20261008-1500.dump` · 18.7 MB) 뒤 `prisma migrate deploy` 로 미적용 3개
 > (`20260910120000_search_indexes` 포함) 적용, `migrate status` = up to date. 아래 "Google 로그인" 절.
+> **10-15 운영 DB 에 적용** — `20261015120000_match_detail_attempts` (#139 · `matches.detail_attempts` · `detail_last_attempt_at` 추가 ·
+> 같은 폴더에 `rollback.sql`). **배포 전에 적용해야 한다** — 새 Prisma client 가 새 컬럼을 SELECT 한다
+> (`match-details-backfill.service.ts:240` `select: { …, detailAttempts }`). 10-15 은 마이그레이션 적용 **후** 배포했다.
 
 ### 6. 확인
 
@@ -134,6 +137,11 @@ bash /opt/pitchlog/infra/ec2/deploy.sh v1-...   # 태그
 ```
 
 이전 dist 는 자동으로 `dist.prev` 로 보존된다 — **배포 시작 시점에 서비스가 health 를 통과할 때만** 갱신하므로, 실패한 배포를 반복해도 마지막 성공본이 남는다 (10-07 결함 실측 · 10-08 PR #133). health 실패 시 스크립트가 롤백 명령을 출력한다.
+
+**원격 이력을 다시 쓴 뒤 첫 배포 (10-16)** — `deploy.sh` 는 `git pull --ff-only origin "$REF"` (`deploy.sh:51`) 라 이력이 다시 쓰이면
+`/opt/pitchlog` 의 옛 커밋에서 fast-forward 할 수 없다. 10-16 `dev`·`main` 이력 재작성(커밋 메시지·저자만 · 파일 내용·트리 불변) 뒤
+첫 배포 전에 서버 저장소를 새 이력으로 한 번 맞췄다 — 파일 내용이 같은 새 커밋으로 `git checkout -B dev <sha>` → `bash /opt/pitchlog/infra/ec2/deploy.sh dev`.
+이 재작성으로 모든 커밋 SHA 가 바뀌었다.
 
 ## 롤백
 
@@ -301,7 +309,7 @@ sudo systemd-analyze verify /etc/systemd/system/pitchlog-backup.timer
 
 ## 백필 워커 (4-b-1)
 
-`MatchDetailsBackfillService` 를 `@Cron` 트리거로 반복 호출해 백필-2 나머지 4시즌을 무인 실행한다. 종료 사유 3분류 (`cap_reached`/`no_targets`/`error`) 로 상태 갱신 · 겹침 방지 · 커서 재개.
+`MatchDetailsBackfillService` 를 `@Cron` 트리거로 반복 호출해 백필-2 나머지 4시즌을 무인 실행한다. 종료 사유 3분류 (`cap_reached`/`no_targets`/`error`) 로 상태 갱신 · 겹침 방지 · ~~커서 재개~~ → 경기 단위 재시도로 재개 (10-15 #139 · 아래 "안전장치").
 
 ### 켜기 (재시작이 곧 스위치)
 
@@ -339,7 +347,7 @@ sudo systemctl restart pitchlog-backend
 - `BACKFILL_WORKER_CRON` (기본 `5 * * * *` · 매시 5분) — 5 필드 cron. 유효성은 부팅 시 `CronJob` 생성자가 검사 (잘못된 값이면 부팅 실패).
 - `BACKFILL_WORKER_LIMIT` (정수 · 기본 200) — 1회 실행당 경기 수 상한 (4콜/경기 · 200 = 800콜).
 - `BACKFILL_WORKER_SEASONS` (쉼표 구분 · 기본 빈 값) — 순회할 시즌 목록. 빈 값이면 현재 시즌만 순회 (초판 동작). 각 항목은 `SEASON_YEARS` (2022~2026) 안 · 중복·빈 항목 금지 · 부팅 시 거부.
-- `BACKFILL_DAILY_CAP` (정수 · 1~7500 · **기본 5700**) — 일일 자율 상한. 하드 한도 7,500 미만으로 지킨다. `/status` 카운터 약 2분 지연 · 실제 사용량은 상한보다 최대 ~320콜 많을 수 있음. **백필-2 기간 운영값 6800** 권장 (여유 380). 변경 절차: `sudoedit /etc/pitchlog/backend.env` → `sudo systemctl restart pitchlog-backend` → 시작 로그 `일일 상한 <N>콜` 확인. 하드 한도 7,500 초과 시 429 로 error 종료하지만 커서(`backfill_jobs.cursor_match_id`)로 재개된다 (손실·중복 없음).
+- `BACKFILL_DAILY_CAP` (정수 · 1~7500 · **기본 5700**) — 일일 자율 상한. 하드 한도 7,500 미만으로 지킨다. `/status` 카운터 약 2분 지연 · 실제 사용량은 상한보다 최대 ~320콜 많을 수 있음. **백필-2 기간 운영값 6800** 권장 (여유 380). 변경 절차: `sudoedit /etc/pitchlog/backend.env` → `sudo systemctl restart pitchlog-backend` → 시작 로그 `일일 상한 <N>콜` 확인. 하드 한도 7,500 초과 시 429 로 멈추지만 ~~커서(`backfill_jobs.cursor_match_id`)로 재개된다 (손실·중복 없음)~~ → 다음 트리거의 대상 SELECT 가 미확정 경기를 다시 고른다 (10-15 #139 · 아래 "안전장치").
 
 ### 백필-2 켜기 (나머지 4시즌 무인)
 
@@ -365,16 +373,20 @@ BACKFILL_WORKER_CRON="*/10 * * * *"
 **완료 판정**: 모든 시즌이 `no_targets` 이고 `total=0` 이면 로그 `all seasons done` 한 줄이 뜨고 `lastOutcome=no_targets` 로 수렴. 이후 재시작 없이 이 상태가 지속되면 백필-2 완료.
 
 **대상 범위**: ~~워커는 `screenCompetitionWhere` (displayOrder ≤ 100) 만 순회 — 리그 5개 + UCL 만. 국내 컵 6개는 워커 순회에서 제외~~ →
-09-17 4층 분리(`19a2ac8`) 이후 워커가 부르는 `MatchDetailsBackfillService` 는 `ingestScopeWhere`(isTracked 전부 · **19대회**)를 순회한다
-(`match-details-backfill.service.ts:130`). 컵·슈퍼컵·UEL·UECL 경기도 `detail_eligible` 이면 워커 대상이다.
+09-17 4층 분리(`e8f6977`) 이후 워커가 부르는 `MatchDetailsBackfillService` 는 `ingestScopeWhere`(isTracked 전부 · **19대회**)를 순회한다
+(`match-details-backfill.service.ts:135-137`). 컵·슈퍼컵·UEL·UECL 경기도 `detail_eligible` 이면 워커 대상이다.
 
 ### 안전장치
 
 - **API_FOOTBALL_KEY 없음** — `SCHEDULER_ENABLED=true` 여도 잡 등록 안 됨 (부팅 경고 · 부팅 성공).
 - **겹침 방지** — 이전 실행 중이면 다음 트리거 skip (in-memory 플래그 · 재시작 시 초기화).
-- **에러 재시도** — `error` 는 다음 트리거에서 재시도 · 커서 (`backfill_jobs.cursor_match_id`) 가 재개 보장.
-- **DAILY_CAP** — 워커가 매 경기 앞에서 `/status` 로 확인 · 5,700 초과 시 자연 중단 (`cap_reached`).
-- **`/status` 스냅숏** — `SCHEDULER_ENABLED=true` 면 매일 UTC 23:50 자동 (개별 스위치 없음).
+- **에러 재시도** — `error` 는 다음 트리거에서 재시도. 재개는 ~~커서 (`backfill_jobs.cursor_match_id`)~~ 가 아니라 대상 SELECT 가 한다 (10-15 #139 · 컬럼은 남았고 상세 백필은 읽지도 쓰지도 않는다):
+  `detail_checked_at IS NULL` 인 종료 경기를 경기마다 `detail_attempts` 로 다시 고른다 — 0회 즉시 · 1회 뒤 1시간 · 2회 뒤 6시간 · 3회 포기 (warn 에 복구 SQL).
+  복구: `UPDATE matches SET detail_attempts = 0, detail_last_attempt_at = NULL WHERE detail_checked_at IS NULL AND detail_attempts >= 3;`
+- **DAILY_CAP** — 워커가 매 경기 앞에서 `/status` 로 확인 · 상한 `min(API 한도, BACKFILL_DAILY_CAP)` (`match-details-backfill.service.ts:206` · 기본 5,700 · 운영 env 6,800) 까지 남은 콜이 한 경기분(4콜) 미만이면 자연 중단 (`cap_reached` · `:293-295`).
+  10-16 #141 부터 대회시즌마다 대상 count 를 먼저 하고 0 이면 확인하지 않는다 (`no_targets`). 확인은 `QuotaService.current()` — 사용량만 보고 기록하지 않는다.
+- **`/status` 스냅숏** — `SCHEDULER_ENABLED=true` 면 매일 UTC 23:50 자동 (개별 스위치 없음). `api_quota_snapshots` INSERT 는 하루 1회 `QuotaSnapshotJob` 과 CLI(`cli/ingest.ts` — `status` 와 l0·l1·l2·l6·backfill·probe-details·probe-players 앞뒤)만 한다 ·
+  읽는 코드는 없다 · 보존 기간 정리 코드 없음 (10-16 #141). `/status` 는 쿼터를 소비하지 않는다 (10-14 하루 13,546회 호출에도 used 가 한도 7,500 미도달).
 
 ## L2 매일 · L1 매주 (4-b-2)
 

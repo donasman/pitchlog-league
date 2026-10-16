@@ -226,12 +226,18 @@ L1 diff 가 매일 `/leagues` 를 다시 보므로 시즌이 생기면 그때 �
 Copa del Rey·Coupe de France는 2026 시즌이 아직 없다.
 `competition_seasons.status`(UPCOMING / IN_PROGRESS / FINISHED)가 이래서 필요하다.
 
-### 6-1. `/status` 의 호출 카운터도 신뢰하지 않는다 (2026-09-07 실측 2회)
+### 6-1. `/status` 의 호출 카운터 — 늦게 반영되지만 쿼터 판단은 이 값으로 한다 (2026-09-07 실측 2회 · 2026-10-16 정정)
 
 L0 가 99콜을 보낸 직후 `/status` 의 `requests.current` 는 22 만큼(1회차), 11 만큼(2회차) 늘어 있었다.
 지연 반영으로 보이며 얼마나 늦는지는 모른다.
-쿼터 판단(경고선 6,000콜/일)은 **클라이언트가 직접 센 콜 수**(`ApiFootballClient.callCount` → `ingestion_runs.calls_used`)로 한다.
-`/status` 값은 `api_quota_snapshots` 에 참고로만 저장한다.
+~~쿼터 판단(경고선 6,000콜/일)은 **클라이언트가 직접 센 콜 수**(`ApiFootballClient.callCount` → `ingestion_runs.calls_used`)로 한다.~~
+~~`/status` 값은 `api_quota_snapshots` 에 참고로만 저장한다.~~
+
+**2026-10-16 정정 — 예측이 틀렸고 코드가 맞았다.** 코드의 쿼터 판단은 라이브 폴러·상세 백필 모두 **`/status` 의 used** 로 한다 —
+클라이언트 자체 콜 카운트가 아니다. 왜 틀렸나: **`/status` 는 쿼터를 소비하지 않아** 매 경기 앞에서 불러도 예산이 줄지 않는다 —
+10-14 운영 하루에 `/status` 를 13,546회 불렀는데도 used 가 한도 7,500 에 닿지 않았다 (EC2 journal 실측).
+`api_quota_snapshots` 는 이 판단에 쓰이지 않는다 — 읽는 코드가 없고, INSERT 는 하루 1회 `QuotaSnapshotJob` 과 CLI(`cli/ingest.ts` — `status` 와 l0·l1·l2·l6·backfill·probe-details·probe-players 앞뒤)만
+한다 (`SCHEMA_DESIGN.md` 3-6). 라이브 폴러의 강등·정지 임계값은 `INGESTION_STRATEGY.md` 3-5.
 
 ---
 

@@ -205,7 +205,7 @@ export async function fetchStandings(competitionSlug, _season) {
  *
  * Mock 도 실 API 와 같은 shape 을 만들어 `normalizePlayerDetail` 을 통과시킨다 —
  * 정규화 이전 형태를 페이지가 소비하면 두 분기의 계약이 갈리고, 컴포넌트가 필드 존재
- * 여부로 분기 판정을 하게 된다 (dataStatus 판단이 컴포넌트로 흩어졌던 c9d9b54 회귀 배경).
+ * 여부로 분기 판정을 하게 된다 (dataStatus 판단이 컴포넌트로 흩어졌던 044d0ae 회귀 배경).
  * @param {string} slug
  */
 export async function fetchPlayerDetail(slug) {

@@ -10,6 +10,7 @@
 > **2026-10-07 갱신** — 09-28 PR #129 까지 반영: L4 라이브(1장 L4 · 3장) · 스케줄러(L2 매일 #14 · L6 주기) ·
 > 조회 API 구현 목록 · 사용자 API(2장 "사용자") · AI 도구(6장).
 > **2026-10-08 갱신** — PR #135 L2 missingTeams 재수집(1장 L2) · L2 `updateWhere` 실제 조건 · #21 콜 수 · `/competitions`·`/matches` 범위(2장).
+> **2026-10-16 갱신** — PR #138~#141: L3 #18 · L5 #29 ID 없는 선수 · 명단 없는 라인업 · 상세 백필 재시도(5장 #56) · 쿼터 판단 실제(5장 #54 · L4) · 운영 쓰기 모드 확인(L4) · Phase 2 관문 통과 10-15(7장).
 
 ---
 
@@ -118,15 +119,15 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 
 | # | 기능 | API | 콜 수 | 비고 |
 |---|---|---|---|---|
-| 18 | 라인업 수집 | `/fixtures/lineups?fixture=` | 경기당 1 | 보통 킥오프 60분 전 공개 |
+| 18 | 라인업 수집 | `/fixtures/lineups?fixture=` | 경기당 1 | 보통 킥오프 60분 전 공개. ✅ 09-10 구현(#46 · `l3/lineups.service.ts`). ✅ 10-15 수정(#138 id 없는 선수 · #140 명단 없는 라인업 · `ingestion/api-football/api-player-id.ts`) — #138 `player.id` 가 없는(`knownApiPlayerId` 가 null — 양의 정수가 아닌) 엔트리는 저장하지 않고 건너뜀(warn 1줄) · #140 모든 팀의 선수가 0명(`startXI`·`substitutes` 키 없음 · 예: fixture 1485809)이면 `has_lineups=false`(미제공)로 마감 |
 | 19 | 라인업 폴링 (미공개 시 재시도) | 같음 | 경기당 1~5 | 공개될 때까지 5분 주기 |
 | 20 | 결장자 대조 | 부상 데이터와 결합 | 0 | 파생 |
 
 ### L4 — 실시간 · 10~15초
 
-> **시점: 백필-2 뒤 (2026-09-07).** 폴링과 백필은 같은 일일 한도를 쓴다. L5 의 확정 코드가 백필-2 로 먼저 검증되고, L4 는 그것을 하루 지연 대신 10초 지연으로 부른다 (`INGESTION_STRATEGY` 6장 머리).
+> **시점: 백필-2 뒤 (2026-09-07).** 폴링과 백필은 같은 일일 한도를 쓴다. L5 의 확정 코드가 백필-2 로 먼저 검증되고, L4 는 그것을 하루 지연 대신 ~~10초 지연~~ (설계 당시 값) → **정상 주기 15초**(`LIVE_POLLER_PERIOD_SEC=15` · `env.validation.ts:229` · 운영 미지정 = 기본값)로 부른다 (`INGESTION_STRATEGY` 6장 머리).
 >
-> **구현 (09-24~27 · `ingestion/l4/` · `scheduler/live-poller.job.ts`)** — 1판 관측(#111 · #113) · 2판 쓰기 + 역행 가드 + `/api/live`(#115 · #116) · 3판 FT 즉시 상세(#122). 운영 스위치는 `LIVE_POLLER_ENABLED` · `LIVE_POLLER_MODE=observe|write`(기본 observe) · `LIVE_FT_DETAILS_ENABLED` (`DEPLOY.md` L4 절). 운영값은 10-07 미확인.
+> **구현 (09-24~27 · `ingestion/l4/` · `scheduler/live-poller.job.ts`)** — 1판 관측(#111 · #113) · 2판 쓰기 + 역행 가드 + `/api/live`(#115 · #116) · 3판 FT 즉시 상세(#122). 운영 스위치는 `LIVE_POLLER_ENABLED` · `LIVE_POLLER_MODE=observe|write`(기본 observe) · `LIVE_FT_DETAILS_ENABLED` (`DEPLOY.md` L4 절). ~~운영값은 10-07 미확인~~ → ✅ 10-16 **운영 쓰기 모드 확인** — EC2 `/etc/pitchlog/backend.env` `LIVE_POLLER_MODE=write` · `LIVE_FT_DETAILS_ENABLED=true` · `/health` `livePoller.mode="write"` (00:22 UTC). 10-15 Phase 2 관문 통과 — 관측 창(10-09 18:00 ~ 10-15 00:00 UTC)에서 라이브 finalize 65/65 (7장).
 
 | # | 기능 | API | 콜 수 | 비고 |
 |---|---|---|---|---|
@@ -140,6 +141,9 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 - ~~#21은 대회 수와 무관하게 **1콜 고정**이다.~~ `ids=` 방식이라 tick 마다 **폴링 창 안 경기 전부**(kickoff now-4h ~ now+5m ·
   FT 관측 후 10분 유지 · `live-window.ts` `selectDbTargets`) + 창 안 probe 경기를 합쳐 20개 청크당 `/fixtures?ids=` 1콜,
   `fetchStatus` 인 tick 은 `/status` 1콜이 더 붙는다 (`live-observer.service.ts` tick 흐름 4·5). 창이 비면 0콜.
+  ⚠️ #141 판 실측(10-16 머지) — **`/status` 는 쿼터를 소비하지 않는다** (10-14 하루 13,546회 호출에도 used 가 7,500 에 닿지 않았다). 위 `/status` 1콜은 쿼터 예산에서 빠진다.
+- 강등·정지 판단은 클라이언트 자체 콜 카운트가 아니라 `/status` 의 used 다. 운영 미지정(env 기본값) — 정상 `LIVE_POLLER_PERIOD_SEC=15` ·
+  used ≥ `LIVE_POLLER_SLOW_AT=6000` 이면 `LIVE_POLLER_SLOW_PERIOD_SEC=30` 초 · used ≥ `LIVE_POLLER_STOP_AT=7000` 이면 UTC 자정까지 정지 (10-16 EC2 `/etc/pitchlog/backend.env` 에 주기·임계 미지정 확인).
 - #26의 경계 조건이 회고가 지목한 테스트 필수 영역이다 — `live-window.spec.ts`.
 - ✅ **오버랩 방지** — in-memory 겹침 방지 + tick 처리 시간 계측(`lastTickMs` · `maxTickMsToday`) (#111).
 
@@ -158,6 +162,10 @@ API는 현재 스냅샷만 준다. 이력을 만들어내는 건 우리 몫이�
 | 32 | UCL 녹아웃 합산·진출 판정 | — | 0 | 재시도 |
 | 33 | H2H 기록 갱신 | `/fixtures/headtohead?h2h=A-B` | 경기당 1 | ✅ 확인됨. 자체 계산 불필요 |
 | 34 | `recheck → confirmed` 상태 전이 | — | 0 | **`matches.stats_state`** (`NONE`·`RECHECK`·`CONFIRMED`) + `confirmed_at` — ✅ 컬럼·마이그레이션 09-07 적용(`20260907120000_match_stats_state`). 지금은 전부 `NONE`. 상세 4개(#28·#29·#29-1·라인업)가 다 들어오면 `CONFIRMED`. 프론트 배지의 유일한 소스 |
+
+> ✅ 10-15 PR #138 (`ingestion/api-football/api-player-id.ts` `knownApiPlayerId`) — #29 는 `player.id` 가 null·0 인 선수를 건너뛴다(warn).
+> 같은 선수가 라인업에서는 `id: null`, `/fixtures/players` 에서는 `id: 0` 으로 온다. **`SCHEMA_DESIGN` 2-4 "없으면 만든다" 의 예외** — API 가 id 를 주지 않은 선수는 `players` 행을 만들지 않는다.
+> 운영 DB 에 이미 생긴 `api_player_id=0` 행 정리는 범위 밖 (`NEXT_STEPS` 1장 "10-16 기준 남은 것").
 
 > **#29-1은 2026-09-03에 추가됐다.** 원래 계획에서 빠져 있었다.
 > 점유율·슈팅 6종·패스 정확도와 **`expected_goals`·`goals_prevented`** 가 전부 여기서 온다.
@@ -397,9 +405,9 @@ L5(#28·#34)에서 트리거한다. 별도 스케줄러를 두지 않는다.
 | # | 기능 | 근거 |
 |---|---|---|
 | 53 | 공통 HTTP client — timeout·호출 제한·retry·backoff | 회고: v1엔 보호장치가 없었다 |
-| 54 | 일일 API 콜 카운터 + **6,000콜 경고선** | V2_DESIGN 3-3 |
+| 54 | 일일 API 콜 카운터 + **6,000콜 경고선** | V2_DESIGN 3-3. ✅ 10-16 #141 머지 판에서 확인(`ingestion/api-football/quota.service.ts`) — 자체 카운터가 아니라 `/status` 의 used 로 판단한다(라이브 폴러·상세 백필). `api_quota_snapshots` 는 하루 1회 잡·CLI 가 쓰기만 하고 읽는 코드가 없다(보존 기간 정리 코드도 없다). 상세 백필은 기록 없는 `current()` |
 | 55 | 작업 실행 락 (competition·season·job type) | 중복 실행 방지 |
-| 56 | 작업 상태·재시도 횟수 기록 | 조용한 실패 금지 |
+| 56 | 작업 상태·재시도 횟수 기록 | 조용한 실패 금지. ✅ 10-15 경기 상세 재시도(#139 · `ingestion/backfill/detail-retry.ts`) — `matches.detail_attempts`·`detail_last_attempt_at` · 1시간·6시간 백오프 · 3회 포기(warn 에 복구 SQL) |
 | 57 | `/health` 엔드포인트 | 배포 PoC |
 | 58 | 환경변수 schema 검증 — 없으면 부팅 실패 | v1 기본 비밀번호 사고 |
 | 59 | 구조화 로깅 + 외부 API 호출 추적 | |
@@ -428,7 +436,7 @@ L5(#28·#34)에서 트리거한다. 별도 스케줄러를 두지 않는다.
 |---|---|---|
 | **0** | 57·58 + 스켈레톤 | CI 통과, **API 3콜 실호출 확인** (검토 B-1) |
 | **1** | L0(1~6) · L1(7~11) · 48~52 · 53~56 · 조회 API 일부 | **스쿼드 diff 테스트가 이적 시나리오 통과** |
-| **2** | L2(13~17) · L3(18~20) · L5(27~34) · 백필 → **그 뒤** L4(21~26) · 40~47 (순서 09-07 확정) — 10-07: 백필 · L4 코드 완료, 40~47 은 REST 폴링으로 대체(3장) | 5시즌 완전(✅ 09-24) + **실제 라운드 1회 무중단 관측**(미확인) |
+| **2** | L2(13~17) · L3(18~20) · L5(27~34) · 백필 → **그 뒤** L4(21~26) · 40~47 (순서 09-07 확정) — 10-07: 백필 · L4 코드 완료, 40~47 은 REST 폴링으로 대체(3장) | ✅ **관문 통과 (10-15)** — 5시즌 완전(✅ 09-24) + **실제 라운드 1회 무중단 관측**(✅ 10-15 · 관측 창 10-09 18:00 ~ 10-15 00:00 UTC · 재시작 0 · 라이브 finalize 65/65) |
 | **3+** | 47-1~47-6 푸시 알림 | 구독 등록 → 골 이벤트 → 기기 수신 확인 |
 | **3** | 조회 API 전체 · 배포 | 언어 전환, 백엔드 다운 시 오류 노출 |
 | **4** | L6(35~39) · 보정·푸시 알림 | 최종 API 예산 실측 (6대회는 Phase 1 에서 이미 활성화) |

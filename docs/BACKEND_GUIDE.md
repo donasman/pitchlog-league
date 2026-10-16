@@ -32,7 +32,7 @@ backend/src
 │   ├── screen-scope.ts           "화면에 나오는 대회" 단일 정의 — 있음
 │   ├── l2/                      Phase 2 · L2 5시즌 완료
 │   ├── l3/                      Phase 2 · 경기 상세 쓰기 (lineups · events, 2026-09-10)
-│   ├── l4/                      Phase 2 · 실시간 (예정)
+│   ├── l4/                      Phase 2 · 실시간 — 있음 (live-observer · live-writer · live-finalizer · live-window · status-rank · 잡은 scheduler/live-poller.job.ts)
 │   ├── l5/                      Phase 2 · 경기 상세 쓰기 (team_stats · player_stats, 2026-09-10)
 │   └── l6/                      Phase 2 · 시즌 집계 완료
 ├── realtime/                     Phase 2 (Gateway)
@@ -61,6 +61,10 @@ backend/src
 - **고아 행 검사를 L6 보정 잡과 CI 통합 테스트 양쪽에서 돌린다.** 자동 삭제하지 않는다.
 - **수집은 부모-먼저 순서를 지킨다.** 라인업·경기 통계에 스쿼드에 없는 선수가 나오면
   건너뛰지 말고 최소 정보로 `players` 를 먼저 만든다.
+  **예외 — API 가 id 를 주지 않은 선수 (2026-10-15 실측 · #138).** 라인업 `player.id` 가 null, `/fixtures/players` 는
+  같은 선수를 `id: 0` 으로 준다. 이런 선수는 `players` 행을 만들지 않는다 — `knownApiPlayerId(id)`
+  (`ingestion/api-football/api-player-id.ts`) 가 양의 정수만 id 로 인정한다. L3 lineups·L5 player-stats 는 그 엔트리를
+  건너뛰고 warn 1줄, L3 events 는 선수 id 를 null 로 둔다. 근거·남은 정리는 `SCHEMA_DESIGN.md` 2-4.
 
 partial unique index 3개(`competition_seasons` · `squad_entries` · `coach_tenures`)는
 Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴다 — `prisma/sql/partial-indexes.sql`.
@@ -78,8 +82,9 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 - 다음 주기에 다시 실행해도 되는 짧은 작업은 NestJS Scheduler를 사용한다.
 - 수백 건 처리, 진행률, 실패 지점 재개가 필요하면 BullMQ Job으로 승격한다.
   **단 5개년 백필은 승격하지 않는다 (2026-09-07)** — `backfill_jobs` 가 DB 체크포인트라 단일 루프로 충분하다.
-  워커는 `/status` 를 읽어 **일일 상한(5,700콜)** 을 스스로 지킨다 (`INGESTION_STRATEGY.md` 5-1).
-- 경기 상세 워커는 백필이 끝난 뒤에도 같은 코드로 "어제 끝난 경기" 를 하루 1회 받는다. L4 실시간은 그 뒤에 얹는다.
+  워커는 `/status` 를 읽어 **일일 상한** 을 스스로 지킨다 — `min(API 한도, BACKFILL_DAILY_CAP)` (`match-details-backfill.service.ts:206`) ·
+  `BACKFILL_DAILY_CAP` 기본 5,700 (`env.validation.ts:192`) · 운영 env 6,800 (10-16 확인) (`INGESTION_STRATEGY.md` 5-1).
+- 경기 상세 워커는 백필이 끝난 뒤에도 같은 코드로 "어제 끝난 경기" 를 받는다 (운영 워커 cron `*/10` — 10-14 실측 하루 144 tick). L4 실시간은 그 뒤에 얹는다.
 - 스케줄러와 Worker의 중복 실행을 막는 lock·job key를 둔다.
 - API 호출 제한, timeout, 제한된 retry와 exponential backoff를 공통 HTTP client에 적용한다.
 
@@ -93,30 +98,45 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
 
 ## 경기 상세 (L3·L5)
 
-- L3 lineups: /fixtures/lineups → MatchLineup + LineupEntry. Coach·Player 최소 upsert.
+- L3 lineups: /fixtures/lineups → MatchLineup + LineupEntry. Coach·Player 최소 upsert. `player.id` 가 없는 엔트리는 저장하지 않고 건너뛴다 — warn 1줄 `L3 lineups: match id=… apiFixtureId=… — player.id 없는 엔트리 n건 skip (이름#등번호…)` (10-15 #138). **선수 명단 없는 라인업 (2026-10-15 실측 · #140)**: 하위 리그 팀이 나오는 컵 경기(Coupe de France 등)는 `startXI`·`substitutes` 키 자체가 없고 `formation` 이 null 이다 (예: fixture 1485809). 모든 팀의 선수가 0명이면 쓰기 없이 `has_lineups=false`(미제공)로 마감 · info 로그 `선수 명단 없는 라인업 N팀 → has_lineups=false (미제공)`.
 - L3 events: /fixtures/events → MatchEvent. API 응답이 시간순이 아니라 (elapsed asc, extra ?? 0 asc, 응답 index) 로 정렬해 seq 매김. minute_extra 컬럼은 NULL 유지.
 - L5 team_stats: /fixtures/statistics → TeamMatchStat 18항목 (Red Cards null → 0, Ball Possession/Passes % 는 "55%" → Int 55, expected_goals/goals_prevented 는 Decimal · null 유지).
-- L5 player_stats: /fixtures/players → PlayerMatchStat + Player 최소 upsert. rating 은 null 유지 (미출장·5분 이하). passes_accuracy 는 퍼센트 아니라 정확 패스 횟수 (문자열 → Int). API 오타 penalty.commited 는 penalty_committed 로 재매핑.
-- has_* 4상태 (D3): NULL=미조회 / true=200+비지않음+upsert완료 / false=200+빈배열 / 에러·429·타임아웃은 NULL 유지.
+- L5 player_stats: /fixtures/players → PlayerMatchStat + Player 최소 upsert. rating 은 null 유지 (미출장·5분 이하). passes_accuracy 는 퍼센트 아니라 정확 패스 횟수 (문자열 → Int). API 오타 penalty.commited 는 penalty_committed 로 재매핑. id 가 null·0 인 선수 행은 건너뛰고 warn (10-15 #138).
+- has_* 4상태 (D3): NULL=미조회 / true=200+비지않음+upsert완료 / false=200+빈배열 (라인업은 모든 팀 선수 0명도 — 위 L3 lineups) / 에러·429·타임아웃은 NULL 유지.
 - 4개 has_* 가 모두 non-NULL 이 되면 detail_checked_at=now() + stats_state=CONFIRMED + confirmed_at=now() (common/match-detail-status.ts:promoteIfAllDetailsChecked). RECHECK 는 L4 가 처리.
 - 트랜잭션은 엔드포인트 단위로 짧게. Events 는 deleteMany → createMany → updateMany 세 문장 하나 트랜잭션 (재실행 시 이벤트 수 줄면 옛 행 남기 방지). 경기 단위 트랜잭션은 안 함 (4콜 사이 실패는 부분 저장돼야).
 - matches 갱신은 has_lineups/has_events/has_team_stats/has_player_stats/detail_checked_at/stats_state/confirmed_at 7개 컬럼만. updateMany + detailEligible:true · count===1 확인 (D20).
-- 오케스트레이터(backfill worker)는 다음 판. 이 판은 서비스 4개만.
+- 오케스트레이터는 `MatchDetailsBackfillService` (아래 절) — 이 4개 서비스를 경기 단위로 순차 호출한다. `@Cron` 트리거는 `scheduler/backfill-worker.job.ts`.
 
 ### 오케스트레이터 (backfill)
 
 - `MatchDetailsBackfillService` (`backend/src/ingestion/backfill/match-details-backfill.service.ts`) — 대회시즌별로 L3·L5 4개 서비스를 순차 호출한다. 각 서비스가 자기 has_* 를 세팅하고 승격은 헬퍼가 자동으로 한다 (경기 상세 절 참조).
-- **대상 SELECT**: `detail_eligible=true AND detail_checked_at IS NULL AND status_short IN ('FT','AET','PEN') AND kickoff_at < now() - interval '24 hours' AND id > cursor_match_id`. 정렬 `id asc`. 종료 직후 24시간은 기록이 아직 변한다 (경기 통계 재검증).
-- **커서**: `backfill_jobs.cursor_match_id` — 대회시즌 단위로 관리. 경기 하나 처리 후 그 id 로 advance. 재실행이 커서 이후만 집는다.
-- **일일 상한**: 5,700콜 = 1,425경기 (경기당 4콜). `--limit` 이 있으면 `min(--limit, floor((5700 - used) / 4))`. 매 경기 앞에 재확인.
-- **중단 사유 6종**: `quota_exhausted`(429 잡힘) · `daily_cap`(5,700 도달) · `limit_reached`(--limit) · `no_targets`(대상 소진) · `done`(정상 완료) · `error`(예외).
-- `ApiQuotaExhaustedError` 는 즉시 상위로 던져 그 자리에서 중단 (커서 보존). 다른 오류는 그 엔드포인트만 실패로 세고 다음 엔드포인트 진행.
-- `BackfillJob` phase 는 `DETAILS`. begin(cs, DETAILS) → 처리 → complete(cs, null) 또는 fail(cs, message). 이미 `DONE` 인 대회시즌은 skip (되돌리지 않음).
+- **대상 SELECT**: `detail_eligible=true AND detail_checked_at IS NULL AND status_short IN ('FT','AET','PEN') AND kickoff_at < now() - interval '24 hours'` + 아래 재시도 창. ~~`AND id > cursor_match_id` · 정렬 `id asc`~~ → 정렬 `kickoff_at asc, id asc` (2026-10-15 · #139). 킥오프 뒤 24시간 안의 경기는 대상이 아니다 — 그동안 기록이 아직 변한다 (경기 통계 재검증 · `RECENT_MATCH_LOCK_MS = 24h` · `detail-retry.ts:27`·`:58`). 조건은 `detailTargetWhere` (`ingestion/backfill/detail-retry.ts`).
+- ~~**커서**: `backfill_jobs.cursor_match_id` — 대회시즌 단위로 관리. 경기 하나 처리 후 그 id 로 advance. 재실행이 커서 이후만 집는다.~~
+  → **경기 단위 재시도 (2026-10-15 #139 머지).** 커서는 "id > cursor" 만 앞으로 가서 id 가 작은데 늦게 끝난 경기·실패한 경기를 영원히 건너뛰었다.
+  이제 경기마다 `matches.detail_attempts`(시도 횟수) · `detail_last_attempt_at`(마지막 시도 시각)을 두고, 매 판의 대상 SELECT 가 다시 고른다 —
+  시도 0회 → 즉시 · 1회 → 마지막 시도 1시간 뒤 · 2회 → 6시간 뒤 · 3회 → 포기 (warn 에 복구 SQL). 상수 `DETAIL_MAX_ATTEMPTS=3` · `DETAIL_RETRY_BACKOFF_MS=[1h,6h]` (`detail-retry.ts`).
+  시도 기록은 raw `UPDATE … RETURNING` 이라 `updated_at` 을 건드리지 않는다. 확정(`detail_checked_at`)은 `has_*` 가 전부 non-null 일 때만이다.
+  복구: `UPDATE matches SET detail_attempts = 0, detail_last_attempt_at = NULL WHERE detail_checked_at IS NULL AND detail_attempts >= 3;`
+  `backfill_jobs.cursor_match_id` 컬럼은 남겨 두었지만 상세 백필은 읽지도 쓰지도 않는다.
+- **일일 상한**: `effectiveLimit = min(q.limit, BACKFILL_DAILY_CAP)` (`match-details-backfill.service.ts:206`) — `BACKFILL_DAILY_CAP` 기본 5,700 (`env.validation.ts:192`) ·
+  운영 env 6,800 (10-16 확인). 남은 경기 수는 `floor((effectiveLimit - used) / 4)` (경기당 4콜 · `:207`), `--limit` 이 있으면 그 남은 수와의 `min` (`:226-227`).
+  매 경기 앞에 재확인 — `effectiveLimit - used < 4` 면 그 경기부터 멈춘다 (`:293-295`).
+  **사용량 확인 (2026-10-16 · #141)**: 대회시즌마다 대상 count 를 먼저 하고 0 이면 사용량 확인 없이 `no_targets`. 대상이 있을 때만
+  진입 · 매 경기 앞 · 끝 사유 판정에서 `QuotaService.current()` — `/status` 로 사용량만 확인 · `api_quota_snapshots` INSERT 없음 · debug 로그.
+  판단 근거는 `/status` 의 used 다 (클라이언트 자체 콜 카운트가 아니다 · `DATA_RULES.md` 6-1).
+- **중단 사유 6종**: `quota_exhausted`(429 잡힘) · `daily_cap`(used 가 API 한도 미만인데 `BACKFILL_DAILY_CAP` 에 닿음 · `:209`·`:296`) · `limit_reached`(--limit) · `no_targets`(대상 소진) · `done`(정상 완료) · `error`(예외).
+- `ApiQuotaExhaustedError` 는 즉시 상위로 던져 그 자리에서 중단 (~~커서 보존~~ → 재개는 다음 판의 대상 SELECT 가 한다). 다른 오류는 그 엔드포인트만 실패로 세고 다음 엔드포인트 진행.
+- ~~`BackfillJob` phase 는 `DETAILS`. begin(cs, DETAILS) → 처리 → complete(cs, null) 또는 fail(cs, message). 이미 `DONE` 인 대회시즌은 skip (되돌리지 않음).~~
+  → 상세 백필은 **`backfill_jobs.phase` 를 읽지도 쓰지도 않는다** (`match-details-backfill.service.ts:31-38`). phase 는 L2·L6 백필-1 완료 표시
+  (`dataStateOf` → 프론트 시즌 선택기)와 L1 락(`BACKFILL_IN_PROGRESS` 에 `DETAILS` 포함 · `l1.service.ts:43-46`)이 공유하는 신호라 상세 백필 소유가 아니다.
+  진행 지표는 `updateDetailProgress` (`backfill-job.service.ts:98-150`) 하나로 `total`·`done`·`failed`·`last_error` 만 쓰고, job 이 없으면
+  phase 기본값 `PENDING` 으로 만든다. skip 판정은 대상 SELECT 가 한다 — 대상 count 가 0 이면 job 도 만들지 않고 넘어간다 (`match-details-backfill.service.ts:181-197`).
 - 경기 단위 트랜잭션 없음. 엔드포인트 단위 트랜잭션은 각 서비스 안에 있다 (4콜 사이 실패는 부분 저장돼야).
 
 실행:
 - `npm run ingest -- backfill [--season=YYYY] [--limit=N] [--dry-run]`
-- `--season` 없으면 화면 6대회 현재 시즌만 (`isCurrent:true + screenCompetitionWhere`).
+- `--season` 없으면 ~~화면 6대회 현재 시즌만 (`isCurrent:true + screenCompetitionWhere`)~~ → 수집 범위 19대회(`ingestScopeWhere` · isTracked 전부)의 현재 시즌만 (`isCurrent: true` · `match-details-backfill.service.ts:135-137`). `--season` 이 있으면 19대회의 그 시즌.
 - `--dry-run` 은 대상 경기 수·예정 콜 수·남은 상한·실제 처리 예정 경기 수만 출력하고 **API 를 한 번도 부르지 않는다**.
 - 진행 로그는 50경기마다 한 줄 (처리/실패/남은 상한). 요약: 대회시즌별 processed·failed·stoppedReason.
 
@@ -128,7 +148,7 @@ Prisma schema로 표현되지 않으므로 마이그레이션 SQL에 직접 쓴�
   - `events`: `seq` 오름차순 · `{ seq, minute, minuteExtra, teamRef, playerRef|null, playerName|null, assistPlayerRef|null, assistPlayerName|null, type, detail, comments }`.
   - `teamStats`: 팀별 18항목. `expectedGoals` · `goalsPrevented` 는 **null 을 0 으로 바꾸지 않는다**.
   - `playerStats`: 매치 참여 선수. `rating` 은 null 유지.
-  - `availability`: 4갈래 각각 `'ok' | 'not_provided' | 'not_collected'`. `has_*=true` → ok · false → not_provided(API 가 빈 배열을 줬다) · null → not_collected(아직 수집 안 함). **이 3값은 DATA_RULES 3장 (null 은 0 아니다 · 있음/없음/미수집 3상태)이다 — 빈 배열 하나로 뭉개지 않는다.**
+  - `availability`: 4갈래 각각 `'ok' | 'not_provided' | 'not_collected'`. `has_*=true` → ok · false → not_provided(API 가 빈 배열을 줬다 · 라인업은 선수 명단이 없을 때도 — 10-15 #140, 화면 "이 경기는 라인업이 제공되지 않았습니다") · null → not_collected(아직 수집 안 함). **이 3값은 DATA_RULES 3장 (null 은 0 아니다 · 있음/없음/미수집 3상태)이다 — 빈 배열 하나로 뭉개지 않는다.**
   - `asOf`: 네 갈래 갱신 시각 중 **가장 오래된 값** (`earliestOf` 헬퍼 · `common/as-of.ts`).
 - 프론트 소비: `services/live.js:fetchMatchDetail` 이 `/api/matches/:ref` 와 이 엔드포인트를 병렬로 부르고 `normalize.js:matchDetail` 순수 함수가 화면 shape 으로 변환.
 

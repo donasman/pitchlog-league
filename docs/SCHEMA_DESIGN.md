@@ -132,6 +132,15 @@ competitions → seasons → competition_seasons → competition_rounds
 이 경우 `players`에 최소 정보로 먼저 upsert하고 프로필은 나중에 채운다.
 **"없으면 건너뛴다"가 아니라 "없으면 만든다"** 로 처리한다.
 
+**예외 — API 가 id 를 주지 않은 선수 (2026-10-15 실측 · #138).** 라인업 `startXI`/`substitutes` 의 `player.id` 가
+**null** 로 올 수 있고, 같은 선수가 `/fixtures/players` 에서는 `id: 0` 으로 온다. 운영 로그 10-10~14 에 live-poller finalize 23건 ·
+백필 lineups 실패 9건이 `players.api_player_id` NOT NULL 위반(23502)으로 났고, L5 는 `api_player_id=0` 선수 행(`0-adam-mouak`)을 만들어 오염시켰다.
+→ **API 가 id 를 주지 않은(null·0) 선수는 `players` 행을 만들지 않는다.** `knownApiPlayerId(id)`
+(`backend/src/ingestion/api-football/api-player-id.ts`)가 양의 정수면 그 값, 아니면 null 을 준다.
+L3 lineups 는 id 없는 엔트리를 저장하지 않고 건너뛴다(warn 1줄) · L3 events 는 선수 id 를 null 로 둔다 · L5 player-stats 는 null·0 id 를 건너뛴다(warn).
+남은 것: 운영 DB 에 이미 생긴 `api_player_id=0` 선수 행 정리 (운영 DB 쓰기 승인 필요). 이 행을 참조하는 테이블 10개, 그중 고아 검사 밖
+5개(`match_events.player_id`·`assist_player_id` · `injuries` · `external_ids` · `localized_names`).
+
 ### 2-5. 삭제 순서를 문서에 박는다
 
 Cascade가 없으므로 보관 정책 실행 시 순서가 틀리면 고아가 남는다.
@@ -333,6 +342,10 @@ matches(
   stats_state,                    -- NONE | RECHECK | CONFIRMED. L2 는 NONE 만 쓴다. L5 가 올린다
   confirmed_at NULL,
 
+  -- 상세 백필 경기 단위 재시도 (2026-10-15 · #139 · 마이그레이션 20261015120000_match_detail_attempts)
+  detail_attempts,                -- INTEGER NOT NULL DEFAULT 0. 시도 횟수. 3 이면 포기
+  detail_last_attempt_at NULL,    -- TIMESTAMPTZ(6). 마지막 시도 시각 — 재시도 백오프(1h·6h) 기준
+
   data_version,                   -- 실시간 이벤트 순서 보장
   as_of, updated_at
 )
@@ -353,8 +366,25 @@ INDEX(tie_id)
 `final` 까지밖에 못 만든다. `has_*` 에서 파생하지 않는 이유: "확인했고 없음(false)" 인 컵 경기가 영원히 `recheck` 가 된다.
 
 `has_*`가 **3값 논리**다. `NULL`은 미확인, `false`는 확인했고 없음, `true`는 있음.
-`false`인 경기는 다시 부르지 않는다. 단 **FT 후 24시간 이내는 `NULL`로 되돌려 재시도**한다 —
-데이터가 늦게 채워지는 경우가 있다 (`INGESTION_STRATEGY.md` 4-2 ①).
+~~`false`인 경기는 다시 부르지 않는다.~~ → **`detail_checked_at` 이 기록된(확정된) 경기는 다시 부르지 않는다** — 상세 백필의
+대상 조건이 `detail_checked_at IS NULL` 이다 (`detail-retry.ts:56`). 확정 전에는 갈래 하나가 `false` 여도 **4갈래를 다시 부른다** —
+오케스트레이터가 네 서비스를 모두 호출하고(`match-details-backfill.service.ts:314-317`), 각 서비스는 `has_*` 를 보지 않고 API 를 부른다
+(`l3/lineups.service.ts:66-97` · `l3/events.service.ts:71-93` · `l5/team-stats.service.ts:130-152` · `l5/player-stats.service.ts:231-258` —
+경기 존재 · fixture id · `detail_eligible` 만 확인).
+~~단 **FT 후 24시간 이내는 `NULL`로 되돌려 재시도**한다 —
+데이터가 늦게 채워지는 경우가 있다 (`INGESTION_STRATEGY.md` 4-2 ①).~~
+→ **코드는 `has_*` 를 `NULL` 로 되돌리지 않는다. 늦게 채워지는 데이터는 기다려서 흡수한다** — 상세 백필은 킥오프 뒤 24시간이 지난
+경기부터 대상으로 잡고(`RECENT_MATCH_LOCK_MS = 24h` · `detail-retry.ts:27` · 조건 `kickoff_at < now − 24h` · `detail-retry.ts:58`),
+실패하면 마지막 시도 1시간 뒤 · 6시간 뒤 다시 부르고 3회 실패하면 포기한다 (`DETAIL_RETRY_BACKOFF_MS` · `DETAIL_MAX_ATTEMPTS=3` · 아래 단락).
+(`backend/src` 에 `has_*` 를 `NULL` 로 쓰는 코드 없음 — 생성 코드·spec 제외 grep.)
+
+**`detail_attempts` · `detail_last_attempt_at` — 경기 단위 재시도 (2026-10-15 #139 머지).** 상세 백필은
+`backfill_jobs.cursor_match_id` 로 "id > cursor" 만 앞으로 갔다 — id 가 작은데 늦게 끝난 경기와 실패한 경기를 영원히 건너뛰었다.
+커서를 버리고 경기마다 시도 횟수 · 마지막 시도 시각을 둔다. 대상은 종료 상태 경기 중 `detail_checked_at IS NULL` 이고
+재시도 시점이 된 것(순서 `kickoff_at asc, id asc`) — 시도 0회 즉시 · 1회 뒤 1시간 · 2회 뒤 6시간 · 3회면 포기(warn 에 복구 SQL).
+시도 기록은 raw `UPDATE … RETURNING` 이라 `updated_at` 을 건드리지 않는다. 확정(`detail_checked_at`)은 `has_*` 가 전부 non-null 일 때만이다.
+복구: `UPDATE matches SET detail_attempts = 0, detail_last_attempt_at = NULL WHERE detail_checked_at IS NULL AND detail_attempts >= 3;`
+운영 적용 10-15 · 결과는 `INGESTION_STRATEGY.md` 5-3.
 
 ```
 knockout_ties(
@@ -572,8 +602,17 @@ INDEX(layer, started_at)
 api_quota_snapshots(id, captured_at, calls_used, limit_day, plan, expires_on)
 ```
 
+`backfill_jobs.cursor_match_id` 는 **컬럼만 남았다 (2026-10-15 · #139).** 상세 백필은 이 커서를 읽지도 쓰지도 않는다 —
+상세 백필의 재시작 지점은 경기 행의 시도 기록(3-3 `detail_attempts` · `detail_last_attempt_at`)이다.
+
 `api_quota_snapshots`는 `/status` 응답을 적재한다.
-`INGESTION_STRATEGY.md` 3-5의 경고선(6,000콜) 판단과 구독 만료 감시가 여기서 나온다.
+~~`INGESTION_STRATEGY.md` 3-5의 경고선(6,000콜) 판단과 구독 만료 감시가 여기서 나온다.~~
+→ **2026-10-16 실측 · #141 — 예측이 틀렸고 코드가 맞았다.** 이 테이블을 읽는 코드는 없다 — 경고선 판단에 쓰이지 않는다.
+라이브 폴러·상세 백필은 `/status` 응답의 used 를 그 자리에서 읽어 판단하므로(`DATA_RULES.md` 6-1) 적재된 행을 다시 읽을 일이 없었다.
+구독 만료 임박 warn 도 `/status` 응답으로 낸다 (프로세스당 UTC 하루 1회).
+INSERT 는 `QuotaService.snapshot()` 하나이고, 하루 1회 `QuotaSnapshotJob` 과 CLI(`cli/ingest.ts` — `status` 와 l0·l1·l2·l6·backfill·probe-details·probe-players 앞뒤)만 부른다 — 상세 백필은 기록 없는
+`QuotaService.current()` 로 확인한다. 그 전에는 상세 백필이 대회시즌마다 `snapshot()` 을 불러 10-14 하루에 13,546행이 들어갔다.
+보존 기간 정리 코드는 없다.
 
 ### 3-7. 다국어
 
@@ -812,7 +851,7 @@ partial unique index가 막아주지만 그건 **에러로 막는 것**이라 di
 | `matches.referee` · `venue_id` · `elapsed` | 실측에서 자주 `null` |
 | `standings.description` · `status` | 구역 표기가 없는 대회 |
 | `lineup_entries.grid` | 벤치 선수 |
-| `match_events.player_id` · `assist_player_id` | 팀 단위 이벤트 |
+| `match_events.player_id` · `assist_player_id` | 팀 단위 이벤트 · API 가 선수 id 를 주지 않은 이벤트 (2026-10-15 · 2-4 예외) |
 | `coaches.birth_date` · `nationality` 등 | 실측에서 대부분 `null` |
 
 **`et_*`와 `pen_*`을 0으로 채우면 안 된다.** "연장 0-0"과 "연장 없음"이 구분되지 않아
@@ -823,8 +862,16 @@ partial unique index가 막아주지만 그건 **에러로 막는 것**이라 di
 `matches.has_events` · `has_lineups` · `has_team_stats` · `has_player_stats`
 
 `NULL`=미확인 · `false`=확인했고 없음 · `true`=있음.
-`false`는 재수집하지 않는 근거이므로 **함부로 쓰면 데이터가 영영 안 채워진다.**
-FT 후 24시간 이내는 `NULL`로 되돌린다.
+~~`false`는 재수집하지 않는 근거이므로~~ → 4개가 모두 non-null 이 되면 확정(`detail_checked_at`)되고, **확정된 경기는 다시 부르지 않는다**
+(`detail-retry.ts:56`). 확정 전에는 갈래 하나가 `false` 여도 4갈래를 다시 부른다 (3-3). 그래서 `false` 는 나머지 갈래와 함께 확정되는 순간
+재수집을 막는다 — **함부로 쓰면 데이터가 영영 안 채워진다.**
+~~FT 후 24시간 이내는 `NULL`로 되돌린다.~~ → 되돌리지 않는다. 상세 백필이 킥오프 뒤 24시간 안의 경기를 대상에서 빼는 것으로
+대신한다 (`RECENT_MATCH_LOCK_MS` · `detail-retry.ts:27`·`:58` · 3-3).
+
+**`has_lineups=false` 는 선수 명단 없는 라인업에도 쓴다 (2026-10-15 실측 · #140).** 하위 리그 팀이 나오는 컵 경기
+(Coupe de France 등)의 `/fixtures/lineups` 는 `startXI`·`substitutes` 키 자체가 없고 `formation` 이 null 이다 (예: fixture 1485809).
+L3 lineups 는 모든 팀의 선수가 0명이면 쓰기 없이 `has_lineups=false`(미제공)로 마감한다 — 화면은 "이 경기는 라인업이 제공되지
+않았습니다" (`not_provided`).
 
 ---
 
