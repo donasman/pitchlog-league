@@ -166,6 +166,19 @@ https://github.com/donasman/pitchlog-league/compare/main...dev 에서 PR 생성.
 정책상 이 머지가 배포 시점이지만, **현재 상태(10-16)는 운영 배포가 `dev` 기준이다** ("브랜치 전략" 절의 현재 상태 참고).
 `main` 릴리즈 PR 은 10-16 #144 가 처음이다 (Phase 2 · **Create a merge commit** 으로 머지 — 이력 보존). 배포 자동화 워크플로는 없다.
 
+**릴리즈 뒤 back-merge** — merge commit 릴리즈는 `main` 에만 머지 커밋을 남겨 GitHub 이 "main 이 N commits ahead" 로 표시한다.
+`dev` 에서 브랜치를 따서 `main` 을 합친 PR 로 맞춘다 (10-16 #147 · 파일 변경 0):
+
+```bash
+git fetch origin --prune
+git checkout -b chore/back-merge-main origin/dev
+git merge --no-ff origin/main     # 트리는 dev 와 같아야 한다
+git push -u origin chore/back-merge-main   # → dev 로 PR · Create a merge commit
+```
+
+`main` 을 head 로 한 PR(`compare/dev...main`)은 쓰지 않는다 — `dev` 룰셋이 strict(최신 브랜치 필수)라 `dev` 가 앞서가면
+"Update branch" 가 `main` 에 직접 push 하려다 `main` 룰셋에 막힌다 (10-16 #146 에서 실제로 막혔다).
+
 ### 6. Phase 단위 릴리즈 태그
 
 v1의 주차 단위(`v0.2-wk2`) 대신 **Phase 기반**으로 태그한다 (V2_DESIGN.md 8장 로드맵과 통일).
@@ -283,7 +296,8 @@ API-Football API 키는 환경변수로만 주입한다.
 ## 선행조건 완료 현황
 
 - ✅ **S0 — API-Football 구독**: Pro 플랜 구독 완료 (2026-08-27). 26-27 시즌 데이터 접근 가능.
-  10-15 **Pro(7,500콜/일) 유지** 결정 (실측 하루 최대 2,559콜) · 구독 만료 2026-10-22 — 갱신은 사용자 몫
+  10-15 **Pro(7,500콜/일) 유지** 결정 (실측 하루 최대 2,559콜) · 구독 만료 2026-10-22 — 갱신은 사용자 몫.
+  10-16 **AdSense 승인까지 갱신** 결정 (`docs/MONETIZATION.md` 2장). API-Sports 약관은 데이터 게시 라이선스·엠블럼 권리를 주지 않는다 (같은 문서 3-2)
 - ✅ **S1 — 저장소 이름**: `pitchlog-league`로 확정, 이 저장소가 그 결과물
 - Phase 0 착수를 막던 두 조건 모두 해소됨 → **PR #1(저장소 골격)부터 바로 진행 가능**
 
@@ -315,6 +329,8 @@ UCL 대진표는 백엔드 tie 없이 프론트 `buildTies` 가 경기 목록에
 배포(09-16)와 과거 4시즌 경기 상세 백필(09-24)은 끝났다 (10-07 문서 동기화).
 운영 Google 로그인·서버 저장 즐겨찾기는 10-08 에 열렸다 (운영 DB 마이그레이션 · Vercel env · Supabase provider — `docs/DEPLOY.md`).
 Phase 2 관문(실제 라운드 1회 무중단 관측)은 10-15 에 통과했다 — 관측 중 드러난 운영 버그 넷은 #138~#141 로 고쳐 10-15~16 에 배포했다 (`docs/NEXT_STEPS.md` 10장 "Phase 2 관문 실측").
+10-16 사용자 목표는 **AdSense US$100** 이다 — Vercel Hobby 는 광고를 금지하므로 프론트를 Cloudflare Pages 로 옮기고 배포를 `main` 기준으로 바꾼다.
+판 구성(A 글 섹션 · B 심사 기본 페이지 · C 호스팅 이전 · D 광고)·결정·근거는 `docs/MONETIZATION.md`, 순서는 `docs/NEXT_STEPS.md` 1장 16번.
 **09-07 중간 점검(`docs/PLAN_REVIEW.md`)** 이 순서를 확정했다 — 기록 백필 먼저, 실시간은 그 뒤.
 현재 진행 상황과 다음 순서는 `docs/NEXT_STEPS.md` 1장이 기준이다.
 
