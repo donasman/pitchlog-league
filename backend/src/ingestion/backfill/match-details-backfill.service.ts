@@ -16,8 +16,11 @@
  *   중단 사유는 실제 원인을 구분한다:
  *     - `quota_exhausted`: used >= quota.limit (API 가 실제로 429 낼 상태)
  *     - `daily_cap`: used < quota.limit 이지만 used >= dailyCap (우리 자율 상한)
- *   시즌 진입 시 1회, 그리고 **매 경기 처리 앞에서** quota 를 다시 스냅숏한다 —
+ *   사용량 확인(QuotaService current · /status 1콜 · 기록 없음)은 **대상이 있는 대회시즌 진입 1회 +
+ *   매 경기 앞 1회** 다 (예산이 take 를 자른 대회시즌은 끝 사유 판정에서 1회 더) —
  *   같은 판 안에서 다른 시즌·다른 프로세스가 예산을 먹었을 수 있다.
+ *   대상이 0 인 대회시즌은 사용량을 확인하지 않는다 — count 를 먼저 하고 0 이면 바로 넘어간다.
+ *   기록(api_quota_snapshots INSERT)은 snapshot 쪽(QuotaSnapshotJob · CLI)만 한다.
  *
  * ## 소유권 (D18·D19·D20)
  *   L3·L5 가 각자의 has_* 를 세우고 `promoteIfAllDetailsChecked` 가 detail_checked_at·stats_state 를 올린다.
@@ -31,7 +34,7 @@
  *   상세 백필이 phase 를 DETAILS 로 세우면 며칠 도는 동안 L1 스쿼드가 잠긴다.
  *   DONE 으로 세우면 L6 가 세운 완료 표시와 구분이 안 된다.
  *   대신 skip 판정은 **대상 SELECT 자체가 한다** — detail_checked_at IS NULL 이 걸리면
- *   targets 가 0 이라 아무 API 도 안 부르고 continue.
+ *   targeted 가 0 이라 /status 도 상세 API 도 안 부르고 continue.
  *   진행 지표는 `updateDetailProgress` (backfill-job.service.ts) 하나로만 쓴다.
  *
  * ## 트랜잭션
@@ -68,7 +71,7 @@ export interface BackfillDetailsOptions {
 /** 6가지 중단 사유. 시즌 단위와 전체 단위에서 같이 쓴다 */
 export type BackfillStopReason =
   | 'quota_exhausted' // ApiQuotaExhaustedError 잡힘
-  | 'daily_cap' // limit_day - used < 4 (quota 소진 직전)
+  | 'daily_cap' // min(limit, dailyCap) - used < 4 · used < limit (우리 자율 상한)
   | 'limit_reached' // --limit 도달
   | 'no_targets' // 이 시즌에 대상 경기 없음
   | 'done' // 대상 다 처리
@@ -166,16 +169,40 @@ export class MatchDetailsBackfillService {
         const label = `${cs.competition.name} ${cs.season.year}`;
 
         // skip 판정은 phase 가 아니라 대상 SELECT 로 한다 —
-        //   detail_checked_at IS NULL 조건이 걸려 있어 이미 다 채운 시즌은 targets 가 0 이라
+        //   detail_checked_at IS NULL 조건이 걸려 있어 이미 다 채운 시즌은 targeted 가 0 이라
         //   자연히 continue. phase 는 우리 소유가 아니라 여기서 읽지 않는다.
 
-        // 남은 예산 계산 (dry-run 은 quota 안 부름)
+        // now 는 이 대회시즌 동안 고정한다 — count 와 findMany 가 다른 시각을 쓰면 24h 컷·백오프 창이 어긋난다
+        const now = new Date();
+        const targetWhere = detailTargetWhere(cs.id, now);
+
+        // targeted 는 LIMIT 없이 count — 요약과 done/limit_reached 판정에 쓴다.
+        // 사용량 확인보다 먼저 센다 — 대상이 0 인 대회시즌은 /status 를 부르지 않는다.
+        const targeted = await this.prisma.match.count({ where: targetWhere });
+
+        if (targeted === 0) {
+          // 남은 대상 없음. phase 를 건드리지 않으므로 job 도 만들지 않는다 —
+          // 대상이 없으면 아무 상태도 남기지 않는 게 옳다 (다음 판이 다시 대상 SELECT 로 판정).
+          this.logger.log(`${label}: 대상 없음 (targeted=${targeted})`);
+          perSeason.push({
+            competitionSeasonId: cs.id,
+            competitionName: cs.competition.name,
+            seasonYear: cs.season.year,
+            targeted,
+            processed: 0,
+            failed: 0,
+            stoppedReason: 'no_targets',
+          });
+          continue;
+        }
+
+        // 남은 예산 계산 — 대상이 있을 때만 사용량을 확인한다 (dry-run 은 확인 안 함)
         let limitForThisSeason: number;
         let limitedBy: 'user_limit' | 'budget' = 'user_limit';
         if (opts.dryRun) {
           limitForThisSeason = opts.limit ?? Number.MAX_SAFE_INTEGER;
         } else {
-          const q = await this.quota.snapshot();
+          const q = await this.quota.current();
           const effectiveLimit = Math.min(q.limit, this.dailyCap);
           const remainingByBudget = Math.floor((effectiveLimit - q.used) / PER_MATCH_CALLS);
           if (remainingByBudget <= 0) {
@@ -206,13 +233,6 @@ export class MatchDetailsBackfillService {
           }
         }
 
-        // now 는 이 대회시즌 동안 고정한다 — count 와 findMany 가 다른 시각을 쓰면 24h 컷·백오프 창이 어긋난다
-        const now = new Date();
-        const targetWhere = detailTargetWhere(cs.id, now);
-
-        // targeted 는 LIMIT 없이 count — 요약과 done/limit_reached 판정에 쓴다
-        const targeted = await this.prisma.match.count({ where: targetWhere });
-
         const targets = await this.prisma.match.findMany({
           where: targetWhere,
           orderBy: [{ kickoffAt: 'asc' }, { id: 'asc' }],
@@ -221,8 +241,7 @@ export class MatchDetailsBackfillService {
         });
 
         if (targets.length === 0) {
-          // 남은 대상 없음. phase 를 건드리지 않으므로 job 도 만들지 않는다 —
-          // 대상이 없으면 아무 상태도 남기지 않는 게 옳다 (다음 판이 다시 대상 SELECT 로 판정).
+          // count 뒤에 대상이 빠졌거나(다른 프로세스가 확정) dry-run --limit=0 — 위 targeted=0 과 같이 처리한다.
           this.logger.log(`${label}: 대상 없음 (targeted=${targeted})`);
           perSeason.push({
             competitionSeasonId: cs.id,
@@ -268,9 +287,10 @@ export class MatchDetailsBackfillService {
               break;
             }
 
-            // 예산 재확인 (매 경기 앞) — 같은 판 안에서도 quota 는 계속 흘러간다.
-            // 시즌 시작 스냅숏 이후에 다른 프로세스·이전 경기 처리로 quota 가 상한을 넘었을 수 있다.
-            const q2 = await this.quota.snapshot();
+            // 예산 재확인 (매 경기 앞 · 기록 없는 확인) — 같은 판 안에서도 quota 는 계속 흘러간다.
+            // 대회시즌 진입 확인 이후에 다른 프로세스·이전 경기 처리로 quota 가 상한을 넘었을 수 있다.
+            // q2 는 아래 50경기 진행 로그도 재사용한다 (추가 /status 없음).
+            const q2 = await this.quota.current();
             const effectiveLimit2 = Math.min(q2.limit, this.dailyCap);
             if (effectiveLimit2 - q2.used < PER_MATCH_CALLS) {
               seasonStop = q2.used >= q2.limit ? 'quota_exhausted' : 'daily_cap';
@@ -348,7 +368,7 @@ export class MatchDetailsBackfillService {
             });
 
             if (processed % PROGRESS_EVERY === 0) {
-              const q2 = await this.quota.snapshot();
+              // 이 경기 앞에서 확인한 q2 를 그대로 쓴다 — 진행 로그만을 위해 /status 를 더 부르지 않는다
               this.logger.log(
                 `${label}: 진행 ${processed}/${targets.length} · 실패 ${failed} · 남은 예산 ${q2.limit - q2.used}`,
               );
@@ -360,7 +380,7 @@ export class MatchDetailsBackfillService {
             // take: limitForThisSeason 로 잘랐다 — 시즌 진입 시 기억해둔 limitedBy 로 판정
             if (limitedBy === 'budget') {
               // 예산이 잘랐다 — used 가 상한을 이미 넘겼는지 확인해 daily_cap/quota_exhausted 구분
-              const qEnd = await this.quota.snapshot();
+              const qEnd = await this.quota.current();
               seasonStop = qEnd.used >= qEnd.limit ? 'quota_exhausted' : 'daily_cap';
             } else {
               seasonStop = 'limit_reached';
