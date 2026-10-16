@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | [AGENT_RUNS.md](./AGENT_RUNS.md) | 파이프라인 판별 실측 기록 · 매 판 갱신 · **새 세션이 먼저 읽을 것** | 기록(누적 · 최신 행이 현재) |
 | [NEXT_STEPS.md](./NEXT_STEPS.md) | 현재 검사 결과와 다음 작업 순서 | **현재 기준** (실행 체크리스트) |
+| [MONETIZATION.md](./MONETIZATION.md) | 수익화 계획 — AdSense US$100 목표 · 결정 · 약관·호스팅 제약(10-16 리서치) · 판 A~D | **현재 기준** (2026-10-16~) |
 | [PRD.md](./PRD.md) | 화면 요구사항 — 디자인 작업의 입력 | **현재 기준** |
 | [FRONTEND_GUIDE.md](./FRONTEND_GUIDE.md) | React·Vite·JavaScript 기술 결정과 화면 개발 기준 | **현재 기준** |
 | [BACKEND_GUIDE.md](./BACKEND_GUIDE.md) | NestJS·Prisma·Socket.io 백엔드 개발 기준 | **현재 기준** |

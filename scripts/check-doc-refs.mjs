@@ -49,6 +49,7 @@ const MANIFEST = {
   13: ['경기 상세 조회', '탭', 'availability'],
   14: ['검색', 'search', '전역 검색'],
   15: ['어시스턴트', '유료', 'Gemini', '전환'],
+  16: ['수익화', 'AdSense'],
 };
 
 /** (b) 범위 가드가 검사할 파일 목록 (레포 루트 기준) */
@@ -61,6 +62,7 @@ const CHECKED_FILES = [
   'docs/V2_DESIGN.md',
   'docs/SCHEMA_DESIGN.md',
   'docs/INGESTION_STRATEGY.md',
+  'docs/MONETIZATION.md',
 ];
 
 const NEXT_STEPS_PATH = 'docs/NEXT_STEPS.md';
