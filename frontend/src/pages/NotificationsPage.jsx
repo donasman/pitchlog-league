@@ -6,10 +6,14 @@
  *
  * 로그인이 없으므로 다른 기기와 동기화되지 않는다.
  * 이 사실을 화면이 숨기지 않는다.
+ *
+ * 실 API 모드(isNotificationsEnabled=false)에서는 알림 백엔드가 없으므로 설정 UI·권한 요청을
+ * 그리지 않고 제목 + NotImplementedState 로 "아직 없음" 을 드러낸다.
  */
 
 import { useTranslation } from 'react-i18next'
 import { useNotifications } from '@/contexts/NotificationContext'
+import NotImplementedState from '@/components/ui/NotImplementedState'
 
 /* ── 토글 스위치 ── */
 function Switch({ on, onChange, label }) {
@@ -133,7 +137,7 @@ const COMPS = [
 /* ── NotificationsPage ── */
 export default function NotificationsPage() {
   const { t } = useTranslation()
-  const { settings, updateSettings, showPermCard } = useNotifications()
+  const { isNotificationsEnabled, settings, updateSettings, showPermCard } = useNotifications()
   const { permission, events, pushEnabled, competitions: followedComps } = settings
 
   function toggleEvent(key) {
@@ -146,9 +150,26 @@ export default function NotificationsPage() {
     updateSettings({ competitions: next })
   }
 
+  /* 실 API 모드 — 알림 백엔드가 없다. 가짜 설정·권한 요청(showPermCard) 경로를 그리지 않는다.
+     조건부 return 은 모든 훅 호출 뒤에 둔다. */
+  if (!isNotificationsEnabled) {
+    return (
+      <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
+        <div style={{ paddingBlock: '20px 48px' }} className="pl-container">
+          <div style={{ marginBottom: 20 }}>
+            <h1 className="t-page" style={{ margin: 0, fontSize: 26 }}>{t('notif.settingsTitle')}</h1>
+          </div>
+          <div className="pl-card">
+            <NotImplementedState featureKey="errors.feature.notifications" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8">
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
+      <div style={{ paddingBlock: '20px 48px' }} className="pl-container">
 
         {/* 헤더 */}
         <div style={{ marginBottom: 20 }}>

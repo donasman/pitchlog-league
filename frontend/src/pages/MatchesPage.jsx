@@ -8,39 +8,38 @@
  * 모바일(<1024px): 필터 칩 가로 스크롤 + 1열 목록
  */
 
-import { useMemo } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
+import { useLiveMatches } from '@/hooks/useLiveMatches'
 import { fetchAllMatches, fetchCompetitions, fetchStandings } from '@/services/api'
+import { mergeLive } from '@/utils/liveMerge'
 import MatchCard from '@/components/ui/MatchCard'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
 import StandingsTable from '@/components/ui/StandingsTable'
 import LiveHeroCard from '@/components/home/LiveHeroCard'
+import HScroller, { HScrollerHeaderControls } from '@/components/ui/HScroller'
 import { isLive } from '@/utils/matchStatus'
-import { getLocalizedCompetitionName } from '@/utils/localization'
+import { getLocalizedCompetitionName, getLocalizedCompetitionShortName } from '@/utils/localization'
+import { kstDateKey } from '@/utils/dateFormat'
+import { todayKstKey, tomorrowKstKey } from '@/services/clock'
+import { pickFocusMatchdays } from '@/utils/matchDays'
 
 /* ── 상수 ── */
-const MOCK_TODAY = '2026-11-23'   // Mock 기준일 (Live 경기 날짜)
-
 const STATUS_GROUPS = {
   live:      ['live', 'halftime'],
   scheduled: ['scheduled'],
   finished:  ['confirmed', 'final', 'recheck', 'postponed', 'cancelled'],
 }
 
-/* ── 날짜 유틸 ── */
-function getKSTDateKey(isoString) {
-  return new Date(isoString).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
-}
-
 /* ── 경기 날짜별 그룹화 ── */
 function groupByDate(matches) {
   const map = {}
   for (const m of matches) {
-    const key = getKSTDateKey(m.date)
+    const key = kstDateKey(m.date)
     if (!map[key]) map[key] = { key, firstIso: m.date, matches: [] }
     map[key].matches.push(m)
   }
@@ -53,7 +52,7 @@ function groupByDate(matches) {
 function CompFilterRail({ competitions, activeComp, activeStatus, onCompChange, onStatusChange, t, locale }) {
   const compOptions = [
     { slug: 'all', label: t('matches.allCompetitions'), initials: 'ALL' },
-    ...(competitions ?? []).map(c => ({ slug: c.slug, label: getLocalizedCompetitionName(c, locale), initials: c.shortName })),
+    ...(competitions ?? []).map(c => ({ slug: c.slug, label: getLocalizedCompetitionName(c, locale), initials: getLocalizedCompetitionShortName(c, locale) || c.shortName })),
   ]
 
   const statusOptions = [
@@ -136,10 +135,10 @@ function CompFilterRail({ competitions, activeComp, activeStatus, onCompChange, 
 /* ─────────────────────────────────────────────────────────────
    MobileFilterBar — 모바일 가로 스크롤 필터 칩
 ───────────────────────────────────────────────────────────── */
-function MobileFilterBar({ competitions, activeComp, activeStatus, onCompChange, onStatusChange, t }) {
+function MobileFilterBar({ competitions, activeComp, activeStatus, onCompChange, onStatusChange, t, locale }) {
   const comps = [
     { slug: 'all', label: t('matches.allCompetitions') },
-    ...(competitions ?? []).map(c => ({ slug: c.slug, label: c.shortName })),
+    ...(competitions ?? []).map(c => ({ slug: c.slug, label: getLocalizedCompetitionShortName(c, locale) || c.shortName })),
   ]
   const statuses = [
     { value: 'all', label: t('matches.allStatuses') },
@@ -246,9 +245,10 @@ function DayGroup({ group, t, locale }) {
     { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' }
   )
 
+  /* "오늘"·"내일" 은 services/clock 이 정한다 — Mock 은 고정 기준일, 실 API 는 실제 오늘 (KST) */
   let dayTag = null
-  if (group.key === MOCK_TODAY) dayTag = t('matches.today')
-  else if (group.key === '2026-11-24') dayTag = t('matches.tomorrow')
+  if (group.key === todayKstKey()) dayTag = t('matches.today')
+  else if (group.key === tomorrowKstKey()) dayTag = t('matches.tomorrow')
 
   const liveCount = group.matches.filter(m => isLive(m.displayState)).length
 
@@ -285,13 +285,89 @@ function DayGroup({ group, t, locale }) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   FocusRow / FocusSummary — 상단 요약 칸 (최근 결과 · 다가오는 경기).
+   HScroller step='card' 로 카드 1장씩 슬라이드 · 자동재생 4s · 두 줄은 2s 엇갈림.
+───────────────────────────────────────────────────────────── */
+function FocusRow({ ariaLabel, titleKey, emptyKey, items, autoDelayMs, resetKey, t }) {
+  return (
+    /* minWidth:0 — grid 자식 기본 min-width:auto 가 트랙 content 폭까지 팽창시켜 부모를 뚫는 것을 막는다 */
+    <section aria-label={ariaLabel} style={{ display: 'grid', gap: 8, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h2 className="t-card" style={{ margin: 0 }}>{t(titleKey)}</h2>
+        {items.length > 0 && (
+          <span className="t-sub num" style={{ marginLeft: 4 }}>
+            {t('matches.matchCount', { count: items.length })}
+          </span>
+        )}
+      </div>
+      {items.length === 0 ? (
+        <p className="t-sub" style={{ margin: 0 }}>{t(emptyKey)}</p>
+      ) : (
+        /* key=resetKey — 대회 필터 변경 시 HScroller 인스턴스 자체를 리마운트 → scrollLeft 0 · 자동재생 타이머 재시작.
+           스코어 갱신(mergeLive) 은 key 를 안 바꾸므로 그대로 유지. */
+        /* cardWidth=260 → 트랙 grid-auto-columns 가 260px 로 고정 · 카드가 칸을 뚫어 겹치던 회귀 잠금.
+           eagerLogo — 가로 슬라이드 안 배지는 뷰포트 교차 없어 lazy 면 로고 로드 실패 (팀 탭 관례). */
+        <HScroller
+          key={resetKey}
+          rows={1}
+          gap={8}
+          step="card"
+          cardWidth={260}
+          ariaLabel={ariaLabel}
+          autoPlay
+          intervalMs={4000}
+          startDelayMs={autoDelayMs}
+          showPauseToggle
+          header={(ctrl) => (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+              <HScrollerHeaderControls {...ctrl} />
+            </div>
+          )}
+        >
+          {items.map(m => (
+            <div key={m.id} style={{ minWidth: 0 }}>
+              <MatchCard match={m} compact eagerLogo />
+            </div>
+          ))}
+        </HScroller>
+      )}
+    </section>
+  )
+}
+
+function FocusSummary({ focus, resetKey, t }) {
+  return (
+    <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+      <FocusRow
+        ariaLabel="Recent results"
+        titleKey="matches.focus.recent"
+        emptyKey="matches.focus.noRecent"
+        items={focus.recent}
+        autoDelayMs={0}
+        resetKey={resetKey}
+        t={t}
+      />
+      <FocusRow
+        ariaLabel="Upcoming matches"
+        titleKey="matches.focus.upcoming"
+        emptyKey="matches.focus.noUpcoming"
+        items={focus.upcoming}
+        autoDelayMs={2000}
+        resetKey={resetKey}
+        t={t}
+      />
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    MiniStandingsPanel — 우측 순위표 패널 (lg 이상)
 ───────────────────────────────────────────────────────────── */
-function MiniStandingsPanel({ competitions, activeCompSlug, t, locale }) {
+function MiniStandingsPanel({ competitions, activeCompSlug, seasonYear, t, locale }) {
   const displaySlug = activeCompSlug === 'all' ? 'premier-league' : activeCompSlug
-  const { data: standingsData, loading } = useData(
-    () => fetchStandings(displaySlug),
-    [displaySlug]
+  const { data: standingsData, loading, error } = useData(
+    () => fetchStandings(displaySlug, seasonYear),
+    [displaySlug, seasonYear]
   )
 
   const comp = (competitions ?? []).find(c => c.slug === displaySlug)
@@ -326,6 +402,8 @@ function MiniStandingsPanel({ competitions, activeCompSlug, t, locale }) {
           <div style={{ padding: 12 }}>
             <LoadingSkeleton rows={6} />
           </div>
+        ) : error ? (
+          <ErrorState description={error} />
         ) : entries.length > 0 ? (
           <div style={{ padding: '4px 0' }}>
             <StandingsTable entries={entries} maxRows={8} compact competitionSlug={displaySlug} />
@@ -346,6 +424,10 @@ export default function MatchesPage() {
 
   const activeComp   = searchParams.get('competition') ?? 'all'
   const activeStatus = searchParams.get('status') ?? 'all'
+  // 백엔드 `?season=` 은 연도(int)만 받는다. 헤더가 URL 을 연도로 정규화하기 전 한 렌더 동안
+  // 예전 라벨('2025-26')이 남아 있을 수 있어, 연도가 아니면 넘기지 않는다(백엔드가 현재 시즌으로 폴백).
+  const seasonParam  = searchParams.get('season')
+  const seasonYear   = /^\d{4}$/.test(seasonParam ?? '') ? Number(seasonParam) : undefined
 
   /* URL 파라미터 업데이트 헬퍼 */
   function setParam(key, value) {
@@ -358,21 +440,45 @@ export default function MatchesPage() {
   }
 
   /* 데이터 조회 */
-  const { data: allMatches, loading: loadingMatches, error: matchError } = useData(fetchAllMatches, [])
+  // 시즌을 안 골랐으면(기본) 지금까지처럼 6대회를 한 번에 받아 대회 칩은 클라이언트에서 거른다.
+  // 그래서 activeComp 를 deps 에 넣지 않는다 — 넣으면 칩을 누를 때마다 재요청이 돌아 목록이 로딩으로 깜빡인다.
+  // 시즌을 고르면 대회를 서버로 내린다: 과거 시즌은 조회 창이 없어 6대회를 다 받으면 ≈1,900경기가 온다.
+  const scopedCompSlug = seasonYear && activeComp !== 'all' ? activeComp : undefined
+  // deps 에 seasonYear 가 있어야 시즌을 바꿨을 때 다시 받는다
+  const { data: matchesResult, loading: loadingMatches, error: matchError } = useData(
+    () => fetchAllMatches({ season: seasonYear, competitionSlug: scopedCompSlug }),
+    [seasonYear, scopedCompSlug ?? null]
+  )
   const { data: competitions, loading: loadingComps } = useData(fetchCompetitions, [])
   const loading = loadingMatches || loadingComps
 
-  /* 필터 적용 */
+  const allMatches = matchesResult?.items ?? null
+  /** 과거 시즌인데 대회를 안 골랐다 — 빈 결과가 아니라 "고르면 보인다" 다. 둘을 같은 화면으로 그리지 않는다 */
+  const needsCompetition = matchesResult?.unavailableReason === 'COMPETITION_REQUIRED'
+
+  /* 라이브 폴링 병합 — mergeLive 는 원본 배열 그대로(참조 유지) 또는 새 배열 반환 */
+  const { liveMap } = useLiveMatches()
+  const mergedMatches = useMemo(
+    () => allMatches ? mergeLive(allMatches, liveMap) : null,
+    [allMatches, liveMap]
+  )
+
+  /* 대회 필터만 적용된 목록 — 요약 칸(FocusSummary) 입력 (R1).
+     아래 `filtered` 는 상태 필터까지 포함 — 목록·LIVE 히어로 용도. */
+  const byCompetition = useMemo(() => {
+    if (!mergedMatches) return null
+    return activeComp === 'all'
+      ? mergedMatches
+      : mergedMatches.filter(m => m.competitionSlug === activeComp)
+  }, [mergedMatches, activeComp])
+
+  /* 필터 적용 — 상태 필터만 (대회 필터는 위에서 이미 적용됨) */
   const filtered = useMemo(() => {
-    if (!allMatches) return []
-    return allMatches.filter(m => {
-      const compOk = activeComp === 'all' || m.competitionSlug === activeComp
-      if (!compOk) return false
-      if (activeStatus === 'all') return true
-      const group = STATUS_GROUPS[activeStatus] ?? []
-      return group.includes(m.displayState)
-    })
-  }, [allMatches, activeComp, activeStatus])
+    if (!byCompetition) return []
+    if (activeStatus === 'all') return byCompetition
+    const group = STATUS_GROUPS[activeStatus] ?? []
+    return byCompetition.filter(m => group.includes(m.displayState))
+  }, [byCompetition, activeStatus])
 
   /* LIVE 경기 (히어로) & 날짜별 그룹 */
   const liveMatches = useMemo(
@@ -385,14 +491,57 @@ export default function MatchesPage() {
   )
   const dayGroups = useMemo(() => groupByDate(nonLiveFiltered), [nonLiveFiltered])
 
+  /* 요약 칸 데이터 — 대회 필터만 적용된 목록에서 3경기일씩 뽑는다.
+     라이브 병합은 byCompetition 단계에서 끝났으므로 focus 결과도 자동 갱신.
+     카드 재렌더 시 HScroller 는 children 을 useEffect deps 로 안 넣어 scrollLeft·자동재생 타이머 유지. */
+  const todayKey = todayKstKey()
+  const focus = useMemo(
+    () => pickFocusMatchdays(byCompetition ?? [], todayKey),
+    [byCompetition, todayKey]
+  )
+
+  /* 지난 경기 접기 (R3 · 앵커 스크롤 보정) */
+  const [showPast, setShowPast] = useState(false)
+  const buttonRef = useRef(null)
+  const anchorTopRef = useRef(null)
+  /* activeStatus === 'finished' 은 원래 지난 경기를 보려는 필터라 접기 비활성 */
+  const foldEnabled = activeStatus !== 'finished'
+  const hiddenGroups = useMemo(
+    () => (foldEnabled ? dayGroups.filter(g => g.key < todayKey) : []),
+    [dayGroups, foldEnabled, todayKey]
+  )
+  const hiddenMatchCount = hiddenGroups.reduce((n, g) => n + g.matches.length, 0)
+  const visibleDayGroups = useMemo(() => {
+    if (!foldEnabled || showPast) return dayGroups
+    return dayGroups.filter(g => g.key >= todayKey)
+  }, [dayGroups, foldEnabled, showPast, todayKey])
+
+  /* 앵커 스크롤 보정 — 클릭 직전 버튼의 화면 상단 위치를 기억, 펼침/접힘 후 같은 위치로 되돌린다.
+     Chrome 자체 overflow-anchor 보정과 이중 적용되면 흔들리므로 목록 컨테이너에 overflow-anchor:none. */
+  function onToggleShowPast() {
+    const el = buttonRef.current
+    anchorTopRef.current = el ? el.getBoundingClientRect().top : null
+    setShowPast(v => !v)
+  }
+  useLayoutEffect(() => {
+    const prevTop = anchorTopRef.current
+    anchorTopRef.current = null
+    if (prevTop == null) return
+    const el = buttonRef.current
+    if (!el) return
+    const newTop = el.getBoundingClientRect().top
+    const delta = newTop - prevTop
+    if (Math.abs(delta) > 0.5) window.scrollBy(0, delta)
+  }, [showPast])
+
   /* 헤더 부가 정보 */
   const totalCount = filtered.length
   const liveCount  = liveMatches.length
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
       {/* 모바일 필터 (lg 미만) */}
-      <div className="lg:hidden">
+      <div className="lg:hidden pl-sticky-filter">
         <MobileFilterBar
           competitions={competitions}
           activeComp={activeComp}
@@ -406,10 +555,9 @@ export default function MatchesPage() {
 
       {/* 3열 그리드 (lg+) / 단일 열 (모바일) */}
       <div
+        className="pl-container"
         style={{
-          maxWidth: 1440,
-          margin: '0 auto',
-          padding: '16px 16px 40px',
+          paddingBlock: '16px 40px',
         }}
       >
         {/* ── 레이아웃: 데스크톱 3열 ── */}
@@ -420,14 +568,14 @@ export default function MatchesPage() {
               grid-template-columns: 196px 1fr 300px;
               gap: 16px;
               align-items: start;
-              padding: 16px 24px 40px;
+              padding-block: 16px 40px;
             }
           }
         `}</style>
         <div className="matches-3col">
 
           {/* LEFT: 필터 레일 (lg+) */}
-          <div className="hidden lg:block">
+          <div className="hidden lg:block pl-sticky-filter" style={{ top: 'calc(var(--pl-header-h) + 16px)' }}>
             <CompFilterRail
               competitions={competitions}
               activeComp={activeComp}
@@ -464,8 +612,13 @@ export default function MatchesPage() {
               <ErrorState description={matchError} />
             )}
 
+            {/* 과거 시즌 — 대회를 골라야 목록이 뜬다. "경기가 없음" 과 다른 상태라 문구를 나눈다 */}
+            {!loading && !matchError && needsCompetition && (
+              <EmptyState title={t('matches.pickCompetition')} description={t('matches.pickCompetitionDesc')} />
+            )}
+
             {/* 빈 결과 */}
-            {!loading && !matchError && filtered.length === 0 && (
+            {!loading && !matchError && !needsCompetition && filtered.length === 0 && (
               <EmptyState
                 title={t('matches.noMatches')}
                 description={t('matches.noMatchesDesc')}
@@ -473,17 +626,53 @@ export default function MatchesPage() {
             )}
 
             {/* 경기 목록 */}
-            {!loading && !matchError && filtered.length > 0 && (
+            {!loading && !matchError && !needsCompetition && filtered.length > 0 && (
               <>
+                {/* 요약 칸 — 최근 결과 · 다가오는 경기 */}
+                <FocusSummary focus={focus} resetKey={activeComp} t={t} />
+
                 {/* LIVE 히어로 */}
                 {(activeStatus === 'all' || activeStatus === 'live') && liveMatches.length > 0 && (
                   <LiveSection matches={liveMatches} t={t} />
                 )}
 
-                {/* 날짜별 그룹 */}
-                {dayGroups.map(group => (
-                  <DayGroup key={group.key} group={group} t={t} locale={locale} />
-                ))}
+                {/* 지난 경기 접기 버튼 — 접힐 대상이 있을 때만 */}
+                {foldEnabled && hiddenGroups.length > 0 && (
+                  <button
+                    ref={buttonRef}
+                    type="button"
+                    onClick={onToggleShowPast}
+                    aria-expanded={showPast}
+                    style={{
+                      alignSelf: 'start',
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      border: '1px solid var(--pl-line)',
+                      background: 'var(--pl-card)',
+                      color: 'var(--pl-text)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font)',
+                      fontSize: 13,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {showPast
+                      ? t('matches.hidePast')
+                      : t('matches.showPast', { count: hiddenGroups.length, matches: hiddenMatchCount })}
+                  </button>
+                )}
+
+                {/* 날짜별 그룹 — 접기 상태 반영 · overflow-anchor:none 으로 Chrome 자동 보정 이중 적용 방지 */}
+                <div style={{ overflowAnchor: 'none', display: 'grid', gap: 16 }}>
+                  {visibleDayGroups.map(group => (
+                    <DayGroup key={group.key} group={group} t={t} locale={locale} />
+                  ))}
+                </div>
+
+                {/* 오늘 이후 그룹이 0개 · 그러나 지난 그룹은 있음 → 안내 문구 (버튼만 남는 상태 방지) */}
+                {foldEnabled && visibleDayGroups.length === 0 && hiddenGroups.length > 0 && (
+                  <p className="t-sub" style={{ margin: 0 }}>{t('matches.futureEmpty')}</p>
+                )}
               </>
             )}
           </main>
@@ -493,6 +682,7 @@ export default function MatchesPage() {
             <MiniStandingsPanel
               competitions={competitions}
               activeCompSlug={activeComp}
+              seasonYear={seasonYear}
               t={t}
               locale={locale}
             />

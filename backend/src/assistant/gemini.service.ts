@@ -1,0 +1,447 @@
+/**
+ * Gemini function-calling 어시스턴트 서비스.
+ *
+ * 흐름:
+ *   1. system prompt + user question 을 contents 로 시작.
+ *   2. tools = [{functionDeclarations: registry 10개}] · toolConfig.mode = AUTO 로 generateContent.
+ *   3. 응답에 functionCalls 있으면 각 call 을 registry.call → evidence·data 에 누적,
+ *      functionResponse Part 를 contents 에 append 후 재호출.
+ *   4. functionCalls 없으면 response.text 를 answer 로 확정.
+ *
+ * 상한:
+ *   - 도구 호출 총 MAX_TOOL_CALLS(5) 회. 넘으면 마지막 응답 text 로 answer, truncated:true.
+ *   - 전체 REQUEST_TIMEOUT_MS(75_000) 밖으로 나가면 AbortController 로 진행 중 호출을 취소하고,
+ *     지금까지 evidence·data 로 truncated:true 반환.
+ *
+ * 왜 parametersJsonSchema 인가:
+ *   - registry 의 argsSchema 는 `additionalProperties: false` 등 OpenAPI 3.0 Schema 밖 필드를 쓴다.
+ *   - SDK 는 `parameters` (OpenAPI 서브셋) 와 `parametersJsonSchema` (raw JSON Schema) 를 나눠 두고
+ *     상호 배타로 정의한다 (node_modules/@google/genai/dist/genai.d.ts:5295~5298).
+ *   - argsSchema 를 그대로 넘기려면 parametersJsonSchema 다. e2e Case 4 도 원문 description 을 확인한다.
+ *
+ * 왜 GEMINI_API_KEY 미설정 시 부팅은 살리는가:
+ *   - 로컬 개발자가 어시스턴트 없이도 조회 API 를 띄울 수 있어야 한다.
+ *   - 대신 ask() 시점에 명확히 503 을 낸다.
+ */
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { GoogleGenAI, type Content, type FunctionDeclaration } from '@google/genai';
+import { AssistantToolRegistry } from './assistant-tool.registry.js';
+import type { AssistantTool, ToolResult } from './assistant.types.js';
+import { compressForModel } from './response-compaction.js';
+import { maskSecrets } from './mask-secrets.js';
+
+export const MAX_TOOL_CALLS = 5;
+/** step 상한과 별도로, 실제로 registry.call 을 도는 총 실행 수 상한.
+ *  step 상한(5)은 왕복 상한이지만, 한 step 안에서 모델이 다수 functionCall 을 반환할 수 있어
+ *  실행 수가 폭주하는 걸 못 막는다. MAX_TOOL_EXECUTIONS 는 이 실행 수 자체를 캡한다. */
+export const MAX_TOOL_EXECUTIONS = 8;
+// gemini-3.x 계열은 추론 단계가 있어 왕복 2회면 30초를 넘긴다 (2026-09-09 실측: 3.6-flash 타임아웃)
+export const REQUEST_TIMEOUT_MS = 75_000;
+
+/**
+ * 시스템 프롬프트를 현재 시각(KST · UTC)과 함께 조립한다.
+ *
+ * 왜 팩토리인가:
+ *   - 규칙 7 의 날짜 비교("지났는지·앞으로인지") 는 모델이 자체 시간감 없이 판정하지 못한다.
+ *     매 ask() 진입 시점의 `new Date()` 를 프롬프트에 값으로 박아 모델에 시각 기준을 준다.
+ *   - 규칙 2 (네 갈래: 데이터 없음 · 미확정 · 필드 null · 전제 오류), 규칙 4 (한국어 존댓말+외래어 통용 표기),
+ *     규칙 7 (계산 규약) 을 신설. 규칙 1·3·5·6 은 그대로.
+ *
+ * 포맷 규약:
+ *   - KST: "YYYY-MM-DD HH:mm KST" — `sv-SE` locale 이 ISO 형식(YYYY-MM-DD HH:mm:ss) 을 돌려주므로
+ *     초를 잘라내고 " KST" 를 붙인다.
+ *   - UTC: "YYYY-MM-DDTHH:mmZ" — 초 없음. Intl 대신 `toISOString().slice(0, 16) + 'Z'` 가 정확하다.
+ */
+export function buildSystemPrompt(now: Date): string {
+  // sv-SE + Asia/Seoul → "2026-09-14 15:24:00" 형태. 초 잘라내고 " KST".
+  const kstFmt = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const kst = `${kstFmt.format(now)} KST`;
+  // toISOString → "2026-09-14T06:24:37.123Z". 앞 16자 (YYYY-MM-DDTHH:mm) + "Z".
+  const utc = `${now.toISOString().slice(0, 16)}Z`;
+  return (
+    '너는 PitchLog 축구 데이터 어시스턴트다.\n' +
+    `현재 시각: ${kst} (${utc})\n` +
+    '\n' +
+    '규칙:\n' +
+    '1. 도구를 부르지 않고는 숫자·순위·기록을 말하지 않는다.\n' +
+    '2. 답할 수 없을 때는 네 갈래로 구분해 답한다. (a) 는 도구를 부르기 전 판정, (b)(c)(d) 는 부른 뒤 판정이다:\n' +
+    '   (a) 질문이 요구하는 정보를 주는 도구가 도구 목록에 없으면: "우리 데이터에 없습니다" — 도구를 부르지 않는다\n' +
+    '   (b) 시즌·일정·대진이 아직 정해지지 않았으면: "아직 확정되지 않았습니다"\n' +
+    '   (c) 도구 응답의 특정 필드만 null 이면 그 필드만 "제공되지 않습니다" 라 하고 다른 필드는 그대로 답한다\n' +
+    '   (d) 질문의 전제가 이 대회·종목에 존재하지 않으면 "그런 것은 없습니다" 라고 먼저 밝히고 실제 구조를 말한다 (예: UCL 은 조별리그가 아니라 리그 페이즈다)\n' +
+    '   * 도구를 부른 뒤에는 반드시 한국어 문장으로 답한다. 도구 결과만 반환하고 끝내지 않는다.\n' +
+    '3. null 은 0 이 아니라 "측정 안 됨" 이다.\n' +
+    '4. 답변 언어는 질문 언어를 따른다. 한국어는 존댓말(-니다체)로 통일한다. 외래어는 통용 표기를 쓴다 (League Phase → 리그 페이즈).\n' +
+    '5. 마크다운 표(| ... |)를 쓰지 않는다. 표가 필요한 답은 짧은 문장으로 요약하고 상세는 근거 데이터에 맡긴다.\n' +
+    '6. 판정 표현("무패"·"압도적"·"최고"·"부진")을 쓰지 않는다. 서버가 판정하지 않는 한 조회된 수치만 말한다. 숫자 나열 대신 한두 문장 요약.\n' +
+    '7. 계산: 항목 5개 이상이면 계산 없이 값만 나열한다. 비율·퍼센트는 분모와 정의를 밝힐 때만 계산한다 — 도구가 이미 준 퍼센트(점유율·패스 성공률)는 그대로 전달한다. 표본 5경기 미만이면 원값을 먼저 말한다. 도구가 준 순서를 재정렬하지 않는다(필요하면 그렇게 말한다). 날짜 비교(지났는지·앞으로인지)는 위 현재 시각 기준으로 판단한다. 날짜 산출(며칠 남음·몇 살·경기 간격)은 하지 않는다. 근거에 없는 값으로 계산하지 않는다.\n' +
+    '8. 합계·차이를 말할 때는 계산에 쓴 값을 반드시 형식대로 적는다: "맨체스터 시티 9 + 아스널 9 + 헐 시티 7 = 25점". 이 형식 없이 결과만 말하지 않는다.\n' +
+    '9. 대회 범위는 이 프롬프트에 나열하지 않는다. 우리가 다루는 대회의 정본은 `list_competitions` 결과다 — 답하기 전 필요하면 부른다. 대회·팀·선수의 존재 여부를 도구 없이 단정하지 않는다: 관련 도구(`list_competitions`·`list_teams`·`get_team`·`get_player`·`list_matches` 등)가 있는데 부르지 않고 "우리 데이터에 없습니다" 라고 답하지 않는다 — 규칙 2(a)는 "그 정보를 주는 도구가 도구 목록에 없을 때"만 적용된다.\n' +
+    '10. "유럽 대항전" 은 UEFA Champions League · UEFA Europa League · UEFA Europa Conference League 셋을 모두 뜻한다. 특정 대회를 지정하지 않은 유럽 대항전 질문에는 셋 모두를 조회한다 (예: `list_matches` 를 세 대회 ref 로 각각 호출). UCL 만 조회하고 답하지 않는다.\n' +
+    '11. 답변 대상 대회와 집계 대회는 다르다. `list_matches`·`get_match`·`list_teams`·`get_team`·`get_player` 는 우리가 다루는 모든 대회를 대상으로 한다. 그러나 `get_standings`·`get_top_scorers`·`get_top_assisters` 의 Mode B(competition 생략)는 리그5 + UCL 6대회만 집계한다 — 국내 컵·슈퍼컵·유로파·컨퍼런스의 순위·랭킹이 필요하면 competition ref 를 지정해 개별 조회한다.'
+  );
+}
+
+export interface AskEvidence {
+  tool: string;
+  args: Record<string, unknown>;
+  asOf: string;
+}
+
+/**
+ * ask() 가 상한(maxToolCalls · maxToolExecutions) 에 걸려 텍스트 없이 종료할 때 만드는 폴백 답변.
+ * 규칙 4(질문 언어 따름)와 불일치하지만 한국어 고정으로 결정적이게 만든다 (Gemini 추가 호출 금지).
+ * evidence 기준 도구별 횟수 집계, 여러 도구는 " · " 로 잇는다. args·ref 는 넣지 않음(내부 문자열 노출 금지).
+ */
+export function buildTruncatedFallback(evidence: AskEvidence[]): string {
+  const base = '요청하신 정보를 찾지 못했습니다.';
+  if (evidence.length === 0) return base;
+  const counts = new Map<string, number>();
+  for (const e of evidence) counts.set(e.tool, (counts.get(e.tool) ?? 0) + 1);
+  const parts = Array.from(counts.entries()).map(([tool, n]) => `${tool} ${n}회`);
+  return `${base} (조회한 도구: ${parts.join(' · ')})`;
+}
+
+export interface AskResult {
+  answer: string;
+  evidence: AskEvidence[];
+  data: unknown[];
+  truncated: boolean;
+  model: string;
+  /** evidence 중 가장 오래된 asOf. evidence 가 비면 null.
+   *  ISO 8601 문자열은 사전순 = 시간순 정렬이라 min 은 lexicographic min 이다. */
+  asOf: string | null;
+  /** 이 ask() 호출 안 generateContent SDK 호출 횟수 (재시도 포함). E2 계측용. */
+  geminiRequests: number;
+}
+
+export interface AskOpts {
+  timeoutMs?: number;
+  maxToolCalls?: number;
+  maxToolExecutions?: number;
+}
+
+/**
+ * SDK 최소 인터페이스 — 테스트에서 Mock 으로 갈아 끼우려고 남긴다.
+ * client.models.generateContent 만 쓰는 좁은 스펙.
+ */
+export interface GeminiClientLike {
+  models: {
+    generateContent: (params: {
+      model: string;
+      contents: Content[];
+      config?: {
+        systemInstruction?: string;
+        tools?: Array<{ functionDeclarations: FunctionDeclaration[] }>;
+        toolConfig?: { functionCallingConfig?: { mode?: string } };
+        abortSignal?: AbortSignal;
+      };
+    }) => Promise<{
+      text?: string;
+      functionCalls?: Array<{ name?: string; args?: Record<string, unknown> }>;
+      /** 모델 턴 원문. Gemini 3 계열은 functionCall part 에 thoughtSignature 를 실어 보내고,
+       *  다음 요청에 그 part 를 **그대로** 되돌려주지 않으면 400 INVALID_ARGUMENT 가 난다.
+       *  (2026-09-09 실측: "Function call is missing a thought_signature in functionCall parts") */
+      candidates?: Array<{ content?: Content }>;
+    }>;
+  };
+}
+
+/** evidence 중 가장 오래된 asOf 를 뽑는다. 없으면 null.
+ *  프론트 카드 헤더에 "언제 기준" 을 한 줄로 표시하려면 여러 도구 asOf 중 최솟값이 안전하다. */
+export function pickAsOf(evidence: AskEvidence[]): string | null {
+  if (evidence.length === 0) return null;
+  // ISO 8601 문자열은 사전순 = 시간순. `map` 이 이미 새 배열을 만들어 sort 가 원본을 건드리지 않는다.
+  return evidence.map((e) => e.asOf).sort()[0] ?? null;
+}
+
+/** registry 의 AssistantTool 을 Gemini FunctionDeclaration 으로 변환한다 (raw JSON Schema 경로) */
+export function toFunctionDeclaration(tool: AssistantTool): FunctionDeclaration {
+  return {
+    name: tool.name,
+    description: tool.description,
+    // additionalProperties: false 등을 그대로 살리려면 parametersJsonSchema.
+    // `parameters` 는 OpenAPI 3.0 Schema 서브셋만 받는다 (SDK d.ts:5295).
+    parametersJsonSchema: tool.argsSchema,
+  };
+}
+
+@Injectable()
+export class GeminiService {
+  private readonly logger = new Logger(GeminiService.name);
+  private readonly client: GeminiClientLike | null;
+  private readonly modelName: string;
+  /** 테스트에서 setClient 로 갈아 끼울 수 있게 held (production 은 생성자에서만 세팅).
+   *  `null` 도 유효한 override 값(= 강제 미설정)이므로 sentinel 로 활성 여부를 별도 관리한다.
+   *  (2026-09-09 실측: .env 에 GEMINI_API_KEY 가 있으면 `setClient(null)` 이 실 client 로 폴백돼 e2e Case 1 이 깨졌다) */
+  private clientOverride: GeminiClientLike | null = null;
+  private overrideActive = false;
+
+  constructor(
+    private readonly config: ConfigService,
+    private readonly registry: AssistantToolRegistry,
+  ) {
+    const apiKey = this.config.get<string>('GEMINI_API_KEY');
+    this.modelName = this.config.get<string>('GEMINI_MODEL') ?? 'gemini-3.5-flash';
+    if (apiKey && apiKey.length > 0) {
+      this.client = new GoogleGenAI({ apiKey }) as unknown as GeminiClientLike;
+    } else {
+      this.client = null;
+      this.logger.warn('GEMINI_API_KEY 미설정 — POST /api/assistant 는 503 을 낸다');
+    }
+  }
+
+  /** 테스트 전용 — MockGeminiClient 를 주입한다. `null` 을 넘기면 실 client 로 폴백하지 않고 강제 미설정. */
+  setClient(client: GeminiClientLike | null): void {
+    this.clientOverride = client;
+    this.overrideActive = true;
+  }
+
+  private getClient(): GeminiClientLike | null {
+    return this.overrideActive ? this.clientOverride : this.client;
+  }
+
+  async ask(question: string, opts: AskOpts = {}): Promise<AskResult> {
+    const client = this.getClient();
+    if (!client) {
+      throw new HttpException('assistant.error.not_configured', HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    const maxToolCalls = opts.maxToolCalls ?? MAX_TOOL_CALLS;
+    const maxExecutions = opts.maxToolExecutions ?? MAX_TOOL_EXECUTIONS;
+    const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+
+    // ask() 진입 시점의 시각을 프롬프트에 값으로 박는다. step 마다 다시 계산하면
+    // 시각이 흔들려 규칙 7 의 "지났는지·앞으로인지" 판정이 불안정해진다.
+    const systemInstruction = buildSystemPrompt(new Date());
+
+    const evidence: AskEvidence[] = [];
+    const data: unknown[] = [];
+    let executions = 0;
+    let truncated = false;
+    // E2 계측 — generateContent SDK 호출 수. try 안 pre-increment (throw 나도 이미 셈).
+    let geminiRequests = 0;
+
+    // 도구 10개를 FunctionDeclaration 으로 변환 — 매 호출마다 같은 배열
+    const functionDeclarations = this.registry.getAll().map(toFunctionDeclaration);
+
+    // contents 는 user 발화로 시작. system 은 config.systemInstruction 로 별도.
+    const contents: Content[] = [{ role: 'user', parts: [{ text: question }] }];
+
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
+    let lastAnswer = '';
+
+    try {
+      for (let step = 0; step <= maxToolCalls; step++) {
+        // 상한 초과: maxToolCalls 회 부른 뒤 한 번 더 재호출해 최종 텍스트를 뽑되, 도구가 또 오면 truncated
+        let response: Awaited<ReturnType<GeminiClientLike['models']['generateContent']>>;
+        try {
+          // 재시도·에러 시에도 카운트되도록 await 전에 증가한다.
+          geminiRequests++;
+          response = await client.models.generateContent({
+            model: this.modelName,
+            contents,
+            config: {
+              systemInstruction,
+              tools: [{ functionDeclarations }],
+              toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
+              abortSignal: controller.signal,
+            },
+          });
+        } catch (cause) {
+          const err = this.wrapSdkError(cause, controller.signal.aborted);
+          // controller catch 에서 (err as any).geminiRequests 로 헤더에 실을 수 있게 attach.
+          (err as { geminiRequests?: number }).geminiRequests = geminiRequests;
+          throw err;
+        }
+
+        lastAnswer = response.text ?? lastAnswer;
+
+        const calls = response.functionCalls ?? [];
+        if (calls.length === 0) {
+          // 답 확정
+          return {
+            answer: lastAnswer,
+            evidence,
+            data,
+            truncated,
+            model: this.modelName,
+            asOf: pickAsOf(evidence),
+            geminiRequests,
+          };
+        }
+
+        // 상한을 넘겼으면 마지막 텍스트로 확정하고 truncated
+        if (step >= maxToolCalls) {
+          truncated = true;
+          const answer = lastAnswer.trim() === '' ? buildTruncatedFallback(evidence) : lastAnswer;
+          return {
+            answer,
+            evidence,
+            data,
+            truncated,
+            model: this.modelName,
+            asOf: pickAsOf(evidence),
+            geminiRequests,
+          };
+        }
+
+        // 모델이 예측한 functionCall 을 그대로 contents 에 넣고 (role:'model'), 각 결과를 functionResponse Part 로 append
+        // 모델 턴은 **응답 원문을 그대로** 되돌린다 — 재구성하면 thoughtSignature 가 떨어져 400 이 난다.
+        // 원문이 없을 때만 name·args 로 최소 복원한다 (테스트 Mock 경로).
+        const modelContent = response.candidates?.[0]?.content;
+        contents.push(
+          modelContent ?? {
+            role: 'model',
+            parts: calls.map((c) => ({ functionCall: { name: c.name ?? '', args: c.args ?? {} } })),
+          },
+        );
+
+        const responseParts: Array<{ functionResponse: { name: string; response: Record<string, unknown> } }> = [];
+        let outerBreak = false;
+        for (const c of calls) {
+          // 실행 수 상한(MAX_TOOL_EXECUTIONS): step 상한과 별개로, 한 step 안에서 다수 functionCall 이 몰릴 때도
+          // 서비스 호출이 폭주하지 않도록 실행 카운트 자체를 캡한다. 발동 시 이 도구부터는 실행하지 않고 outer 도 break.
+          if (executions >= maxExecutions) {
+            truncated = true;
+            outerBreak = true;
+            break;
+          }
+          executions++;
+          const name = c.name ?? '';
+          const args = c.args ?? {};
+          let result: ToolResult;
+          try {
+            result = await this.registry.call(name, args);
+          } catch (cause) {
+            // 도구 자체 오류(BadRequest·NotFound 등)는 응답 파트로 감싸 모델에 되돌린다 — 모델이 재시도하거나 사용자에게 상황을 설명하게
+            const msg = cause instanceof Error ? cause.message : String(cause);
+            responseParts.push({ functionResponse: { name, response: { error: msg } } });
+            continue;
+          }
+          const { tool, args: appliedArgs, asOf } = result;
+          const argsObj = appliedArgs && typeof appliedArgs === 'object' ? (appliedArgs as Record<string, unknown>) : {};
+          evidence.push({ tool, args: argsObj, asOf });
+          // 프론트로 나가는 배열은 원본 유지 (금지 규약).
+          data.push(result.data);
+          const compressed = compressForModel(name, result.data);
+          // 모드 B (get_standings competition 생략 시 items 여러 개) 호출 실측 로그 — 다음 판 competitions:string[] 도입 근거.
+          // 실측 (2026-09-10): 모드 B 6대회 압축 후 27.6KB · 다른 도구 <5KB. Q3 게이트(10KB) 유일 초과 자리.
+          if (name === 'get_standings' && argsObj.competition == null) {
+            const items = (compressed as { items?: unknown[] } | null)?.items;
+            const compBytes = Buffer.byteLength(JSON.stringify(compressed));
+            this.logger.log(`[assistant.modeB] tool=${name} competitions=${Array.isArray(items) ? items.length : 0} compressedBytes=${compBytes}`);
+          }
+          responseParts.push({
+            functionResponse: {
+              name,
+              // SDK 는 { response: Record<string, unknown> } 를 기대한다.
+              // 모델로는 응답을 압축해서 되돌린다 — 429 근본 대응 (response-compaction.ts).
+              // 압축은 새 객체를 만들어 반환하므로 result.data 는 mutation 되지 않는다.
+              response: { result: compressed, asOf: result.asOf },
+            },
+          });
+        }
+        contents.push({ role: 'user', parts: responseParts });
+        if (outerBreak) break;
+      }
+
+      // 이론상 여기 도달 안 함 (루프 안에서 return) — 안전망.
+      // MAX_TOOL_EXECUTIONS 발동으로 outer break 를 타면 여기로 온다 — truncated 는 이미 true 로 세팅됨.
+      const answer = lastAnswer.trim() === '' ? buildTruncatedFallback(evidence) : lastAnswer;
+      return { answer, evidence, data, truncated: true, model: this.modelName, asOf: pickAsOf(evidence), geminiRequests };
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
+  /**
+   * SDK 오류를 HttpException 으로 매핑 · 근본 파악 로그 (D1).
+   *
+   * @google/genai `ApiError` 는 message 에 `JSON.stringify(errorBody)` 를 담는다
+   * (index.mjs:8679~8687). errorBody.error = { code, status, message, details? }.
+   * 429 은 details[] 에 quotaMetric/quotaValue/retryDelay 가 실려 나오므로
+   * 여기서 파싱해 로그로 남긴다 (프론트로는 여전히 'assistant.error.rate_limited' 만).
+   *
+   * 로그로 나가는 모든 문자열은 maskSecrets 로 API 키·Bearer 를 지운다 (Q5).
+   */
+  private wrapSdkError(cause: unknown, aborted: boolean): HttpException {
+    if (aborted) {
+      return new HttpException('assistant.error.timeout', HttpStatus.GATEWAY_TIMEOUT);
+    }
+    // @google/genai ApiError 는 { status: number } 를 갖는다 (d.ts:538~542)
+    const status = extractStatus(cause);
+    const detail = parseErrorBody(cause);
+
+    if (status === 429) {
+      this.logger.warn(maskSecrets(formatSdkErrorLog(status, detail, cause)));
+      return new HttpException('assistant.error.rate_limited', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    this.logger.warn(maskSecrets(formatSdkErrorLog(status, detail, cause)));
+    return new HttpException('assistant.error.model_error', HttpStatus.BAD_GATEWAY);
+  }
+}
+
+function extractStatus(cause: unknown): number | undefined {
+  if (cause && typeof cause === 'object' && 'status' in cause) {
+    const v = (cause as { status: unknown }).status;
+    if (typeof v === 'number') return v;
+  }
+  return undefined;
+}
+
+function errMessage(cause: unknown): string {
+  if (cause instanceof Error) return cause.message;
+  return String(cause);
+}
+
+interface SdkErrorBodyDetail {
+  errStatus?: string; // "RESOURCE_EXHAUSTED" 등 (errorBody.error.status)
+  errMessage?: string; // errorBody.error.message
+  details?: unknown[]; // errorBody.error.details[]
+}
+
+/**
+ * ApiError.message 는 `JSON.stringify(errorBody)` — errorBody = { error: { code, status, message, details? } }.
+ * 형태가 안 맞으면 undefined 를 반환한다 (원문 message 는 formatSdkErrorLog 가 대신 실는다).
+ */
+function parseErrorBody(cause: unknown): SdkErrorBodyDetail | undefined {
+  if (!(cause instanceof Error)) return undefined;
+  const raw = cause.message;
+  if (!raw || raw[0] !== '{') return undefined;
+  try {
+    const parsed = JSON.parse(raw) as { error?: { status?: unknown; message?: unknown; details?: unknown } };
+    const err = parsed.error;
+    if (!err || typeof err !== 'object') return undefined;
+    const out: SdkErrorBodyDetail = {};
+    if (typeof err.status === 'string') out.errStatus = err.status;
+    if (typeof err.message === 'string') out.errMessage = err.message;
+    if (Array.isArray(err.details)) out.details = err.details;
+    return out;
+  } catch {
+    return undefined;
+  }
+}
+
+function formatSdkErrorLog(status: number | undefined, detail: SdkErrorBodyDetail | undefined, cause: unknown): string {
+  // 괄호 안에 status · errStatus 를 콤마로 이어붙인 뒤 닫는다 — "Gemini call failed (status=429, errStatus=RESOURCE_EXHAUSTED): ..."
+  const inParen: string[] = [`status=${status ?? 'unknown'}`];
+  if (detail?.errStatus) inParen.push(`errStatus=${detail.errStatus}`);
+  const line = `Gemini call failed (${inParen.join(', ')})`;
+  const body = detail?.errMessage ?? errMessage(cause);
+  const details = detail?.details && detail.details.length > 0 ? ` details=${JSON.stringify(detail.details)}` : '';
+  return `${line}: ${body}${details}`;
+}

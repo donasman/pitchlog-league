@@ -35,7 +35,7 @@ export default function ThemeToggle() {
       onClick={() => setIsDark(d => !d)}
       aria-label={isDark ? t('theme.toLight') : t('theme.toDark')}
       aria-pressed={isDark}
-      className="p-2 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex items-center justify-center w-11 h-11 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {isDark
         ? <Sun  size={18} aria-hidden="true" />

@@ -1,0 +1,456 @@
+/**
+ * 백필-2 오케스트레이터 — 상세 4콜(L3 lineups·events · L5 team-stats·player-stats) 을 경기 단위로 돈다.
+ *
+ * 이 파일 자체는 API-Football 을 부르지 않는다. 대상 경기를 골라 L3·L5 서비스에 위임한다.
+ *
+ * ## 대상 SELECT — `detailTargetWhere` (detail-retry.ts)
+ *   `detail_eligible=true` · `detail_checked_at=null` · status ∈ {FT,AET,PEN} · kickoff < now - 24h
+ *   · 재시도 창(0회 즉시 · 1회 실패 뒤 1h · 2회 실패 뒤 6h · 3회면 영구 제외).
+ *   커서는 없다 — `id > cursor` 는 id 가 작은데 늦게 끝난 경기와 실패한 경기를 영구히 건너뛰었다.
+ *   정렬은 `kickoff asc, id asc`. 이 판이 죽어도 다음 판의 대상 SELECT 가 미확정 경기를 다시 고른다.
+ *
+ * ## 예산 (INGESTION_STRATEGY 3-5)
+ *   경기당 4콜 고정. 우리는 API 상한(Pro=7,500)보다 낮은 자율 상한(env `BACKFILL_DAILY_CAP` · 기본 5,700)을 지킨다 —
+ *   `effectiveLimit = min(quota.limit, dailyCap)`. `remaining = effectiveLimit - used`
+ *   를 4로 나눈 만큼만 잡는다. 우리 자율 상한이 API 상한보다 먼저 걸린다.
+ *   중단 사유는 실제 원인을 구분한다:
+ *     - `quota_exhausted`: used >= quota.limit (API 가 실제로 429 낼 상태)
+ *     - `daily_cap`: used < quota.limit 이지만 used >= dailyCap (우리 자율 상한)
+ *   사용량 확인(QuotaService current · /status 1콜 · 기록 없음)은 **대상이 있는 대회시즌 진입 1회 +
+ *   매 경기 앞 1회** 다 (예산이 take 를 자른 대회시즌은 끝 사유 판정에서 1회 더) —
+ *   같은 판 안에서 다른 시즌·다른 프로세스가 예산을 먹었을 수 있다.
+ *   대상이 0 인 대회시즌은 사용량을 확인하지 않는다 — count 를 먼저 하고 0 이면 바로 넘어간다.
+ *   기록(api_quota_snapshots INSERT)은 snapshot 쪽(QuotaSnapshotJob · CLI)만 한다.
+ *
+ * ## 소유권 (D18·D19·D20)
+ *   L3·L5 가 각자의 has_* 를 세우고 `promoteIfAllDetailsChecked` 가 detail_checked_at·stats_state 를 올린다.
+ *   이 파일이 matches 에 쓰는 것은 `detail_attempts`·`detail_last_attempt_at` 둘뿐이다 (상세 백필 소유) —
+ *   raw UPDATE 로 써서 updated_at 을 건드리지 않는다 (Prisma update·updateMany 는 @updatedAt 을 올린다).
+ *   backfill_jobs 는 `total`·`done`·`failed`·`last_error` 만 쓴다.
+ *
+ * ## backfill_jobs.phase 는 읽지도 쓰지도 않는다
+ *   L2·L6 백필-1 완료 표시(`dataStateOf` → 프론트 시즌 선택기)와 L1 락
+ *   (`BACKFILL_IN_PROGRESS` in l1.service.ts:43) 에 공유되는 신호라 우리 소유가 아니다.
+ *   상세 백필이 phase 를 DETAILS 로 세우면 며칠 도는 동안 L1 스쿼드가 잠긴다.
+ *   DONE 으로 세우면 L6 가 세운 완료 표시와 구분이 안 된다.
+ *   대신 skip 판정은 **대상 SELECT 자체가 한다** — detail_checked_at IS NULL 이 걸리면
+ *   targeted 가 0 이라 /status 도 상세 API 도 안 부르고 continue.
+ *   진행 지표는 `updateDetailProgress` (backfill-job.service.ts) 하나로만 쓴다.
+ *
+ * ## 트랜잭션
+ *   여기는 트랜잭션이 없다. L3·L5 가 자체 트랜잭션을 짧게 잡는다.
+ *   시도 기록(detail_attempts +1)은 4콜 시도가 다 끝난 뒤 UPDATE 한 방 — quota 예외로 그 전에 끊긴
+ *   경기는 시도로 세지 않는다. 진행 지표 갱신도 update 한 방 — 실패해도 다음 판의 대상 SELECT 가
+ *   미확정 경기를 다시 고른다(멱등).
+ */
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { EnvironmentVariables } from '../../config/env.validation.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { QuotaService } from '../api-football/quota.service.js';
+import { ApiQuotaExhaustedError } from '../api-football/api-football.errors.js';
+import { IngestionRunService } from '../ingestion-run.service.js';
+import { BackfillJobService } from './backfill-job.service.js';
+import { DETAIL_MAX_ATTEMPTS, detailTargetWhere, isDetailGiveUp } from './detail-retry.js';
+import { L3LineupsService } from '../l3/lineups.service.js';
+import { L3EventsService } from '../l3/events.service.js';
+import { L5TeamStatsService } from '../l5/team-stats.service.js';
+import { L5PlayerStatsService } from '../l5/player-stats.service.js';
+import { ingestScopeWhere } from '../screen-scope.js';
+import { IngestionLayer } from '../../generated/prisma/client.js';
+
+export interface BackfillDetailsOptions {
+  /** 없으면 수집 범위(ingestScopeWhere · isTracked 19대회)의 현재 시즌만 (run() where) */
+  season?: number;
+  /** 처리할 경기 수 상한. 실제 상한은 min(limit, 남은 예산/4) */
+  limit?: number;
+  /** true 면 대상 카운트만 계산하고 API 는 안 부른다 · job 갱신도 없음 */
+  dryRun?: boolean;
+}
+
+/** 6가지 중단 사유. 시즌 단위와 전체 단위에서 같이 쓴다 */
+export type BackfillStopReason =
+  | 'quota_exhausted' // ApiQuotaExhaustedError 잡힘
+  | 'daily_cap' // min(limit, dailyCap) - used < 4 · used < limit (우리 자율 상한)
+  | 'limit_reached' // --limit 도달
+  | 'no_targets' // 이 시즌에 대상 경기 없음
+  | 'done' // 대상 다 처리
+  | 'error'; // 예상치 못한 예외
+
+export interface BackfillPerSeasonReport {
+  competitionSeasonId: number;
+  competitionName: string;
+  seasonYear: number;
+  /** 백오프 대기·포기 경기를 뺀 대상 수 (LIMIT 미적용) */
+  targeted: number;
+  /** 4엔드포인트 시도가 다 끝난 경기 수 (일부 endpoint 실패 포함) */
+  processed: number;
+  /** 4엔드포인트 중 하나 이상 실패한 경기 수 */
+  failed: number;
+  stoppedReason: BackfillStopReason;
+  lastError?: string;
+}
+
+export interface BackfillDetailsResult {
+  perSeason: BackfillPerSeasonReport[];
+  totalProcessed: number;
+  totalFailed: number;
+  overallStopped: BackfillStopReason;
+  dryRun: boolean;
+  /** IngestionRunService.wrap 이 PARTIAL 로 저장하도록 */
+  partial?: boolean;
+}
+
+const PER_MATCH_CALLS = 4;
+// 일일 자율 상한은 env `BACKFILL_DAILY_CAP` (기본 5700). 하드 한도(Pro=7500)보다 낮다 —
+// 우리가 먼저 멈춘다. /status 카운터 약 2분 지연 실측 · 상한 초과분 최대 ~320콜.
+const PROGRESS_EVERY = 50;
+
+@Injectable()
+export class MatchDetailsBackfillService {
+  private readonly logger = new Logger(MatchDetailsBackfillService.name);
+  readonly dailyCap: number;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly quota: QuotaService,
+    private readonly jobs: BackfillJobService,
+    private readonly runs: IngestionRunService,
+    private readonly lineups: L3LineupsService,
+    private readonly events: L3EventsService,
+    private readonly teamStats: L5TeamStatsService,
+    private readonly playerStats: L5PlayerStatsService,
+    config: ConfigService<EnvironmentVariables, true>,
+  ) {
+    this.dailyCap = config.get('BACKFILL_DAILY_CAP', { infer: true });
+  }
+
+  async run(opts: BackfillDetailsOptions = {}): Promise<BackfillDetailsResult> {
+    return this.runs.wrap(IngestionLayer.BACKFILL, null, async () => {
+      const perSeason: BackfillPerSeasonReport[] = [];
+      let totalProcessed = 0;
+      let totalFailed = 0;
+      let overallStopped: BackfillStopReason = 'done';
+
+      const where = opts.season !== undefined
+        ? { competition: ingestScopeWhere, season: { year: opts.season } }
+        : { isCurrent: true, competition: ingestScopeWhere };
+
+      const seasons = await this.prisma.competitionSeason.findMany({
+        where,
+        include: { competition: true, season: true },
+        // 최신 시즌부터 (INGESTION_STRATEGY 5-3)
+        orderBy: [{ season: { year: 'desc' as const } }, { competition: { displayOrder: 'asc' as const } }],
+      });
+
+      if (seasons.length === 0) {
+        this.logger.warn(
+          opts.season !== undefined
+            ? `${opts.season} 시즌인 화면 대회가 없다 — L0 를 먼저 돌린다`
+            : '현재 시즌인 화면 대회가 없다 — L0 를 먼저 돌린다',
+        );
+        return {
+          perSeason,
+          totalProcessed,
+          totalFailed,
+          overallStopped: 'no_targets',
+          dryRun: !!opts.dryRun,
+        };
+      }
+
+      const mode = opts.season !== undefined ? `${opts.season} 시즌` : '현재 시즌';
+      this.logger.log(
+        `backfill-details 시작 — ${mode} · 대회시즌 ${seasons.length}개 · 일일 상한 ${this.dailyCap}콜` +
+          (opts.limit !== undefined ? ` · --limit=${opts.limit}` : '') +
+          (opts.dryRun ? ' · DRY RUN' : ''),
+      );
+
+      for (const cs of seasons) {
+        const label = `${cs.competition.name} ${cs.season.year}`;
+
+        // skip 판정은 phase 가 아니라 대상 SELECT 로 한다 —
+        //   detail_checked_at IS NULL 조건이 걸려 있어 이미 다 채운 시즌은 targeted 가 0 이라
+        //   자연히 continue. phase 는 우리 소유가 아니라 여기서 읽지 않는다.
+
+        // now 는 이 대회시즌 동안 고정한다 — count 와 findMany 가 다른 시각을 쓰면 24h 컷·백오프 창이 어긋난다
+        const now = new Date();
+        const targetWhere = detailTargetWhere(cs.id, now);
+
+        // targeted 는 LIMIT 없이 count — 요약과 done/limit_reached 판정에 쓴다.
+        // 사용량 확인보다 먼저 센다 — 대상이 0 인 대회시즌은 /status 를 부르지 않는다.
+        const targeted = await this.prisma.match.count({ where: targetWhere });
+
+        if (targeted === 0) {
+          // 남은 대상 없음. phase 를 건드리지 않으므로 job 도 만들지 않는다 —
+          // 대상이 없으면 아무 상태도 남기지 않는 게 옳다 (다음 판이 다시 대상 SELECT 로 판정).
+          this.logger.log(`${label}: 대상 없음 (targeted=${targeted})`);
+          perSeason.push({
+            competitionSeasonId: cs.id,
+            competitionName: cs.competition.name,
+            seasonYear: cs.season.year,
+            targeted,
+            processed: 0,
+            failed: 0,
+            stoppedReason: 'no_targets',
+          });
+          continue;
+        }
+
+        // 남은 예산 계산 — 대상이 있을 때만 사용량을 확인한다 (dry-run 은 확인 안 함)
+        let limitForThisSeason: number;
+        let limitedBy: 'user_limit' | 'budget' = 'user_limit';
+        if (opts.dryRun) {
+          limitForThisSeason = opts.limit ?? Number.MAX_SAFE_INTEGER;
+        } else {
+          const q = await this.quota.current();
+          const effectiveLimit = Math.min(q.limit, this.dailyCap);
+          const remainingByBudget = Math.floor((effectiveLimit - q.used) / PER_MATCH_CALLS);
+          if (remainingByBudget <= 0) {
+            const reason: BackfillStopReason = q.used >= q.limit ? 'quota_exhausted' : 'daily_cap';
+            this.logger.warn(
+              `${label}: 남은 예산 부족 — ${reason} (used=${q.used}/${q.limit} · cap=${this.dailyCap})`,
+            );
+            overallStopped = reason;
+            perSeason.push({
+              competitionSeasonId: cs.id,
+              competitionName: cs.competition.name,
+              seasonYear: cs.season.year,
+              targeted: 0,
+              processed: 0,
+              failed: 0,
+              stoppedReason: reason,
+            });
+            break;
+          }
+          // 어느 쪽이 상한을 잘랐는지 기억 (loop 정상 종료 후 seasonStop 판정에 쓴다)
+          const userLimitLeft = opts.limit !== undefined ? opts.limit - totalProcessed : Infinity;
+          limitForThisSeason = Math.min(userLimitLeft, remainingByBudget);
+          limitedBy = userLimitLeft <= remainingByBudget ? 'user_limit' : 'budget';
+          if (opts.limit !== undefined && limitForThisSeason <= 0) {
+            overallStopped = 'limit_reached';
+            this.logger.log(`${label}: --limit 도달 (총 ${totalProcessed}) — 남은 시즌 중단`);
+            break;
+          }
+        }
+
+        const targets = await this.prisma.match.findMany({
+          where: targetWhere,
+          orderBy: [{ kickoffAt: 'asc' }, { id: 'asc' }],
+          take: Math.max(0, limitForThisSeason),
+          select: { id: true, apiFixtureId: true, detailAttempts: true },
+        });
+
+        if (targets.length === 0) {
+          // count 뒤에 대상이 빠졌거나(다른 프로세스가 확정) dry-run --limit=0 — 위 targeted=0 과 같이 처리한다.
+          this.logger.log(`${label}: 대상 없음 (targeted=${targeted})`);
+          perSeason.push({
+            competitionSeasonId: cs.id,
+            competitionName: cs.competition.name,
+            seasonYear: cs.season.year,
+            targeted,
+            processed: 0,
+            failed: 0,
+            stoppedReason: 'no_targets',
+          });
+          continue;
+        }
+
+        if (opts.dryRun) {
+          // dry-run 은 대상만 세고 아무것도 안 건드린다
+          this.logger.log(`${label}: dry-run · targeted=${targeted} take=${targets.length}`);
+          perSeason.push({
+            competitionSeasonId: cs.id,
+            competitionName: cs.competition.name,
+            seasonYear: cs.season.year,
+            targeted,
+            processed: 0,
+            failed: 0,
+            stoppedReason: 'no_targets',
+          });
+          continue;
+        }
+
+        // begin 호출 없음 — phase 는 우리 소유가 아니다. total·done·failed 만 쓴다.
+
+        let processed = 0;
+        let failed = 0;
+        // 명시적으로 union 을 잡아둔다 — 여러 갈래에서 재할당되고 TS 가 좁혀 놓으면 아래 비교가 안 통한다
+        let seasonStop: BackfillStopReason = 'done' as BackfillStopReason;
+        let lastError: string | undefined;
+
+        try {
+          for (const m of targets) {
+            // limit 재확인 (매 경기 앞)
+            if (opts.limit !== undefined && totalProcessed + processed >= opts.limit) {
+              seasonStop = 'limit_reached';
+              overallStopped = 'limit_reached';
+              break;
+            }
+
+            // 예산 재확인 (매 경기 앞 · 기록 없는 확인) — 같은 판 안에서도 quota 는 계속 흘러간다.
+            // 대회시즌 진입 확인 이후에 다른 프로세스·이전 경기 처리로 quota 가 상한을 넘었을 수 있다.
+            // q2 는 아래 50경기 진행 로그도 재사용한다 (추가 /status 없음).
+            const q2 = await this.quota.current();
+            const effectiveLimit2 = Math.min(q2.limit, this.dailyCap);
+            if (effectiveLimit2 - q2.used < PER_MATCH_CALLS) {
+              seasonStop = q2.used >= q2.limit ? 'quota_exhausted' : 'daily_cap';
+              overallStopped = seasonStop;
+              this.logger.warn(
+                `${label}: 매 경기 예산 재확인 부족 — ${seasonStop} (used=${q2.used}/${q2.limit} · cap=${this.dailyCap}) · 이 경기부터 중단`,
+              );
+              break;
+            }
+
+            // 이 경기의 4엔드포인트를 순차로. ApiQuotaExhaustedError 는 시즌 중단
+            let anyFailed = false;
+            // 어느 갈래든 승격을 보고하면 이 경기는 확정됐다 (승격은 마지막으로 채운 갈래가 보고한다)
+            let promoted = false;
+            // 포기 warn 에 남길 이 경기의 마지막 오류 — 시즌 lastError 와 별개
+            let matchError: string | undefined;
+            const services: Array<{
+              name: string;
+              fn: () => Promise<{ ok: boolean; reason?: string; promoted?: boolean }>;
+            }> = [
+              { name: 'lineups', fn: () => this.lineups.run(m.id, m.apiFixtureId) },
+              { name: 'events', fn: () => this.events.run(m.id, m.apiFixtureId) },
+              { name: 'teamStats', fn: () => this.teamStats.run(m.id, m.apiFixtureId) },
+              { name: 'playerStats', fn: () => this.playerStats.run(m.id, m.apiFixtureId) },
+            ];
+            for (const s of services) {
+              try {
+                const r = await s.fn();
+                if (r.promoted === true) promoted = true;
+                if (!r.ok) {
+                  anyFailed = true;
+                  matchError = `${s.name} ok=false${r.reason ? ` (${r.reason})` : ''}`;
+                  this.logger.warn(`${label}: match ${m.id} · ${matchError}`);
+                }
+              } catch (err) {
+                if (err instanceof ApiQuotaExhaustedError) {
+                  lastError = err.message;
+                  throw err; // 아래 catch 로
+                }
+                anyFailed = true;
+                lastError = err instanceof Error ? err.message : String(err);
+                matchError = `${s.name}: ${lastError}`;
+                this.logger.warn(
+                  `${label}: match ${m.id} · ${s.name} 실패 — ${lastError}`,
+                );
+              }
+            }
+
+            // 시도 기록 — 4콜 시도가 다 끝난 경기만 온다 (ApiQuotaExhaustedError 는 위에서 throw 돼
+            // 여기 안 온다 → quota 로 끊긴 경기는 시도로 세지 않는다). 성공·실패 무관하게 센다.
+            // Prisma update 가 아니라 raw UPDATE — @updatedAt(updated_at) 을 올리지 않기 위해서다.
+            const rows = await this.prisma.$queryRaw<{ detail_attempts: number }[]>`
+              UPDATE "matches"
+              SET "detail_attempts" = "detail_attempts" + 1, "detail_last_attempt_at" = ${new Date()}
+              WHERE "id" = ${m.id}
+              RETURNING "detail_attempts"`;
+            const attemptsAfter = rows[0]?.detail_attempts ?? m.detailAttempts + 1;
+            // 실패 판정은 anyFailed 가 아니라 !promoted — 라이브 finalize 가 먼저 채운 has_* 덕분에
+            // 갈래 하나가 실패해도 승격될 수 있다.
+            if (isDetailGiveUp(promoted, attemptsAfter)) {
+              this.logger.warn(
+                `${label}: match ${m.id} (fixture ${m.apiFixtureId}) 상세 재시도 포기 — ${attemptsAfter}/${DETAIL_MAX_ATTEMPTS}회 실패 · 마지막 오류 ${(matchError ?? '-').slice(0, 200)} · 복구 UPDATE matches SET detail_attempts = 0, detail_last_attempt_at = NULL WHERE id = ${m.id}`,
+              );
+            }
+
+            processed++;
+            if (anyFailed) failed++;
+
+            // 진행 지표 갱신 — 경기 하나 시도 완료마다. 재개는 대상 SELECT 가 맡는다 (커서 없음).
+            // phase 는 건드리지 않는다 (updateDetailProgress 규약). lastError 는 유지(undefined).
+            await this.jobs.updateDetailProgress(cs.id, {
+              total: targeted,
+              done: processed,
+              failed,
+            });
+
+            if (processed % PROGRESS_EVERY === 0) {
+              // 이 경기 앞에서 확인한 q2 를 그대로 쓴다 — 진행 로그만을 위해 /status 를 더 부르지 않는다
+              this.logger.log(
+                `${label}: 진행 ${processed}/${targets.length} · 실패 ${failed} · 남은 예산 ${q2.limit - q2.used}`,
+              );
+            }
+          }
+
+          // 정상 종료. targeted 를 다 처리했으면 done. 아니면 왜 잘렸는지 판정
+          if (seasonStop === 'done' && processed < targeted) {
+            // take: limitForThisSeason 로 잘랐다 — 시즌 진입 시 기억해둔 limitedBy 로 판정
+            if (limitedBy === 'budget') {
+              // 예산이 잘랐다 — used 가 상한을 이미 넘겼는지 확인해 daily_cap/quota_exhausted 구분
+              const qEnd = await this.quota.current();
+              seasonStop = qEnd.used >= qEnd.limit ? 'quota_exhausted' : 'daily_cap';
+            } else {
+              seasonStop = 'limit_reached';
+            }
+            overallStopped = seasonStop;
+          }
+        } catch (err) {
+          if (err instanceof ApiQuotaExhaustedError) {
+            seasonStop = 'quota_exhausted';
+            overallStopped = 'quota_exhausted';
+          } else {
+            seasonStop = 'error';
+            overallStopped = 'error';
+            lastError = err instanceof Error ? err.message : String(err);
+            // 상세 백필은 phase 를 안 건드린다. 오류만 lastError 에 남긴다 — 다음 판은 대상 SELECT 가 다시 고른다.
+            await this.jobs.updateDetailProgress(cs.id, {
+              total: targeted,
+              done: processed,
+              failed,
+              lastError,
+            });
+          }
+        }
+
+        // 정상 종료. phase 는 건드리지 않고 lastError 만 지운다 (이전 판의 흔적 청소).
+        if (seasonStop === 'done') {
+          await this.jobs.updateDetailProgress(cs.id, {
+            total: targeted,
+            done: processed,
+            failed,
+            lastError: null,
+          });
+        }
+
+        perSeason.push({
+          competitionSeasonId: cs.id,
+          competitionName: cs.competition.name,
+          seasonYear: cs.season.year,
+          targeted,
+          processed,
+          failed,
+          stoppedReason: seasonStop,
+          lastError,
+        });
+        totalProcessed += processed;
+        totalFailed += failed;
+
+        this.logger.log(
+          `${label} 완료 — 처리 ${processed}/${targeted} · 실패 ${failed} · stop=${seasonStop}`,
+        );
+
+        // 시즌 단위 중단 사유가 전체를 막는 것이면 남은 시즌으로 안 넘어간다
+        if (
+          seasonStop === 'quota_exhausted' ||
+          seasonStop === 'daily_cap' ||
+          seasonStop === 'limit_reached'
+        ) {
+          break;
+        }
+      }
+
+      const partial = totalFailed > 0 || overallStopped !== 'done';
+      return {
+        perSeason,
+        totalProcessed,
+        totalFailed,
+        overallStopped,
+        dryRun: !!opts.dryRun,
+        partial,
+      };
+    });
+  }
+}

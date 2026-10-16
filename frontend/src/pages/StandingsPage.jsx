@@ -8,13 +8,17 @@
  */
 
 import { Link, useSearchParams } from 'react-router-dom'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import StandingsTable from '@/components/ui/StandingsTable'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
 import { useData } from '@/hooks/useData'
-import { fetchCompetitions, fetchStandings } from '@/services/api'
+import { useSeasonParam } from '@/hooks/useSeasonParam'
+import { groupStandings } from '@/utils/standings'
+import { selectableSeasons } from '@/utils/seasons'
+import { fetchCompetitions, fetchSeasons, fetchStandings } from '@/services/api'
 import { getLocalizedCompetitionName } from '@/utils/localization'
 import { toKSTDateTime } from '@/utils/dateFormat'
 
@@ -24,6 +28,10 @@ export default function StandingsPage() {
   const locale = i18n.language
 
   const competitionSlug = searchParams.get('competition') ?? 'premier-league'
+  // 시즌 훅으로 통일 — 라벨('2025-26') 이 남아 있으면 연도로 정규화하고, 현재 시즌이면 URL 에서 뺀다.
+  const { data: seasonsData } = useData(() => fetchSeasons(competitionSlug), [competitionSlug])
+  const seasonsMemo = useMemo(() => selectableSeasons(seasonsData ?? []), [seasonsData])
+  const { seasonYear, setSeasonYear } = useSeasonParam(seasonsMemo)
 
   const { data: competitions, loading: loadingComps } = useData(fetchCompetitions, [])
   // ⚠ 오류를 null 로 삼키는 catch 를 넣지 않는다 — EmptyState 로 위장된다 (1단계 감사 §C, CI 검사 대상).
@@ -31,13 +39,18 @@ export default function StandingsPage() {
   //   컵 대회는 순위표 자체가 없는 것이 정상이므로, 실 API 연결 시
   //   "없음"(EmptyState)과 "실패"(ErrorState)를 서비스 계층에서 구분한다.
   const { data: standings, loading: loadingStand, error } = useData(
-    () => fetchStandings(competitionSlug),
-    [competitionSlug]
+    () => fetchStandings(competitionSlug, seasonYear),
+    [competitionSlug, seasonYear]
   )
 
   const loading = loadingComps || loadingStand
   const comp    = (competitions ?? []).find(c => c.slug === competitionSlug) ?? null
+  // format 은 **현재 시즌** 기준이다 (competitions.catalog.ts). UCL 은 2024-25 에 조별리그 →
+  // 리그페이즈로 바뀌었으므로, 이 표가 어느 쪽인지는 format 이 아니라 데이터로 판단한다.
   const isUCL   = comp?.format === 'groups_knockout'
+  const isGroupStage = groupStandings(standings?.entries ?? []).length > 1
+  /** 시즌 라벨은 응답에서 — 순위표의 seasonId, 없으면 대회의 currentSeason */
+  const season  = standings?.seasonId ?? comp?.currentSeason ?? null
 
   function setComp(slug) {
     setSearchParams(prev => {
@@ -48,51 +61,57 @@ export default function StandingsPage() {
   }
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
       <div
-        style={{
-          maxWidth: 1120,
-          margin: '0 auto',
-          padding: '20px 16px 48px',
-        }}
-        className="lg:px-8"
+        style={{ paddingBlock: '20px 48px' }}
+        className="pl-container"
       >
         {/* ── 페이지 헤더 ── */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
           <h1 className="t-page" style={{ margin: 0, fontSize: 26 }}>
             {t('standings.title')}
           </h1>
-          <span className="t-sub">2026-27 · 6{t('common.country')}</span>
+          <span className="t-sub">{season ? `${season} · ` : ''}6{t('common.country')}</span>
         </div>
 
         {/* ── 대회 필터 칩 ── */}
         <div
+          className="pl-sticky-filter"
           style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            borderBottom: '1px solid var(--pl-line)',
             paddingBottom: 14,
             marginBottom: 14,
           }}
         >
-          <span className="t-cap" style={{ width: 44, flexShrink: 0 }}>{t('matches.filterComp')}</span>
-          {(competitions ?? []).map(c => (
-            <button
-              key={c.slug}
-              onClick={() => setComp(c.slug)}
-              aria-pressed={c.slug === competitionSlug}
-              className="pl-chip"
-            >
-              {getLocalizedCompetitionName(c, locale) || c.shortName}
-            </button>
-          ))}
-          {competitions && (
-            <span className="t-sub" style={{ marginLeft: 'auto' }}>
-              {t('standings.leaguePhaseTitle').slice(0,1).toUpperCase() + t('standings.leaguePhaseTitle').slice(1)}
-            </span>
-          )}
+          <div className="pl-chip-row">
+            <span className="t-cap" style={{ width: 44, flexShrink: 0 }}>{t('matches.filterComp')}</span>
+            {(competitions ?? []).map(c => (
+              <button
+                key={c.slug}
+                onClick={() => setComp(c.slug)}
+                aria-pressed={c.slug === competitionSlug}
+                className="pl-chip"
+              >
+                {getLocalizedCompetitionName(c, locale) || c.shortName}
+              </button>
+            ))}
+            {/* 시즌 드롭다운 — 활성 대회의 선택 가능 시즌만 (COMPLETE) · 현재 시즌은 값 '' (URL 에서 param 제거) */}
+            {seasonsMemo.length > 0 && (
+              <select
+                aria-label={t('header.seasonSelect')}
+                value={seasonYear !== undefined ? String(seasonYear) : ''}
+                onChange={(e) => setSeasonYear(e.target.value === '' ? null : Number(e.target.value))}
+                className="pl-chip"
+                style={{ marginLeft: 'auto', fontFamily: 'var(--font)' }}
+              >
+                {seasonsMemo.map(s => (
+                  <option key={s.year} value={s.current ? '' : String(s.year)}>
+                    {s.label}
+                    {s.current ? ` ${t('header.currentSeason')}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
 
         {/* ── 스테이지 정보 + 데이터 기준 시각 ── */}
@@ -115,7 +134,9 @@ export default function StandingsPage() {
               )}
             </span>
             {isUCL && (
-              <span className="t-sub">{t('standings.uclLeagueNote')}</span>
+              <span className="t-sub">
+                {t(isGroupStage ? 'standings.uclGroupNote' : 'standings.uclLeagueNote')}
+              </span>
             )}
             <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="t-cap num" style={{ color: 'var(--pl-sub)' }}>
@@ -162,16 +183,15 @@ export default function StandingsPage() {
               aria-hidden="true"
             />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p className="t-body" style={{ margin: 0, fontWeight: 600 }}>{t('standings.leaguePhaseTitle')}</p>
-              <p className="t-sub" style={{ margin: 0 }}>{t('standings.leaguePhaseDesc')}</p>
+              <p className="t-body" style={{ margin: 0, fontWeight: 600 }}>
+                {t(isGroupStage ? 'standings.groupPhaseTitle' : 'standings.leaguePhaseLabel')}
+              </p>
+              <p className="t-sub" style={{ margin: 0 }}>
+                {t(isGroupStage ? 'standings.groupPhaseDesc' : 'standings.leaguePhaseDesc')}
+              </p>
             </div>
-            <Link
-              to="/competitions/champions-league/knockout"
-              className="pl-btn pl-btn-sm pl-btn-ghost"
-              style={{ flexShrink: 0 }}
-            >
-              {t('standings.leaguePhaseLink')}
-            </Link>
+            {/* UCL 녹아웃 링크는 T 판 (feat/tournament-bracket) 에서 삭제 —
+                대진표는 이제 /competitions/champions-league 의 대진표 탭 */}
           </div>
         )}
 
@@ -213,6 +233,8 @@ export default function StandingsPage() {
               <StandingsTable
                 entries={standings.entries}
                 competitionSlug={competitionSlug}
+                format={comp?.format}
+                seasonFinished={(seasonsData ?? []).find(s => s?.year === seasonYear)?.status === 'FINISHED'}
               />
             ) : (
               <EmptyState

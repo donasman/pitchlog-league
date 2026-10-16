@@ -21,8 +21,8 @@ export default function StatsRanking({ title, unit, entries = [] }) {
       </div>
       <div className="space-y-0.5">
         {entries.map(entry => {
-          const teamName   = getLocalizedShortName({ id: entry.teamId, name: entry.teamName }, locale) || entry.teamName
-          const playerName = getLocalizedShortName({ id: entry.playerId, name: entry.playerName }, locale) || entry.playerName
+          const teamName   = getLocalizedShortName({ id: entry.teamId, name: entry.teamName, originalName: entry.teamOriginalName }, locale) || entry.teamName
+          const playerName = getLocalizedShortName({ id: entry.playerId, name: entry.playerName, originalName: entry.playerOriginalName }, locale) || entry.playerName
           return (
             <Link
               key={entry.playerId ?? entry.playerSlug}
@@ -30,7 +30,7 @@ export default function StatsRanking({ title, unit, entries = [] }) {
               className="flex items-center gap-3 py-2 px-2 rounded hover:bg-accent transition-colors group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <span className="text-xs text-muted-foreground w-4 text-right flex-shrink-0">{entry.rank}</span>
-              <TeamBadge initials={entry.teamInitials} color={entry.teamColor} size="xs" name={entry.teamName} />
+              <TeamBadge initials={entry.teamInitials} color={entry.teamColor} logoUrl={entry.teamLogoUrl} size="xs" name={entry.teamName} />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
                   {playerName}

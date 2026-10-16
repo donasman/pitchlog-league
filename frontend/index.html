@@ -2,7 +2,11 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#3366FF" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PitchLog — 유럽 클럽축구 데이터 플랫폼</title>
     <meta name="description" content="EPL, La Liga, Bundesliga, Serie A, Ligue 1, Champions League 경기·팀·선수 통계를 한곳에서." />
@@ -13,6 +17,19 @@
           document.documentElement.classList.add('dark')
         }
       } catch (e) { /* 저장소 접근 불가 시 라이트 유지 */ }
+    </script>
+    <!-- 첫 페인트 zoom 세팅 (src/utils/zoom.js 와 동일 공식) — 미디어쿼리 점프 대신 1280→1600 선형 -->
+    <script>
+      (function () {
+        try {
+          var w = window.innerWidth
+          var z = 1
+          if (w >= 1600) z = 1.25
+          else if (w > 1280) z = Math.round((1 + 0.25 * (w - 1280) / 320) * 100) / 100
+          document.documentElement.style.zoom = z
+          document.documentElement.style.setProperty('--pl-zoom', String(z))
+        } catch (e) { /* zoom 미지원·접근 실패 시 폴백은 CSS 기본값(z=1) */ }
+      })()
     </script>
   </head>
   <body>

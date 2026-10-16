@@ -7,14 +7,19 @@ import { useParams, Link } from 'react-router-dom'
 import { MapPin, Calendar, ChevronRight, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import TeamBadge from '@/components/ui/TeamBadge'
+import FavoriteToggle from '@/components/ui/FavoriteToggle'
 import FormBadge from '@/components/ui/FormBadge'
 import MatchCard from '@/components/ui/MatchCard'
 import EmptyState from '@/components/ui/EmptyState'
+import NotImplementedState from '@/components/ui/NotImplementedState'
+import { pickUpcoming, pickRecent } from '@/utils/matchSort'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import { useData } from '@/hooks/useData'
 import { fetchTeamDetail } from '@/services/api'
 import { getLocalizedName, getLocalizedCompetitionShortName } from '@/utils/localization'
+import { formatPositionLabel } from '@/utils/positionLabel'
+import { localizeCountry } from '@/utils/countryName'
 
 export default function TeamPage() {
   const { slug } = useParams()
@@ -41,24 +46,34 @@ export default function TeamPage() {
 
   if (!data) return null
 
-  const { team, matches, eplRank, players, competitions } = data
-  const upcoming = matches.filter(m => m.displayState === 'scheduled').slice(0, 2)
-  const recent   = matches.filter(m => ['confirmed','recheck','final'].includes(m.displayState)).slice(0, 3)
+  const { team, matches, leagueRank, players, competitions } = data
+  const upcoming = pickUpcoming(matches, 2)
+  const recent = pickRecent(matches, 3)
 
-  const teamDisplayName = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
+  const teamDisplayName = getLocalizedName(team, locale) || team.name
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 48px' }} className="lg:px-8 space-y-5">
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
+    <div style={{ paddingBlock: '20px 48px' }} className="pl-container space-y-5">
       {/* 팀 헤더 */}
       <div className="pl-card" style={{ padding: 'clamp(14px,3vw,24px)', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <TeamBadge initials={team.initials} color={team.color} size="lg" name={team.name} />
+        <TeamBadge initials={team.initials} color={team.color} logoUrl={team.logoUrl} size="lg" name={team.name} />
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-foreground truncate">{teamDisplayName}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <h1 className="text-2xl font-bold text-foreground truncate" style={{ margin: 0, minWidth: 0 }}>{teamDisplayName}</h1>
+            <FavoriteToggle slug={team.ref} label={teamDisplayName} size="md" />
+          </div>
           <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5"><MapPin size={13} aria-hidden="true" />{team.stadium}</span>
-            <span>{t('team.founded')} {team.foundedYear}</span>
-            <span>{t('team.manager')}: {team.manager}</span>
+            {/* 값이 있는 것만 그린다 — 백엔드가 안 준 것을 "미정"·"-" 로 위장하지 않는다 */}
+            {team.stadium && (
+              <span className="flex items-center gap-1.5"><MapPin size={13} aria-hidden="true" />{team.stadium}</span>
+            )}
+            {team.foundedYear != null && (
+              <span>{t('team.founded')} {team.foundedYear}</span>
+            )}
+            {team.manager && (
+              <span>{t('team.manager')}: {team.manager}</span>
+            )}
           </div>
           <div className="flex flex-wrap gap-2 mt-3">
             {competitions.map(c => (
@@ -76,12 +91,12 @@ export default function TeamPage() {
             ))}
           </div>
         </div>
-        {eplRank && (
+        {leagueRank && (
           <div className="text-center flex-shrink-0">
-            <div className="text-4xl font-black text-foreground">{eplRank.rank}</div>
-            <div className="text-xs text-muted-foreground">{t('team.eplRank')}</div>
+            <div className="text-4xl font-black text-foreground">{leagueRank.rank}</div>
+            <div className="text-xs text-muted-foreground">{t('team.leagueRank')}</div>
             <div className="text-sm font-bold text-primary mt-1">
-              {t('team.eplRankPoints', { pts: eplRank.points })}
+              {t('team.leagueRankPoints', { pts: leagueRank.points })}
             </div>
           </div>
         )}
@@ -89,13 +104,13 @@ export default function TeamPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {eplRank && (
+          {leagueRank && leagueRank.form.length > 0 && (
             <section>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                 {t('team.recentForm')}
               </h2>
               <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-2">
-                {eplRank.form.map((r, i) => <FormBadge key={i} result={r} size="md" />)}
+                {leagueRank.form.map((r, i) => <FormBadge key={i} result={r} size="md" />)}
               </div>
             </section>
           )}
@@ -136,12 +151,16 @@ export default function TeamPage() {
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               {t('team.squad')}
             </h2>
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Users size={12} />{players.length}
-            </span>
+            {players !== null && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Users size={12} />{players.length}
+              </span>
+            )}
           </div>
           <div className="bg-card border border-border rounded-xl divide-y divide-border">
-            {players.length > 0 ? players.map(p => (
+            {players === null ? (
+              <NotImplementedState messageKey="team.noSquad" />
+            ) : players.length > 0 ? players.map(p => (
               <Link
                 key={p.slug}
                 to={`/players/${p.slug}`}
@@ -150,9 +169,9 @@ export default function TeamPage() {
                 <span className="text-xs text-muted-foreground w-5 text-right flex-shrink-0">{p.number}</span>
                 <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
                   { GK:'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300', DEF:'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300', MID:'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300', FWD:'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' }[p.position]
-                }`}>{p.position}</span>
+                }`}>{formatPositionLabel(p.position, t)}</span>
                 <span className="text-sm text-foreground group-hover:text-primary transition-colors truncate">{p.name}</span>
-                <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">{p.nationality}</span>
+                <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">{localizeCountry(p.nationality, locale, t)}</span>
               </Link>
             )) : (
               <div className="p-4"><EmptyState description={t('team.noSquad')} /></div>

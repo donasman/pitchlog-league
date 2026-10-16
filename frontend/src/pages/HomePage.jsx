@@ -10,15 +10,21 @@
  *  ⑤ 푸터
  */
 
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
+import { useLiveMatches } from '@/hooks/useLiveMatches'
 import { fetchOverview } from '@/services/api'
+import { getLocalizedCompetitionName, getLocalizedCompetitionShortName, pickLocalized } from '@/utils/localization'
+import { formatRoundLabel } from '@/utils/roundLabel'
 import TeamBadge from '@/components/ui/TeamBadge'
 import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
+import EmptyState from '@/components/ui/EmptyState'
 import AskBar from '@/components/home/AskBar'
+import MyTeamsSection from '@/components/home/MyTeamsSection'
 import { toKSTTime } from '@/utils/dateFormat'
 
 /* ── 구역 색 (tokens.css --z-* 와 동일) ── */
@@ -28,9 +34,11 @@ const ZONE_COLORS = ['#3B82F6','#EAB308','#F97316','#16A34A','#F87171','#DC2626'
    LiveTicker — 히어로 오른쪽 패널
    경기 카드 금지. 얇은 스코어 줄(ticker)로 표현.
 ───────────────────────────────────────────────────────────── */
-function LiveTicker({ livePulse, nextKickoff, dataAsOf, t, locale }) {
+function LiveTicker({ livePulse, nextKickoff, dataAsOf, liveAsOf, liveStale, t, locale }) {
   const count = livePulse?.length ?? 0
   const empty = count === 0
+  // 라이브 폴링이 성공적으로 응답을 준 뒤에는 그 시각을, 그 전에는 오버뷰의 dataAsOf 를 표시.
+  const shownAsOf = liveAsOf ?? dataAsOf
 
   return (
     <div className="pl-card" style={{ overflow: 'hidden', display: 'grid', alignContent: 'start' }}>
@@ -52,12 +60,25 @@ function LiveTicker({ livePulse, nextKickoff, dataAsOf, t, locale }) {
             <span className="t-card">{t('home.liveNow', { count })}</span>
           </>
         )}
-        {dataAsOf && (
-          <span className="t-cap num" style={{ marginLeft: 'auto' }}>
+        {liveStale && (
+          <span
+            className="t-cap"
+            style={{ marginLeft: 'auto', color: 'var(--st-warn-text, var(--pl-sub))' }}
+            role="status"
+          >
+            {t('live.stale')}
+          </span>
+        )}
+        {!liveStale && shownAsOf && (
+          <span
+            className="t-cap num"
+            style={{ marginLeft: 'auto' }}
+            title={liveAsOf ? t('live.lastUpdated', { time: toKSTTime(liveAsOf, locale) }) : undefined}
+          >
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true" style={{ display: 'inline', marginRight: 4 }}>
               <circle cx="6" cy="6" r="4.6" /><path d="M6 3.4V6l1.8 1.2" />
             </svg>
-            {toKSTTime(dataAsOf, locale)}
+            {toKSTTime(shownAsOf, locale)}
           </span>
         )}
       </div>
@@ -68,7 +89,7 @@ function LiveTicker({ livePulse, nextKickoff, dataAsOf, t, locale }) {
           <div style={{ display: 'grid', gap: 4 }}>
             <span className="t-cap">{t('home.nextKickoffLabel')}</span>
             <span className="t-sec">{toKSTTime(nextKickoff.date, locale)} KST</span>
-            <span className="t-body">{nextKickoff.homeName} vs {nextKickoff.awayName}</span>
+            <span className="t-body">{pickLocalized(nextKickoff.homeName, nextKickoff.homeOriginalName, locale)} vs {pickLocalized(nextKickoff.awayName, nextKickoff.awayOriginalName, locale)}</span>
           </div>
           <Link to="/matches" className="pl-link" style={{ justifySelf: 'start' }}>
             {t('home.viewSchedule')}
@@ -134,16 +155,16 @@ function LiveTicker({ livePulse, nextKickoff, dataAsOf, t, locale }) {
 /* ─────────────────────────────────────────────────────────────
    Hero — 헤드라인(왼쪽) + LiveTicker(오른쪽)
 ───────────────────────────────────────────────────────────── */
-function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
+function Hero({ livePulse, nextKickoff, dataAsOf, liveAsOf, liveStale, t, locale }) {
   return (
     <div
       className="grid gap-6 lg:gap-10"
       style={{ gridTemplateColumns: 'minmax(0,1fr)', alignItems: 'start' }}
     >
       <style>{`@media(min-width:1024px){.hero-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)!important}}`}</style>
-      <div className="hero-grid grid gap-6 lg:gap-10" style={{ alignItems: 'start' }}>
+      <div className="hero-grid grid gap-6 lg:gap-10" style={{ gridTemplateColumns: 'minmax(0, 1fr)', alignItems: 'start' }}>
         {/* 왼쪽 — 말 */}
-        <div style={{ display: 'grid', gap: 16, paddingTop: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16, paddingTop: 8 }}>
           {/* 워드마크 + h1 덩어리 (좁은 간격으로 한 덩어리처럼) */}
           <div style={{ display: 'grid', gap: 6 }}>
             <div
@@ -182,7 +203,7 @@ function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
           >
             {t('home.heroSubtitle')}
           </p>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div className="hero-cta" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Link to="/matches" className="pl-btn">{t('home.btnTodayMatches')}</Link>
             <Link to="/standings" className="pl-btn pl-btn-ghost">{t('home.standingsLabel')}</Link>
           </div>
@@ -191,9 +212,56 @@ function Hero({ livePulse, nextKickoff, dataAsOf, t, locale }) {
         </div>
 
         {/* 오른쪽 — 살아있음의 증거 */}
-        <LiveTicker livePulse={livePulse} nextKickoff={nextKickoff} dataAsOf={dataAsOf} t={t} locale={locale} />
+        <LiveTicker
+          livePulse={livePulse}
+          nextKickoff={nextKickoff}
+          dataAsOf={dataAsOf}
+          liveAsOf={liveAsOf}
+          liveStale={liveStale}
+          t={t}
+          locale={locale}
+        />
       </div>
     </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CompetitionEmblem — 대회 로고, 없으면 shortName 텍스트로 폴백
+   normalize.js 가 채워 준 comp.logoUrl 을 소비한다. 로딩 실패 시 이니셜로 떨어진다
+   (TeamBadge 폴백과 같은 규칙 — 이 자리는 span 이라 별도 상태를 둔다).
+───────────────────────────────────────────────────────────── */
+function CompetitionEmblem({ comp, locale = 'ko' }) {
+  const [failed, setFailed] = useState(false)
+  const showImg = comp.logoUrl && !failed
+  return (
+    <span
+      className="pl-emblem"
+      style={{
+        width: 36,
+        height: 36,
+        fontSize: 11,
+        fontWeight: 700,
+        background: showImg ? 'transparent' : 'var(--pl-fill-2)',
+        color: 'var(--pl-sub)',
+        borderRadius: 8,
+        flexShrink: 0,
+      }}
+    >
+      {showImg ? (
+        <img
+          src={comp.logoUrl}
+          alt={getLocalizedCompetitionName(comp, locale) || comp.name || comp.shortName}
+          width={36}
+          height={36}
+          loading="eager"
+          onError={() => setFailed(true)}
+          style={{ width: 36, height: 36, objectFit: 'contain' }}
+        />
+      ) : (
+        getLocalizedCompetitionShortName(comp, locale) || comp.shortName
+      )}
+    </span>
   )
 }
 
@@ -204,13 +272,16 @@ function CompetitionCard({ comp, t, locale }) {
   const liveCount     = comp.liveCount ?? 0
   const upcomingCount = comp.upcomingCount ?? 0
   const hasLive       = liveCount > 0
-  const compName      = locale === 'ko' ? comp.name : comp.name
+  /* en=원문 · ko=한글 displayName (이전엔 ko/en 둘 다 comp.name 이라 en 에서 원문 폴백 실패) */
+  const compName      = getLocalizedCompetitionName(comp, locale) || comp.name
+  const compShort     = getLocalizedCompetitionShortName(comp, locale) || comp.shortName
 
   return (
     <Link
       to={`/competitions/${comp.slug}`}
       style={{
         display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr)',
         gap: 12,
         padding: 16,
         textDecoration: 'none',
@@ -220,25 +291,11 @@ function CompetitionCard({ comp, t, locale }) {
     >
       {/* 헤더: 엠블럼 + 이름 + 상태 배지 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* 대회 이니셜 배지 */}
-        <span
-          className="pl-emblem"
-          style={{
-            width: 36,
-            height: 36,
-            fontSize: 11,
-            fontWeight: 700,
-            background: 'var(--pl-fill-2)',
-            color: 'var(--pl-sub)',
-            borderRadius: 8,
-            flexShrink: 0,
-          }}
-        >
-          {comp.shortName}
-        </span>
+        <CompetitionEmblem comp={comp} locale={locale} />
         <div style={{ display: 'grid', minWidth: 0, flex: 1 }}>
-          <span className="t-card tname" style={{ fontWeight: 600 }}>{compName}</span>
-          <span className="t-cap">{comp.shortName}</span>
+          <span className="t-card tname" style={{ fontWeight: 600 }} title={compName}>{compName}</span>
+          {/* 원문 부제(compShort)는 ko 에서만 노출 — en 에서는 제목과 중복돼 카드가 겹쳐 보였다 */}
+          {locale === 'ko' && <span className="t-cap">{compShort}</span>}
         </div>
         <span style={{ flexShrink: 0 }}>
           {hasLive ? (
@@ -254,8 +311,8 @@ function CompetitionCard({ comp, t, locale }) {
         </span>
       </div>
 
-      {/* 라운드/스테이지 */}
-      <span className="t-sub">{comp.stage?.label}</span>
+      {/* 라운드/스테이지 — API 원문("Regular Season - 5") 을 formatRoundLabel 로 로컬라이즈 */}
+      <span className="t-sub tname" title={comp.stage?.label ?? ''}>{formatRoundLabel(comp.stage?.label, t)}</span>
 
       {/* 구분선 + 선두 */}
       <div
@@ -268,19 +325,22 @@ function CompetitionCard({ comp, t, locale }) {
         }}
       >
         <span className="t-cap">{t('home.leaderLabel')}</span>
-        {comp.leader && (
+        {comp.leader ? (
           <>
             <TeamBadge
               initials={comp.leader.teamInitials}
               color={comp.leader.teamColor}
+              logoUrl={comp.leader.teamLogoUrl}
               size="xs"
-              name={comp.leader.teamName}
+              name={pickLocalized(comp.leader.teamName, comp.leader.teamOriginalName, locale)}
+              loading="eager"
             />
             <span
               className="tname t-body"
               style={{ fontWeight: 600, flex: 1 }}
+              title={pickLocalized(comp.leader.teamName, comp.leader.teamOriginalName, locale)}
             >
-              {comp.leader.teamName}
+              {pickLocalized(comp.leader.teamName, comp.leader.teamOriginalName, locale)}
             </span>
             {comp.leader.points != null && (
               <span className="num t-body" style={{ fontWeight: 700, marginLeft: 'auto', flexShrink: 0 }}>
@@ -288,6 +348,10 @@ function CompetitionCard({ comp, t, locale }) {
               </span>
             )}
           </>
+        ) : (
+          // singleTableLeader 판정이 null 을 준 자리 — 라벨만 남아 빈칸이 되지 않도록 대시 표시.
+          // 조 2개(UCL 리그페이즈 등)에서는 애초에 "선두" 라는 개념이 없어 null 이 맞다.
+          <span className="t-sub">—</span>
         )}
       </div>
     </Link>
@@ -302,10 +366,7 @@ function CompetitionSection({ competitions, t, locale }) {
     <section style={{ display: 'grid', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <h2 className="t-sec" style={{ margin: 0, fontSize: 22 }}>{t('home.competitionSection')}</h2>
-        <span className="t-sub">{t('home.competitionSectionDesc')}</span>
-        <Link to="/competitions" className="pl-link" style={{ marginLeft: 'auto' }}>
-          {t('home.viewAllComps')}
-        </Link>
+        <span className="t-sub" style={{ marginLeft: 'auto' }}>{t('home.competitionSectionDesc')}</span>
       </div>
       <div
         style={{
@@ -315,12 +376,14 @@ function CompetitionSection({ competitions, t, locale }) {
         }}
         className="sm:grid-cols-3"
       >
-        <style>{`@media(min-width:640px){.comp-grid{grid-template-columns:repeat(3,1fr)!important}}`}</style>
+        {/* minmax(0, 1fr) — /teams 와 같은 min-content 하한 버그. 2026-09-10 실측: 645~700px 구간에서
+            분데스리가·UCL 카드가 컨테이너(562px) 를 넘어 트랙이 653px 로 부풀어 카드가 삐져나왔다. */}
+        <style>{`@media(min-width:480px){.comp-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(min-width:640px){.comp-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}`}</style>
         <div
           className="comp-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
+            gridTemplateColumns: 'minmax(0, 1fr)',
             gap: 12,
             gridColumn: '1 / -1',
           }}
@@ -336,8 +399,13 @@ function CompetitionSection({ competitions, t, locale }) {
 
 /* ─────────────────────────────────────────────────────────────
    ShortcutCard — 바로 가기 카드 (3행 미리보기)
+   rows[i].logo 는 React node (TeamBadge). rank 가 전부 비면 rank 컬럼 자체를 뺀다.
 ───────────────────────────────────────────────────────────── */
-function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
+function ShortcutCard({ title, sub, rows, to, zoneFirst, t }) {
+  const hasRank = rows.some(r => r.rank !== '' && r.rank != null)
+  // rank(20px) + badge(24px) + name(1fr) + value(auto) · 팀 카드는 rank 를 뺀다
+  const rowTemplate = hasRank ? '20px 24px 1fr auto' : '24px 1fr auto'
+
   return (
     <Link
       to={to}
@@ -352,9 +420,6 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
           <span className="pl-link" style={{ fontSize: 12 }}>{t('home.openAll')}</span>
         </span>
       </div>
-      <div style={{ padding: '0 16px 6px' }}>
-        <span className="t-cap">{head}</span>
-      </div>
 
       {/* 미리보기 3행 */}
       {rows.map((row, i) => (
@@ -362,11 +427,11 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
           key={i}
           style={{
             display: 'grid',
-            gridTemplateColumns: '20px 1fr auto',
+            gridTemplateColumns: rowTemplate,
             gap: 10,
             alignItems: 'center',
             padding: '9px 16px',
-            borderTop: '1px solid var(--pl-line)',
+            borderTop: i === 0 ? '1px solid var(--pl-line)' : '1px solid var(--pl-line)',
             position: 'relative',
           }}
         >
@@ -382,7 +447,12 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
               aria-hidden="true"
             />
           )}
-          <span className="num t-sub" style={{ fontWeight: 700 }}>{row.rank}</span>
+          {hasRank && (
+            <span className="num t-sub" style={{ fontWeight: 700 }}>{row.rank}</span>
+          )}
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            {row.logo}
+          </span>
           <span
             className="t-body tname"
             style={{ fontWeight: 600 }}
@@ -402,24 +472,60 @@ function ShortcutCard({ title, sub, head, rows, to, zoneFirst, t }) {
 
 /* ─────────────────────────────────────────────────────────────
    ShortcutsSection — 3열 바로 가기
+   두 번째 카드(원래 "Top Scorers")를 /stats 로 가는 CTA 로 교체.
+   실제 리그별 득점 순위는 아래 LeagueScorersSection 이 담당.
 ───────────────────────────────────────────────────────────── */
-function ShortcutsSection({ eplTop3, topScorers, competitions, t }) {
+function ShortcutsSection({ eplTop3, competitions, leagueScorers, t, locale }) {
   const standingsRows = (eplTop3 ?? []).map(e => ({
     rank: e.rank,
-    label: e.teamName,
+    logo: (
+      <TeamBadge
+        initials={e.teamInitials}
+        color={e.teamColor}
+        logoUrl={e.teamLogoUrl}
+        sizePx={24}
+        name={pickLocalized(e.teamName, e.teamOriginalName, locale)}
+        loading="eager"
+      />
+    ),
+    label: pickLocalized(e.teamName, e.teamOriginalName, locale),
     value: t('home.ptsUnit', { pts: e.points }),
-  }))
-
-  const scorerRows = (topScorers ?? []).map(s => ({
-    rank: s.rank,
-    label: `${s.playerName} · ${s.teamName}`,
-    value: t('home.goalsCountUnit', { goals: s.value }),
   }))
 
   const leaderRows = (competitions ?? []).slice(0, 3).map(c => ({
     rank: '',
-    label: c.leader?.teamName ?? '-',
-    value: c.shortName,
+    logo: c.leader ? (
+      <TeamBadge
+        initials={c.leader.teamInitials}
+        color={c.leader.teamColor}
+        logoUrl={c.leader.teamLogoUrl}
+        sizePx={24}
+        name={pickLocalized(c.leader.teamName, c.leader.teamOriginalName, locale)}
+        loading="eager"
+      />
+    ) : null,
+    label: c.leader ? pickLocalized(c.leader.teamName, c.leader.teamOriginalName, locale) : '-',
+    value: getLocalizedCompetitionShortName(c, locale) || c.shortName,
+  }))
+
+  // 통계 카드: EPL 리그 카드에서 상위 3명만 뽑아 재사용. 아래 LeagueScorersSection 과 문맥은 겹치지만
+  // 그건 5명 전체 · 여기는 3명 · 목적은 /stats 로의 CTA 겸 티저. 회고 4-6 — 호출 실패(error)면
+  // 빈 배열로 위장하지 않고 ErrorState 카드로 갈래를 드러낸다 (LeagueScorersSection:532 와 같은 패턴).
+  const eplLeague = (leagueScorers ?? []).find(l => l.competitionSlug === 'premier-league')
+  const scorerRows = (eplLeague?.entries ?? []).slice(0, 3).map(e => ({
+    rank: e.rank,
+    logo: (
+      <TeamBadge
+        initials={e.teamInitials}
+        color={e.teamColor}
+        logoUrl={e.teamLogoUrl}
+        sizePx={20}
+        name={pickLocalized(e.teamName, e.teamOriginalName, locale)}
+        loading="eager"
+      />
+    ),
+    label: `${pickLocalized(e.playerName ?? '-', e.playerOriginalName, locale)}${e.teamName ? ` · ${pickLocalized(e.teamName, e.teamOriginalName, locale)}` : ''}`,
+    value: t('home.goalsCountUnit', { goals: e.value }),
   }))
 
   return (
@@ -433,28 +539,113 @@ function ShortcutsSection({ eplTop3, topScorers, competitions, t }) {
         <ShortcutCard
           title={t('home.standingsLabel')}
           sub={t('home.epl3Label')}
-          head="EPL Top 3"
           rows={standingsRows}
           to="/standings?competition=premier-league"
           zoneFirst
           t={t}
         />
-        <ShortcutCard
-          title={t('home.statsLabel')}
-          sub={t('home.allScorerLabel')}
-          head={t('home.allScorerLabel')}
-          rows={scorerRows}
-          to="/stats"
-          t={t}
-        />
+        {eplLeague?.error ? (
+          <div className="pl-card" style={{ padding: 12 }}>
+            <ErrorState description={eplLeague.error} />
+          </div>
+        ) : (
+          <ShortcutCard
+            title={t('home.statsLabel')}
+            sub={t('home.eplScorersLabel')}
+            rows={scorerRows}
+            to="/stats?competition=premier-league"
+            t={t}
+          />
+        )}
         <ShortcutCard
           title={t('home.teamsLabel')}
           sub={t('home.topTeamsLabel')}
-          head={t('home.topTeamsLabel')}
           rows={leaderRows}
           to="/teams"
           t={t}
         />
+      </div>
+    </section>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   LeagueScorersSection — 리그별 득점 순위 3열 (EPL·라리가·분데스)
+   fetchOverview 응답의 leagueScorers 를 소비. 각 리그 카드에 상위 5명.
+───────────────────────────────────────────────────────────── */
+function LeagueScorersSection({ leagueScorers, t, locale }) {
+  const cols = leagueScorers ?? []
+  if (cols.length === 0) return null
+
+  return (
+    <section style={{ display: 'grid', gap: 16 }}>
+      <h2 className="t-sec" style={{ margin: 0, fontSize: 22 }}>{t('home.leagueScorers')}</h2>
+      <div
+        className="league-scorers-grid"
+        style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}
+      >
+        <style>{`@media(min-width:768px){.league-scorers-grid{grid-template-columns:repeat(3,1fr)!important}}`}</style>
+        {cols.map(col => (
+          <div key={col.competitionSlug} className="pl-card" style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--pl-line)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="t-sec" style={{ fontSize: 16, flex: 1 }}>{pickLocalized(col.competitionName, col.competitionOriginalName, locale)}</span>
+              <Link
+                to={`/stats?competition=${col.competitionSlug}`}
+                className="pl-link"
+                style={{ fontSize: 12 }}
+              >
+                {t('home.openAll')}
+              </Link>
+            </div>
+            {col.error ? (
+              <div style={{ padding: 12 }}>
+                <ErrorState description={col.error} />
+              </div>
+            ) : !col.entries || col.entries.length === 0 ? (
+              <div style={{ padding: 12 }}>
+                <EmptyState />
+              </div>
+            ) : (
+              col.entries.map((s, i) => (
+                <div
+                  key={s.playerSlug ?? i}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '24px 20px 1fr auto',
+                    gap: 10,
+                    alignItems: 'center',
+                    padding: '10px 16px',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--pl-line)',
+                  }}
+                >
+                  <span className="num t-sub" style={{ fontWeight: 700 }}>{s.rank ?? i + 1}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <TeamBadge
+                      initials={s.teamInitials}
+                      color={s.teamColor}
+                      logoUrl={s.teamLogoUrl}
+                      sizePx={20}
+                      name={pickLocalized(s.teamName, s.teamOriginalName, locale)}
+                      loading="eager"
+                    />
+                  </span>
+                  <span
+                    className="t-body tname"
+                    style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {pickLocalized(s.playerName, s.playerOriginalName, locale)}
+                    <span className="t-cap" style={{ marginLeft: 6, color: 'var(--pl-sub)' }}>
+                      {pickLocalized(s.teamName, s.teamOriginalName, locale)}
+                    </span>
+                  </span>
+                  <span className="num t-body" style={{ fontWeight: 700, flexShrink: 0 }}>
+                    {t('home.goalsCountUnit', { goals: s.value })}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        ))}
       </div>
     </section>
   )
@@ -558,7 +749,7 @@ function DiffsSection({ t }) {
 /* ─────────────────────────────────────────────────────────────
    FooterSection
 ───────────────────────────────────────────────────────────── */
-function FooterSection({ dataAsOf, t, locale }) {
+function FooterSection({ season, dataAsOf, t, locale }) {
   return (
     <footer
       style={{
@@ -572,7 +763,7 @@ function FooterSection({ dataAsOf, t, locale }) {
     >
       <span className="t-card">PitchLog</span>
       <span className="t-sub">{t('home.dataSource')}</span>
-      <span className="t-sub">2026-27</span>
+      {season && <span className="t-sub">{season}</span>}
       {dataAsOf && (
         <span className="t-cap num" style={{ marginLeft: 'auto' }}>
           {toKSTTime(dataAsOf, locale)} KST
@@ -590,10 +781,30 @@ export default function HomePage() {
   const locale = i18n.language
 
   const { data: overview, loading, error } = useData(fetchOverview, [])
+  const { liveMap, asOf: liveAsOf, stale: liveStale } = useLiveMatches()
+
+  // 라이브 폴링이 응답을 준 뒤에는 오버뷰의 livePulse seed 를 훅 결과로 대체한다.
+  // shape 은 services/live.js:570-577 livePulse 와 동일 (matchId/competitionSlug/home/away/minute/displayState).
+  // 훅이 아직 응답 없음(빈 Map) → seed 유지.
+  // ★ early return 앞에 둔다 — 로딩→로드 전환 시 훅 호출 개수가 바뀌면 안 된다.
+  const livePulseSeed = overview?.livePulse
+  const livePulseMerged = useMemo(() => {
+    if (!liveMap || liveMap.size === 0) return livePulseSeed
+    return Array.from(liveMap.values())
+      .filter(m => m.displayState === 'live' || m.displayState === 'halftime')
+      .map(m => ({
+        matchId:         m.id,
+        competitionSlug: m.competitionSlug,
+        home: { name: m.homeTeam?.name, initials: m.homeTeam?.initials, color: m.homeTeam?.color, score: m.score?.home ?? null },
+        away: { name: m.awayTeam?.name, initials: m.awayTeam?.initials, color: m.awayTeam?.color, score: m.score?.away ?? null },
+        minute:       m.minute,
+        displayState: m.displayState,
+      }))
+  }, [liveMap, livePulseSeed])
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '40px 24px' }}>
+      <div className="pl-container" style={{ paddingBlock: '40px' }}>
         <LoadingSkeleton rows={8} variant="card" />
       </div>
     )
@@ -601,30 +812,33 @@ export default function HomePage() {
 
   if (error) {
     return (
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '40px 24px' }}>
+      <div className="pl-container" style={{ paddingBlock: '40px' }}>
         <ErrorState description={error} />
       </div>
     )
   }
 
-  const { competitions, livePulse, nextKickoff, dataAsOf, topScorers, eplTop3 } = overview ?? {}
+  const { competitions, nextKickoff, dataAsOf, leagueScorers, eplTop3 } = overview ?? {}
+  /** 시즌 라벨은 응답에서 — 실 API 대회 객체의 currentSeason. Mock 오버뷰에는 없어 표기가 빠진다 */
+  const season = (competitions ?? []).find(c => c.currentSeason)?.currentSeason ?? null
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
       <div
+        className="pl-container"
         style={{
-          maxWidth: 1440,
-          margin: '0 auto',
-          padding: 'clamp(20px,3vw,36px) clamp(16px,6vw,80px) 0',
+          paddingBlock: 'clamp(20px,3vw,36px) 0',
           display: 'grid',
           gap: 'clamp(28px,4vw,40px)',
         }}
       >
         {/* ① 히어로 */}
         <Hero
-          livePulse={livePulse}
+          livePulse={livePulseMerged}
           nextKickoff={nextKickoff}
           dataAsOf={dataAsOf}
+          liveAsOf={liveAsOf}
+          liveStale={liveStale}
           t={t}
           locale={locale}
         />
@@ -632,19 +846,26 @@ export default function HomePage() {
         {/* ② 6개 대회 현황 */}
         <CompetitionSection competitions={competitions} t={t} locale={locale} />
 
+        {/* ② + ½ 내 팀 (즐겨찾기) */}
+        <MyTeamsSection />
+
         {/* ③ 바로 가기 */}
         <ShortcutsSection
           eplTop3={eplTop3}
-          topScorers={topScorers}
           competitions={competitions}
+          leagueScorers={leagueScorers}
           t={t}
+          locale={locale}
         />
+
+        {/* ③ + ½ 리그별 득점 순위 */}
+        <LeagueScorersSection leagueScorers={leagueScorers} t={t} locale={locale} />
 
         {/* ④ 차별점 3개 */}
         <DiffsSection t={t} />
 
         {/* ⑤ 푸터 */}
-        <FooterSection dataAsOf={dataAsOf} t={t} locale={locale} />
+        <FooterSection season={season} dataAsOf={dataAsOf} t={t} locale={locale} />
       </div>
     </div>
   )

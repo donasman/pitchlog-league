@@ -13,12 +13,8 @@ import { useData } from '@/hooks/useData'
 import { fetchTeamFixtures } from '@/services/api'
 import { getLocalizedName, getLocalizedCompetitionShortName } from '@/utils/localization'
 import { isLive } from '@/utils/matchStatus'
-
-const MOCK_TODAY_KST = '2026-11-23'  // Mock 기준일 (경기 데이터 기준)
-
-function getKSTDateKey(isoString) {
-  return new Date(isoString).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
-}
+import { kstDateKey } from '@/utils/dateFormat'
+import { todayKstKey } from '@/services/clock'
 
 /* 오늘 구분선 */
 function TodayDivider({ t }) {
@@ -52,21 +48,25 @@ export default function TeamFixturesPage() {
   }
 
   if (loading) return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '24px 16px' }}>
-      <LoadingSkeleton rows={8} />
+    <div className="pl-container" style={{ paddingBlock: '24px' }}>
+      <div style={{ maxWidth: 960, margin: 0 }}>
+        <LoadingSkeleton rows={8} />
+      </div>
     </div>
   )
 
   if (error) return (
-    <div style={{ maxWidth: 820, margin: '0 auto', padding: '64px 16px' }}>
-      <ErrorState title={t('team.fixtureErrorTitle')} description={error} />
+    <div className="pl-container" style={{ paddingBlock: '64px' }}>
+      <div style={{ maxWidth: 960, margin: 0 }}>
+        <ErrorState title={t('team.fixtureErrorTitle')} description={error} />
+      </div>
     </div>
   )
 
   if (!data) return null
 
   const { team, matches, competitions } = data
-  const teamName = getLocalizedName({ id: team.id, name: team.name }, locale) || team.name
+  const teamName = getLocalizedName(team, locale) || team.name
 
   const compOptions = [
     { slug: 'all', label: t('team.allCompetitions') },
@@ -83,14 +83,21 @@ export default function TeamFixturesPage() {
   /* 날짜 순 정렬 */
   const sorted = [...filtered].sort((a, b) => a.date.localeCompare(b.date))
 
-  /* 오늘 기준으로 분리: 과거 / 오늘 / 미래 */
-  const past    = sorted.filter(m => getKSTDateKey(m.date) < MOCK_TODAY_KST)
-  const today   = sorted.filter(m => getKSTDateKey(m.date) === MOCK_TODAY_KST)
-  const future  = sorted.filter(m => getKSTDateKey(m.date) > MOCK_TODAY_KST)
+  /* 오늘 기준으로 분리: 과거 / 오늘 / 미래 — "오늘" 은 services/clock 이 정한다 (Mock 고정, 실 API 실제) */
+  const todayKey = todayKstKey()
+  const past    = sorted.filter(m => kstDateKey(m.date) < todayKey)
+  const today   = sorted.filter(m => kstDateKey(m.date) === todayKey)
+  const future  = sorted.filter(m => kstDateKey(m.date) > todayKey)
+
+  /* 시즌 라벨은 응답에서 — 참가 대회의 currentSeason, 없으면 경기의 seasonId */
+  const season = (competitions ?? []).find(c => c.currentSeason)?.currentSeason
+    ?? matches.find(m => m.seasonId)?.seasonId
+    ?? null
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
-      <div style={{ maxWidth: 820, margin: '0 auto', padding: '16px 16px 48px' }} className="lg:px-8">
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
+      <div className="pl-container" style={{ paddingBlock: '16px 48px' }}>
+        <div style={{ maxWidth: 960, margin: 0 }}>
 
         {/* 헤더 */}
         <div style={{ marginBottom: 16 }}>
@@ -100,11 +107,11 @@ export default function TeamFixturesPage() {
           <h1 className="t-page" style={{ margin: '4px 0 2px', fontSize: 22 }}>
             {teamName} — {t('team.fixtures')}
           </h1>
-          <span className="t-sub">2026-27 · {t('team.allCompetitions')}</span>
+          <span className="t-sub">{season ? `${season} · ` : ''}{t('team.allCompetitions')}</span>
         </div>
 
         {/* 대회 필터 */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div className="pl-sticky-filter" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16, padding: '8px 0' }}>
           {compOptions.map(c => (
             <button
               key={c.slug}
@@ -158,6 +165,7 @@ export default function TeamFixturesPage() {
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   )

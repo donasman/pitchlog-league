@@ -16,8 +16,8 @@
 | **외래키** | **사용하지 않음.** Prisma `relationMode = "prisma"`. 무결성은 백엔드 책임 | 2026-09-06 |
 | **기본키** | 내부 서로게이트 ID + `external_ids` 매핑 | 2026-09-06 |
 | **이력 모델** | SCD Type 2는 **스쿼드·감독만** | 2026-09-06 |
-| 범위 | 12대회(리그 6 + 컵 6) × 최근 5시즌 | 2026-09-04 |
-| 저장소 | Supabase 무료 500MB (추정 사용 ~270MB) | 2026-09-04 |
+| 범위 | ~~12대회~~ → **19대회** (리그5 + UCL + 국내 컵 6 + 슈퍼컵 5 + 유로파 + 컨퍼런스) × 최근 5시즌 | ~~2026-09-04~~ → **2026-09-17 (feat/scope-expansion)** |
+| 저장소 | Supabase 무료 500MB (~~추정 사용 ~270MB~~ → **09-16 실측 79MB · 완성 시 약 262MB**) | 2026-09-17 실측 |
 | DB | PostgreSQL + Prisma | ADR-001 |
 
 명명 규칙: **DB는 snake_case, Prisma 모델은 PascalCase + `@@map`.**
@@ -132,6 +132,15 @@ competitions → seasons → competition_seasons → competition_rounds
 이 경우 `players`에 최소 정보로 먼저 upsert하고 프로필은 나중에 채운다.
 **"없으면 건너뛴다"가 아니라 "없으면 만든다"** 로 처리한다.
 
+**예외 — API 가 id 를 주지 않은 선수 (2026-10-15 실측 · #138).** 라인업 `startXI`/`substitutes` 의 `player.id` 가
+**null** 로 올 수 있고, 같은 선수가 `/fixtures/players` 에서는 `id: 0` 으로 온다. 운영 로그 10-10~14 에 live-poller finalize 23건 ·
+백필 lineups 실패 9건이 `players.api_player_id` NOT NULL 위반(23502)으로 났고, L5 는 `api_player_id=0` 선수 행(`0-adam-mouak`)을 만들어 오염시켰다.
+→ **API 가 id 를 주지 않은(null·0) 선수는 `players` 행을 만들지 않는다.** `knownApiPlayerId(id)`
+(`backend/src/ingestion/api-football/api-player-id.ts`)가 양의 정수면 그 값, 아니면 null 을 준다.
+L3 lineups 는 id 없는 엔트리를 저장하지 않고 건너뛴다(warn 1줄) · L3 events 는 선수 id 를 null 로 둔다 · L5 player-stats 는 null·0 id 를 건너뛴다(warn).
+남은 것: 운영 DB 에 이미 생긴 `api_player_id=0` 선수 행 정리 (운영 DB 쓰기 승인 필요). 이 행을 참조하는 테이블 10개, 그중 고아 검사 밖
+5개(`match_events.player_id`·`assist_player_id` · `injuries` · `external_ids` · `localized_names`).
+
 ### 2-5. 삭제 순서를 문서에 박는다
 
 Cascade가 없으므로 보관 정책 실행 시 순서가 틀리면 고아가 남는다.
@@ -184,14 +193,14 @@ competitions(
   type,            -- LEAGUE | CUP | SUPER_CUP
   format,          -- ROUND_ROBIN | LEAGUE_PHASE_KNOCKOUT | KNOCKOUT
   top_flight_competition_id NULL,   -- 컵 → 그 나라 1부 리그. 컷오프 판정에 쓴다
-  is_tracked,      -- 우리가 수집하는 12개
+  is_tracked,      -- 우리가 수집하는 ~~12개~~ → 19개 (2026-09-17)
   display_order
 )
 INDEX(top_flight_competition_id)
 ```
 
 `top_flight_competition_id`가 컵 컷오프의 근거다. FA Cup(45) → Premier League(39).
-전체 800개 대회 카탈로그를 다 넣지 않고 **`is_tracked = true`인 12개 + 슈퍼컵 5개만** 넣는다.
+전체 800개 대회 카탈로그를 다 넣지 않고 **`is_tracked = true`인 ~~12개 + 슈퍼컵 5개~~ → 19개** (리그5 + UCL + 국내 컵 6 + 슈퍼컵 5 + 유로파 + 컨퍼런스 · 2026-09-17) 만 넣는다.
 
 ```
 seasons(id, year UNIQUE)
@@ -329,6 +338,14 @@ matches(
   has_player_stats NULL,
   detail_checked_at NULL,
 
+  -- 통계 확정 상태 (PRD 4-2 recheck → confirmed, 2026-09-07 추가 결정 · 1장 1번 PR 에서 마이그레이션)
+  stats_state,                    -- NONE | RECHECK | CONFIRMED. L2 는 NONE 만 쓴다. L5 가 올린다
+  confirmed_at NULL,
+
+  -- 상세 백필 경기 단위 재시도 (2026-10-15 · #139 · 마이그레이션 20261015120000_match_detail_attempts)
+  detail_attempts,                -- INTEGER NOT NULL DEFAULT 0. 시도 횟수. 3 이면 포기
+  detail_last_attempt_at NULL,    -- TIMESTAMPTZ(6). 마지막 시도 시각 — 재시도 백오프(1h·6h) 기준
+
   data_version,                   -- 실시간 이벤트 순서 보장
   as_of, updated_at
 )
@@ -345,9 +362,29 @@ INDEX(tie_id)
 실측 때문이다 — Copa del Rey `Round of 128`의 Maracena 0-5 Valencia는 1부 팀이 있는데도
 팀통계·선수통계가 0이었다. 대회나 라운드로 뭉뚱그리면 이 케이스를 못 담는다.
 
+**`stats_state` 가 프론트 `displayState` 의 `recheck`·`confirmed` 를 만드는 유일한 소스다** (09-07). `status_short` 만으로는
+`final` 까지밖에 못 만든다. `has_*` 에서 파생하지 않는 이유: "확인했고 없음(false)" 인 컵 경기가 영원히 `recheck` 가 된다.
+
 `has_*`가 **3값 논리**다. `NULL`은 미확인, `false`는 확인했고 없음, `true`는 있음.
-`false`인 경기는 다시 부르지 않는다. 단 **FT 후 24시간 이내는 `NULL`로 되돌려 재시도**한다 —
-데이터가 늦게 채워지는 경우가 있다 (`INGESTION_STRATEGY.md` 4-2 ①).
+~~`false`인 경기는 다시 부르지 않는다.~~ → **`detail_checked_at` 이 기록된(확정된) 경기는 다시 부르지 않는다** — 상세 백필의
+대상 조건이 `detail_checked_at IS NULL` 이다 (`detail-retry.ts:56`). 확정 전에는 갈래 하나가 `false` 여도 **4갈래를 다시 부른다** —
+오케스트레이터가 네 서비스를 모두 호출하고(`match-details-backfill.service.ts:314-317`), 각 서비스는 `has_*` 를 보지 않고 API 를 부른다
+(`l3/lineups.service.ts:66-97` · `l3/events.service.ts:71-93` · `l5/team-stats.service.ts:130-152` · `l5/player-stats.service.ts:231-258` —
+경기 존재 · fixture id · `detail_eligible` 만 확인).
+~~단 **FT 후 24시간 이내는 `NULL`로 되돌려 재시도**한다 —
+데이터가 늦게 채워지는 경우가 있다 (`INGESTION_STRATEGY.md` 4-2 ①).~~
+→ **코드는 `has_*` 를 `NULL` 로 되돌리지 않는다. 늦게 채워지는 데이터는 기다려서 흡수한다** — 상세 백필은 킥오프 뒤 24시간이 지난
+경기부터 대상으로 잡고(`RECENT_MATCH_LOCK_MS = 24h` · `detail-retry.ts:27` · 조건 `kickoff_at < now − 24h` · `detail-retry.ts:58`),
+실패하면 마지막 시도 1시간 뒤 · 6시간 뒤 다시 부르고 3회 실패하면 포기한다 (`DETAIL_RETRY_BACKOFF_MS` · `DETAIL_MAX_ATTEMPTS=3` · 아래 단락).
+(`backend/src` 에 `has_*` 를 `NULL` 로 쓰는 코드 없음 — 생성 코드·spec 제외 grep.)
+
+**`detail_attempts` · `detail_last_attempt_at` — 경기 단위 재시도 (2026-10-15 #139 머지).** 상세 백필은
+`backfill_jobs.cursor_match_id` 로 "id > cursor" 만 앞으로 갔다 — id 가 작은데 늦게 끝난 경기와 실패한 경기를 영원히 건너뛰었다.
+커서를 버리고 경기마다 시도 횟수 · 마지막 시도 시각을 둔다. 대상은 종료 상태 경기 중 `detail_checked_at IS NULL` 이고
+재시도 시점이 된 것(순서 `kickoff_at asc, id asc`) — 시도 0회 즉시 · 1회 뒤 1시간 · 2회 뒤 6시간 · 3회면 포기(warn 에 복구 SQL).
+시도 기록은 raw `UPDATE … RETURNING` 이라 `updated_at` 을 건드리지 않는다. 확정(`detail_checked_at`)은 `has_*` 가 전부 non-null 일 때만이다.
+복구: `UPDATE matches SET detail_attempts = 0, detail_last_attempt_at = NULL WHERE detail_checked_at IS NULL AND detail_attempts >= 3;`
+운영 적용 10-15 · 결과는 `INGESTION_STRATEGY.md` 5-3.
 
 ```
 knockout_ties(
@@ -539,8 +576,13 @@ UNIQUE(competition_season_id, category, rank)
 ```
 
 `category`: `SCORERS | ASSISTS | YELLOW_CARDS | RED_CARDS`.
-전용 엔드포인트가 대회당 1콜이므로 `player_season_stats`에서 뽑지 않고 따로 저장한다
-(원칙 ①의 예외 — API 공식 순위가 우리 집계보다 권위 있다).
+
+> ⚠️ **더 이상 조회 경로가 아니다 (2026-09-17 · feat/statistics-self-aggregation).**
+> `/api/stats/*` 는 `player_match_stats` 를 자체 집계하는 방식으로 전환됐다 (DATA_RULES 8장).
+> 이 테이블 · `TopRanking` 모델 · `RankingCategory` enum · `L6.rankings` 브랜치는 **다음 판에서 제거 예정**이다 —
+> 자체 집계가 화면에서 안정 통과한 후 삭제한다. 그 전까지 L6 가 계속 채우지만 아무도 읽지 않는다.
+>
+> **왜 자체 집계로 갔나**: (1) TopRanking 은 대회당 1콜의 상위 N 만 주므로 컵·유럽 대항전 등 순위표 없는 대회에서는 랭킹이 없다. (2) 대회별 상위 N 을 자른 뒤 SUM 하면 합산값이 실제와 다르다. (3) 우리는 이미 `player_match_stats` 를 다 갖고 있다 — 원본에서 뽑는 게 정합.
 
 ### 3-6. 운영
 
@@ -560,8 +602,17 @@ INDEX(layer, started_at)
 api_quota_snapshots(id, captured_at, calls_used, limit_day, plan, expires_on)
 ```
 
+`backfill_jobs.cursor_match_id` 는 **컬럼만 남았다 (2026-10-15 · #139).** 상세 백필은 이 커서를 읽지도 쓰지도 않는다 —
+상세 백필의 재시작 지점은 경기 행의 시도 기록(3-3 `detail_attempts` · `detail_last_attempt_at`)이다.
+
 `api_quota_snapshots`는 `/status` 응답을 적재한다.
-`INGESTION_STRATEGY.md` 3-5의 경고선(6,000콜) 판단과 구독 만료 감시가 여기서 나온다.
+~~`INGESTION_STRATEGY.md` 3-5의 경고선(6,000콜) 판단과 구독 만료 감시가 여기서 나온다.~~
+→ **2026-10-16 실측 · #141 — 예측이 틀렸고 코드가 맞았다.** 이 테이블을 읽는 코드는 없다 — 경고선 판단에 쓰이지 않는다.
+라이브 폴러·상세 백필은 `/status` 응답의 used 를 그 자리에서 읽어 판단하므로(`DATA_RULES.md` 6-1) 적재된 행을 다시 읽을 일이 없었다.
+구독 만료 임박 warn 도 `/status` 응답으로 낸다 (프로세스당 UTC 하루 1회).
+INSERT 는 `QuotaService.snapshot()` 하나이고, 하루 1회 `QuotaSnapshotJob` 과 CLI(`cli/ingest.ts` — `status` 와 l0·l1·l2·l6·backfill·probe-details·probe-players 앞뒤)만 부른다 — 상세 백필은 기록 없는
+`QuotaService.current()` 로 확인한다. 그 전에는 상세 백필이 대회시즌마다 `snapshot()` 을 불러 10-14 하루에 13,546행이 들어갔다.
+보존 기간 정리 코드는 없다.
 
 ### 3-7. 다국어
 
@@ -575,12 +626,17 @@ UNIQUE(entity_type, entity_id, locale)
 INDEX(entity_type, locale)
 ```
 
-`entity_type`: `TEAM | PLAYER | COMPETITION | ROUND | VENUE`
+`entity_type`: `TEAM | PLAYER | COMPETITION | COACH | ROUND | VENUE` (schema.prisma:114 · `COACH` 추가됨)
 
 **`ROUND`가 새로 들어간다.** `1/128-finals`·`Extra Preliminary Round`를 한국어로 옮겨야 하고,
 대회마다 체계가 다르다. 지금 프론트의 `PLAYER_NAMES` 하드코딩을 이 테이블로 옮긴다.
 
 컵 컷오프를 목록 단계에서 자른 덕에 팀은 700개가 아니라 **64개 규모**로 유지된다.
+
+**연결 (2026-09-17 · feat/localized-names-api 1단계 · `~~미구현~~` 해소).** 읽기 API 가 `?locale=ko|en`
+으로 이 테이블을 조회해 `displayName` 을 만든다. 헬퍼는 `common/name-lookup.ts` (배치 IN 조회 · locale=en 은 no-op).
+`common/names.dto.ts` 의 `names(original, short, override?)` 가 override 를 받으면 로케일 이름을,
+아니면 원본을 채운다. `originalName` 은 항상 원본. 상세 규칙은 `BACKEND_FEATURES.md` 응답 공통 규칙 참조.
 
 ---
 
@@ -591,7 +647,7 @@ INDEX(entity_type, locale)
 
 | 화면 (PRD) | 질의 | 사용 인덱스 | 비고 |
 |---|---|---|---|
-| 홈 — 오늘의 경기 | `matches WHERE kickoff_at BETWEEN … AND competition_season_id IN (…)` | `matches(kickoff_at)` | 실측 `/fixtures?date=`가 451건. 12대회로 좁힌다 |
+| 홈 — 오늘의 경기 | `matches WHERE kickoff_at BETWEEN … AND competition_season_id IN (…)` | `matches(kickoff_at)` | 실측 `/fixtures?date=`가 451건. ~~12대회~~ → 19대회 (2026-09-17) 로 좁힌다 |
 | 홈 — 순위 사이드바 | `standings WHERE competition_season_id = ? ORDER BY rank LIMIT 6` | `standings(competition_season_id, rank)` | |
 | 순위 `/standings` | 위와 같음, LIMIT 없음 | 같음 | 20행 |
 | 경기 목록 `/matches` | `matches WHERE competition_season_id = ? AND kickoff_at … ORDER BY kickoff_at` | `matches(competition_season_id, kickoff_at)` | 필터가 대회+날짜라 복합 인덱스가 정확히 맞는다 |
@@ -602,7 +658,7 @@ INDEX(entity_type, locale)
 | 경기 상세 — 선수 평점 | `player_match_stats WHERE match_id = ?` | `player_match_stats(match_id)` | **FK 없으면 여기가 36만 행 풀스캔** |
 | 대회 허브 | `competition_seasons` + `competition_rounds` | `competition_seasons(competition_id) WHERE is_current` | |
 | 녹아웃 대진표 | `bracket_slots WHERE competition_season_id = ? ORDER BY round, slot_index` | UNIQUE(cs_id, round_id, slot_index) | 슬롯이 없으면 골격만 그린다 |
-| 통계 랭킹 `/stats` | `top_rankings WHERE competition_season_id = ? AND category = ? ORDER BY rank` | UNIQUE(cs_id, category, rank) | 사전 계산돼 있어 조인 없음 |
+| 통계 랭킹 `/stats` | `player_match_stats` GROUP BY player_id (2026-09-17 자체 집계 · DATA_RULES 8장). `top_rankings` 는 더 이상 조회 경로가 아니다 | `player_match_stats(player_id, competition_season_id)` | |
 | 팀 상세 — 요약 | `team_season_stats WHERE competition_season_id = ? AND team_id = ?` | UNIQUE | |
 | 팀 상세 — 최근 경기 | `matches WHERE (home_team_id = ? OR away_team_id = ?) ORDER BY kickoff_at DESC LIMIT 5` | `matches(home_team_id, kickoff_at)` + `(away_team_id, kickoff_at)` | **OR는 두 인덱스를 각각 타야 한다.** UNION ALL로 쓰는 편이 안전 |
 | 팀 상세 — 스쿼드 | `squad_entries WHERE team_id = ? AND season_year = ? AND valid_to IS NULL` | `squad_entries(team_id, season_year)` | |
@@ -631,7 +687,7 @@ INDEX(entity_type, locale)
 |---|---|---|---|---|---|---|---|---|
 | competitions · seasons · competition_seasons | **C/U** | | | | | | U | C/U |
 | competition_rounds | | | **C/U** | | | | U | C/U |
-| teams · venues · competition_entries | **C/U** | U | | | | | | C/U |
+| teams · venues · competition_entries | **C/U** | U | C/U ¹ | | | | | C/U |
 | players | | **C/U** | | U | | U | U | C/U |
 | squad_entries | | **C/U** | | | | | | C |
 | coach_tenures | | **C/U** | | | | | | C |
@@ -639,10 +695,13 @@ INDEX(entity_type, locale)
 | match_events | | | | | **C/U** | U | | C |
 | match_lineups · lineup_entries | | | | **C** | | U | U | C |
 | team_match_stats · player_match_stats | | | | | | **C/U** | U | C |
-| standings | | | | | U | **U** | U | C/U |
+| standings | | | C/U/D ² | | U | **U** | U | C/U |
 | player_season_stats · team_season_stats | | | | | | U | **U** | C/U |
 | top_rankings | | | | | | | **U** | C/U |
 | injuries | | **C/U** | | | | | U | C |
+
+¹ L2 는 `venues` 를 경기 응답의 경기장으로 직접 upsert 한다(name·city · `l2.service.ts` venues `batchUpsert`). `teams`·`venues`·`competition_entries` 는 10-08 PR #135 부터 **현재 시즌·missingTeams 일 때만** L2 가 `L0Service.refreshTeamsForSeason` 에 위임해 L0 코드로 쓴다 — 팀 쓰기 소유는 L0 그대로.
+² L2 `collectStandings`(`l2.service.ts:398`)는 한 트랜잭션에서 순위 행을 upsert 하고, 그 대회시즌에서 이번 응답에 없는 옛 행(`(team_id, group_name)`)을 DELETE 한다(`:452-456`). KNOCKOUT 대회는 부르지 않는다(`:385-386`). L4 의 FT 뒤 순위 갱신(#122)도 같은 함수를 재사용한다.
 
 **충돌 지점 세 곳이 보인다.**
 
@@ -655,7 +714,11 @@ INDEX(entity_type, locale)
 라인업과 경기 통계에 스쿼드에 없는 선수가 나온다(2-4). 네 경로가 같은 선수를 동시에
 `INSERT`할 수 있다. → `api_player_id` UNIQUE + `ON CONFLICT DO NOTHING`.
 **Prisma `upsert()`가 항상 `ON CONFLICT`로 컴파일되지는 않는다** (설계검토 B-2).
-쿼리 로그로 확인하고, 아니면 `$executeRaw`를 쓴다. 동시 호출 통합 테스트를 같은 PR에 넣는다.
+→ **결정 (2026-09-07)**: 수집 경로의 upsert 는 전부 `backend/src/prisma/batch-upsert.ts` 를 쓴다.
+`INSERT … VALUES (…),(…) ON CONFLICT DO UPDATE … RETURNING` 을 테이블당 1문장으로 보내므로
+ON CONFLICT 가 코드로 보장되고, 행 단위 왕복(Supabase ≈60ms)도 사라진다.
+L0 실측: 20팀 시즌 하나가 행 단위 80왕복 → 3문장. `test/l0.e2e-spec.ts` 가 쿼리 로그로 확인한다.
+동시 호출 통합 테스트는 `players` 를 만드는 PR 에 넣는다.
 
 **③ `squad_entries` — L1과 백필이 겹치면 이중 이력이 생긴다.**
 백필이 현재 시즌 스쿼드를 넣는 동안 주간 diff가 돌면 같은 선수에 두 행이 열린다.
@@ -727,7 +790,7 @@ partial unique index가 막아주지만 그건 **에러로 막는 것**이라 di
 
 ## 7. 검토 ④ 볼륨·카디널리티
 
-5시즌 · 12대회 · 컵 컷오프 적용 기준. 경기 상세는 리그 1,941 + 컵 222 = **2,163경기/시즌**.
+5시즌 · ~~12대회~~ → **19대회** · 컵 컷오프 적용 기준 (2026-09-17). 경기 상세: 리그 1,941 + 컵 ~~222~~ → **541** (실측) + UEL 213 + UECL 201 = 대략 **2,900경기/시즌** (실측 기반 · 종전 2,163 은 컵 222 기준).
 
 | 테이블 | 행 수 | 추정 크기 | 증가 요인 |
 |---|---|---|---|
@@ -735,16 +798,16 @@ partial unique index가 막아주지만 그건 **에러로 막는 것**이라 di
 | `lineup_entries` | 432,000 | 35 MB | 경기 × 40명(벤치 포함) |
 | `match_events` | 162,000 | 19 MB | 경기 × 15 |
 | `player_season_stats` | ~30,000 | 9 MB | 선수 × 팀 × 대회시즌 |
-| `players` | ~15,000 | 8 MB | 5시즌 누적, 이적 포함 |
+| `players` | ~15,000 | 8 MB | 5시즌 누적, 이적 포함. **09-07 실측: 현재 시즌 6대회만으로 4,863명** |
 | `team_match_stats` | 21,600 | 5 MB | 경기 × 2 |
 | `matches` | **12,410** | 4 MB | 리그 9,705 + 컵 목록 2,705 |
-| `squad_entries` | ~16,500 | 2 MB | |
+| `squad_entries` | ~16,500 | 2 MB | **09-07 실측: 한 시즌 첫 적재가 4,863행.** 5시즌 + 이적 이력(SCD2)이면 재산정 필요 |
 | `injuries` | ~12,000 | 2 MB | |
 | `bracket_slots` | ~1,500 | 0.2 MB | 컵 7개 × 5시즌 × 15슬롯 |
 | `standings` | 600 | 0.1 MB | 리그만 |
 | 나머지 | ~5,000 | 1 MB | |
 | **데이터 합계** | | **~166 MB** | |
-| **+ 인덱스 60%** | | **~266 MB** | 500MB의 **53%** |
+| **+ 인덱스 60%** | | ~~**~266 MB** (500MB의 **53%**)~~ → **완성 시 약 262 MB (실측 기반 · 09-17)** | 종전 266 은 완성 추정치 · 실측 79MB + 잔여 183MB ≈ 262 |
 
 **FK를 안 쓰면 인덱스가 줄어들 것 같지만 그렇지 않다.** 2-2에서 관계 컬럼마다
 인덱스를 명시하기로 했으므로 총량은 비슷하다. 다만 제약 검사 비용이 없어
@@ -788,7 +851,7 @@ partial unique index가 막아주지만 그건 **에러로 막는 것**이라 di
 | `matches.referee` · `venue_id` · `elapsed` | 실측에서 자주 `null` |
 | `standings.description` · `status` | 구역 표기가 없는 대회 |
 | `lineup_entries.grid` | 벤치 선수 |
-| `match_events.player_id` · `assist_player_id` | 팀 단위 이벤트 |
+| `match_events.player_id` · `assist_player_id` | 팀 단위 이벤트 · API 가 선수 id 를 주지 않은 이벤트 (2026-10-15 · 2-4 예외) |
 | `coaches.birth_date` · `nationality` 등 | 실측에서 대부분 `null` |
 
 **`et_*`와 `pen_*`을 0으로 채우면 안 된다.** "연장 0-0"과 "연장 없음"이 구분되지 않아
@@ -799,8 +862,16 @@ partial unique index가 막아주지만 그건 **에러로 막는 것**이라 di
 `matches.has_events` · `has_lineups` · `has_team_stats` · `has_player_stats`
 
 `NULL`=미확인 · `false`=확인했고 없음 · `true`=있음.
-`false`는 재수집하지 않는 근거이므로 **함부로 쓰면 데이터가 영영 안 채워진다.**
-FT 후 24시간 이내는 `NULL`로 되돌린다.
+~~`false`는 재수집하지 않는 근거이므로~~ → 4개가 모두 non-null 이 되면 확정(`detail_checked_at`)되고, **확정된 경기는 다시 부르지 않는다**
+(`detail-retry.ts:56`). 확정 전에는 갈래 하나가 `false` 여도 4갈래를 다시 부른다 (3-3). 그래서 `false` 는 나머지 갈래와 함께 확정되는 순간
+재수집을 막는다 — **함부로 쓰면 데이터가 영영 안 채워진다.**
+~~FT 후 24시간 이내는 `NULL`로 되돌린다.~~ → 되돌리지 않는다. 상세 백필이 킥오프 뒤 24시간 안의 경기를 대상에서 빼는 것으로
+대신한다 (`RECENT_MATCH_LOCK_MS` · `detail-retry.ts:27`·`:58` · 3-3).
+
+**`has_lineups=false` 는 선수 명단 없는 라인업에도 쓴다 (2026-10-15 실측 · #140).** 하위 리그 팀이 나오는 컵 경기
+(Coupe de France 등)의 `/fixtures/lineups` 는 `startXI`·`substitutes` 키 자체가 없고 `formation` 이 null 이다 (예: fixture 1485809).
+L3 lineups 는 모든 팀의 선수가 0명이면 쓰기 없이 `has_lineups=false`(미제공)로 마감한다 — 화면은 "이 경기는 라인업이 제공되지
+않았습니다" (`not_provided`).
 
 ---
 
@@ -906,8 +977,170 @@ Prisma migration을 이 순서로 쪼갠다. 각 단계가 독립적으로 배�
 | 2 | 팀 최근 경기 질의 — `UNION ALL` vs `match_participants` 보조 테이블 | Phase 2에서 실측 후 |
 | 3 | 순위표 라운드별 스냅샷 | 500MB 여유가 확인되면. `standings`에 `round_id` 추가 + UNIQUE 확장 |
 | 4 | `injuries`의 멱등 키 | `/injuries` 응답에 안정적인 식별자가 없다. `(player_id, cs_id, fixture_date)`로 시작하고 중복이 생기면 조정 |
-| 5 | `localized_names`를 테이블로 둘지 JSON 파일로 둘지 | i18n 문서에서. 팀 64개 규모면 파일도 가능하다 |
-| 6 | Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 | **Phase 0 스켈레톤에서 쿼리 로그로 확인** (설계검토 B-2). 아니면 `$executeRaw` |
+| ~~5~~ | ~~`localized_names`를 테이블로 둘지 JSON 파일로 둘지~~ | **결정 (2026-09-07)** — 테이블 유지. **팀 110개만** 채운다(5대 리그 96 + UCL 리그페이즈 14), 선수는 영어. CSV → 적재 CLI (`NEXT_STEPS` 11장) |
+| 6 | Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 | **해결 (2026-09-07)** — 확인 대신 `batch-upsert.ts` 로 강제. 5장 ② 참조 |
+| 7 | `matches.stats_state` 추가 | **결정 (2026-09-07)** — 3-3. `NEXT_STEPS` 1장 1번 PR 에서 마이그레이션 |
+
+---
+
+## 12-N. 녹아웃 대진(Tie) DTO — 프론트 규격이 백엔드 예약이다
+
+**결정 (2026-09-21 · feat/tournament-bracket).** `KnockoutTie`·`BracketSlot` 모델은
+`schema.prisma:511~567` 에 이미 있지만 L2-b (UCL 녹아웃 · 2027-02) 이후 채워진다.
+그 전까지 프론트가 `normalizeMatch` 결과에서 같은 라운드·같은 팀 페어를 묶어 tie 를 만든다.
+이 절이 그 규격이다 — 백엔드가 tie 를 실을 때 이 shape 을 그대로 반환한다.
+
+### Tie DTO
+
+프론트 `frontend/src/utils/ties.js` 의 `buildTies` 가 만드는 형태 = 백엔드 응답 형태.
+필드가 이보다 늘어나면 프론트 화면(TieCard·TournamentBracket)이 어긋난다.
+
+```js
+/**
+ * @typedef {'pending'|'in_progress'|'settled'} TieStatus
+ * @typedef {'single'|'aggregate'|'et'|'pens'|'pending'} DecidedBy
+ *
+ * @typedef {object} Tie
+ * @property {string} tieId                     `${roundName}::${sortedRefsJoined}`
+ * @property {string} roundName                 원문 그대로 (예: 'Round of 16')
+ * @property {number|null} roundOrdinal
+ * @property {object} home                      1차전 홈 · 단판 홈
+ * @property {object} away
+ * @property {Array<object>} legs               길이 1 (단판) 또는 2 (2레그)
+ * @property {{home:number, away:number}|null} aggregate   2레그 goals 합. leg 어느 하나라도 null 이면 null
+ * @property {{home:number, away:number}|null} penalties   penHome/penAway 둘 다 non-null 일 때만
+ * @property {string|null} winnerTeamRef
+ * @property {TieStatus} status
+ * @property {DecidedBy} decidedBy
+ */
+```
+
+### enum 매핑
+
+`TieStatus` 는 백엔드 `TieStatus` (schema.prisma:523) 를 그대로 이어받는다.
+
+| 프론트 값       | 백엔드 `TieStatus` | 조건 |
+|-----------------|-------------------|------|
+| `'pending'`     | `SCHEDULED`       | 모든 legs 가 scheduled |
+| `'in_progress'` | `IN_PROGRESS`     | 일부만 종료 |
+| `'settled'`     | `SETTLED`         | 모든 legs 종료(final/recheck/confirmed/cancelled) |
+
+`DecidedBy` 는 백엔드 `WinReason` (schema.prisma:522) 을 그대로 이어받는다 —
+`'pending'` 만 프론트 전용 (백엔드는 미결정 tie 를 winReason=null 로 실는다).
+
+| 프론트 값     | 백엔드 `WinReason` | 뜻 |
+|---------------|--------------------|------|
+| `'single'`    | `SINGLE_LEG`       | 단판 종료 (연장·PK 없음) |
+| `'aggregate'` | `AGGREGATE`        | 2레그 합산 (연장 아님) |
+| `'et'`        | `EXTRA_TIME`       | 연장 결정 |
+| `'pens'`      | `PENALTIES`        | 승부차기 결정 |
+| `'pending'`   | `null`             | 미결정 |
+
+### aggregate 계산 규약 (정정 2)
+
+`aggregate = 연장 포함 최종 골(dto.goals) 합 · 승부차기 별도.`
+
+프론트 `NormalizedMatch.score = { home, away }` 는 `normalize.js:392` 에서 `dto.goals`
+를 그대로 매핑한다 — API 최종 골 (연장 포함). `penHome/penAway` 는 별도 필드.
+
+2레그일 때:
+```
+aggregate.home = legs[0].score.home + legs[1].score.away
+aggregate.away = legs[0].score.away + legs[1].score.home
+```
+반전 검증: `legs[0].homeTeam.slug === legs[1].awayTeam.slug &&
+legs[0].awayTeam.slug === legs[1].homeTeam.slug`. 실패하면 각 경기 단판 폴백.
+leg 스코어 어느 하나라도 null 이면 `aggregate = null`.
+
+### tie 생성 규칙 (buildTies)
+
+1. groupBy `(roundName, sortedPairKey=[home.slug, away.slug].sort().join('::'))`
+2. 그룹 사이즈 **1** → 단판 tie
+3. 그룹 사이즈 **2** → 반전 검증 통과하면 2레그 tie · 실패면 각 경기 단판 폴백
+4. 그룹 사이즈 **3+** → 오류 케이스 · `console.warn` · 각 경기 단판 폴백
+5. legs 정렬: `date asc`
+6. `winnerTeamRef = legs[legs.length-1].winnerTeamRef`
+7. 정렬 (반환 배열): `roundOrdinal asc · null 뒤 · tieId asc`
+
+### decidedBy 판정
+
+- `winnerTeamRef == null` → `'pending'`
+- 단판:
+  - `penHome/penAway` 둘 다 non-null → `'pens'`
+  - `etHome` non-null → `'et'`
+  - 그 외 → `'single'`
+- 2레그:
+  - `penHome/penAway` 둘 다 non-null (leg2) → `'pens'`
+  - `aggregate` 동률 && leg2 `etHome/etAway` non-null → `'et'`
+  - 그 외 → `'aggregate'`
+
+### bracketRounds — 4열 고정 + UCL R32 접힌 리스트
+
+**정정 1.** 모든 대회의 트리는 **16강→8강→4강→결승 4열 고정**이다.
+UCL 의 `Round of 32` 는 트리 밖 · 접힌 리스트로 그린다 (`isBracket=false · isEarly=true`).
+
+`BracketRound` 필드:
+```js
+/**
+ * @typedef {object} BracketRound
+ * @property {string} roundName
+ * @property {number|null} roundOrdinal
+ * @property {Array<Tie>} ties
+ * @property {boolean} isBracket           true = 트리 4열 대상
+ * @property {boolean} isEarly             true = 트리 밖 · 접힌 리스트 (UCL R32 · 컵 R64/R128)
+ * @property {boolean} isQualifier         UCL 예선·Play-offs (D4 · 표시 안 함)
+ * @property {Array<object>|null} byeSlots UCL R16 만 · R32 참가 안 한 R16 참가팀
+ */
+```
+
+라운드 분류 규칙 (`roundName` 정확 매칭):
+
+| roundName | isBracket | isEarly | isQualifier |
+|---|---|---|---|
+| `Round of 16` · `Quarter-finals` · `Semi-finals` · `Final` | `true` | `false` | `false` |
+| `Round of 32` · `Round of 64` · `Round of 128` | `false` | `true` | `false` |
+| `1st Qualifying Round` · `2nd Qualifying Round` · `3rd Qualifying Round` · 포함 `Qualifying Round` · 정확 `Play-offs` · `Preliminary Round` · `Preliminary` | `false` | `false` | `true` |
+| 접두 `League Stage -` · `Regular Season -` 등 | `false` | `false` | `false` |
+
+### byeSlots — UCL R16 부전승 (정정 1)
+
+UCL 리그페이즈 1~8위는 R16 직행이다 (2024-25 시즌부터 UCL 스위스 포맷).
+R32 tie 안에 팀 slug 집합을 만들고, R16 tie 안 팀 중 그 집합에 없는 팀 = bye.
+
+계산 조건:
+- `format === 'groups_knockout'` 이고 `roundName === 'Round of 16'` 일 때만
+- 그 외 라운드·컵(`format === 'cup'`) 은 `byeSlots = null`
+
+중복 제거 · legs 정렬 순서 유지. 최대 8개 (UCL 리그페이즈 1~8위 규모).
+
+### defaultTab (D6)
+
+`{format, ties}` 로 대회 페이지 기본 탭을 정한다:
+- `format === 'league'` → `'schedule'`
+- `format === 'cup'`: `isBracket` 라운드에 tie 하나라도 있으면 `'bracket'` · 아니면 `'schedule'`
+- `format === 'groups_knockout'`: 같은 판정 · 아니면 `'standings'`
+
+### isSuperCup (정정 3)
+
+`comp?.format === 'cup' && (comp?.displayOrder ?? 0) >= 200`.
+
+임계값은 `>= 200` (`>` 아님) — Community Shield(210) · Supercopa de España(220) · UEFA Super Cup 등
+슈퍼컵 5종 (`normalize.js:31`, apiId 528/556/529/547/526) 이 displayOrder 200 대에 몰려 있다.
+`FA Cup` 같은 국내 컵(110~180)은 걸러진다.
+
+렌더 판정 (tie 1개 → 결과 카드 · 2~3개 → tie 카드 리스트) 은 `CompetitionPage` (B 판) 담당 —
+`isSuperCup` 은 boolean 만 낸다.
+
+### 백엔드 도래 시
+
+`backend/prisma/schema.prisma:511~567` 의 `KnockoutTie`·`BracketSlot` 은 외래키가 없다
+(`docs/BACKEND_GUIDE.md`). tie 응답 DTO 는 이 절 값 그대로 매핑:
+
+- `KnockoutTie.winReason` (enum) ↔ 프론트 `decidedBy` — `'pending'` 만 `winReason=null` 로 실는다
+- `KnockoutTie.status` (enum) ↔ 프론트 `status`
+- `aggregateHome`/`aggregateAway` ↔ 프론트 `aggregate.home`/`.away`
+- `firstLegMatchId`/`secondLegMatchId` ↔ 프론트 `legs[0]`/`legs[1]` (매치 ref 로 조인)
+- `BracketSlot.placeholderLabel` ↔ 프론트 `byeSlots` 팀 이름 (bye 슬롯 라벨)
 
 ---
 
@@ -920,7 +1153,7 @@ Prisma migration을 이 순서로 쪼갠다. 각 단계가 독립적으로 배�
 | 멱등성 키 정리 | 5-1 | 테이블별 재실행 규칙 |
 | SCD2 · 이중 시간 모델 | 6장 | `squad_entries`를 집계 근거로 쓰면 안 되는 구조적 이유 |
 | 원본/파생 분리 | 1·9장 | `standings`를 자체 계산하지 않는 결정 |
-| 볼륨·카디널리티 | 7장 | 266MB(53%). `player_match_stats`가 절반 |
+| 볼륨·카디널리티 | 7장 | ~~266MB(53%)~~ → **262MB (실측 기반 · 09-17)**. `player_match_stats`가 절반 |
 | 널 가능성 매트릭스 | 8장 | `et_*`·`pen_*`을 0으로 채우면 `win_reason`이 틀림 |
 | 비정규화 정당화표 | 9장 | 컬럼 7개, 갱신 책임자 명시 |
 | 삭제·보관 시나리오 | 10장 | FK 없는 환경의 삭제 순서 |

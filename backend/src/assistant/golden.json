@@ -1,0 +1,170 @@
+{
+  "cases": [
+    {
+      "id": "c1",
+      "question": "손흥민 이번 시즌 기록 알려줘",
+      "tool": null,
+      "reason": "선수 검색(이름→ref) 도구가 없다. get_player 는 ref 필요. LLM 이 도구를 헛호출해도 답변만 규칙 준수면 통과 — 헛호출 횟수는 soft 경고로 남긴다 (search 도구 도입 후 재측정 근거)"
+    },
+    {
+      "id": "c3",
+      "question": "EPL 상위 4팀 최근 5경기 비교해줘",
+      "tool": "get_standings",
+      "args": { "competition": "39-premier-league" }
+    },
+    {
+      "id": "c4",
+      "question": "챔피언스리그 16강 올라간 팀은?",
+      "tool": "get_standings",
+      "args": { "competition": "2-uefa-champions-league" },
+      "expected": { "answerMustNotContain": ["진출했", "확정됐"] },
+      "reason": "UCL 16강 미결정(2027-02). 도구를 불러 규칙 2(b) '아직 확정되지 않았습니다' 로 답하는 것이 옳다. '진출했다/확정됐다' 문구가 나오면 없는 결과를 지어낸 것"
+    },
+    {
+      "id": "c5",
+      "question": "우리 서비스가 다루는 대회 다 보여줘",
+      "tool": "list_competitions",
+      "args": {}
+    },
+    {
+      "id": "c6",
+      "question": "EPL 대회 정보",
+      "tool": "get_competition",
+      "args": { "ref": "39-premier-league" }
+    },
+    {
+      "id": "c7",
+      "question": "EPL 참가팀 목록",
+      "tool": "list_teams",
+      "args": { "competition": "39-premier-league" }
+    },
+    {
+      "id": "c8",
+      "question": "리버풀 팀 정보 (venue 포함)",
+      "tool": "get_team",
+      "args": { "ref": "40-liverpool" }
+    },
+    {
+      "id": "c9",
+      "question": "이번 주 EPL 경기 일정",
+      "tool": "list_matches",
+      "args": { "competition": "39-premier-league" }
+    },
+    {
+      "id": "c10",
+      "question": "리옹 유벤투스 경기 상세",
+      "tool": "get_match",
+      "args": { "fixtureId": "1622630" }
+    },
+    {
+      "id": "c11",
+      "question": "선수 909 (메시) 상세 정보",
+      "tool": "get_player",
+      "args": { "ref": "909-lionel-messi" }
+    },
+    {
+      "id": "c12",
+      "question": "챔피언스리그 득점왕 TOP 10",
+      "tool": "get_top_scorers",
+      "args": { "competition": "2-champions-league", "limit": 10 }
+    },
+    {
+      "id": "c13",
+      "question": "라리가 도움왕",
+      "tool": "get_top_assisters",
+      "args": { "competition": "140-la-liga" }
+    },
+    {
+      "id": "c14",
+      "question": "손흥민 인생 통산 골 수",
+      "tool": null,
+      "reason": "이 서비스는 5시즌만 커버 — get_player.totals 는 우리가 가진 시즌 합계일 뿐"
+    },
+    {
+      "id": "c15",
+      "question": "다음 시즌 EPL 우승 팀 예측해줘",
+      "tool": null,
+      "reason": "예측은 결정적 계층 밖 (V2_DESIGN 5-8)"
+    },
+    {
+      "id": "c16",
+      "question": "리버풀 다음 경기 언제야?",
+      "tool": "list_matches",
+      "args": { "team": "40-liverpool" },
+      "expected": { "answerMustNotReferencePastMatch": true },
+      "reason": "G1 · 답변에서 (월,일) 추출, 전부 KST 오늘 과거이면 실패. 30일 초과 격차는 연말/연초로 간주 무시. tool·args 는 문서용 — smoke·e2e 강제 안 함. 미변경 상태 실패 확인이 이 케이스에서는 성립하지 않음 (2026-09-14 실측: 데이터가 9/8 까지 진전돼 남은 경기가 미래뿐이라 옛 프롬프트도 미래 날짜만 답변). G1 은 목록에 과거 경기가 섞였을 때만 드러남 — 다음 라운드 데이터 적재 후 재실측 여지"
+    },
+    {
+      "id": "c17",
+      "question": "EPL 상위 3팀 승점 합계는?",
+      "tool": "get_standings",
+      "args": { "competition": "39-premier-league" },
+      "expected": { "answerMustContain": [" + ", " = "] },
+      "reason": "G2 · 규칙 7 형식 'A 9 + B 9 + C 7 = 25' 공백 포함. 골득실 +15 는 안 걸림"
+    },
+    {
+      "id": "c18",
+      "question": "음바페 통산 도움",
+      "tool": "get_player",
+      "args": { "ref": "278-kylian-mbappe" },
+      "expected": { "answerMustContain": ["찾지 못했습니다"] },
+      "reason": "MAX_TOOL_CALLS 소진 시 코드 폴백 검증. 음바페는 데이터에 없음(2026-09-14 실측 · /api/search 라틴·한글 모두 0건 · unaccent+한글 별칭 미적용) → 도구 5회 후 폴백. tool·args 는 문서용"
+    },
+    {
+      "id": "c20",
+      "question": "챔피언스리그 16강 조 편성 알려줘",
+      "tool": "get_standings",
+      "args": { "competition": "2-uefa-champions-league" },
+      "expected": { "answerMustNotContain": ["A조", "B조", "C조", "D조"] },
+      "reason": "G5·G6 · UCL 은 조별리그가 아니라 리그 페이즈. 없는 조 지어내지 않는지. 09-14 실측 evidence: list_competitions→get_competition→get_standings 3개 순차"
+    },
+    {
+      "id": "c21",
+      "question": "맨유 감독 누구야",
+      "tool": null,
+      "expected": { "answerMustNotContain": ["감독은"] },
+      "reason": "감독 정보는 도구에 없다 (L1 #10 미착수). 규칙 2(a) 도구 목록에 없음 검증. 2026-09-11 브라우저 실측에서 '제공된 데이터에 없습니다' 로 통과. search 도구가 들어와도 이 케이스는 유효하다 (감독 정보 자체가 스키마에 없음)"
+    },
+    {
+      "id": "c22",
+      "question": "살라 등번호 알려줘",
+      "tool": "get_player",
+      "args": { "ref": "306-mohamed-salah" },
+      "expected": {
+        "answerMustNotContain": ["전체 시즌", "시스템에서 확인이"]
+      },
+      "reason": "규칙 2(c) — 특정 필드만 null 이면 그 필드만 '제공되지 않습니다'. 살라 primaryTeam·jerseyNumber·position 전부 null (L1 squad 재적재 백로그 · 프롬프트 문제 아님). 3.5-lite 2/2 get_player 정상 호출 · 답 '우리 데이터에 없습니다'(규칙 2(a) 문구를 2(c) 자리에 사용 · 재현 2/2) → 규칙 2(c) 준수는 프롬프트 판에서 hard 재구성. 3.1-lite 1회는 도구 우회(모델 차이)"
+    },
+    {
+      "id": "c23",
+      "question": "맨체스터 시티 다음 경기 언제야?",
+      "tool": "list_matches",
+      "args": { "team": "50-manchester-city" },
+      "expected": { "answerMustNotReferencePastMatch": true },
+      "reason": "fix/assistant-scope-19 실측 4번 · c16 리버풀 짝. 컵/리그 아무 대회든 다음 경기 정답 (실측에서 '노리치와의 리그 컵' 통과). 대회명이 답에 들어가면 좋으나 hard 는 미래 경기 참조만"
+    },
+    {
+      "id": "c24",
+      "question": "이번 주 유럽 대항전 경기 알려줘",
+      "tool": "list_matches",
+      "expected": { "answerMustNotContain": ["아직 확정되지 않았습니다", "일정이 아직"] },
+      "reason": "fix/assistant-scope-19 실측 3번 · 규칙 10. '유럽 대항전' 은 UCL·UEL·UECL 셋. 옛 프롬프트는 UCL 만 조회하고 '확정되지 않았습니다' 답변. 도구 호출 검증(UEL 3·UECL 848 각 조회 여부)은 evidence 를 사람이 확인 (smoke 는 evidence.tool 만 hard, args.competition 은 sofrt)"
+    },
+    {
+      "id": "c25",
+      "question": "유로파리그와 컨퍼런스리그도 다루니?",
+      "tool": "list_competitions",
+      "args": {},
+      "expected": { "answerMustContain": ["Europa League", "Europa Conference"] },
+      "reason": "fix/assistant-scope-19 실측 1번 · 규칙 9. list_competitions 결과에 UEL(3)·UECL(848) 이 들어 있음에도 프롬프트가 옛 17 을 믿고 답했었다. Gemini 는 대회명을 영어 정식명(UEFA Europa League · UEFA Europa Conference League) 으로 유지하는 경향이라 needle 은 영어 표기 (한국어 답변 표기도 이 substring 을 포함)"
+    },
+    {
+      "id": "c26",
+      "question": "유로파리그에 어떤 팀들이 있어?",
+      "tool": "list_teams",
+      "args": { "competition": "3-uefa-europa-league" },
+      "expected": { "answerMustNotContain": ["우리 데이터에 없습니다"] },
+      "reason": "fix/assistant-scope-19 실측 2번 · 규칙 9 후반. 옛 프롬프트는 도구 호출 0회로 '우리 데이터에 없습니다' 즉답. list_teams 를 부르면 유로파리그 참가팀이 나온다"
+    }
+  ]
+}

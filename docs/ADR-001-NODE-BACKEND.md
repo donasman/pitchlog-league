@@ -5,6 +5,8 @@
 > 재확인: 2026-09-06 — 범위가 12대회 × 5시즌으로 커진 뒤 Spring 전환을 검토했으나 유지.
 > 늘어난 것은 저장량(266MB)과 API 예산(45,400콜/8~12일)이지 런타임 부하가 아니다
 > (백필 초당 0.05콜). 아래 다섯 근거 중 무효화된 것이 없다.
+>
+> 이후 2026-09-17 범위가 19대회로 확장됐다 — 현재 사양은 INGESTION_STRATEGY 1장 참조.
 
 ## 결정
 
@@ -15,10 +17,10 @@ PitchLog 백엔드는 **NestJS + TypeScript 기반 모듈형 모놀리스**로 �
 - 일반 API: NestJS REST Controller
 - 실시간: NestJS WebSocket Gateway + Socket.io
 - 단기 스케줄: `@nestjs/schedule`
-- 대량·재시작 가능 작업: Redis + BullMQ Worker(필요 시 도입)
+- 대량·재시작 가능 작업: DB 체크포인트(`backfill_jobs`) 위의 단일 루프. Redis + BullMQ 는 다중 인스턴스가 필요해질 때만 (2026-09-07 확정)
 - 입력 검증: DTO + ValidationPipe
 - API 명세: OpenAPI/Swagger
-- 테스트: Jest + Supertest
+- 테스트: vitest + Supertest (Nest 12 기본. 2026-09-06 스켈레톤에서 확정)
 
 초기에는 REST API, 외부 축구 API 수집, 경기일 스케줄러, Socket.io를 하나의 백엔드
 애플리케이션에서 운영한다. 수집량이나 접속량이 커지면 같은 저장소와 도메인 모듈을 공유하면서
@@ -27,7 +29,8 @@ API, Worker, Realtime Gateway를 독립 프로세스로 분리한다.
 ## 이유
 
 - 현재 백엔드 구현물이 없어 전환 비용이 낮다.
-- React 프론트엔드와 TypeScript 생태계를 공유할 수 있다.
+- React 프론트엔드와 Node·npm 생태계를 공유할 수 있다. (프론트는 JavaScript 다 — TypeScript 는 NestJS 가
+  DI·DTO 검증에 컴파일러 메타데이터를 쓰기 때문에 백엔드에만 따라온 선택이지, 프론트와 공유하는 것이 아니다. 09-07 정정)
 - PitchLog 작업은 외부 API·DB·WebSocket·AI 호출 중심의 I/O 작업이다.
 - Spring Boot와 별도 Node 게이트웨이 두 서버를 운영하는 복잡도를 줄일 수 있다.
 - 초기 단순성과 향후 프로세스 분리를 동시에 확보할 수 있다.
@@ -76,7 +79,7 @@ partial index(3.8+)와 `ON CONFLICT`(3.24+)도 지원한다. 그래도 제외한
 - enum 포기와 전 환경 SQLite 통일을 받아들임
 
 **비용이 이유라면 DB를 바꾸지 않는다.** NestJS와 같은 VPS에 Docker PostgreSQL을 띄운다
-(`infra/docker-compose.yml`). Supabase 무료 티어는 7일 비활성 시 정지, Neon은 컴퓨트 시간
+(도입 시 `infra/docker-compose.yml` — 아직 없다). Supabase 무료 티어는 7일 비활성 시 정지, Neon은 컴퓨트 시간
 제한이 있어 10초 스케줄러가 상시 도는 이 서비스와는 궁합이 애매하다.
 
 ## 폐기한 안

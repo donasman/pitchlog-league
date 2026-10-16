@@ -1,11 +1,13 @@
 # PitchLog 다음 작업 순서
 
-> 갱신: 2026-09-06 · 이전 판(09-03)을 대체한다.
+> 갱신: 2026-10-16 (10-16 PR #141 까지 반영 — **Phase 2 관문 통과(10-15)** · 관측 중 운영 수정 #138~#141 · Pro 유지 결정(10-15) · 10-16 이력 재작성으로 문서 속 SHA 교체) ·
+> 2026-10-08 (10-08 PR #135 까지 반영 — 운영 로그인 개시 · 운영 DB 마이그레이션 · L2 missingTeams 자가 복구 · EC2 env) ·
+> 2026-10-07 (09-28 PR #130 까지 — 배포 · 백필-2 · 스케줄러 · L4 1~4판 · 로그인) · 3차 개정(09-07 중간 점검 — `PLAN_REVIEW.md`) 위에 덧쓴다.
 > 근거 문서: `INGESTION_STRATEGY.md` · `SCHEMA_DESIGN.md` · `DATA_RULES.md` ·
 > `API_INVENTORY.md` · `PRD.md` · `BACKEND_FEATURES.md`
 
-**설계는 충분하다. 백엔드 코드가 0줄이므로 여기서 문서를 더 쓰면 계속 0줄이다.**
-아래는 코드로 넘어가는 순서다.
+**설계는 충분하다. 코드가 돌기 시작했다 — 문서는 코드가 바꾼 사실만 갱신한다.**
+아래는 코드로 넘어가는 순서다. 세션을 새로 열면 **1장부터** 본다.
 
 ---
 
@@ -16,36 +18,306 @@
 | 설계 문서 | ✅ 완료 — docs 24개 + 디자인 브리프 9개 |
 | 디자인 | ✅ 완료 — 시안 13개, 토큰 1파일 |
 | API 실측 | ✅ 완료 — 엔드포인트 53종·컵 30개·5시즌·과거 깊이 전수 조사 |
-| 수집 전략 | ✅ 확정 — 12대회 × 5시즌, 컵 컷오프, 백필 계획 |
-| 스키마 설계 | ✅ 확정 — 테이블 30개, 외래키 미사용 |
-| 프론트엔드 | 🚧 Mock 기반. 1~8단계 화면 구현 완료, 1단계 감사 12건 수정 완료(`c6c43b4`). 실 API 연결·컵 화면 남음 |
-| **백엔드** | ❌ **코드 0줄** |
-| CI · 배포 · DB | ❌ 미구성. Supabase 프로젝트도 아직 없다 |
-| 백업 | ❌ 없음 — **백필 전 필수** |
+| 수집 전략 | ✅ 확정 — ~~12대회~~ → **19대회** × 5시즌 (2026-09-17 확장 · feat/scope-expansion), 컵 컷오프, 백필 계획 |
+| 스키마 설계 | ✅ 확정 — Prisma 모델 ~~29~~ → **30**개 (09-28 PR #129 `UserFavoriteTeam`), 외래키 미사용. (09-17 기준 DB 31테이블 = 29 + `_prisma_migrations` + 잔여 `equipments`) |
+| 프론트엔드 | 🚧 실 API 연결 완료 — 대회·팀·경기·순위·선수·통계·경기 상세·검색·어시스턴트. 09-21~28 추가: 대회 탭 재구성·컵 페이지(#97·#98) · 라운드 네비게이션(#101) · **대진표 탭**(#104 · `UCLKnockoutPage` 흡수) · **라이브 15초 폴링**(#123 · `/api/live`) · `/matches` 요약 칸(#124) · 이름·라운드·국가·포지션 언어별 표시(#126) · **Google 로그인 + 서버 저장 즐겨찾기**(#129 · 로컬 저장 폐기 · **운영 개시 10-08** — preview 실측 + 운영 사용자 확인) · 첫 로드 전·실패 뒤 토글이 서버 목록을 지우던 결함 수정(10-08 #134 · `loadState`·`loadError`·`actionError`). ~~**알림만 Mock** (`NotificationContext` 가 `@/mocks/notifications` 직접 import)~~ → **알림 백엔드는 여전히 없다.** 10-13 #137(`abb1a38`)부터 실 API 모드(`VITE_USE_MOCK=false` · 운영)에서는 헤더 종 버튼·패널을 렌더하지 않고 알림 목록은 `[]`, `/notifications/settings` 는 `NotImplementedState`("아직 백엔드에 없는 데이터입니다 (알림)"). Mock 모드만 그대로 `@/mocks/notifications` 를 읽는다 (`NotificationContext.jsx` `isNotificationsEnabled = USE_MOCK`). 테스트 ~~31파일 · 정적 grep 373건 (10-07)~~ → 10-08 정적 grep 32파일 · `it(` 391건 + `it.each` 10 (#134 `favoritesState.test.js` 추가 · 같은 셈법으로 10-07 시점 `2cc6af7` 은 31파일 · `it(` 370). `AuthContext`·`FavoritesContext` `.test.jsx` 2파일은 jsdom 미도입으로 `describe.skip` |
+| **백엔드** | 🚧 (10-15~16) **Phase 2 관문 통과**(10-15 사용자 판정 — 10장 "Phase 2 관문 실측" 소절) · 관측 중 드러난 운영 버그 넷 수정 — **ID 없는 선수 건너뜀**(#138 · `knownApiPlayerId`) · **상세 백필 커서 제거 + 경기 단위 재시도 상한 3**(#139 · `matches.detail_attempts`·`detail_last_attempt_at` · 마이그레이션 `20261015120000_match_detail_attempts` 운영 DB 10-15 적용) · **선수 명단 없는 라인업 → `has_lineups=false`**(#140) · **쿼터 확인 소음 제거**(#141 · `QuotaService.current()` — INSERT 없음). Prisma 모델 수 변화 없음(컬럼 2개 추가). (10-08) **L2 missingTeams 자가 복구**(#135 — 현재 시즌만 그 대회시즌 `/teams` 1콜 재수집 · `L0Service.refreshTeamsForSeason` 위임 · 결과 `teamsRefreshed`) · 즐겨찾기 동시 PUT 사용자 단위 `pg_advisory_xact_lock` 직렬화(#134) · **운영 DB 마이그레이션 적용**(백업 `pitchlog-20261008-1500.dump` 18.7 MB 뒤 `migrate deploy` 미적용 3개 · up to date). (10-07 갱신) 엔드포인트 **17개** (조회 GET 12 · `GET /api/live` · `GET/PUT /api/me/favorites` · `POST /api/assistant` · `/health` 포함) · Prisma **30**모델 · **스케줄러 잡 5개**(`backfill-worker` · `l2-daily` · `l1-weekly` · `live-poller` · `quota-snapshot`) · **백필-2 완료**(09-24 서버 실측 · `932def1` 본문) · **L4 1~3판**(관측 · 쓰기 · FT 즉시 상세) · **Supabase Auth JWT**(#129). 아래는 09-17 기준 적재 수치 — Nest 12 · ~~Prisma 29모델~~ · API 클라이언트 · 배치 upsert · **L0**(~~17대회 · 83대회시즌 · 팀 1,888~~ → **19대회 · 93대회시즌 · 팀 2,110** · 2026-09-17 확장) · **조회 API 10개**(대회·팀·경기·순위·**선수·통계 랭킹 09-09 PR #34·#36**) · **L1 스쿼드**(155팀, 관문 테스트 통과) · **L2 5시즌**(~~라운드 1,070 · 경기 9,787 · 순위 654~~ → **경기 13,724 · detail_eligible 13,710** · 2026-09-17 전 시즌 재적재) · **L6 시즌 집계**(선수 통계 30,925 · 랭킹 2,335 · 팀 통계 489 · 선수 13,591) · `backfill_jobs` 30 DONE |
+| CI · DB | ✅ CI 2잡(`frontend-verify`·`backend-verify`, ~~단위 53 · e2e 10파일 85건~~ → ~~10-07 정적 grep: 단위 31파일 288건 · e2e 20파일 206건(`it` 187 + `it.skipIf` 19)~~ → ~~10-08 정적 grep: 단위 31파일 289건(`it(`) · e2e 20파일 210건(`it` 191 + `it.skipIf` 19)~~ → 10-16 정적 grep(`ce2ce1f`): 단위 34파일 304건(`it(`) · e2e 21파일 221건(`it` 202 + `it.skipIf` 19) · e2e 원격 DB 가드 11파일 — #138 `no-id-players` 추가) · Supabase dev **서울**(ap-northeast-2, 09-07 이전 — L0 200초 → 71초) · 기본 브랜치 `dev` · Ruleset `protect-main`·`protect-dev` · 10-08 원격 브랜치 정리 — `dev`·`main` 만 남음 (워크트리 `pitchlog-auth`·`pitchlog-l4` 삭제) · **10-16 이력 재작성** — 커밋 메시지의 Claude 표기 줄(`Co-Authored-By: Claude …` · `Claude-Session: …`)을 지우고 저자가 Claude 인 커밋 8개를 사용자로 바꿔 `dev`·`main` 을 다시 썼다 (파일 내용·트리 불변 · 독립 검증 484쌍 불일치 0). **모든 커밋 SHA 가 바뀌었다** — 이 문서의 SHA 는 새 값이다. 이후 커밋·PR 에 attribution 줄을 붙이지 않는다 |
+| 배포 | ✅ 운영 중 (09-15~16 PR #68·#69·#71·#81) — **백엔드 AWS EC2**(t3.small · 서울 · systemd · Docker 안 씀) **+ 프론트 Vercel**(`/api/*` rewrite 프록시 → same-origin). 배포 브랜치는 **`dev`** — `dev` → `main` 릴리즈 PR 은 아직 한 번도 내지 않았다 (10-07 사용자 확인). Railway·Cloudflare Pages 는 폐기 (14장). 10-07 EC2 가 #129 이후 빌드에서 `SUPABASE_URL must be a URL address` 재시작 루프 → `/etc/pitchlog/backend.env` 에 `SUPABASE_URL` 추가로 복구 · 10-08 #133 템플릿에 필수 줄 + `deploy.sh` 는 서비스가 health 통과할 때만 `dist.prev` 갱신. 10-08 Vercel env `VITE_SUPABASE_*`(Production·Preview) · Supabase Google provider·Redirect URLs (`DEPLOY.md` "Google 로그인" 절). 10-15~16 `deploy.sh dev` 로 #138(`3857065`) · #139(`e6c09a6` — 운영 DB 마이그레이션 `20261015120000_match_detail_attempts` 적용 **뒤** 배포) · #140(`6fb12ac`) · #141(`ce2ce1f` · 10-16 00:22 UTC · health OK · 마이그레이션 없음) 반영. 10-16 이력 재작성 뒤 EC2 를 새 이력으로 1회 맞췄다 |
+| 백업 | ✅ 백업·복원 리허설 2회 통과 — 09-07 L0 만(10,062행) · **09-08 백필-1 직전(22,049행)**. **09-16 자동화** (PR #72) — EC2 systemd 타이머 매일 KST 04:00 `pg_dump` → S3 (수명 주기 30일 · `DEPLOY.md`) · 10-08 운영 마이그레이션 직전 수동 백업 `pitchlog-20261008-1500.dump` (18.7 MB) |
 
 ### 확정된 범위
 
 | 항목 | 값 |
 |---|---|
-| 대회 | **12개** — 5대 리그 + UCL + 국내 컵 6개 (+슈퍼컵 5개) |
+| 대회 | ~~12개~~ → **19개** (2026-09-17 · feat/scope-expansion) — 리그5 + UCL + 국내 컵 6 + 슈퍼컵 5 + 유로파(id 3) + 컨퍼런스(id 848). displayOrder 10~250 |
 | 시즌 | **최근 5시즌** (2022~2026) |
 | 컵 수집 | 목록은 1부 팀 최초 등장 라운드부터 · 상세는 (1부 참가 OR 16강 이상) |
-| DB | Supabase 무료 500MB. 추정 사용 266MB (53%) |
-| 백필 | 약 45,400콜 · **8~12일** |
+| DB | Supabase 무료 500MB. ~~추정 266MB (53%)~~ — 그 값은 **완성 추정치**였다. **2026-09-17 실측 79MB** (상세 1,836건 시점) · 완성 시 약 **262MB** (경기당 상세 ~20KB · player_match_stats 54% · lineup_entries 27% · match_events 15%) |
+| 백필 | 약 45,400콜 — **기록 2,000콜(1일) + 경기 상세 43,000콜(8일, 무인)** 로 쪼갬 (09-07) |
 | 외래키 | **사용하지 않음.** 무결성은 백엔드 책임 |
 
 ---
 
-## 1. 지금 당장 — 푸시
+## 1. 지금 당장 — 다음 세션 첫 작업
 
-커밋이 로컬에만 있다. 이번 조사 산출물(문서 8개, 스크립트 3개)이 한 대의 PC에만 있는 상태다.
+09-07 에 끝낸 것: 서울 리전 이전 · L0 재실행 · 조회 API 4개(PR #12) · `output/` 정리 ·
+`protect-dev` Ruleset · 원격 브랜치 정리 · **프론트 첫 실 API 연결**(PR #14·#15) ·
+**브라우저 실측** · **로고 자체 저장**(5장을 앞으로 당김) · **백업 + 복원 리허설 통과**(4장 관문).
 
-```bash
-cd /c/Dev/pitchlog-league
-git push -u origin docs/api-data-inventory
+### 실측에서 나온 것 (09-07, 브라우저)
+
+`/competitions` 6개 · `/teams` 5그룹(EPL 20 · 라리가 20 · 분데스 18) · 헤더 선택기 ·
+미구현 화면 오류 표시 — 전부 의도대로 동작했다. **로고만 빼고.**
+
+팀 목록 한 화면의 로고 96개가 **11초가 지나도 전부 로딩 미완료**였다
+(`loaded: 0, failed: 0, pending: 96`). 같은 URL 을 하나만 받으면 200·90KB 로 멀쩡하다.
+원본이 1개당 90KB 이고 media 호스트가 동시 연결을 조인다. 한 화면에 8.6MB 다.
+
+**폴백이 작동하지 않는다는 게 더 큰 문제였다.** 실패가 아니라 "영원히 로딩 중" 이라
+`<img onError>` 가 불리지 않아 이니셜로 넘어가지 못하고 회색 사각형만 남는다.
+그래서 5장 "로고 자체 저장" 을 8단계 백필보다 앞으로 당겼다.
+받아서 96×96 webp 로 줄이니 161개 1.1MB(평균 4.3KB) — 원본 그대로면 14.5MB 였다.
+
+### 관찰 (09-09, 즐겨찾기 판 브라우저 실측)
+
+`/teams` 페이지가 가로 스크롤 28px. **이번 판 회귀 아니다** — FavoriteToggle 별 버튼을
+`display:none` 으로 두고 재측정해도 `scrollWidth` 1498 로 동일. 카드 그리드 자체가 뷰포트를
+넘는다. ✅ 09-10 PR #49 (`8d923e5`) 에서 정정 — `.teams-grid` 열을 `minmax(0,1fr)` 로.
+
+### 조회 지연 분해 실측 (2026-09-11)
+
+> dev 모드 실측 — `npm run start:dev` (watch + 쿼리 로깅) 상태의 절대값이다.
+> 프로덕션보다 크다. 엔드포인트 간 상대 비교와 병렬도가 판단 근거다.
+> 오버헤드 = `total − query_wall_ms` (병렬 겹침 때문에 sum 이 아니라 wall 기준).
+> curl 측정이라 ETag 304 가 안 걸린다. 브라우저 재측정 시 hash 시간이 절약된다.
+
+warm 평균(2~4회차):
+
+| 엔드포인트 | 쿼리수 | sum(ms) | wall(ms) | total(ms) | 오버헤드(ms) | 병렬도 |
+|---|---:|---:|---:|---:|---:|---:|
+| `/api/search?q=son` | 3 | 113.9 | 47.6 | 48.6 | 1.1 | 2.39 |
+| `/api/stats/scorers` | 8 | 146.0 | 92.0 | 93.8 | 1.8 | 1.59 |
+| `/api/teams/:ref` | 6 | 113.1 | 75.0 | 76.5 | 1.6 | 1.51 |
+| `/api/players/:ref` | 8 | 184.8 | 103.5 | 105.5 | 2.0 | 1.79 |
+| **`/api/standings`** | **17** | 375.6 | **345.8** | **348.7** | 2.9 | **1.09** |
+| `/api/matches/:ref/detail` | 18 | 313.9 | 57.5 | 61.0 | 3.5 | 5.46 |
+
+cold(1회차) total: 166.8 / 134.6 / 73.9 / 106.8 / 321.7 / 180.8
+
+**판정**
+
+1. **오버헤드는 문제가 아니다 (1~4ms · 총의 1~3%).** 착수 전 가설이었던
+   "Prisma 하이드레이션·직렬화가 150ms" 는 실측으로 기각됐다.
+   `select` 좁히기 처방 폐기. `total ≈ query_wall_ms` — 시간은 전부 DB 안에 있다.
+2. **`/api/standings` 가 유일한 병목.** warm 348.7ms, 2위의 3.3배.
+   병렬도 1.09 = 쿼리 17개가 거의 순차. `standing.service.ts:41-46` `for` 루프.
+   왕복 17회가 직렬로 쌓인다(서울 RTT 5~15ms 가정 시 85~255ms).
+   cold(321.7)와 warm(348.7)이 차이 없다 — 다른 엔드포인트는 3배씩 빨라지는데
+   이것만 안 빨라진다. 편차도 크다(294~386).
+3. **쿼리 개수는 지표가 아니다.** `/api/matches/:ref/detail` 은 18개인데 61ms
+   (병렬도 5.46). standings 17개 348ms 와 대비된다. **병렬도가 지표다.**
+4. **캐시·Redis 는 지금 답이 아니다.** 애플리케이션 계층에 문제가 없고,
+   병렬화로 348 → 60~80ms 를 공짜로 얻을 수 있다. 그 뒤에도 느리면
+   인메모리 캐시부터. 인스턴스 1개에서 Redis 는 인메모리보다 느리고 비싸다.
+   기존 원칙(다중 인스턴스·L4 실시간 때만 도입) 유지.
+
+**다음 판 후보 (우선순위)**
+
+1. ~~`/api/standings` 순차 루프 → `Promise.all` 병렬화.~~ ✅ 2026-09-15 `perf/standings-parallel` —
+   `standing.service.ts:41-45` 모드 B 순차 for 를 `Promise.all(comps.flatMap(...))` 로 교체.
+   실측(사용자 Windows · dev 모드): warm 0.279823s → 평균 ≈0.101s (0.110401 / 0.096224 / 0.096688) ·
+   **3.4× 개선**. body diff `fc.exe` "no differences encountered" (asOf 포함 동일).
+   기대치 60~80ms 는 대회 6개 전부 시즌 있을 때. Promise.all 은 입력 순서 보존 → displayOrder asc 유지.
+2. (1) 이후 재측정. warm ≈100ms 로 인메모리 TTL 캐시 우선순위 강등. 프론트 knock-on 이 있는지가 다음 판단 근거
+
+**계측 방법 (재현용)**
+
+`LatencyProfilerInterceptor`(`enterWith` + `AsyncLocalStorage`) + `PrismaService` `$on('query')` 로
+요청별 쿼리 수·시각 집계. `NODE_ENV=development` 필수(dev 만 query 이벤트 emit).
+각 엔드포인트 4회(cold 1 + warm 3), 서버 재시작으로 cold 확보.
+계측 코드는 커밋하지 않는다.
+
+메모: 본측정 첫 search 호출 1건이 000(연결 실패) — 서버 기동 직후라 그렇다.
+search 는 3회만 기록됐고 warm 평균은 2회차 기준이다.
+
+### 다음 진행 순서 — 09-07 중간 점검 후 확정 (`PLAN_REVIEW.md`)
+
+09-07 에 계획한 것은 다 끝났다. **Phase 1 관문(스쿼드 diff)은 통과했다.**
+
+그다음 순서는 점검에서 뒤집혔다 — 배포 PoC 가 아니라 **이미 나와 있는 기록을 전부 받고,
+그 뒤에 실시간**이다. 이유는 둘이다.
+
+1. 백필과 라이브 폴링은 **같은 7,500콜을 두고 싸운다.** `INGESTION_STRATEGY` 3-2 — 백필만이면 8일,
+   폴링과 같이 돌리면 19~45일. 백필을 먼저 끝내면 폴링은 빈 예산 위에서 돈다.
+2. 백필의 쓰기 코드(L3·L5)가 **곧 실시간의 FT 확정 코드**다. 어려운 쪽을 먼저 만들고 폴링을 나중에 얹는다.
+   반대로 하면 폴링을 만들어놓고 FT 뒤에 부를 게 없다.
+
+그리고 45,450콜의 **95% 가 경기별 상세**(경기당 4콜)다. 나머지 — 일정·결과·순위·시즌 통계·랭킹 —
+는 2,000콜이면 다 받는다. 그래서 백필을 둘로 쪼갠다 (8장).
+
+| # | 할 일 | 장 | 콜 | 끝나면 보이는 것 |
+|---|---|---|---|---|
+| ~~1~~ | ~~**꺼내기**~~ ✅ 09-07 PR #24 — `/api/matches`·`/api/standings` · `stats_state` · `live.js` 6함수 · `clock.js` · vitest 3파일 · 블록 결손. **브라우저 실측 6화면 전부 정상** | 6·11 | 0 | ✅ 현재 시즌 결과·순위·일정·홈 |
+| ~~2~~ | ~~**백필-1 기록**~~ ✅ 09-08 PR #26·#27 — 5시즌 × **화면 6대회** 일정·결과·순위 + 선수 시즌 통계 30,925 · 랭킹 2,335 · 팀 시즌 통계 489 · `backfill_jobs` 30 DONE. `isCurrent` 컷 버그 · UCL 조별리그 구조 변경을 여기서 잡았다. **남은 것: L1 2차 실행 · UCL 예선 전용 팀 정리 · 시즌 선택기 노출(11장)** | 8-b | ~2,000 (1일) | ✅ 5시즌 결과·순위 · 선수 시즌 기록 |
+| ~~—~~ | ~~**선수·통계 화면 실 API 전환**~~ ✅ 09-08~09 PR #34·#36 — 백필-1 이 넣은 3만 행이 화면에 안 나오고 있었다. `PlayerModule`·`StatisticsModule` (`/api/players/:ref`·`/api/stats/{scorers,assisters}`) · 표시 판단을 `normalize.js` 순수 함수(`key`·`playerTotals`·`formatStat`)로 · `dataStatus` 컨셉 폐기 · 이적 케이스 반례 e2e · **반례 픽스처 규약**(`pitchlog-e2e-fixture` 스킬) | 6·11 | 0 | ✅ 선수 상세 · 랭킹 |
+| ~~3~~ | ~~**경기 상세 쓰기 코드 + 현재 시즌만**~~ ✅ 09-10 PR #46 — L3·L5 서비스 4개 + `MatchDetailsBackfillService` + CLI (`npm run ingest -- backfill`). **현재 시즌(2026-27) 6대회 180경기 CONFIRMED** · 588콜 · 실패 0 (has_team/player_stats false 15경기는 정상 · 빈 응답). 초기 예상 2,200경기는 시즌 초라 실측 180. **과거 4시즌(2022~2025)은 미완** — 4번(서버화) + 백필-2 워커 몫 | 8-c·10 | 588 (실측) | ✅ 라인업 · 타임라인 · xG (현재 시즌만) |
+| ~~4~~ | ~~**서버화**~~ ✅ 09-15~24 — 4-a 배포(EC2 systemd + Vercel `/api` rewrite · PR #68·#69·#71) → 4-c 백업 자동화(EC2 타이머 `pg_dump` → S3 · #72 · 복원 리허설 결함 정정 #74~#77) → 4-b-1 백필 워커 + /status(#78·#79 · 일일 상한 env #83) → **백필-2 나머지 4시즌 무인 완료** (09-16 12:10 UTC 시작 · 09-24 서버 실측에서 완료 상태 확인 — `932def1` 커밋 본문. 정확한 종료 시각·최종 경기 수·DB 용량은 기록 없음) | 2·4·8-c | 43,260콜 · **8일** (`INGESTION_STRATEGY.md:175` 산식) | ✅ 5시즌 경기 상세 |
+| ~~5~~ | ~~**전환**~~ ✅ 09-24 PR #109 — 예측("코드 변경 없음")이 틀렸다. 워커의 "어제 끝난 경기" 규칙은 이미 있었지만 **L2 가 상태를 갱신해야 걸리는데 L2 를 부르는 잡이 없어서** `/api/matches` asOf 가 09-17 에 멈춰 있었다. L2 매일(`10 4 * * *` UTC) · L1 매주(`30 5 * * 1`) 잡 추가 · 기본 꺼짐 (`L2_DAILY_ENABLED` · `L1_WEEKLY_ENABLED`). 운영 켜짐 여부는 미확인 — 10-08 health 에 `l2Daily=partial` 결과가 찍혀 L2 매일은 운영에서 돈다 (L1 매주는 여전히 기록 없음) | 8-c | ~~약 50/일~~ (6대회 시절 추정) → 산식 L2 매일 ≤46 + ~~`/status` 1~~ (`/status` 는 쿼터를 소비하지 않는다 — 10-14 하루 13,546회 호출에도 used 가 7,500 에 닿지 않았다 · #141 실측) + missingTeams 시 대회시즌당 최대 1 · L1 매주 별도 | 라이브만 빼고 **하루 지연으로 완전** |
+| ~~6~~ | ~~**L4 실시간**~~ ✅ 10-15 **Phase 2 관문 "실제 라운드 1회 무중단 관측" 통과** (사용자 판정 · 10장 "Phase 2 관문 실측" 소절) — 코드 4판: 1판 관측 모드(#111 · #113) · 2판 쓰기 모드 + 역행 가드 + L2 보호 + `GET /api/live`(#115 · #116) · 3판 FT 즉시 상세 저장 · winner · standings(#122 · `LIVE_FT_DETAILS_ENABLED`) · 4판 프론트 15초 폴링(#123). 관측 창 10-09 18:00 ~ 10-15 00:00 UTC — 백엔드 재시작 0 · 라이브 finalize 65/65. 관측 중 드러난 운영 버그 넷은 아래 `~~—~~` 행(#138~#141). **운영 쓰기 모드 확인** (10-16 EC2 `/etc/pitchlog/backend.env` — `LIVE_POLLER_MODE=write` · `LIVE_FT_DETAILS_ENABLED=true` · `/health` `livePoller.mode="write"` 00:22 UTC) | 10 | 경기일 ~4,700 (예측) · 실측 하루 전체 사용량 최대 2,559콜 (10-15 Pro 유지 결정의 근거 · 14장) | ✅ 홈 LIVE 히어로 · 요약 스트립 |
+| 7 | L6 보정(주기 잡 없음 — `scheduler/` 에 L6 잡 0) · L1 #9~#11 · **알림**(백엔드 없음 — 10-13 #137 부터 실 API 모드에서는 숨김 · Mock 모드만 Mock) · AI 후속(아래 09-15 절) · L2-b 녹아웃 tie 백엔드 영속화 (2027-02 — 프론트 대진표는 #104 로 `buildTies` 가 대신 계산). ~~한국어 팀명 110~~ ✅ 09-17 PR #91 (146개 추가 · 198팀) | 8-d·9·11 | | |
+| ~~8~~ | ~~**챗봇 도구 층 (MCP)**~~ ✅ 09-08 PR #38 — `backend/src/assistant/` 도구 10개(list_competitions·get_competition·list_teams·get_team·list_matches·get_match·get_standings·get_top_scorers·get_top_assisters·get_player) · `cli/mcp.ts` stdio 서버 · golden.json 15건 · e2e 25/25. LLM 호출·채팅 UI 없음 | 6·9 | 0 | ✅ LLM 이 결정적 계층을 부를 배관 |
+| ~~9~~ | ~~**즐겨찾기 (팀)**~~ ✅ 09-09 PR #39 — 팀만 로컬 저장(`localStorage: pitchlog-favorites`, 상한 5). `FavoritesContext`·`FavoriteToggle`·홈 `MyTeamsSection`(다음 경기·최근 결과·리그 순위). 선수·대회 북마크는 후속 판 | — | 0 | ✅ 즐겨찾기 목록 화면 |
+| ~~10~~ | ~~**챗봇 LLM 연결 + 로고 적용**~~ ✅ 09-09 PR #41 — `POST /api/assistant` (Gemini · @google/genai@2.21.0 · 상한 5호출/30초 · 메모리 rate limit) · `AssistantPanel` 실 API 연결 · 저장돼 있는데 안 쓰이던 팀·대회 로고 161개를 순위표·통계·홈 대회 카드에 적용(`normalizeStanding`·`normalizeStatsRow`·leader shape 에 `teamLogoUrl` 추가). 배포·서버화는 후속 판 | 6·9 | 0 | ✅ 자연어 질문 · 화면에 로고 |
+| ~~11~~ | ~~**조회 성능 (캐시 헤더 · 페이지 상한 · 프론트 요청 합치기)**~~ ✅ 09-09 PR #42 — `/api/*` 전역 `CacheHeaderInterceptor` (ETag · If-None-Match 304 · Cache-Control 60s) · `/api/matches` `limit`(기본 100·최대 500) + `total`·`hasMore` · `services/live.js` 요청 합치기 + TTL 캐시(기본 60s · competitions/teams 300s · Mock 우회 · **askAssistant POST 는 캐시 밖**). assistant 실행 상한·최상위 asOf·규칙 6 은 PR #41 위 후속 판 | 6·9 | 0 | ✅ /standings 재방문 캐시 hit |
+| ~~12~~ | ~~**어시스턴트 근거 카드 (도구별 컴포넌트 재사용) + 실행 상한 8 + 최상위 asOf + 규칙 6**~~ ✅ 09-09 PR #43 — `AssistantPanel` 이 `data[]` 를 tool 별로 매핑해 `StandingsTable`·`MatchCard`·`StatsRanking` 재사용(그 외는 접힘 JSON). `MAX_TOOL_EXECUTIONS=8` (왕복 5·전체 75초와 별개 · 3.x 계열 추론으로 30초→75초 실측 상향). 응답 최상위 `asOf` = evidence 중 사전순 최소. `AssistantContext` 요청 경합 방어(seq · AbortController). SYSTEM_PROMPT 규칙 6 "판정 표현 금지". `GEMINI_MODEL` 기본값 `gemini-3.6-flash` (2.5-flash 는 신규 프로젝트 404) | 8 | 0 | ✅ 어시스턴트 답변에 표가 아니라 카드 |
+| ~~13~~ | ~~**경기 상세 조회 (/api/matches/:ref/detail) + 탭 4종 실 API 연결**~~ ✅ 09-10 PR #47 — `MatchFullDetailDto` (lineups·events·teamStats·playerStats·availability·asOf) · `earliestOf` 헬퍼 · 프론트 `matchDetail` 순수 함수 · `buildEventMapByRef` (playerRef 매칭) · availability 3값(`ok`/`not_provided`/`not_collected`) i18n. check:details 에 테이블 크기·5시즌 추정 (Supabase 500MB 대비 %) | — | 0 | ✅ 라인업 · 통계 · 타임라인 3탭 (H2H 는 데이터 없음, unavailable 유지) |
+| ~~14~~ | ~~**전역 검색 (시연용)**~~ ✅ 09-10 PR #50 — `GET /api/search?q=` (팀·선수·대회 · 정렬 규칙 · pg_trgm GIN + btree lower_prefix) · `localized_names` 90 시드 · SearchPanel debounce+AbortController+3상태 · 손흥민·이강인 한국어 검색 통과 | 9 | 0 | ✅ 헤더 검색으로 팀·선수·대회 이동 |
+| 15 | **어시스턴트 유료 전환 판단 (경비 근거)** — #52 압축이 세션당 $0.024 → $0.006 로 4× 절감. 무료 티어 유지 중. **09-11 판정: 429 는 RPD(하루 요청 20) 제한이라 압축과 무관** (아래 "429 원인 재판정" 절). `GEMINI_MODEL` 을 `gemini-3.5-flash-lite`(RPD 500)로 전환. 유료 전환은 압축·모델 전환 후에도 RPD 부족할 때 판단 | — | 0 | RPD 여유 · 유료 전환은 트래픽 실측 뒤 |
+| ~~—~~ | ~~**운영 Google 로그인 개시**~~ ✅ 10-08 — 10-07 EC2 `SUPABASE_URL` 복구 · 10-08 운영 DB `migrate deploy`(미적용 3개 · 백업 먼저) · Vercel `VITE_SUPABASE_*` · Supabase Google provider + Redirect URLs. 같은 날 #133(배포 템플릿·`dist.prev`) · #134(즐겨찾기 첫 로드 결함 · 동시 PUT 직렬화) | 11 | 0 | ✅ 운영에서 로그인 · 서버 저장 즐겨찾기 |
+| ~~—~~ | ~~**L2 missingTeams 자가 복구**~~ ✅ 10-08 PR #135 — 계기: Copa del Rey 2026 R128 에 3~5부 9팀이 teams 에 없어 54경기 중 9경기 누락(`l2Daily=partial`). 그날은 L0 수동 재실행 + L2 재실행으로 54/54. #135 부터 L2 가 현재 시즌에서만 그 대회시즌 `/teams` 1콜을 다시 받는다 (L0 위임 · `teamsRefreshed`) | 8 | 대회시즌당 최대 1 | ✅ 컵 하위 라운드 팀 추가에 L2 매일이 스스로 복구 |
+| ~~—~~ | ~~**Phase 2 관측 중 드러난 운영 버그 넷**~~ ✅ 10-15~16 PR #138~#141 — ① #138 ID 없는 선수: 라인업 `player.id` null · `/fixtures/players` `id: 0` 인 선수를 저장하지 않고 건너뜀(`knownApiPlayerId` · warn 1줄) ② #139 상세 백필 커서 제거 + 경기 단위 재시도 상한 3(1시간·6시간 백오프 · `matches.detail_attempts`) ③ #140 선수 명단 없는 라인업 → `has_lineups=false`(미제공) ④ #141 쿼터 확인 소음 — 대상 0 인 대회시즌은 `/status` 를 부르지 않는다. 실측은 10장 "Phase 2 관문 실측" 소절 | 8-c·10 | — | ✅ 미확정 상세 2026 29경기 + 과거 129경기 확정(10-15) · 배포 뒤 첫 워커 tick `/status` 0회(10-16 · 이전 tick 당 약 94회) |
+
+~~4번의 6일은 손이 아니라 쿼터가 쓰는 시간이다. 그동안 남은 프론트 화면(경기 상세 탭 · CompetitionHub 랭킹) ·
+한국어 팀명 CSV 를 만든다.~~ (4번 완료로 지난 계획)
+
+~~**예약**: API-Football 구독 만료 09-22 — 백필-2 완료 전 갱신 필요.~~ ✅ 갱신함 (10-07 사용자 확인)
+
+**예약**: API-Football 구독 만료 **2026-10-22** — 10-15 결정으로 **Pro(7,500콜/일) 유지** (실측 하루 최대 2,559콜 · 14장). 갱신은 사용자 몫이다.
+
+### 10-16 기준 남은 것 — 순서표 7번 + Phase 2 관측 후속 (10-08 판을 고쳐 쓴 것)
+
+6번이 10-15 에 끝났다. 아래 "운영 데이터" ~ "쿼터·운영" 네 묶음은 관측과 #138~#141 이 남긴 백로그이고 **우선순위 순서가 아니다** (근거는 10장 "Phase 2 관문 실측" 소절).
+
+| 묶음 | 할 일 | 근거 |
+|---|---|---|
+| 운영 확인 | ~~EC2 의 `LIVE_POLLER_ENABLED` · `L1_WEEKLY_ENABLED` 현재값 — 문서에 기록 없음~~ ✅ 10-16 `/etc/pitchlog/backend.env` — `SCHEDULER_ENABLED` · `BACKFILL_WORKER_ENABLED` · `L2_DAILY_ENABLED` · `L1_WEEKLY_ENABLED` · `LIVE_POLLER_ENABLED` 전부 `true` (`/health` 잡 5개 `enabled:true` 와 일치). ~~`LIVE_POLLER_MODE` · `LIVE_FT_DETAILS_ENABLED`~~ ✅ 10-16 `/etc/pitchlog/backend.env` 확인 — `LIVE_POLLER_MODE=write` · `LIVE_FT_DETAILS_ENABLED=true` · `/health` `livePoller.mode="write"` (00:22 UTC). 같은 파일에서 `BACKFILL_DAILY_CAP=6800` (코드 기본값 5,700 · `env.validation.ts:192`). 라이브 폴러 주기·임계 4종(`LIVE_POLLER_PERIOD_SEC` · `LIVE_POLLER_SLOW_PERIOD_SEC` · `LIVE_POLLER_SLOW_AT` · `LIVE_POLLER_STOP_AT`)은 운영 미지정 = env 기본값 15초 · 30초 · 6000 · 7000 (10-16 같은 파일 확인). ~~`L2_DAILY_ENABLED`~~ (10-08 health `l2Daily=partial` 결과로 운영에서 도는 것 확인) · ~~#129 배포 뒤 `SUPABASE_URL`·Vercel `VITE_SUPABASE_*` 설정 여부~~ ✅ 10-07~08 설정 (`DEPLOY.md` "Google 로그인" 절) | 6번 · `DEPLOY.md` |
+| ~~Phase 2 관문~~ | ~~실제 라운드 1회 무중단 관측 (L4 쓰기 모드)~~ ✅ 10-15 통과 (사용자 판정) | 13장 · 10장 |
+| 릴리즈 | `dev` → `main` 첫 릴리즈 PR + 태그 `v2-phase2-scheduler` — Phase 2 두 기준(5시즌 완전 · 실제 라운드 1회 무중단 관측)을 모두 충족했고 릴리즈·태그는 아직 안 했다. 그 밖의 Phase 태그(`v0-phase0` …)도 없다. 지금 태그는 `v0.5.x` 만 | `CLAUDE.md` Git 전략 · 13장 |
+| 운영 데이터 | 운영 DB `api_player_id=0` 선수 행 정리 (#138 범위 밖 · 운영 DB 쓰기 승인 필요). 이 행을 참조하는 테이블 10개, 그중 고아 검사 밖 5개(`match_events.player_id`·`assist_player_id` · `injuries` · `external_ids` · `localized_names`) | 10장 |
+| 수집 방어 | L5 응답 키 누락 방어 · `coach` 키 | 10장 |
+| 프론트 | 한 팀만 라인업이 있는 경기에서 화면 크래시 (ErrorBoundary 없음) | 10장 |
+| 쿼터·운영 | `BACKFILL_DAILY_CAP` 6800(운영 env · 코드 기본값 5,700) 과 폴러 임계 6000/7000 정합 · 워커·CLI 동시 실행 락 (지금은 운영 규칙으로 금지) · `/health` 에 상세 백필 포기 건수 · 할 일 없는 tick 의 `ingestion_runs` 1행/시즌 (하루 ~720) · `api_quota_snapshots` 보존 기간 정리 · 라이브 finalize 로그가 미제공(저장 0)에도 `lineups=2` 로 찍힘 · 운영 로거 레벨 (debug 가 찍힘) | 10장 |
+| 기능 | 알림 · L6 주기 잡 · L1 #9~#11 · 홈·`/matches` 라운드 필터(D7 유예) · L2-b tie 영속화(2027-02) | 7번 · 14장 아래 예약 절 |
+| 어시스턴트 | 09-15 예약 두 절 (아래) — 기본 모델 이관은 10-07 에도 미완 | 아래 |
+| 정리 | 죽은 i18n 키 2개 · jsdom 도입해 `describe.skip` 2파일 해제 · 시즌 롤오버 운영 규칙 문서(12장) | 14장 아래 · 12장 |
+
+**되돌리기 어려운 순서는 둘이다.**
+- 리허설 통과 → 백필-2 나머지 4시즌. 백업 없이 6일짜리 무인 실행을 켜지 않는다
+- 현재 시즌 확인(3번) → 나머지 4시즌(4번). 쓰기 형태가 틀린 채 5시즌을 돌리면 6일을 다시 쓴다.
+  실측이 계획을 네 번 뒤집었다(로고 · 백업 · L1 동시 등장 · UCL 컷) — 다섯 번째가 여기서 나와도 1.5일이다
+
+- [x] ~~급감 가드가 첫 실행에서는 꺼져 있었다~~ ✅ 확인함 — 최소 스쿼드 24명, 반쪽 명단 없음.
+      (`before > 0` 일 때만 걸리므로 첫 실행은 전부 통과한다. 다음 첫 적재 때도 확인한다)
+
+연결된 폴더의 셸은 리눅스 VM이라 네트워크가 없다. **push·pull·npm·prisma·pg_dump 는 Windows 터미널에서 직접 실행한다.**
+
+---
+
+### 어시스턴트 유료 전환 근거 (2026-09-10 · 판을 시작하기 전에 이 절을 읽는다)
+
+발표 중 3번째 질문부터 429 발생. 압축 판(#52) 이 응답 크기와 왕복당 컨텍스트를 크게 줄였다.
+유료 판단은 **압축 판 배포 후 실측**을 근거로 한다.
+
+**Gemini 3.6 flash 요금** (2026-09-10 · https://ai.google.dev/gemini-api/docs/pricing):
+- Input: $0.30 / 1M 토큰 · Output: $2.50 / 1M 토큰 · Context caching 별도
+
+**세션당 비용 (검산 후 정정치)**:
+- 압축 전 (get_standings 모드 B · 왕복 3): input 66k × $0.30/1M = $0.020 · output 1.5k × $2.50/1M = $0.004 → **$0.024/세션**
+- 압축 후 (모드 B 27.6KB · 왕복 3): input 6k = $0.0018 · output 동일 $0.004 → **$0.006/세션**
+- **4× 절감** (input 만은 11× · output $0.004 는 압축 무관 · 총액 기준 4배)
+
+**일일·월간 (트래픽 가정 근거 없음 · 배포 후 실측 필수)**:
+- 하루 50 세션 (내부 시연) → 압축 전 $1.20/일 · 압축 후 $0.30/일 ($9/월)
+- 하루 500 (초기 사용자 · 가정) → $12/일 → $3/일 ($90/월)
+- 하루 5,000 (성장 · 가정) → $120/일 → $30/일 ($900/월)
+
+**판단 기준 (사용자 · 2026-09-10)**:
+- 429 실제로 얼마나 줄었는지 압축 후 재측정 필요
+- 트래픽 (배포처 · AWS/Railway 미정) 가정이 공허 · 실측 후 판단
+- 압축 판이 유료 전환의 선행 가치 — 유료로 가도 10배 절감 (input 만)
+
+---
+
+### 429 원인 재판정 (2026-09-11 · 09-10 절의 전제를 갈아엎는다)
+
+**압축 판(#52) 이후에도 429 가 그대로였다.** 3번째 질문부터 발생, 시연에서 실측.
+PR #54 가 넣은 `parseErrorBody` 로 SDK ApiError 본문이 찍혔다:
+
+```
+quotaId:     GenerateRequestsPerDayPerProjectPerModel-FreeTier
+quotaValue:  20
+model:       gemini-3.6-flash
+retryDelay:  39s
 ```
 
-연결된 폴더의 셸은 리눅스 VM이라 Windows 자격 증명 관리자를 못 쓴다. **Windows 터미널에서 직접 실행한다.**
+**RPD(하루 요청 수) 20 제한이다. 페이로드 크기와 무관하다.** 09-10 의 가설(응답이 커서
+컨텍스트 왕복이 무겁다 → 압축으로 완화)은 원인을 잘못 짚었다. 코드는 옳게 압축했지만
+429 는 안 줄었다 — 압축은 RPD 에 효과가 없다(요청 횟수 제한이라 페이로드 크기와 무관).
+**압축의 값어치는 남는다** — 세션당 비용 4× 절감(위 절), 그리고 Groq 등 TPD(하루 토큰
+제한) 가 있는 공급자로의 이전 시 하한선을 낮춘다.
+
+#### AI Studio 대시보드 실측 (2026-09-11)
+
+| 모델군 | RPM | RPD | TPM | 판정 |
+|---|---:|---:|---:|---|
+| Flash 3.x 계열(3 · 3.5 · 3.6 · 3.7 · 3.8) | 5 | **20** | — | 이번 원인 |
+| 2.5 Flash · 2.5 Flash Lite | 5 | **20** | — | 마찬가지 |
+| **3.1 Flash Lite · 3.5 Flash Lite** | 15 | **500** | 250K | **채택** |
+| Gemma 4 26B/31B | — | 14,400 | 16K | TPM 16K 라 부적합 |
+| Gemini Embedding 1·2 | 100 | 1,000 | — | 채팅 도구 아님 |
+
+**"최신 모델일수록 무료 한도가 크다" 는 거짓이다.** 3.8-flash 도 RPD 20 이다.
+Flash 무료 한도의 차이는 세대가 아니라 **-lite 변종 유무**에서 온다.
+
+**09-09 기록 "gemini-2.5-flash 는 신규 프로젝트 404" 는 낡았다.** 지금은 한도가
+잡혀 있다(RPM 5 · RPD 20 · Flash 3.x 와 같은 취급). AGENT_RUNS 09-09 판의
+"2.5-flash 404 → 3.6-flash" 근거는 현시점 판단 근거로 쓰지 않는다.
+
+#### 전환 결과 (2026-09-11)
+
+`.env` 의 `GEMINI_MODEL` 을 `gemini-3.5-flash-lite` 로 바꿨다(코드 변경 없음).
+**브라우저 실측 9케이스 통과** — 도구 호출, 한국어, 판정 표현 금지, null 3상태,
+R1 모드 A 유도, 429 0건.
+
+기존 백엔드 규칙(`env.validation.ts` 기본 `gemini-3.5-flash` · `.env.example`
+샘플 `gemini-3.6-flash`)은 이 판에서 손대지 않았다 — 이 판은 문서/설정만.
+코드 기본값을 lite 로 옮기는 것은 별도 판.
+
+---
+
+### 어시스턴트 후속 판 예약 (2026-09-15 · SYSTEM_PROMPT 규칙 보강 판이 남긴 것)
+
+이 판(fix/assistant-prompt-rules)에서 RPD 500 소진으로 못 한 검증과 별도 판으로 미룬 코드 폴백:
+
+- **규칙 7 세부 4항 브라우저 실측** — 5개 이상 미계산 · 비율 분모 · 재정렬 금지 · 날짜 산출. golden 자동 회귀 밖 · 사용자 브라우저 · RPD 리셋(KST 16:00) 후. 질문 문안·판정 기준은 사용자 확정본 사용.
+- **어시스턴트 검색 도구 (선수·감독 이름 조회)** — c1 헛호출 4회(2026-09-14 실측 기준선) → 1회 감소로 효과 측정. Mbappé/음바페 unaccent + 한글 별칭도 이 판에서 (현재 `/api/search` 라틴·한글 모두 0건).
+- **규칙 2(c) 문구 미준수** — c22 재현 2/2 · 프롬프트 규칙 보강 판 후보 · 그때 c22 hard 복원.
+- **어시스턴트 코드 기본값 `gemini-3.5-flash-lite` 이관** — 10-07 재확인: 여전히 미완. `env.validation.ts:144` = `gemini-3.5-flash` · `backend/.env.example:33` = `gemini-3.6-flash` · `infra/ec2/backend.env.example:27` 만 lite. 별도 판.
+
+### 어시스턴트 후속 판 예약 (2026-09-15 · debug-header-gate 판이 남긴 것)
+
+- **envFilePath override 동작 검증** — 두 가설로 남긴다. (1) `.env.local` 이 `.env` 를 우선 (envFilePath 순서 · 설계대로) — **이 판 grep 실측에서 `.env.local` 파일 부재로 배제**. (2) `@nestjs/config` 가 파일 값으로 process.env 를 덮음 — T3(vitest 내 1회) 관측만 있고 **단독 재현 미실시 · 미검증 · 별도 판**. dotenv 기본은 override:false 인데도 T3 에서 `process.env='true'` 를 세팅한 뒤 파일의 `'flase'` 가 이겼음. `@nestjs/config` 소스 조사 + 단독 재현 스크립트로 확정.
+- ~~**POST /api/assistant 응답 Cache-Control 인터셉터 검토**~~ ✅ 2026-09-15 `fix/cache-header-post` — 인터셉터가 GET 이외 메서드에 `Cache-Control: no-store` 를 명시. Vercel 엣지가 POST /api/assistant 응답을 60초 캐시하던 결함 정정 (실측 `x-vercel-cache: HIT` · 19ms · 같은 ETag · 첫 답 반환). e2e Case 8 로 계약 잠금.
+
+---
+
+### 검색 판 착수 근거 (2026-09-10 · 판을 시작하기 전에 이 절을 읽는다)
+
+지난 판 04 탐색에서 `GET /api/search` 를 "시연용 ILIKE 풀스캔" 으로 착수하려다 게이트에서 멈췄다.
+사용자 원 게이트 `players < 5000` 이 무너졌다 — 실측 `players=13,608 · teams=1,888 · localized_names=0`.
+멈춘 판단은 맞았지만, **13,608 행은 성능 문제가 아니다**. 다음 판이 새 함정에 빠지지 않게 근거를 남긴다.
+
+- **성능은 아직 걱정할 자리가 아니다.** 이름 컬럼 300KB 안팎이면 순차 스캔이 수 밀리초고,
+  이 프로젝트 API 왕복 ~300ms 에 묻힌다. ILIKE 가 인덱스를 못 쓰는 건 맞지만 인덱스가 실제로
+  필요해지는 규모는 **수십만~수백만 행부터**다. pg_trgm · tsvector 를 **미리 넣지 마라**.
+  먼저 `EXPLAIN ANALYZE` 로 재고, **p95 가 50ms 를 넘을 때만** 논한다.
+- **진짜 위험은 관련도 정렬이다.** `%son%` 이면 Jackson · Johnson · Robertson · Wilson 이
+  수백 건 걸린다. 정렬 없이 5건 자르면 시연에서 "검색이 이상하다" 로 보인다.
+  → 정확 일치 · 접두어 일치 · 부분 일치 순으로 계층 정렬을 먼저 만든다. 트라이그램 유사도 아님.
+- **teams=1,888 도 같은 문제다.** 대부분 예선 팀이라 그대로 검색하면 화면 6대회 팀이 뒤로 밀린다.
+  → **화면 6대회 참가 팀** (`participations.competitionRef IN visible`) 을 우선 정렬로 붙인다.
+- **`localized_names=0`.** 이관은 사용자 명세대로 `LocaleSource` 손수 입력 값으로 upsert 시드.
+  현재 하드코딩 위치: `frontend/src/i18n/entityNames.js` 94개. 이관 후 `getLocalizedName`
+  소비처 (전수 grep 필요) 가 안 깨지는지 먼저 확인.
+- **레이아웃 판 (09-10) 은 갈래 A 를 분리하고 갈래 B 만 진행**하기로 확정 — 검색은 이 14번으로 별도.
+
+---
+
+### 09-07 프론트 첫 연결에서 정한 것
+
+| 항목 | 결정 |
+|---|---|
+| Mock ↔ 실 API | `VITE_USE_MOCK` 로 **통째로** 전환. 한 화면에 섞지 않는다 |
+| 미구현 화면 | `NotImplementedError` 로 드러낸다. 빈 목록으로 위장하면 "없음"과 "아직 없음"을 구분 못 한다 |
+| 팀 배지 | 우리 정적 파일(`/logos/teams/<apiId>.webp`) 우선, 없으면 404 즉시 → 이니셜 폴백. media URL 직링크는 실측에서 못 쓴다는 게 확인됐다 |
+| 대회 노출 | **19개** (feat/scope-expansion · 2026-09-17) · 4층 범위 분리: 대회 탭·순위표는 6개(displayOrder≤60 · `COMPETITION_LIST_API_IDS`) · 경기 노출·로고·어시스턴트는 19개(`MATCH_VISIBLE_COMPETITION_API_IDS`). 백엔드는 `screen-scope.ts` 의 4상수 (`ingestScopeWhere`/`matchVisibleWhere`/`competitionVisibleWhere`/`squadScopeWhere`). **8장의 "화면 6대회로 한정" 결정을 이 판이 대체함** — 노출 6개는 유지하되 수집·경기 노출은 19개로 확장 |
+| 라우팅 | 기존 slug 유지. 대회 6개는 별칭 표로 `ref`→기존 slug·id 로 옮긴다 |
+| 팀 한국어 이름 | 없다. `entityNames` 는 Mock id 키라 1,888팀에 못 붙인다 — 11단계 `localized_names` 적재로 해결 |
+| 선수 검색 | 실 API 모드에서는 인덱스에서 뺀다 (9단계 L1 전까지 조회 API 없음) |
+
+파일: `services/http.js`(fetch 래퍼) · `services/normalize.js`(정규화 계층 = 11장) ·
+`services/live.js`(실 API) · `services/mock.js`(기존 api.js) · `services/api.js`(전환 스위치)
 
 ---
 
@@ -58,10 +330,16 @@ git push -u origin docs/api-data-inventory
       기존 위반 1건을 잡아 같이 고쳤다
 - [x] ~~pre-commit 훅~~ ✅ `.githooks/pre-commit` — null byte · 깨진 UTF-8 · `.env` ·
       하드코딩된 API 키. **각 개발 환경에서 `git config core.hooksPath .githooks` 1회 필요**
-- [ ] **GitHub 설정** — 기본 브랜치 `dev`, `main`에 PR 필수 + CI 통과 Ruleset (웹에서만 가능)
-- [x] ~~Supabase 프로젝트 생성~~ ✅ `pitchlog-league-dev` (ap-southeast-1). prod 는 필요 시. Session pooler 5432 사용
+- [x] ~~GitHub 설정~~ ✅ 기본 브랜치 `dev`, `protect-main` · `protect-dev` 둘 다 (PR 필수 + `frontend-verify`·`backend-verify`, 09-07).
+      **`pull_request` 에서는 `paths` 필터를 쓰지 않는다** — 필터에 걸려 워크플로가 안 돌면
+      required check 가 "보고 대기" 로 영원히 멈춘다. backend 만 바꾼 PR 이 그렇게 막혔다(09-07)
+- [x] ~~Supabase 프로젝트 생성~~ ✅ `pitchlog-league-dev` (ap-northeast-2 · 서울). prod 는 필요 시. Session pooler 5432 사용
 - [x] ~~NestJS 스켈레톤~~ ✅ Nest 12 · `/health` · Swagger `/docs` · 환경변수 검증 · PrismaService(adapter-pg)
-- [ ] 배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결
+- [ ] ~~배포 PoC (PR #6) — 정적 빌드 시간, Deploy Hook 지연, Socket.io 연결~~ → **재정의 (09-07 점검).**
+      정적 빌드·Deploy Hook·`deployment_requests` 는 Next.js 전제였고 프론트는 09-01 부터 Vite SPA 다
+      (`PLAN_REVIEW.md` 1-1). 검증할 대상이 없다. 실제 확인 항목은 이것뿐이다:
+      EC2 에 Nest systemd 1개(`node dist/main`) · Supabase 연결 · Vercel `/api/:path*` rewrite → `http://<EIP>:3000` (same-origin · `CORS_ORIGIN` 비움) · `trust proxy`(rate limit 가드가 X-Forwarded-For 를 보게) · `/logos` 정적 서빙 · `/health`. (09-15 · Railway/Pages → EC2/Vercel)
+      **1장 4번**에서 스케줄러·백업 자동화와 같이 한다. SEO 는 **공개 초기엔 하지 않는다** (`FRONTEND_GUIDE` 7장)
 
 ---
 
@@ -76,23 +354,120 @@ git push -u origin docs/api-data-inventory
 - [x] ~~Windows 에서 검증~~ ✅ validate · generate · typecheck · lint 통과
 - [x] ~~Supabase dev URL 로 `migrate dev`~~ ✅ `20260906144654_init` — 테이블 29 · 인덱스 90 · FK 0.
       partial index 4개 SQL 끝에 수동 추가. `/health` db:true, e2e 3건 통과(고아 행 검사 포함)
-- [ ] **Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지 쿼리 로그로 확인**
-      아니면 `$executeRaw`로 바꾸고 **동시 호출 테스트를 같은 PR에** (설계검토 B-2)
+- [x] ~~Prisma `upsert()`가 `ON CONFLICT`로 컴파일되는지~~ ✅ 확인 대신 **강제** — `prisma/batch-upsert.ts` 가
+      raw `INSERT … ON CONFLICT` 를 만든다. `test/l0.e2e-spec.ts` 가 쿼리 로그로 문장 수까지 검사 (B-2 종결).
+      동시 호출 테스트는 `players` 를 만드는 PR 에서
 - [x] ~~백엔드 CI~~ ✅ `backend.yml` — Postgres 16 컨테이너, partial index 존재 확인까지. **첫 실행은 PR 에서**
 
 관계 컬럼 `@@index` 누락은 리뷰 체크 항목이다 (`BACKEND_GUIDE.md`).
 
 ---
 
-## 4. 백업 — 반나절 · 백필 전 필수 ★
+## 4. 백업 — 백필 전 필수 ★
 
 Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 날아가면 다시 8~12일이다.
 
-- [ ] `pg_dump` 주 1회 잡
-- [ ] 저장 위치 결정 — R2 / GitHub Release / 로컬
-- [ ] 복원 1회 리허설 — 받아본 적 없는 백업은 백업이 아니다
+- [x] ~~`pg_dump` 잡~~ ✅ 09-07 — `npm run backup` (`backend/scripts/backup.mjs`)
+- [x] ~~저장 위치 결정~~ ✅ **로컬**. 홈 디렉터리 아래 `PitchLogBackups`, `BACKUP_DIR` 로 변경 가능
+- [x] ~~첫 백업~~ ✅ 09-07 — 목차를 보니 Supabase 내부 스키마까지 딸려 와 있었다
+      → `--schema=public` 로 좁히니 448KB → **244KB · 4.2초**. L0 만 든 상태
+- [x] ~~복원 리허설 절차~~ ✅ `npm run backup:verify` — 일회용 컨테이너에 복원 후 행 수 대조
+- [x] ~~리허설 1회 실행~~ ✅ 09-07 **통과** — 테이블 31개 · 행 10,062개, 운영 DB 와 전부 일치
+      (31개 중 `_prisma_migrations` 와 수동 테스트 테이블 `equipments` 가 섞여 있다)
+- [x] ~~백필-1 직전 백업~~ ✅ 09-08 **통과** — 테이블 31개 · 행 **22,049**, 전부 일치.
+      L2 5시즌이 든 상태다. ⚠ `equipments` 4행이 **아직 지워지지 않았다** — 09-07 에
+      "삭제" 라고 적었는데 실제로는 남아 있다. 백필-2 전에 지운다
+- [x] ~~자동 실행~~ ✅ 2026-09-15 `infra/backup-s3` — EC2 systemd 타이머 (매일 KST 04:00 = UTC 19:00 · `Persistent=true`) → S3 (인스턴스 IAM 역할 · 버킷 수명 주기 30일). `backup.mjs` 무건드 · 로컬 `pg_dump 17` (bootstrap 설치) 자동 선택
+- [ ] 백필-2 나머지 4시즌 직전 리허설 재실행 — 현재 시즌 상세가 든 상태(수십만 행)에서
+- [ ] **리허설 자동화 예약 — 4-b 워커 뒤 별도 판**. EC2 네이티브 `postgresql-17` + 주간 타이머 · `restore-check.mjs` 에 로컬 러너 추가 (Docker 대신 로컬 `pg_restore` 로 EC2 에서도 리허설 가능). 지금은 PC 에서 수동
 
-**이것 없이 백필을 시작하지 않는다.**
+**백필 관문은 열렸다.** 남은 것은 자동화와, 백필 직전의 사본 위치 하나 더다.
+
+백필은 데이터가 100배로 불어나므로 **백필 직전에 리허설을 한 번 더 돌린다** —
+지금 통과한 것은 L0(1만 행) 기준이다.
+
+### 왜 로컬인가
+
+저장소가 **Public** 이라 GitHub Release 에 올리면 덤프가 전 세계에 공개된다.
+API-Football 에서 받은 데이터를 통째로 재배포하는 셈이라 약관 확인 없이는 못 쓴다.
+R2 는 계정·키 설정이 앞서야 한다. 로컬은 지금 바로 되고 되돌리기도 쉽다.
+대신 **PC 디스크가 죽으면 백업도 같이 죽는다** — 백필 직전에 사본 위치를 하나 더 정한다.
+
+### 스크립트
+
+```bash
+cd backend
+npm run backup -- --check   # 실행 방식·데몬·DATABASE_URL·저장 위치·마지막 성공
+npm run backup              # 받는다
+```
+
+**실행 방식은 자동으로 고른다** — PATH 에 `pg_dump` 가 있으면 그것을, 없고 `docker` 가
+있으면 `postgres` 이미지 안에서 돌린다. 이 PC 에는 Docker 만 있어서 컨테이너로 돈다.
+
+Docker 쪽이 버전 사고를 막는다. `pg_dump` 가 서버보다 낮으면 덤프를 거부하는데,
+이미지 태그로 고정하면 그 문제가 없다 (`BACKUP_PG_IMAGE`, 기본 `postgres:17`).
+볼륨 마운트는 하지 않는다 — Windows 경로 변환에서 깨지기 쉬워서 덤프를 stdout 으로
+받아 Node 가 파일에 쓴다. `docker -e` 는 이름만 넘겨 비밀번호가 명령줄에 남지 않게 한다.
+
+- **`--schema=public` 만 받는다.** 안 주면 Supabase 내부 스키마(`auth`·`storage`·`realtime`·
+  `vault`·`graphql`·`pgbouncer`·`extensions`)까지 통째로 딸려 온다. 그건 우리 것이 아니고,
+  평범한 `postgres` 컨테이너에는 `supabase_admin` 롤도 `supabase_vault` 확장도 없어
+  **복원이 그 자리에서 깨진다.** `vault` 는 시크릿 저장소라 로컬 덤프에 남길 이유도 없다.
+  우리 객체는 전부 `public` 에 있다 — Prisma 가 멀티스키마를 안 쓰고 확장 함수 의존도 없다
+- 형식 `custom`(-Fc) — 자체 압축, `pg_restore` 부분 복원 가능
+- `--no-owner --no-privileges` — 다른 서버(로컬·Docker)에 그대로 복원된다
+- 앱을 띄우지 않는다. 백업이 애플리케이션 부팅에 의존하면 **앱이 못 뜰 때 백업도 못 받는다**
+- 실패하면 반쯤 쓰인 덤프를 지운다. 남기면 다음에 정상 백업으로 오인한다
+- 보관: 최근 8개 + 그 앞은 달마다 1개씩 12개월
+- `backup.log` 에 **성공과 실패를 모두** 남기고, 마지막 성공이 8일을 넘으면 경고한다
+
+### 자동 실행을 미룬 이유
+
+백업이 Docker 로 도는데, 작업 스케줄러가 새벽에 돌 때 **Docker Desktop 이 꺼져 있으면
+조용히 실패한다.** 그래서 지금은 수동으로 두고, 실패를 로그로 잡을 수 있게만 해뒀다.
+
+백필-2 무인 실행 전에는 반드시 자동화해야 한다. **09-07 점검에서 정했다 — 호스팅 쪽에서 받는다.**
+
+1. **EC2 cron 에서 `pg_dump` → S3** (인스턴스 IAM 역할 · 버킷 수명 주기 30일 · 09-15 결정 · 이전 안은 Railway 크론 → R2) ← 이것. 자동화와 사본 이중화를
+   한 번에 풀고, PC 디스크·Docker Desktop 상태와 무관해진다. 1장 4번에서 배포와 같이 한다
+2. 로컬에 PostgreSQL 클라이언트 설치 + 작업 스케줄러 — 1 이 안 될 때의 대안. `pg_dump` 가 PATH 에
+   있으면 스크립트가 자동으로 그쪽을 쓴다
+3. Docker Desktop 자동 시작 + 스케줄러 — 새벽에 Docker 가 안 떠 있으면 조용히 실패한다. 안 쓴다
+
+2·3 을 쓸 때의 작업 스케줄러 등록:
+
+```cmd
+schtasks /Create /TN "PitchLog DB Backup" ^
+  /TR "C:\Dev\pitchlog-league\backend\scripts\backup.cmd" ^
+  /SC WEEKLY /D SUN /ST 03:00
+```
+
+### 복원 리허설
+
+```bash
+npm run backup:verify              # 가장 최근 덤프
+npm run backup:verify -- <경로>    # 특정 덤프
+npm run backup:verify -- --keep    # 끝나고 컨테이너를 남긴다
+```
+
+일회용 `postgres` 컨테이너에 `pitchlog_verify` DB 를 만들어 복원하고, 컨테이너째 지운다.
+운영 DB 는 건드리지 않는다.
+
+`--schema=public` 으로 뜬 덤프는 `CREATE SCHEMA public` 을 들고 있는데 새 DB 에는 이미
+`public` 이 있다. 그대로 넣으면 `already exists` 로 멈추므로 복원 전에 비운다.
+
+**검증 기준은 "복원됐다" 가 아니라 "원본과 행 수가 같다" 이다.** 복원은 성공했는데
+테이블이 비어 있는 경우를 잡아야 한다. 테이블마다 `count(*)` 를 운영 DB 와 맞춰 보고
+하나라도 다르면 실패로 끝낸다. `pg_restore --exit-on-error` 라서 조용히 넘어가는
+오류도 없다.
+
+수집이 도는 중이면 행 수가 달라질 수 있다 — 그때는 수집을 멈추고 다시 돌린다.
+
+목차만 보는 것은 이걸로 된다 — 09-07 에 이걸로 스키마 범위 문제를 잡았다:
+
+```bash
+docker run --rm -i postgres:17 pg_restore --list < <덤프 경로>
+```
 
 ---
 
@@ -100,10 +475,25 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 
 수집 기능보다 클라이언트를 먼저 만든다. v1은 보호장치 없이 수집부터 만들었고 회고가 그걸 지목했다.
 
-- [ ] timeout · 호출 제한 · 제한된 retry · exponential backoff
-- [ ] `/status` 적재 → `api_quota_snapshots`. **경고선 6,000콜/일 판단의 근거**
-- [ ] L0 기준 데이터 — 12대회 × 5시즌, 약 120콜
-- [ ] 로고는 내려받아 자체 저장 (media URL 직접 링크는 rate limit)
+- [x] timeout · 호출 제한 · 제한된 retry · exponential backoff — `ingestion/api-football/`
+- [x] `/status` 적재 → `api_quota_snapshots`. ~~**경고선 6,000콜/일 판단의 근거**~~ — `npm run ingest -- status`
+      → **#141 판(10-16 머지)에서 확인: 예측이 틀렸다.** `api_quota_snapshots` 를 읽는 코드가 없다 — 경고선 판단에 쓰이지 않고 보존 기간 정리 코드도 없다.
+      쿼터 판단(라이브 폴러 · 상세 백필)은 그 자리에서 `/status` 의 used 를 읽는다 (클라이언트 자체 콜 카운트가 아니다).
+      그리고 **`/status` 는 쿼터를 소비하지 않는다** — 10-14 하루 `snapshot()` 13,546회(`/status` 13,546콜 · INSERT 13,546행 · 로그 27,092줄 = 그날 로그의 62%)에도 used 가 7,500 에 닿지 않았다.
+      #141 부터 INSERT(`snapshot()`)는 하루 1회 `QuotaSnapshotJob` 과 CLI(`cli/ingest.ts`)에만 남고, 상세 백필은 기록 없는 `QuotaService.current()` 를 쓴다
+- [x] 배치 upsert 헬퍼 `prisma/batch-upsert.ts` — 행 단위 upsert 가 Supabase 왕복에 막혀(5초 트랜잭션 한도) 추가.
+      테이블당 1문장, ON CONFLICT 보장(설계검토 B-2 종결). 이후 모든 수집 계층이 이걸 쓴다
+- [x] ~~L0 기준 데이터~~ ✅ 09-07 첫 실 적재 — 17대회 · 82대회시즌(2026 미제공 컵 3개) · 고유 팀 1,888 · 3분 20초 · 건너뜀 0.
+      **09-08 현재 83** — 컵 하나가 2026 시즌을 뒤늦게 등록했다(`DATA_RULES` 5-4 가 예고한 그것).
+      L0 를 다시 돌리면 늘어난다는 뜻이라 정상이다
+      `test/l0.e2e-spec.ts` 가 가짜 API 로 같은 흐름을 CI 마다 돈다. 이름 반영 재실행은 1장
+- [x] `API_FOOTBALL_KEY` 없이도 앱이 뜬다 — 키는 첫 호출에서만 요구 (CI·조회 서버용, PR #9)
+- [x] ~~로고는 내려받아 자체 저장~~ ✅ 09-07 — `ingest -- logos` 가 받아 96×96 webp 로 줄여
+      `frontend/public/logos/` 에 쓴다. 저장소 안이라 배포 인프라(백엔드 호스팅·R2) 결정에
+      묶이지 않고 정적 호스팅(Vercel · 09-15 전까지는 Cloudflare Pages)이 그대로 서빙한다. 옮기려면 `VITE_LOGO_BASE_URL` 접두사만 바꾼다.
+      동시 4개 · 재시도 2회 · 이미 있는 파일은 건너뜀(`--force` 로 전체 재수집).
+      범위는 화면에 나오는 6대회 현재 시즌 참가팀 — 백필로 팀이 늘면 다시 돌린다.
+      **`npm install` 과 첫 실행은 Windows 에서** (1장)
 
 ---
 
@@ -112,11 +502,14 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 **DTO 계약을 별도 문서로 쓰지 않는다. Swagger 스펙이 계약이다.**
 문서로 쓰면 코드와 갈라진다.
 
-- [ ] `GET /competitions` · `GET /standings` — 여기서 처음 화면에 진짜 데이터가 붙는다
-- [ ] **모든 응답에 `asOf` 포함.** 프론트 `DataTimestamp`가 이미 기대하고 있고
-      나중에 붙이면 전 DTO를 고쳐야 한다 (설계검토 C-1)
-- [ ] 결손 표기 규약 — 컵 경기의 `hasTeamStats` 등을 응답에 어떻게 실을지
-- [ ] 프론트 `services/api.js`를 이 스펙에 맞춘다
+- [x] ~~`GET /competitions` · `GET /standings`~~ → **`/api/competitions`(+`/:ref`) · `/api/teams`(+`/:ref`)** ✅ 09-07.
+      순위표는 L2 전엔 데이터가 없어 `/standings` 는 L2 와 같이. Swagger `/docs` 가 계약. e2e 11건
+- [x] ~~모든 응답에 `asOf`~~ ✅ `common/as-of.ts` — 목록은 최신 행, 단건은 그 행
+- [x] **식별자 `ref` = `<apiId>-<slug>`** 결정 — `common/ref.ts`. 근거는 BACKEND_FEATURES 2장
+- [x] **대회시즌 `dataState`**(NONE/PARTIAL/COMPLETE) — `common/data-state.ts`. 시즌 선택기 노출 기준
+- [x] ~~결손 표기 규약~~ ✅ 09-07 — 경기 DTO 에 `hasEvents`·`hasLineups`·`hasTeamStats`·`hasPlayerStats` 3값 그대로 + `statsState`. 컵 순위표는 200 + `unavailableReason`
+- [x] ~~프론트 `services/api.js`를 이 스펙에 맞춘다~~ ✅ 09-07 — 대회 목록·상세 · 팀 목록·상세.
+      `VITE_USE_MOCK` 으로 Mock/실 API 를 통째로 전환한다. 백엔드는 `CORS_ORIGIN` 으로 출처를 받는다
 
 ---
 
@@ -126,25 +519,253 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 
 - [ ] **대진표** — 슬롯 3상태(`CONFIRMED` / `PENDING_WINNER` / `UNDRAWN`).
       "Round of 32 승자" · "추첨 예정" · "예선 통과" 표기
-- [ ] **컵 경기 상세의 통계 탭 결손** — 오류가 아니라 정상 상태로 구분해 보여준다.
-      `EmptyState`에 `action` prop이 없다 (1단계 감사 #11)
-- [ ] **시즌 선택기** — 백필이 끝나지 않은 시즌은 노출하지 않는다.
-      부분적으로 찬 순위표는 사용자가 최신인 줄 안다
+- [x] ~~**컵 경기 상세의 통계 탭 결손**~~ ✅ 2026-09-16 — `availability=not_provided` 상태로 이미 구현
+      (`normalize.js:971` · i18n `match.unavailable.not_provided.*`). #47 (경기 상세 3탭) 판에서 도입됨.
+- [x] ~~**시즌 선택기** — 백필이 끝나지 않은 시즌은 노출하지 않는다.~~ ✅ 2026-09-16 — `utils/seasons.js:21` `selectableSeasons` 가
+      `dataState=COMPLETE` 만 노출 (현재 30/30 DONE = 5시즌 다 노출) · 상세 백필 중 경기는 `MatchPage.jsx:266~275`
+      `availability=not_collected` "수집 중" 카드로 표시. **시즌 숨김 불필요 판정** (`explore/season-selector-incomplete` 09-16).
 - [ ] **컵 대회 화면** — 순위표가 없다. 리그와 구조가 달라야 한다
-- [x] ~~1단계 감사 12건~~ ✅ `c6c43b4`에서 전부 수정됨. 단 #11의 `EmptyState` `action` prop은
+- [x] ~~1단계 감사 12건~~ ✅ `91d7d36`에서 전부 수정됨. 단 #11의 `EmptyState` `action` prop은
       여전히 없다 — 컵 통계 탭 결손 표시에서 필요하다
 
 ---
 
-## 8. L2 일정 + 백필 실행 — 8~12일
+## 8. L2 일정 · 라운드 · 순위 + 백필
 
-`INGESTION_STRATEGY.md` 5장 그대로.
+`INGESTION_STRATEGY.md` 2-2 · 5장. 넷으로 나눈다 — **8-a** 현재 시즌 일정(끝남) · **8-b** 백필-1 기록 ·
+**8-c** 백필-2 경기 상세 · **8-d** 녹아웃 tie.
+09-07 에 "화면이 하나도 안 나온다" 가 순서를 바꿨고, 중간 점검이 백필을 둘로 쪼갰다 (1장).
 
-- [ ] `competition_rounds` 적재 — 컷오프 판정의 근거
-- [ ] BullMQ Worker 승격 — 백필이 Redis를 실제로 도입하는 첫 작업
-- [ ] `backfill_jobs` 재시작 지점
-- [ ] **최신 시즌부터 역순.** 1일차에 2026 시즌이 끝나면 사이트를 열 수 있다
-- [ ] 백필은 비경기일에 몰고 경기일에는 폴링을 우선한다
+### 8-a. 현재 시즌 수집 — 화면 6대회 (09-07)
+
+대회당 3콜(`/fixtures/rounds` · `/fixtures` · `/standings`) × 6 = **18콜.** 수집만 한다 —
+조회 API 와 프론트 연결은 적재 결과를 눈으로 본 뒤다.
+
+> 지금(10-08) 기본 범위는 ~~화면 6대회~~ → `ingestScopeWhere`(isTracked) **19대회 현재 시즌**이다 (09-17 4층 분리) —
+> 리그 5·UEFA 3 은 3콜, 컵 6·슈퍼컵 5(KNOCKOUT)는 standings 없이 2콜 = 최대 46콜.
+> 10-08 PR #135 부터 현재 시즌에서 DB 에 없는 팀(missingTeams)을 만나면 그 대회시즌 `/teams` 1콜을 더 쓴다 (1장 `~~—~~` 행).
+
+- [x] `l2/round-scope.ts` — 라운드 분류 · 컷 판정 **순수 함수**. 이름을 파싱하지 않는다
+      (2-2). 단위 테스트 9건
+- [x] `l2/l2.service.ts` — 라운드 → 경기장 → 경기 → 순위 배치 upsert. `npm run ingest -- l2`
+- [x] **소유권 경계** — `has_*` · `detail_checked_at` · `data_version` · `tie_id` · `leg` 은
+      건드리지 않는다. L3~L5(8-c·10장) 와 8-d 의 것이고, 재실행이 저쪽 진행 상태를 지우면 안 된다
+- [x] e2e — 컷 앞 라운드 미저장 · ordinal 보존 · 목록 밖 라운드/DB 없는 팀 건너뜀 ·
+      멱등 + 스코어 갱신 · 소유권 경계 · 고아 행 없음. **09-08 에 15건으로 늘었다**
+      (전 시즌 확장 · `isCurrent` 컷 회귀 · UCL 폴백 · 쿼터 소진 · 시즌 범위)
+- [x] ~~실 적재 1회~~ ✅ 09-07 · 18콜 · 라운드 192 · 경기 1,930 · 순위 132 — 아래
+- [x] ~~조회 API 확장(경기·순위) + 프론트 연결~~ ✅ 09-07 PR #24 — **1장 1번** (11장)
+
+### 실 적재 결과 (09-07)
+
+| 대회 | 라운드 | 경기 | 순위 | 컷 |
+|---|---|---|---|---|
+| EPL · 라리가 · 세리에A | 38 | 380 | 20 | Regular Season - 1 |
+| 분데스리가 · 리그1 | 34 | 306 | 18 | Regular Season - 1 |
+| UCL | 10 (제외 2) | 178 | 36 | **3rd Qualifying Round** |
+
+미확인 라운드 0 · DB 에 없는 팀 0 · 실패 0. 쿼터 355/7500.
+
+**UCL 컷이 예선에서 잡혔다 — 예측이 틀렸고 코드가 맞았다.** 설계 당시 "5대 리그 팀은
+예선을 치르지 않으므로 컷은 리그페이즈에서 잡힌다"고 적었는데, 실측은 **리옹(Ligue 1)이
+3차 예선과 플레이오프를 치른다**는 것이었다. UCL 리그 경로에는 리그 계수에 따라 5대 리그
+하위권 팀이 들어간다. 그 경기는 화면에 보여야 하므로 **컷이 앞당겨진 것이 옳은 동작**이다.
+
+UCL 의 "1부 팀 집합" 은 `top_flight_competition_id` 가 없어 **추적 5대 리그 참가팀 합집합**을
+쓴다. 이 실측이 그 선택을 검증했다 — "리그페이즈부터" 로 하드코딩했다면 리옹의 예선 6경기를
+놓쳤다.
+
+**남은 관찰 두 가지.**
+
+1. `is_late_stage` 가 전부 false 다. 마지막 라운드(League Stage - 8)가 36팀이라 역순 판정이
+   즉시 끊긴다 — 맞는 동작이다. 녹아웃 대진이 나오는 2027년 2월에 16강 이하가 잡힌다.
+   지금은 `detail_eligible` 이 `has_top_flight` 만으로 결정된다.
+2. 컷은 **라운드 단위**라 Q3·플레이오프의 34경기가 통째로 상세 대상이 됐다. 리옹이 없는
+   경기도 포함이다. 상세 4콜 × 34 = 136콜 — 일회성이라 지금은 두지만, L3 착수 때 다시 본다.
+
+### 8-b. 백필-1 — 이미 나와 있는 기록 전부 · 1장 2번 (09-08 대부분 완료)
+
+`INGESTION_STRATEGY` 3-1 의 45,450콜 중 ~~43,260 이 경기별 상세~~ → **2026-09-17 실측 잔여 약 36,700콜** (대상 9,174경기 · 5.4일). 옛 43,260 은 컵 222/시즌 기준 · 실측 컵 541/시즌 + 유로파·컨퍼런스 유입 후 정정. 나머지 — 일정·결과·순위·
+선수 시즌 통계·랭킹·팀 시즌 통계 — 는 2,000콜이면 다 받는다. 이걸 먼저 떼어 받는다.
+**부상(#11)은 여기서 뺐다** — 현재 시점 데이터라 5시즌 백필의 뜻이 없고, L1 #9~#11 과 함께 간다.
+"시즌이 끝나 확정된 기록" 이라는 뜻의 데이터는 여기서 전부 들어온다.
+
+**화면 6대회로 한정했다.** 컵 6개는 이 단계에 넣지 않는다 — `screen-scope.ts` 의
+`isTracked AND displayOrder <= 100` 이 5대 리그 + UCL 만 고른다. 컵까지 넣으면 3,162콜이
+더 붙는데, 프론트에 컵 화면이 아직 없어 받아도 보이는 곳이 없다.
+
+- [x] ~~백업 수동 1회~~ ✅ 09-08 — `npm run backup` → `npm run backup:verify`.
+      31테이블 22,049행 · 복원 리허설 통과 (L2 5시즌이 든 상태. 09-07 판은 L0 만 · 10,062행)
+- [x] ~~L2 를 전체 대회시즌으로~~ ✅ 09-08 PR #26 — `npm run ingest -- l2 --all-seasons`.
+      `isCurrent` 를 푸는 과정에서 **컷 판정 버그가 드러났다** (아래)
+- [x] ~~선수 시즌 통계 · 득점/도움/카드 랭킹 · 팀 시즌 통계~~ ✅ 09-08 L6 — 아래 실측표.
+      **과거 시즌 선수 명단이 여기서 나왔다** — `squad_entries` 는 현재 시즌만이고
+      `/players/squads` 도 현재만 준다
+- [x] ~~`dataState` 갱신~~ ✅ `backfill_jobs` **writer 를 처음 만들었다**
+      (`backfill/backfill-job.service.ts`). 30대회시즌이 `DONE` 이다.
+      프론트 시즌 선택기 노출은 **11장**이 남았다
+- [ ] L1 2차 실행 (155콜) — diff 가 실 데이터로 처음 돈다
+- [ ] UCL 예선 전용 팀 걷어내기 — **전제가 하나 틀렸다**, 아래
+
+### 8-b 실 적재 결과 (09-08)
+
+**L6 시즌 집계 — 화면 6대회 × 5시즌 = 30대회시즌.**
+
+| 테이블 | 행 | 비고 |
+|---|---|---|
+| `player_season_stats` | **30,925** | 2022 6,719 · 2023 7,376 · 2024 8,096 · 2025 5,515 · 2026 3,219 |
+| `top_rankings` | **2,335** | 득점 586 · 도움 576 · 경고 586 · 퇴장 587 |
+| `team_season_stats` | **489** | ROUND_ROBIN 만 — UCL 은 `/teams/statistics` 대상이 아니다 |
+| `backfill_jobs` | **30** | 전부 `DONE` |
+
+**`assists` 를 nullable 로 바꾼 판정이 데이터로 확인됐다.** 착수 전에 기준을 걸어 뒀다 —
+"`assists_null` 이 과거 시즌에 몰려 있고 2026 이 0 이면 맞다".
+
+| 시즌 | 전체 | `assists` null | 비율 |
+|---|---|---|---|
+| 2022 | 6,719 | 5,038 | 75% |
+| 2023 | 7,376 | 4,962 | 67% |
+| 2024 | 8,096 | 3,690 | 46% |
+| 2025 | 5,515 | 177 | 3% |
+| 2026 | 3,219 | **0** | 0% |
+
+마이그레이션 전 스키마(`NOT NULL DEFAULT 0`)로 그냥 넣었다면 **13,867행이 "도움 0개" 라고
+거짓말**을 하고 있었다. `DATA_RULES` 3장의 3상태 구분(`0` = 실제 0 / `null` = API 미제공 /
+행 없음 = 미수집)이 정확히 그 지점에서 깨진다.
+`passes_key` 는 2026 에도 729행이 null 이다 — 3-1 도 3-2 도 아닌 별개 케이스라 nullable 이 맞다.
+
+**착수 전에 `/players` 볼륨을 실측했다** (`npm run ingest -- probe-players --all-seasons`, 85콜 · 쓰기 없음).
+추정으로 시작했으면 UCL 예산이 통째로 빗나갔다 — 5시즌 페이지 합이
+EPL 211 · 라리가 205 · 분데스 166 · 세리에A 221 · 리그1 191 인데 **UCL 은 510** 이다.
+시즌당 100페이지가 넘어 5대 리그(33~44)의 2~3배다.
+
+| 갈래 | 콜 |
+|---|---|
+| 선수 시즌 통계 | 1,504 |
+| 랭킹 (6대회 × 5시즌 × 4종) | 120 |
+| 팀 시즌 통계 (ROUND_ROBIN 만) | ~480 |
+| **합계** | **≈ 2,100** |
+
+하루 상한 5,700 안이다. 문서의 "~1,800콜" 은 여기서 다시 계산됐다.
+실행 뒤 쿼터 **2,288/7,500**.
+
+### ★ UCL 대회 진행방식이 2024-25 에 바뀌었다 (09-08 확인)
+
+착수 전에 확인한 것이고, **충돌은 없었지만 프론트에 할 일이 생겼다.**
+
+| 시즌 | 구조 | `standings.group_name` | `rank` |
+|---|---|---|---|
+| 2022 · 2023 | 조별리그 8조 × 4팀 | 조마다 다름 (8종) | 조 안에서 **1~4** |
+| 2024 · 2025 · 2026 | 리그페이즈 단일 36팀 | 1종 | **1~36** |
+
+`competitions.catalog.ts` 주석에 "순위표 구조는 같다" 고 적혀 있었는데 **틀렸다.**
+DB 는 이미 맞게 저장돼 있다 — `standings` 의 unique 가 `(대회시즌, 팀, 그룹)` 이라
+조별리그가 그대로 들어간다. 깨지는 것은 **화면**이다.
+
+- 순위표를 `group_name` 으로 쪼개지 않으면 2022 UCL 이 **rank 1 인 팀 8개짜리 한 표**로 보인다
+- `zoneOf` 가 조별리그 시즌의 구역 문자열을 처리하지 못한다
+- → **11장**에 넣는다. 백엔드 수정은 없다
+
+### ★ `isCurrent` 컷 버그 — 전체 시즌으로 넓히니 드러났다
+
+컵의 "1부 팀 집합" 을 구하는 `topFlightApiTeamIds` 가 **`isCurrent: true` 로 참가팀을
+읽고 있었다.** 현재 시즌만 돌 때는 우연히 맞았다. 2024 시즌을 돌리면 2026 참가팀으로
+컷을 잡으므로, 그 시즌에 1부에 없던 팀만 나오는 라운드에서 **컷이 `null` 이 되어 한 행도
+저장되지 않는다.**
+
+`cs.seasonId` 를 쓰도록 고쳤고(컵 경로 · UCL 폴백 둘 다), e2e 8번이 회귀를 막는다 —
+2026 참가팀 `{A,B,C,D}` 대 2024 참가팀 `{A,B,E,F}` 로 짜서 버그 코드면 0행이 된다.
+
+**전체 시즌으로 넓히지 않았으면 못 봤다.** 현재 시즌 하나로는 영원히 통과하는 버그였다.
+
+### 8-c. 백필-2 — 경기별 상세 (~43,000콜) · 1장 3~5번
+
+경기 하나에 4콜 (`lineups` · `events` · `statistics` · `players`) → 테이블 5개. **이게 8~12일이다.**
+오래 걸리는 건 백엔드가 아니라 하루 한도다.
+
+**두 번에 나눠 돌린다.**
+1. **현재 시즌만** (~2,200경기 · 8,700콜 · 1.5일) — 로컬에서 돌리고 화면으로 본다. 쓰기 형태가 틀렸으면 여기서 고친다
+2. **나머지 4시즌** (~~43,260콜 · 8일~~ → 2026-09-17 실측 잔여 **약 36,700콜 · 5.4일**) — 서버에서 무인. 리허설 통과가 관문. 옛 예상치는 컵 222/시즌 기준이었고 실측 541/시즌 · 유로파·컨퍼런스 유입으로 대상 잔여가 정정됐다
+
+**워커는 BullMQ 가 아니다 (09-07 결정).** `backfill_jobs(phase, cursor_match_id, total, done, failed)` 가
+이미 DB 체크포인트다. 한 Nest 프로세스 안에서 `@nestjs/schedule` 로 도는 **단일 루프**면 된다.
+1인이 한 번 돌리는 순차 작업에 Redis 인스턴스를 붙이면 장애 지점과 비용만 는다.
+`INGESTION_STRATEGY` 5-1 · `BACKEND_GUIDE` 가 이걸로 통일됐다.
+⚠️ 10-15 PR #139 — 상세 백필은 `cursor_match_id` 를 **읽지도 쓰지도 않는다** (컬럼은 남겨 두었다). 체크포인트는 경기 행 자체다 — `detail_checked_at` · `detail_attempts` · `detail_last_attempt_at` (아래 워커 규칙).
+
+워커 규칙:
+- 대상 = `detail_eligible AND detail_checked_at IS NULL AND status_short IN ('FT','AET','PEN')`.
+  **백필이 끝나면 이 조건이 자연히 "어제 끝난 경기" 만 남긴다** — 코드가 아니라 대상이 바뀐다 (1장 5번).
+  ⚠️ 09-24 실측: 워커 규칙은 맞았지만 **`status_short` 를 FT 로 바꿔 줄 L2 정기 실행이 없어서** 새 경기가 대상에 안 들어왔다 → L2 매일 잡 추가 (PR #109).
+  L4 없이도 사이트는 하루 지연으로 완전하다
+- **일일 상한** — `/status` 로 오늘 쓴 콜을 읽어 **5,700** 을 넘으면 멈추고 자정 뒤 이어간다 (3-5 경고선).
+  5,700 은 코드 기본값이다(`BACKFILL_DAILY_CAP` · `env.validation.ts:192` · #83 에서 env 화). **운영 env 는 6,800** (10-16 `/etc/pitchlog/backend.env` 확인).
+  이 한 줄이 없으면 첫날 오후에 7,500 을 다 써서 순위 갱신이 그날 못 돈다. "자동" 과 "방치" 의 차이다
+- 순서 = 최신 시즌부터 역순 (5-3). 대회시즌 안에서는 `kickoff_at asc, id asc` (10-15 #139)
+- ~~죽으면 `cursor_match_id` 에서 이어간다 — 컨테이너 재시작 포함~~ → **10-15 #139 에서 커서를 뺐다.** 커서는 "id > cursor" 로만 앞으로 가서
+  id 가 작은데 늦게 끝난 경기 · 실패한 경기를 영원히 건너뛰었다. 지금은 매 실행이 대상(종료 상태 · `detail_checked_at IS NULL` · 재시도 시점 도래)을
+  다시 고른다 — 컨테이너 재시작 포함
+- **경기 단위 재시도 상한** (10-15 #139 · `ingestion/backfill/detail-retry.ts` `DETAIL_MAX_ATTEMPTS=3` · `DETAIL_RETRY_BACKOFF_MS=[1h,6h]`) —
+  시도 0회 → 즉시 · 1회 → 마지막 시도 1시간 뒤 · 2회 → 6시간 뒤 · 3회 → 포기 (warn 에 복구 SQL).
+  시도 기록은 raw `UPDATE … RETURNING` 이라 `updated_at` 을 건드리지 않는다. 확정(`detail_checked_at`)은 `has_*` 가 전부 non-null 일 때만.
+  복구 SQL: `UPDATE matches SET detail_attempts = 0, detail_last_attempt_at = NULL WHERE detail_checked_at IS NULL AND detail_attempts >= 3;`
+- **사용량 확인** (10-16 #141) — 대회시즌마다 대상 수를 먼저 세고, 0 이면 `/status` 없이 `no_targets`. 대상이 있을 때만 진입 · 매 경기 앞 · 끝 사유 판정에서 `QuotaService.current()` (INSERT 없음)
+- 진행 중인 (대회, 시즌) 은 L1 락 (`SCHEMA_DESIGN` 충돌 ③). 코드에 이미 있다
+- `has_*` 가 `false` 인 경기는 다시 안 부른다. FT 후 24시간은 `NULL` 로 되돌려 재시도 (4-2 ①)
+- 상세 4개가 다 들어오면 `matches.stats_state = CONFIRMED` (10장)
+
+- [x] 오케스트레이터(`MatchDetailsBackfillService`) + CLI (`npm run ingest -- backfill`) 골격 (2026-09-10)
+- [x] **실 적재 — 현재 시즌 6대회 180경기 CONFIRMED** (2026-09-10 · 588콜 · 실패 0). has_team_stats false 5 · has_player_stats false 10 (200 빈 응답 · 데이터 자체가 없음). PR #46
+- [x] ~~**과거 4시즌(2022~2025) 백필-2** — 서버화(1장 4번) 이후 무인 실행 (약 43,000콜 · 6일)~~ ✅ 09-16 12:10 UTC 시작 · 09-24 서버 실측에서 완료 상태 (`932def1` 본문). 최종 수치는 기록 없음
+- [x] ~~**상세 백필 커서 제거 · 경기 단위 재시도 상한**~~ ✅ 10-15 PR #139 (운영 DB 마이그레이션 `20261015120000_match_detail_attempts` + `rollback.sql` · 10-15 적용 뒤 배포).
+      **결과**: 미확정이던 2026 시즌 29경기 + 과거 129경기(Coupe de France 127 · UECL 2) 전부 확정 (10-15 09:50 · 11:00 UTC tick).
+      2025 UCL Play-offs 14경기는 대상 밖 — `detailEligible` 여부 미확인 (운영 DB 조회 권한 없음)
+
+### 8-d. L2-b — 녹아웃 tie · 대진표 · 슈퍼컵 · 1장 7번
+
+- [ ] `knockout_ties` · `bracket_slots` — 1·2차전 묶기, 대진표 슬롯 (`INGESTION_STRATEGY` 2-3).
+      **UCL 녹아웃 대진이 나오는 2027-02 뒤** — 그 전엔 검증할 실 데이터가 없다.
+      직전 시즌 템플릿은 백필-1 이 넣는다.
+      화면은 먼저 나왔다 — 09-22 PR #104 대진표 탭이 프론트 `buildTies` 로 경기 목록에서 tie 를 만든다.
+      백엔드 영속화는 미착수 (코드에서 `knockoutTie`·`bracketSlot` 사용처 0)
+- [ ] 슈퍼컵 5개 포함 여부 (`INGESTION_STRATEGY` 8장 #5)
+
+### UCL 예선팀 (09-07 실측에서 드러남)
+
+`/teams?league=2&season=2026` 은 **예선 참가팀까지 전부** 준다. 2-1 이 잡은 UCL 범위는
+~189경기(리그페이즈 36팀 + 녹아웃)인데, L0 가 받은 참가팀은 그보다 훨씬 넓다.
+
+실측 (09-07, 현재 시즌 참가팀):
+
+| | 팀 |
+|---|---|
+| 5대 리그 합 | 96 |
+| UCL 등록팀 | **81** |
+| 중복 제거 전체 | **155** → 겹치는 팀 22 · UCL 에서만 온 팀 59 |
+
+리그페이즈가 36팀이므로 그중 22 는 우리 리그, 14 는 밖(벤피카·아약스 등)이다.
+**불필요분은 예선 전용 45팀** — 선수 약 1,400명, 주 45콜.
+Petrocub(몰도바) · Drita(코소보) · Lincoln Red Imps(지브롤터) · ML Vitebsk(벨라루스)
+같은 클럽으로, 우리가 수집할 189경기에 한 번도 나오지 않는다.
+(36/45 분해는 리그페이즈 정원에서 계산한 값이다. 라운드 데이터로 확정한다)
+
+**지금 정리하지 않고 여기서 한다.** 비용이 주 45콜·수백 KB 라 당장은 무시할 수준이고,
+예선팀과 리그페이즈 팀을 구분하려면 **라운드 데이터가 필요하다** — 8-a 가 그걸 넣었다.
+"5대 리그 참가팀만" 으로 좁히면 리그페이즈 팀 14개가 같이 빠진다.
+
+⚠ **8-a 실측이 기준을 하나 더 만들었다.** 컷이 3차 예선에서 잡혀 Q3(20팀)·플레이오프(14팀)
+경기가 저장돼 있다. 걷어낼 대상은 "예선 참가팀" 이 아니라 **저장된 경기에 한 번도 안 나오는
+팀** 이다. 1·2차 예선(제외된 2라운드)에만 있던 팀이 그것이다.
+
+⚠ ~~**L5·L6(선수 시즌 통계) 전에는 반드시 끝낸다.** 통계 수집 대상이 되는 순간 콜이 커진다~~
+→ **전제가 틀렸다 (09-08).** L6 는 팀당이 아니라 **대회시즌당** `/players?league&season` 을
+페이지네이션한다. 예선 전용 45팀이 DB 에 있어도 콜이 늘지 않는다. `/teams/statistics` 는
+ROUND_ROBIN 만 도므로 UCL 은 아예 대상이 아니다. **그래서 L6 를 정리 전에 돌린 것이
+비용상 문제가 되지 않았다.**
+
+남는 것은 콜이 아니라 **표시**다. `/api/teams` 의 UCL 그룹에 한 경기도 안 나오는 팀이
+섞여 나온다. 급하지 않으므로 프론트 컵·팀 화면을 손볼 때(11장) 같이 본다.
+판정 기준은 위 ⚠ 그대로 — **저장된 경기에 한 번도 안 나오는 팀**이다.
 
 ---
 
@@ -153,27 +774,190 @@ Supabase 무료는 **백업도 PITR도 없다.** 백필이 8~12일짜리인데 �
 완료 기준은 "500선수가 DB에 있다"가 아니라
 **"스쿼드 diff 테스트가 이적 시나리오를 통과한다"** 이다.
 
+- [x] ~~#7 스쿼드 스냅샷~~ ✅ `npm run ingest -- l1`. **09-07 첫 실 적재**: 155팀 전원 ·
+      선수 4,863명(팀당 평균 31.4) · 건너뜀 0 · 실패 0 · 동시 등장 0
+- [x] ~~#8 스쿼드 diff + 테스트~~ ✅ `squad-diff.ts` 순수 함수 + 시나리오 13건
+**#9~#11 은 1장 7번이다** — 화면을 살리는 데 기여가 없어 뒤로 갔다 (09-07 점검). #10 은 diff 구조 재사용이라 그때 가장 싸다.
+
+- [ ] #9 선수 프로필 갱신 (`/players?id=`) — `profile_fetched_at` 을 채운다
+- [ ] #10 감독 이력 (`/coachs?team=`) — `coach_tenures`, diff 구조를 그대로 재사용
+- [ ] #11 부상자 (`/injuries?league=&season=`)
+- [ ] 이적창 주기 상향 (6/13~9/1, 1/1~2/3 일 1회) — Scheduler 도입 시
+
+### 왜 두 단계인가
+
+팀별로 즉시 쓰면 A→B 이적에서 B 를 먼저 처리할 때 A 의 열린 행이 살아 있어
+partial unique 가 터진다. 전 팀 스냅샷을 모은 뒤 한 번에 판정하고,
+`remove → close → update → open` 순서로 한 트랜잭션에 쓴다.
+
+### 정한 것 (09-07)
+
+| 항목 | 결정 |
+|---|---|
+| `season_year` | **전역 현재 시즌 연도 하나.** 컵은 시즌 등록이 늦어(DATA_RULES 5-4) 대회별로 다른 값을 쓰면 한 선수에게 열린 행이 둘 생긴다 — 인덱스는 통과하지만 의미가 깨진다 |
+| 빈 응답·급감 | 직전 명단의 **절반 이하**면 그 팀을 건너뛴다. 실제 대량 방출이면 다음 주에 반영된다 — 하루 늦는 대가로 오탐을 막는다 |
+| 같은 날 재실행 | `valid_from` 이 오늘인 행은 닫지 않고 그 자리에서 고친다. 사라졌으면 지운다. `valid_from = valid_to` 인 0일 이력을 만들지 않는다 |
+| `profile_fetched_at` | squads 는 이름·사진만 준다(**생년월일 없음, 나이만**) → null 유지. #9 가 채울 대상이 남는다 |
+| 두 팀에 동시 등장 | 이적 진행 중 양쪽 구단이 함께 올려 두는 일이 있다. 어느 쪽이 참인지 모르므로 **그 선수는 이번 실행에서 건드리지 않는다** |
+
 ⚠ **백필 진행 중에는 해당 대회-시즌의 L1을 건너뛴다.** 이중 이력이 생기면
 partial unique index가 에러로 막아서 diff가 실패한다 (`SCHEMA_DESIGN.md` 5장 충돌 ③).
+`backfill_jobs.phase` 가 `L0`·`FIXTURES`·`DETAILS`·`RANKINGS` 면 락으로 본다.
+
+⚠ `valid_from` 은 **수집일이지 실제 이적일이 아니다.** 경기의 팀 귀속은
+`player_match_stats.team_id` 가 정한다 (설계검토 A-2).
 
 ---
 
-## 10. L3~L5 실시간 + 확정 처리
+## 10. L3~L5 상세 · 확정 · 실시간
 
-- [ ] 라이브 폴링 윈도우 개폐 — 10초 × 24시간이면 8,640콜로 한도를 그것만으로 넘긴다
-- [ ] 주기 강등 규칙 — 누적 6,000 초과 / 백필 중 / 진행 경기 1개 이하면 15초
-- [ ] 오버랩 방지 + **한 주기 처리 시간 계측**
-- [ ] `data_version` 조건부 갱신 — FT 직후 폴링이 상태를 되돌리는 것을 막는다
-- [ ] 녹아웃 tie 확정 — 2차전 FT 후 합산·승자·`win_reason`
+**순서가 바뀌었다 (09-07 점검).** L3·L5 의 쓰기 코드가 먼저다 — 1장 3번, 백필-2 가 이걸로 돈다.
+L4 라이브는 백필이 끝난 뒤(1장 6번)다. 같은 쿼터를 두고 싸우지 않게 하려는 것이고,
+FT 뒤에 부를 L5 코드가 먼저 있어야 하기 때문이다.
+
+### L3 · L5 — 경기 상세 쓰기 (1장 3번)
+
+- [x] ~~4 엔드포인트 → `match_lineups` · `lineup_entries` · `match_events` · `team_match_stats` · `player_match_stats`~~ ✅ 09-10 PR #46 — L3·L5 서비스 4개 · 현재 시즌 180경기 · 588콜 · 실패 0.
+      배치 upsert · `has_*` 3값 갱신 · `detail_checked_at`
+- [x] ~~`matches.stats_state` — `NONE → RECHECK → CONFIRMED`~~ ✅ 09-10 PR #46 — 180경기 CONFIRMED (`SCHEMA_DESIGN` 3-3, 09-07 결정).
+      상세 4개가 다 들어오면 `CONFIRMED`. **프론트 `recheck`/`confirmed` 배지의 유일한 소스**다.
+      1장 1번에서 컬럼을 먼저 넣고 L2 는 `NONE` 만 쓴다
+- [x] ~~**ID 없는 선수**~~ ✅ 10-15 PR #138 — `ingestion/api-football/api-player-id.ts` `knownApiPlayerId(id)`(양의 정수면 그 값, 아니면 null).
+      L3 lineups 는 id 없는 엔트리를 저장하지 않고 건너뛴다(warn 1줄 `player.id 없는 엔트리 n건 skip`) · L3 events 의 선수 id 는 없으면 null · L5 player-stats 는 null·0 id 를 건너뛴다(warn).
+      **`SCHEMA_DESIGN` 2-4 "없으면 만든다" 의 예외** — API 가 id 를 주지 않은(null·0) 선수는 `players` 행을 만들지 않는다. 새 e2e `test/no-id-players.e2e-spec.ts` (픽스처 대역 997_3xx · 원격 DB 면 throw)
+- [x] ~~**선수 명단 없는 라인업**~~ ✅ 10-15 PR #140 — 모든 팀의 선수가 0명이면 `has_lineups=false`(미제공)로 마감 · 쓰기 없음 · info 로그 `선수 명단 없는 라인업 N팀 → has_lineups=false (미제공)`.
+      프론트는 "이 경기는 라인업이 제공되지 않았습니다"(`not_provided`)를 띄운다
+- [ ] 멱등 — 같은 경기를 두 번 처리해도 값이 두 배가 되지 않는다 (`V2_DESIGN` 5-7). PR #46 이 upsert 로 구현 · **재처리 실측은 백필-2 첫 재실행 때** (현재 시즌 180경기를 한 번 더 돌려 행 수 불변 확인). 백필-2 가 이걸로 5시즌을 돈다
+- [ ] 녹아웃 tie 확정 — 2차전 FT 후 합산·승자·`win_reason`. 8-d 뒤
+
+### L4 — 실시간 (1장 6번 · 09-24~27 코드 4판 머지)
+
+- [x] ~~라이브 폴링 윈도우 개폐~~ ✅ 09-24 PR #111 `ingestion/l4/live-window.ts` · 09-26 #116 창을 kickoff 기준으로 — 10초 × 24시간이면 8,640콜로 한도를 그것만으로 넘긴다
+- [x] ~~주기 강등 규칙~~ ✅ `LIVE_POLLER_SLOW_AT`(기본 6000) · `LIVE_POLLER_STOP_AT`(기본 7000 · ≤ 7500) — `env.validation.ts:244,252`
+- [x] ~~오버랩 방지 + **한 주기 처리 시간 계측**~~ ✅ #111 — `lastTickMs` · `maxTickMsToday` (`DEPLOY.md` L4 절)
+- [x] ~~`data_version` 조건부 갱신~~ ✅ 09-26 PR #115 — `status-rank.ts` 역행 가드 + `live-writer.service.ts` 조건부 UPDATE · `data_version+1`.
+      **L2 재실행도 같은 규칙을 탄다** — `batchUpsert.updateWhere` 로 진행 중 경기를 L2 가 덮지 않는다 (보호 6시간 만료 · #116)
+- [x] ~~FT 감지 → L3·L5 호출~~ ✅ 09-27 PR #122 `live-finalizer.service.ts` — FT 즉시 상세 저장 · winner · standings 갱신 (`LIVE_FT_DETAILS_ENABLED`, 기본 false · `LIVE_POLLER_MODE=write` 여야 효과).
+      **하루 지연이 ~~10초~~ 15초 지연으로 줄어드는 것이 L4 의 전부**다 (10초는 설계 당시 값 · 실제 정상 주기 `LIVE_POLLER_PERIOD_SEC=15` · `env.validation.ts:229` · 운영 미지정 = 기본값)
+- [x] ~~프론트~~ ✅ 09-27 PR #123 — `/api/live` 15초 폴링 · `dataVersion` 병합 · FT 전환 시 상세 재요청
+- [x] ~~**운영 전환 확인** — `LIVE_POLLER_MODE` 기본값은 `observe`(`env.validation.ts:264`). 운영값은 10-07 미확인~~ ✅ 10-16 — EC2 `/etc/pitchlog/backend.env`
+      `LIVE_POLLER_MODE=write` · `LIVE_FT_DETAILS_ENABLED=true` · `/health` `livePoller.mode="write"` (00:22 UTC). 폴러 주기·임계는 미지정(기본값 15 · 30 · 6000 · 7000)
+- [x] ~~**실제 라운드 1회 무중단 관측** — Phase 2 관문 (13장)~~ ✅ 10-15 통과 (사용자 판정) — 아래 실측 소절
+
+### Phase 2 관문 실측 — 실제 라운드 1회 무중단 관측 (2026-10-15 통과)
+
+**판정**: 10-15 사용자가 검증 기준 "실제 라운드 1회 무중단 관측" 을 통과로 봤다. Phase 2 의 두 기준(5시즌 완전 · 이 관측)이 모두 충족됐다.
+남은 것은 `dev` → `main` 첫 릴리즈 PR + 태그 `v2-phase2-scheduler` 이고 아직 안 했다 (1장 "10-16 기준 남은 것").
+
+| 항목 | 실측 |
+|---|---|
+| 관측 창 | 10-09 18:00 ~ 10-15 00:00 UTC |
+| 백엔드 재시작 | 0 |
+| 라이브 finalize | 65/65 |
+| 업스트림 오류 | API 5xx · fetch failed 5건 — 다음 tick 에서 회복 → 무중단으로 인정 |
+
+같은 날(10-15) 쿼터도 정했다 — 실측 하루 최대 2,559콜이라 **Pro(7,500콜/일) 유지** (14장).
+
+**관측 중 드러난 운영 버그 넷** — 전부 고쳐 배포했다 (1장 `~~—~~` 행 · 머지·배포는 0장 "배포" 행).
+
+| PR | 실측 (무엇이 드러났나) | 고친 것 | 결과 |
+|---|---|---|---|
+| #138 | 라인업 `startXI`/`substitutes` 의 `player.id` 가 **null** 로 온다. 같은 선수가 `/fixtures/players` 에서는 `id: 0`. 운영 로그 10-10~14: live-poller finalize 23건 · backfill lineups 실패 9건 (`players.api_player_id` NOT NULL 위반 23502). L5 는 `api_player_id=0` 선수 행(`0-adam-mouak`)을 만들어 오염 | `knownApiPlayerId` — L3 lineups 건너뜀 + warn · L3 events null · L5 건너뜀 + warn (10장 L3·L5) | 운영 DB 의 `api_player_id=0` 행 정리는 범위 밖 (운영 DB 쓰기 승인 필요) |
+| #139 | 상세 백필이 `backfill_jobs.cursor_match_id` 로 "id > cursor" 만 앞으로 갔다 → id 가 작은데 늦게 끝난 경기 · 실패한 경기를 영원히 건너뜀 | 커서 제거 · 경기 단위 재시도 상한 3 (8-c 워커 규칙) | 미확정 2026 시즌 29경기 + 과거 129경기(Coupe de France 127 · UECL 2) 전부 확정 (10-15 09:50 · 11:00 UTC tick). 2025 UCL Play-offs 14경기는 대상 밖 (`detailEligible` 여부 미확인 — 운영 DB 조회 권한 없음) |
+| #140 | 하위 리그 팀이 나오는 컵 경기(Coupe de France 등)의 `/fixtures/lineups` 는 `startXI`·`substitutes` 키 자체가 없고 `formation` 이 null (예: fixture 1485809) | 모든 팀 선수 0명이면 `has_lineups=false`(미제공) (10장 L3·L5) | 프론트 "이 경기는 라인업이 제공되지 않았습니다"(`not_provided`) |
+| #141 | EC2 journal 10-14 하루: `QuotaService.snapshot()` 13,546회(상세 백필 13,443) → `/status` 13,546콜 + `api_quota_snapshots` INSERT 13,546행 + 로그 27,092줄(그날 전체 로그의 62%). 원인: 상세 백필이 처리할 경기가 있는지 보기 전에 대회시즌마다(~93) 확인 · 워커 */10 → 144 tick | 대상 count 먼저 · 0 이면 `/status` 없이 `no_targets` · `QuotaService.current()`(INSERT 없음 · debug 로그) · "구독 만료 임박" warn 은 프로세스당 UTC 하루 1회 (8-c · 5장) | **운영 확인 (10-16)**: 배포(00:22 UTC) 뒤 첫 워커 tick 00:30 UTC — 전 대회시즌 대상 0(`no_targets`) · `QuotaService` 로그 0줄 · `/status` 호출 0. 이전엔 tick 당 약 94회(10-14 하루 13,546회 ÷ 144 tick). 대회시즌마다 "대상 없음 (targeted=0)" LOG 1줄은 남는다 |
+
+**예측이 틀린 것 — `/status` 는 쿼터를 소비하지 않는다.** 문서들이 `/status` 를 콜 예산에 1콜씩 넣어 셌다(1장 5번 · `BACKEND_FEATURES` L4).
+하루 13,546회 호출에도 used 가 한도 7,500 에 닿지 않아 운영 수치로 확정됐다. `api_quota_snapshots` 를 경고선 근거로 적은 5장도 틀렸다 — 읽는 코드가 없다.
+
+**쿼터 판단의 실제** (#141 판에서 확인): 라이브 폴러 · 상세 백필 모두 `/status` 의 used 로 판단한다. 라이브 폴러는 env 기본값(운영 미지정)으로
+정상 주기 `LIVE_POLLER_PERIOD_SEC=15` · used ≥ `LIVE_POLLER_SLOW_AT=6000` 이면 `LIVE_POLLER_SLOW_PERIOD_SEC=30` 초로 강등 · used ≥ `LIVE_POLLER_STOP_AT=7000` 이면 UTC 자정까지 정지.
+운영 로그의 `API 사용량` 은 debug 지만 `main.ts` 가 로거 레벨을 정하지 않아 운영에서도 찍힌다.
+
+**남긴 것** — 1장 "10-16 기준 남은 것" 의 "운영 데이터" · "수집 방어" · "프론트" · "쿼터·운영" 묶음.
 
 ---
 
 ## 11. 프론트 실 API 연결 + 배포
 
-- [ ] `services/api.js` Mock → fetch
-- [ ] null 정규화 계층 — 아직 없다. 실 API 연결 직전에 `services/api.js`에 넣는다
-- [ ] Socket.io 연결 + REST 풀 싱크 fallback
-- [ ] i18n — `localized_names` 적재 후 프론트 `entityNames.js` 제거
+> 10-07: 배포는 09-15~16 완료(EC2 + Vercel · 0장). 실 API 를 타지 않는 화면은 **알림** 하나다.
+> 10-13 #137 — 실 API 모드에서는 알림을 숨긴다 (종 버튼·패널 미렌더 · 목록 `[]` · 설정 화면 `NotImplementedState` · 0장 프론트엔드 행).
+
+- [x] ~~`services/api.js` Mock → fetch~~ ✅ 09-07 — 대회·팀만
+- [x] ~~null 정규화 계층~~ ✅ `services/normalize.js` — `ref`→slug, format enum, 시즌 객체→라벨,
+      상세에만 있는 값(경기장 등)을 목록에서도 `null` 로 맞춘다
+- [x] ~~**1장 1번**~~ ✅ 09-07 PR #24 — 아래 항목 전부. 브라우저 실측에서 잡은 3건(Mock 안내 푸터 · 팀 shortName=code · 끝난 경기 minute)은 후속 fix
+- [x] ~~경기 목록 · 경기 상세 상단 · 순위 · 대회 허브~~ — `live.js` 의 `fetchAllMatches` ·
+      `fetchMatchesByCompetition` · `fetchMatch` · `fetchTeamFixtures` · `fetchStandings` · `fetchCompetitionHub` 교체
+  - [x] ~~**시계 통일**~~ ✅ — `services/clock.js`. Mock 은 `2026-11-23` 고정, 실 API 는 `new Date()`.
+        `MatchesPage` · `TeamFixturesPage` · `matchSort` 의 고정 날짜 3곳과 `calcAge` 의 `2026-09-01` 을 여기로
+        (`PLAN_REVIEW` 2-1). 발표용 고정 시계가 실 데이터에서 "오늘 = 11월 23일" 을 만든다
+  - [x] ~~`getKSTDateKey` 를 `utils/dateFormat.js` 로~~ ✅ `kstDateKey`
+  - [x] ~~**vitest 도입**~~ ✅ — `dateFormat` · `matchStatus`(진리표 + Mock 37경기 대조) · `normalize` 3파일. `verify` 와 CI `frontend-verify` 에 추가.
+        회고 4-5 의 "KST/UTC fix 3회 반복" 이 이 자리다. 프론트 로직 테스트는 지금 0개다
+  - [x] ~~홈~~ ✅ — 득점 Top5 는 **블록 단위** `NotImplementedState`. LIVE 히어로는 실 데이터(진행 중 없으면 다음 킥오프). 홈 전체를 막지 않는다.
+        `EmptyState` 에 `action` prop (1단계 감사 #11 이후 방치)
+  - [x] ~~`displayState` 는 `status_short` + `stats_state` 에서 `normalize.js` 가 만든다.~~ ✅
+        Mock 의 `displayState` 직접 값과 같은 결과여야 한다 — 그 대조가 테스트다
+- [x] ~~**UCL 조별리그 시즌 순위표**~~ ✅ 09-08 — `normalizeStanding` 이 `groupName` 을
+      버리고 있었다. 통과시키고 `StandingsTable` 이 조 단위로 그린다. 단일 표 대회는 래퍼
+      없이 그대로라 DOM 이 안 바뀐다. 백엔드 수정 0
+  - [x] ~~`zoneOf` 오탐~~ ✅ — **버그가 셋이었다.** 아래
+  - [x] ~~**시즌 선택기 노출**~~ ✅ — UI 는 이미 있었고 배선이 없었다. 아래
+  - [x] ~~과거 시즌 경기 목록~~ ✅ — 조회 창(−14/+21일)을 걷어내면 6대회 한 시즌
+        ≈1,900경기가 온다. **대회를 골라야 보이게** 했다(대회당 ≈380). 현재 시즌은 그대로
+  - [ ] 홈 "선두" — 조별리그 시즌이면 `null` 이라 라벨만 남고 옆이 빈다.
+        `fetchOverview` 는 현재 시즌만 보므로 지금은 안 드러난다
+
+### 11장 실측 — `zoneOf` 를 세 번 고쳤다 (09-08)
+
+문서에 적힌 오탐은 하나였는데 실제로는 셋이었고, **DB 를 세 번 본 끝에 맞췄다.**
+
+| # | 무엇 | 어떻게 드러났나 |
+|---|---|---|
+| 1 | 조 1·2위의 `Play Offs: 1/8-finals` 가 `play` 규칙에 걸려 예선 PO 로 잡힌다 | 문서에 기록돼 있던 것 |
+| 2 | rank 폴백(1~8 직행)이 4팀 조에 적용돼 **조 4위가 16강 직행**으로 칠해진다 | 2022 description 실측 — 4위는 `null` 이다 |
+| 3 | `1/8-finals` 와 `1/16-finals` 를 한 규칙으로 묶어 **리그페이즈 9~24위가 직행**으로 칠해진다 | 2024·2025 description 실측 |
+
+3번이 1번을 고치다 새로 만든 버그다. **실측 없이 2022 만 보고 규칙을 만든 것이 원인이다.**
+
+| description | 뜻 | 구역 |
+|---|---|---|
+| `Promotion - Champions League (Play Offs: 1/8-finals)` | 16강 직행 | `ucl_direct` |
+| `Promotion - Champions League (Play Offs: 1/16-finals)` | 녹아웃 PO | `ucl_playoff` |
+| `Promotion - Europa League (Play Offs: 1/16-finals)` | 유로파로 | `europa_league` |
+| `null` (조가 여럿) | API 가 말이 없다 | `none` — 조 크기로 탈락을 추론하지 않는다 |
+
+**rank 폴백은 표가 단일 조일 때만 쓴다.** 8/24/36 경계는 36팀 리그페이즈 전용이다.
+
+### 시즌 선택기 — 없었던 게 아니라 배선이 없었다
+
+`AppHeader` 에 드롭다운이 이미 렌더되고 있었다. 사용자 눈에는 **"누를 수 있는데 아무 일도
+안 일어나는"** 상태였다. 결함 셋 — ① `fetchSeasons` 를 인자 없이 불러 대회를 바꿔도 EPL
+시즌만 나왔다 ② `dataState` 필터가 없었다(5-4 위반) ③ URL 에 `?season=` 을 쓰는데 읽는
+페이지가 없었다. 값도 라벨(`2025-26`)이라 백엔드(연도 int)와 안 맞았다.
+
+**현재 시즌은 URL 에 남기지 않는다.** 남기면 `?season=` 의 뜻이 "현재가 아닌 시즌" 에서
+"한 번 눌렀음" 으로 흐려지고, 경기 화면이 그걸 보고 대회 칩마다 재요청을 돈다.
+
+### `format` 은 현재 시즌 기준이다 (실측에서 드러남)
+
+2022 UCL 이 8조로 잘 쪼개졌는데 그 위에 **"36개 팀 단일 순위표 · 조별리그 아님"** 이
+떠 있었다. `competitions.format` 은 대회 하나에 값이 하나라 시즌마다 다른 구조를 담지
+못한다. 그 시즌의 표가 어느 쪽인지는 **표 자체로** 판단해야 한다.
+
+### 브라우저 실측 (09-08, `VITE_USE_MOCK=false`)
+
+2022 UCL 8조 × 4팀 · 2024 UCL 36팀(1~8 직행 · 9~24 PO · 25~36 탈락) · 2026 UCL Play-offs
+진행 중 · EPL 회귀 없음 · 시즌 선택기 5시즌 · `/matches?season=2024` 안내 → 대회 지정 시
+380경기. 단위 184건 통과.
+- [x] ~~**선수 상세 · 통계 화면 실 API**~~ ✅ 09-09 PR #34·#36 — `PlayerModule`·`StatisticsModule` ·
+      `PlayerPage`·`StatsPage` live 연결. 표시 판단을 `normalize.js` 순수 함수(`key`·`playerTotals`·`formatStat`)로
+      옮기고 컴포넌트에서 판단 로직 뺌 · `dataStatus` 컨셉 폐기 · 이적 반례 e2e 로 잠금. **남은 것: 경기 상세 탭**(라인업 · 통계 · 타임라인) — 1장 3번 뒤
+- [ ] Socket.io 연결 + REST 풀 싱크 fallback — L4 와 같이
+- [ ] i18n — 한국어 **팀명 110개**(5대 리그 96 + UCL 리그페이즈 14) CSV → `localized_names` 적재 CLI.
+      **선수 한국어 이름은 범위 밖**이다 (PRD 3장, 09-07 결정 — 검수 소스가 없고 자동 음역은 금지).
+      `entityNames.js` 는 그때 제거
 
 ---
 
@@ -181,22 +965,25 @@ partial unique index가 에러로 막아서 diff가 실패한다 (`SCHEMA_DESIGN
 
 | 문서 | 언제 |
 |---|---|
-| 설계·기획 의도 변경 정리 | 7단계 즈음. 컵·5개년이 PRD 전제를 바꾼 것을 반영 |
-| i18n 범위 재산정 | 8단계 전. 라운드명 번역 체계, 컵 참가 팀 64개 |
-| 시즌 롤오버 운영 규칙 | 8단계 전. 대회마다 시즌 등록 시점이 다르다 |
+| ~~설계·기획 의도 변경 정리~~ | ✅ `PLAN_REVIEW.md` (09-07). 다음은 백필-2 뒤 |
+| ~~i18n 범위 재산정~~ | ✅ 팀 110개만, 선수는 영어 (11장, 09-07). 라운드명 번역 체계는 그때 같이 |
+| 시즌 롤오버 운영 규칙 | ~~L4 전~~ — L4 코드가 먼저 머지됐다(09-24~27). 10-07 기준 미작성. 다음 시즌(2027-28) 등록 전. 대회마다 시즌 등록 시점이 다르다 (DATA_RULES 5-4) |
 
 ---
 
 ## 13. Phase 대응
 
-| Phase | 이 문서의 단계 | 검증 |
+| Phase | 이 문서의 단계 → 1장 번호 | 검증 |
 |---|---|---|
-| 0 | 2 | 배포 PoC + CI |
-| 1 | 3·4·5·6·9 | 스쿼드 diff 테스트 통과 |
-| 2 | 8·10 | **실제 라운드 1회 무중단 관측** |
-| 3 | 7·11 | 백엔드 다운 시 오류 노출 |
+| 0 | 2 → **1장 4번** (배포 재정의) | CI + 배포된 서버의 `/health` — ✅ 1장 4번 완료(09-16). Phase 태그는 `main` 릴리즈가 없어 아직 안 찍었다 |
+| 1 | 3·4·5·6·9 | ✅ 스쿼드 diff 통과 (09-07). Localization 기반은 1장 7번으로 |
+| 2 | 8·10 → **1장 2~6번** | ✅ **관문 통과 (10-15)** — 백필-2 완료(✅ 09-24) + ~~**실제 라운드 1회 무중단 관측** (L4 — 10-07 미확인)~~ ✅ 10-15 (10장 "Phase 2 관문 실측"). 태그 `v2-phase2-scheduler` 는 `main` 릴리즈가 없어 아직 안 찍었다 |
+| 3 | 7·11 → **1장 1·4·7번** | 백엔드 다운 시 오류 노출 |
 | 4 | — | 최종 API 예산 실측 (6,000콜/일 경고선) |
 | 5 | — | AI 어시스턴트, 숫자 환각 0건 |
+
+Phase 2 와 3 이 **섞여 돈다** — 프론트 연결(3)이 백필(2)보다 먼저 시작하고, 배포(3)가 백필-2(2) 앞에 온다.
+Phase 번호는 검증 기준의 이름이지 순서가 아니다. 순서는 1장 표 하나다.
 
 로드맵 표의 Phase 4는 원래 "리그 다중화"였으나 **컵 6개가 Phase 1부터 범위에 들어왔다.**
 Phase 4의 실질 내용은 L6 보정·푸시 알림·예산 실측으로 바뀐다.
@@ -205,14 +992,38 @@ Phase 4의 실질 내용은 L6 보정·푸시 알림·예산 실측으로 바뀐
 
 ## 14. 남은 미결정
 
-| # | 항목 | 언제 |
+09-07 중간 점검(`PLAN_REVIEW.md` 6장)에서 정한 것은 줄을 긋고 남긴다.
+
+| # | 항목 | 결정 |
 |---|---|---|
 | 2 | Tailwind 팔레트 통합 | 프론트 교체 시. 감사 #6(`--muted-foreground` 4.38:1)이 여기 걸린다 |
 | 4 | 모바일 필터 바 형태 | 경기 탭 모바일 구현 시 |
-| 6 | 다크 모드 기본값 | 배포 전 |
-| 7 | 팀 엠블럼 없을 때 | 컵 하부팀에서 상시 발생한다. 실 API 연결 시 |
-| — | 상시 백엔드 호스팅 (Railway Hobby $5) | Phase 2 전 |
-| — | 팀 최근 경기 질의 — `UNION ALL` vs 보조 테이블 | Phase 2 실측 후 |
-| — | 백필을 어느 Phase에 넣을지 | Phase 1 완료 시점에 판단 |
+| 6 | 다크 모드 기본값 | ~~배포 전~~ — 배포(09-15~16)가 먼저 지나갔다. 10-07 기준 미결 유지 |
+| ~~7~~ | ~~팀 엠블럼 없을 때~~ | ✅ 자체 저장 + 이니셜 폴백 (09-07 로고) |
+| ~~—~~ | ~~상시 백엔드 호스팅~~ | ✅ ~~Railway~~ → **AWS EC2** (09-15 정정 · 무료 크레딧 · Supabase 와 같은 서울 리전 · 슬립 없음 · systemd). 프론트는 Cloudflare Pages → **Vercel** — `/api` rewrite 프록시로 도메인·CORS·CloudFront 없이 https. 원래 근거(슬립 티어 배제)는 EC2 도 만족 |
+| ~~—~~ | ~~백필을 어느 Phase에~~ | ✅ 1장 2~4번. 기록(2,000콜) 먼저, 상세(43,000콜)는 현재 시즌 → 나머지 |
+| ~~—~~ | ~~백필 Worker — BullMQ/Redis~~ | ✅ **안 쓴다.** `backfill_jobs` DB 체크포인트 + 단일 루프 (8-c) |
+| ~~—~~ | ~~SEO~~ | ✅ **공개 초기엔 안 한다.** 정적 `sitemap.xml`·`robots.txt` 만. 검색 유입이 필요해지면 `FRONTEND_GUIDE` 7장 |
+| ~~—~~ | ~~한국어 이름 범위~~ | ✅ ~~**팀 110개만.**~~ → 팀 **198개** (09-17 PR #91 · 유럽 대항전·2부·과거 시즌 잔류 팀까지). 선수는 영어 (11장) · 이름·라운드·국가·포지션 언어별 표시는 09-28 PR #126 |
+| ~~—~~ | ~~`recheck → confirmed` 모델~~ | ✅ `matches.stats_state` 컬럼 (10장) |
+| — | 팀 최근 경기 질의 — `UNION ALL` vs 보조 테이블 | 백필-2 뒤 실측 후 |
+| ~~—~~ | ~~백업 사본 위치 — R2 인가~~ | ✅ **S3** (09-15 · EC2 인스턴스 IAM 역할로 키 없이 · 서울 · 수명 주기 30일). 4-c 백업 자동화 판 |
+| ~~—~~ | ~~API-Football 쿼터 예산 — 플랜 유지 여부~~ | ✅ **Pro(7,500콜/일) 유지** (10-15 결정 · 근거: 실측 하루 최대 2,559콜). 구독 만료 2026-10-22 — 갱신은 사용자 몫 (1장 예약) |
 
 `SCHEMA_DESIGN.md` 12장과 `INGESTION_STRATEGY.md` 8장에 각 문서의 미결정이 따로 있다.
+
+### 대회 페이지 후속 판 예약 (2026-09-21 · feat/schedule-split 판이 남긴 것)
+
+- ~~**A 판 · 라운드 네비게이션**~~ — ✅ 완료 (2026-09-21 · `feat/round-navigation` · PR). `splitSchedule` 재사용 + `pickDefaultRound`·`roundList`·`roundStatus`·`filterByRound` 신설 · `RoundNavigator` 컴포넌트 · 시즌 전체 로드 (리그 창 제거) · MatchCard 승자 강조 + PK 캡션.
+
+### 대회 페이지 후속 판 예약 (2026-09-21 · feat/round-navigation 판이 남긴 것)
+
+- ~~**T 판 · 토너먼트 탭**~~ — ✅ 완료 (2026-09-22 · PR #104 · 후속 #105 부전승 캡션·`/knockout` 리다이렉트). `utils/ties.js buildTies` 프론트 tie 합산 (2레그) · 16강~결승 브래킷 · 컵 탭 순서 대진표·일정·통계 · UCL 탭 순위·대진표·일정·통계 · `UCLKnockoutPage` 흡수. 검증 대상: UCL 2025 · FA Cup 2025 · Copa del Rey 2025. tie 백엔드 영속화는 L4 뒤 별개 판.
+- 홈·`/matches` 라운드 적용 (D7 유예) — MatchCard 승자 강조는 이미 이 판에서 자동 적용됨. 라운드 필터·기본 라운드만 후속.
+- UCL 시즌 전체 500 근접 리스크 재실측 — DB 실측 UCL 2025=223 · UECL=201 · UEL=189 확인 (2026-09-21 · 500 이하). 리스크 닫힘 · 페이지네이션 별개 판 불필요.
+- `services/live.js` 죽은 `isPastSeason` import 삭제 완료 (2026-09-21 · verifier 관측 청소).
+- 죽은 `competition.round.noRoundsYet` i18n 키 (RoundNavigator `rounds.length<=1` 은 return null 이라 문구 없음) — 브라우저 실측에서 자리 찾을지 판정 · 아니면 삭제.
+- 죽은 `scheduleAll` i18n 키 (fix/frontend-leftovers 판 이후 예약) — 여전히 소비처 없음.
+- (10-07 재확인) 위 두 키 `competition.round.noRoundsYet` · `home.scheduleAll` 은 `locales/{ko,en}.json` 에만 있고 `src` 소비처·동적 키 조립 0건.
+
+

@@ -1,0 +1,319 @@
+#!/usr/bin/env node
+/**
+ * 복원 리허설 (NEXT_STEPS 4장 관문)
+ *
+ * 받아본 적 없는 백업은 백업이 아니다. 목차(`pg_restore --list`)를 읽는 것은
+ * 형식 확인이지 복원이 아니다 — 실제로 빈 DB 에 넣어 보고 행 수를 맞춰 봐야 안다.
+ *
+ *   npm run backup:verify              가장 최근 덤프
+ *   npm run backup:verify -- <경로>    특정 덤프
+ *   npm run backup:verify -- --keep    끝나고 컨테이너를 남긴다 (직접 들여다볼 때)
+ *
+ * 일회용 postgres 컨테이너에 복원한다. 운영 DB 는 건드리지 않는다 — 덮어쓴다.
+ * 컨테이너는 끝나면 지운다.
+ *
+ * 검증은 "복원됐다" 가 아니라 **"원본과 행 수가 같다"** 로 한다.
+ * 복원은 성공했는데 테이블이 비어 있는 경우를 잡아야 한다.
+ */
+import { spawn, spawnSync } from 'node:child_process'
+import { createReadStream } from 'node:fs'
+import { readdir, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join, resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { pipeline } from 'node:stream/promises'
+import { config as loadEnv } from 'dotenv'
+
+const BACKEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+loadEnv({ path: join(BACKEND_DIR, '.env.local') })
+loadEnv({ path: join(BACKEND_DIR, '.env') })
+
+const PG_IMAGE = process.env.BACKUP_PG_IMAGE ?? 'postgres:17'
+const SCHEMA = process.env.BACKUP_SCHEMA ?? 'public'
+const CONTAINER_PASSWORD = 'verify-only-throwaway'
+/** 기본 postgres DB 를 그대로 쓰지 않는다 — 복원 대상임을 이름으로 드러낸다 */
+const TARGET_DB = 'pitchlog_verify'
+const READY_TIMEOUT_MS = 60_000
+
+/**
+ * 복원 전 pitchlog_verify 에 만들어야 하는 확장.
+ * backup.mjs 는 `pg_dump -n public` 이라 CREATE EXTENSION 이 덤프에 포함되지 않는다 —
+ * 확장은 복원 측에서 보장한다 (2026-09-16 실측 · gin_trgm_ops does not exist).
+ *
+ * 근거: prisma/migrations/20260910120000_search_indexes/migration.sql:9 · sql/search-indexes.sql:16
+ * (`pg_trgm` 만 · text_pattern_ops 는 postgres 내장 opclass).
+ * 새 확장 추가 시 이 상수를 갱신한다.
+ *
+ * BACKUP_RESTORE_EXTENSIONS (쉼표 구분) 로 실행 시 오버라이드 가능.
+ */
+const REQUIRED_EXTENSIONS = (
+  process.env.BACKUP_RESTORE_EXTENSIONS
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+) ?? ['pg_trgm']
+
+/** 테이블마다 count(*) 를 한 번의 왕복으로 받는다 */
+const COUNT_SQL = `
+SELECT table_name || ' ' ||
+       (xpath('/row/c/text()',
+              query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name),
+                           false, true, '')))[1]::text
+FROM information_schema.tables
+WHERE table_schema = '${SCHEMA}' AND table_type = 'BASE TABLE'
+ORDER BY table_name
+`.trim()
+
+const args = process.argv.slice(2)
+const keepContainer = args.includes('--keep')
+const explicitDump = args.find((a) => !a.startsWith('--'))
+
+class VerifyError extends Error {}
+const fail = (m) => { throw new VerifyError(m) }
+
+function backupDir() {
+  return process.env.BACKUP_DIR ? resolve(process.env.BACKUP_DIR) : join(homedir(), 'PitchLogBackups')
+}
+
+function pgEnvFrom(url) {
+  const u = new URL(url)
+  const env = {
+    PGHOST: u.hostname,
+    PGPORT: u.port || '5432',
+    PGUSER: decodeURIComponent(u.username),
+    PGDATABASE: decodeURIComponent(u.pathname.replace(/^\//, '')) || 'postgres',
+  }
+  if (u.password) env.PGPASSWORD = decodeURIComponent(u.password)
+  const sslmode = u.searchParams.get('sslmode')
+  if (sslmode) env.PGSSLMODE = sslmode
+  return env
+}
+
+/** stdin 을 파일에서 흘려보낼 수 있는 spawn 래퍼. stdout 을 문자열로 돌려준다 */
+function run(command, cmdArgs, { env, stdinFile, quiet } = {}) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(command, cmdArgs, {
+      env: env ?? process.env,
+      stdio: [stdinFile ? 'pipe' : 'ignore', 'pipe', quiet ? 'pipe' : 'inherit'],
+      shell: false,
+    })
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (d) => { out += d })
+    if (quiet) child.stderr.on('data', (d) => { err += d })
+    child.on('error', rejectPromise)
+
+    const fed = stdinFile
+      ? pipeline(createReadStream(stdinFile), child.stdin)
+      : Promise.resolve()
+    fed.catch(rejectPromise)
+
+    child.on('close', (code) => {
+      if (code === 0) resolvePromise(out)
+      else rejectPromise(new Error(`${command} 종료 코드 ${code}${err ? `\n${err.trim()}` : ''}`))
+    })
+  })
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** 컨테이너 안에서 psql 한 번 */
+function psql(container, db, sql) {
+  return run('docker', [
+    'exec', '-e', 'PGPASSWORD=' + CONTAINER_PASSWORD, container,
+    'psql', '-U', 'postgres', '-d', db, '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-c', sql,
+  ], { quiet: true })
+}
+
+/** "이름 개수" 줄들을 Map 으로 */
+function parseCounts(text) {
+  const m = new Map()
+  for (const line of text.split('\n')) {
+    const t = line.trim()
+    if (!t) continue
+    const i = t.lastIndexOf(' ')
+    if (i === -1) continue
+    m.set(t.slice(0, i), Number(t.slice(i + 1)))
+  }
+  return m
+}
+
+async function newestDump() {
+  const dir = backupDir()
+  let files
+  try {
+    files = await readdir(dir)
+  } catch {
+    // 폴더가 없으면 아직 한 번도 안 받은 것
+    fail(`백업 폴더가 없다: ${dir}\n  먼저 npm run backup 을 돌린다.`)
+  }
+  const dumps = files.filter((f) => /^pitchlog-\d{8}-\d{4}\.dump$/.test(f)).sort()
+  if (dumps.length === 0) fail(`${dir} 에 덤프가 없다. 먼저 npm run backup 을 돌린다.`)
+  return join(dir, dumps[dumps.length - 1])
+}
+
+async function main() {
+  if (spawnSync('docker', ['info'], { encoding: 'utf8' }).status !== 0) {
+    fail('Docker 데몬이 응답하지 않는다. Docker Desktop 을 실행한다.')
+  }
+
+  const dumpPath = explicitDump ? resolve(explicitDump) : await newestDump()
+  const { size } = await stat(dumpPath).catch(() => fail(`덤프를 찾을 수 없다: ${dumpPath}`))
+
+  console.log('복원 리허설')
+  console.log(`  덤프        ${dumpPath} (${(size / 1024).toFixed(1)} KB)`)
+  console.log(`  이미지      ${PG_IMAGE}`)
+  console.log(`  대상 스키마  ${SCHEMA}`)
+
+  const name = `pitchlog-verify-${Date.now()}`
+  let started = false
+
+  try {
+    console.log(`\n1. 일회용 컨테이너 기동 (${name})`)
+    await run('docker', [
+      'run', '-d', '--name', name,
+      '-e', `POSTGRES_PASSWORD=${CONTAINER_PASSWORD}`,
+      PG_IMAGE,
+    ], { quiet: true })
+    started = true
+
+    // postgres 이미지는 initdb 후 임시 서버(localhost-only)로 초기 SQL 실행 → 임시 서버 down → 본 서버 up 순서다.
+    // pg_isready 는 임시 서버 단계에서도 성공을 리턴해 "준비" 로 판정한 뒤 2단계에서 재기동 사이에 걸리면
+    // `FATAL: the database system is starting up` 으로 실패한다 (2026-09-16 Windows Docker Desktop 실측).
+    // psql `select 1` 이 **연속 2회 성공** 해야 준비 완료로 본다 — 임시 서버 → 재기동 사이 흔들림에 안 걸린다.
+    const deadline = Date.now() + READY_TIMEOUT_MS
+    let consecutiveOk = 0
+    for (;;) {
+      const r = spawnSync(
+        'docker',
+        ['exec', name, 'psql', '-U', 'postgres', '-d', 'postgres', '-Atc', 'select 1'],
+        { encoding: 'utf8' },
+      )
+      if (r.status === 0 && (r.stdout ?? '').trim() === '1') {
+        consecutiveOk += 1
+        if (consecutiveOk >= 2) break
+      } else {
+        consecutiveOk = 0
+      }
+      if (Date.now() > deadline) {
+        fail(`컨테이너가 ${READY_TIMEOUT_MS / 1000}초 안에 준비되지 않았다 (psql \`select 1\` 연속 2회 성공 대기 · postgres 초기 재기동 레이스)`)
+      }
+      await sleep(1000)
+    }
+    console.log('   준비됨 (psql 연속 2회)')
+
+    console.log(`\n2. 빈 DB 준비 (${TARGET_DB})`)
+    // --schema=public 으로 뜬 덤프는 CREATE SCHEMA public 을 들고 있다.
+    // 새 DB 에는 public 이 이미 있어서 그대로 넣으면 "already exists" 로 멈춘다
+    await psql(name, 'postgres', `CREATE DATABASE ${TARGET_DB}`)
+    await psql(name, TARGET_DB, 'DROP SCHEMA IF EXISTS public CASCADE')
+    console.log('   public 비움')
+
+    console.log('\n3. 복원 (pg_restore 3분할 — pre-data → 확장 → data → post-data)')
+    // pg_dump 는 덤프를 pre-data(스키마·테이블) · data(COPY) · post-data(인덱스·제약) 로 나눈다.
+    // 덤프 안에 CREATE SCHEMA public 이 포함돼 있으므로 (2026-09-16 실측 · 직전 판 판정) public 은 pg_restore 가 만든다.
+    // 인덱스가 public.gin_trgm_ops 를 참조하므로 확장은 pre-data 뒤 · post-data 앞에 만들어야 한다.
+    // --exit-on-error: 조용히 넘어가는 오류가 있으면 리허설의 의미가 없다.
+    // quiet: true — pg_restore stderr 를 캡처해 실패 시 원인 전문이 catch 로 흘러가게 (2026-09-16 3회 루프 실측: 이 캡처가 없으면 간헐 실패 원인 소실).
+    const pgRestore = (section) => run('docker', [
+      'exec', '-i', '-e', 'PGPASSWORD=' + CONTAINER_PASSWORD, name,
+      'pg_restore', '--no-owner', '--no-privileges', '--exit-on-error',
+      '--section', section,
+      '-U', 'postgres', '-d', TARGET_DB,
+    ], { stdinFile: dumpPath, quiet: true })
+
+    // 각 단계 개별 try/catch — 어느 섹션이 죽었는지 · 그 섹션의 pg_restore stderr 전문을 함께 노출.
+    // 바깥 감싸는 try/catch 를 두지 않는다 — 그렇게 하면 어느 단계 실패인지 message 에서 사라진다
+    // (직전 판이 그 방식 + 잘못된 이름의 `BackupError` 참조로 실패 경로에서 ReferenceError 를 냈다).
+    try {
+      await pgRestore('pre-data')
+      console.log('   pre-data (스키마·테이블)')
+    } catch (cause) {
+      fail(`복원 실패 (pre-data · pg_restore --section=pre-data):\n${cause.message}`)
+    }
+
+    for (const ext of REQUIRED_EXTENSIONS) {
+      try {
+        await psql(name, TARGET_DB, `CREATE EXTENSION IF NOT EXISTS ${ext} SCHEMA public`)
+      } catch (cause) {
+        fail(`확장 생성 실패: ${ext} — ${cause.message}\n  이미지(${PG_IMAGE})에 확장이 없을 수 있다. BACKUP_RESTORE_EXTENSIONS 로 조정하거나 다른 이미지를 쓴다.`)
+      }
+    }
+    console.log(`   확장 생성: ${REQUIRED_EXTENSIONS.join(', ')}`)
+
+    try {
+      await pgRestore('data')
+      console.log('   data (COPY)')
+    } catch (cause) {
+      fail(`복원 실패 (data · pg_restore --section=data):\n${cause.message}`)
+    }
+
+    try {
+      await pgRestore('post-data')
+      console.log('   post-data (인덱스·제약)')
+    } catch (cause) {
+      fail(`복원 실패 (post-data · pg_restore --section=post-data):\n${cause.message}`)
+    }
+    console.log('   오류 없이 끝남')
+
+    console.log('\n4. 행 수 비교 (복원본 ↔ 운영 DB)')
+    const restored = parseCounts(await psql(name, TARGET_DB, COUNT_SQL))
+
+    const databaseUrl = process.env.DATABASE_URL
+    if (!databaseUrl) fail('DATABASE_URL 이 없어 운영 DB 와 비교할 수 없다.')
+    const live = parseCounts(await run('docker', [
+      'run', '--rm',
+      ...['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSSLMODE'].flatMap((k) => ['-e', k]),
+      PG_IMAGE, 'psql', '-t', '-A', '-c', COUNT_SQL,
+    ], { env: { ...process.env, ...pgEnvFrom(databaseUrl) }, quiet: true }))
+
+    report(live, restored)
+  } finally {
+    if (started && !keepContainer) {
+      spawnSync('docker', ['rm', '-f', name], { stdio: 'ignore' })
+      console.log(`\n컨테이너 ${name} 삭제`)
+    } else if (started) {
+      console.log(`\n컨테이너 ${name} 유지 (--keep). 다 보고 나면: docker rm -f ${name}`)
+    }
+  }
+}
+
+function report(live, restored) {
+  const names = [...new Set([...live.keys(), ...restored.keys()])].sort()
+  const problems = []
+  const rows = []
+
+  for (const n of names) {
+    const a = live.get(n)
+    const b = restored.get(n)
+    const ok = a !== undefined && b !== undefined && a === b
+    if (!ok) problems.push(n)
+    rows.push({ n, a: a ?? '없음', b: b ?? '없음', mark: ok ? ' ' : '✗' })
+  }
+
+  const w = Math.max(...rows.map((r) => r.n.length), 8)
+  console.log(`\n   ${'테이블'.padEnd(w)}  ${'운영'.padStart(10)}  ${'복원'.padStart(10)}`)
+  for (const r of rows) {
+    console.log(` ${r.mark} ${r.n.padEnd(w)}  ${String(r.a).padStart(10)}  ${String(r.b).padStart(10)}`)
+  }
+
+  const totalLive = [...live.values()].reduce((s, v) => s + v, 0)
+  console.log(`\n   테이블 ${names.length}개 · 행 ${totalLive.toLocaleString()}개`)
+
+  if (problems.length > 0) {
+    fail(
+      `행 수가 다르거나 빠진 테이블 ${problems.length}개: ${problems.join(', ')}\n` +
+      '  백업 중에 데이터가 바뀌었을 수도 있다 — 수집이 도는 중이었는지 확인하고 다시 돌려 본다.\n' +
+      '  그게 아니면 이 백업으로는 복구할 수 없다.',
+    )
+  }
+  console.log('\n✓ 복원본이 운영 DB 와 일치한다. 이 백업은 쓸 수 있다.')
+}
+
+try {
+  await main()
+} catch (cause) {
+  const message = cause instanceof VerifyError ? cause.message : (cause?.stack ?? String(cause))
+  console.error(`\n✗ ${message}\n`)
+  process.exit(1)
+}

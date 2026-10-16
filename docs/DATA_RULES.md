@@ -31,6 +31,7 @@ API_FOOTBALL_KEY=키 node scripts/probe-cups.mjs            # 약 60콜
 | 경기 · 순위 · 라인업 · 선수 기본 통계 | API-Football |
 | 팀 xG · goals_prevented | API-Football |
 | 선수 xG · xA | (도입 시) 2차 소스 |
+| **통계 랭킹 (득점·도움·경고·퇴장·출전)** | **`player_match_stats` 자체 집계** (2026-09-17 확정 · feat/statistics-self-aggregation) |
 
 ### 1-2. 지금은 단일 소스, 구조는 열어둔다
 
@@ -52,7 +53,7 @@ API_FOOTBALL_KEY=키 node scripts/probe-cups.mjs            # 약 60콜
 ```
 external_ids(
   id, entity_type,   -- TEAM | PLAYER | COMPETITION
-  entity_id FK,
+  entity_id,   -- 외래키 없음. 참조 무결성은 백엔드 책임
   source,            -- API_FOOTBALL | SPORTMONKS | ...
   external_id,
   UNIQUE(source, entity_type, external_id)
@@ -98,6 +99,9 @@ Phase 2 완료 후. 그때 다음이 전부 참이면 도입한다.
 | `null` | 측정되지 않았다 | `null` | `-` |
 | **미제공** | 그 대회·라운드에 데이터 자체가 없다 | 결손 플래그 | "이 경기는 통계가 제공되지 않습니다" |
 
+여기에 경기 단위로 **넷째가 있다** — "들어왔지만 아직 확정 아님". PRD 4-2 의 `final → recheck → confirmed` 이고
+`matches.stats_state` 가 담는다 (2026-09-07 결정, `SCHEMA_DESIGN` 3-3). `null` 로도 결손 플래그로도 표현되지 않아 컬럼이 따로 있다.
+
 세 번째는 컵 때문에 생겼다. FA컵 예선 라운드는 통계가 **아예 없다**(실측: 이벤트 0·라인업 0·통계 0).
 이걸 `null`로 저장하면 "측정 안 됨"과 구분이 안 되고, 매 수집마다 API를 다시 때린다.
 
@@ -119,10 +123,42 @@ Phase 2 완료 후. 그때 다음이 전부 참이면 도입한다.
 실제로 `null`이 관측된 필드 전량은 `API_FIELDS_FULL.md`의
 "null 로 온 필드" 절에 엔드포인트별로 있다. 정규화 계층은 그 목록을 기준으로 짠다.
 
-### 3-3. 정규화 계층은 2단계 착수 전에 넣는다
+**2026-09-08 — 시즌 집계에서 3개가 여기로 넘어왔다.** `player_season_stats` 의
+`assists` · `yellowred_cards` · `passes_key` 는 `NOT NULL DEFAULT 0` 이었는데
+nullable 로 바꿨다 (`20260908090000_player_season_stats_nullable`).
 
-`services/api.js`에 정규화가 없어 `matchStats.js`·`lineups.js`의 `null`이
-경기 상세·선수 상세로 그대로 간다. 화면이 늘어난 뒤 넣으면 전부 고쳐야 한다.
+3-1 의 "발생하지 않았다" 로 보였지만 실측이 아니라고 했다 — `/players` 가 **과거 시즌에
+이 값을 아예 주지 않는다.**
+
+| 시즌 | 행 | `assists` null |
+|---|---|---|
+| 2022 | 6,719 | 5,038 (75%) |
+| 2023 | 7,376 | 4,962 (67%) |
+| 2024 | 8,096 | 3,690 (46%) |
+| 2025 | 5,515 | 177 (3%) |
+| 2026 | 3,219 | **0** |
+
+`0` 으로 채웠으면 **13,867행이 "도움 0개" 라고 거짓말**을 한다. 값이 시즌에 따라 나타났다
+사라지는 필드는 3-1 이 아니라 3-2 다. `passes_key` 는 2026 에도 729행이 null 이라
+어느 쪽 규칙에도 안 들어가 있었다 — 같이 nullable 로 둔다.
+
+- **`passes_accuracy` 는 정확 패스 횟수 (실측 21/34)** — 퍼센트가 아니다. API 원문은 문자열 ("15"). 프론트가 백분율로 표시하려면 `passes_total` 로 나눠 계산한다. 저장은 정수 그대로.
+- **subst 이벤트의 assist 는 투입 선수** — API 원문 `player` = 나간 선수, `assist` = 들어온 선수. `match_events.player_id`·`assist_player_id` 에 그대로 저장하고 화면이 라벨로 구분한다.
+
+### 3-3. 정규화 계층 — `services/normalize.js`
+
+**2026-09-07 생겼다.** 실 API 첫 연결(대회·팀)과 같이 들어왔다.
+`ref`→slug, format enum, 시즌 객체→라벨을 옮기고 목록/상세의 `null` 형태를 맞춘다.
+
+**표시 판단은 `normalize.js` 의 `formatStat` · `playerTotals` 가 한다** (09-09, 3라운드 만에 정한 것).
+컴포넌트는 문자열을 직접 고르지 않는다 — `null` 은 `formatStat` 이 `-` 로, 필드별 독립합은
+`playerTotals(rows)` 가 계산(백엔드 `player.service.ts:102-112` 와 동일 규약). `dataStatus`
+같은 행 단위 라벨은 폐기됐다 — `assists=null` 하나가 시즌 전체를 가리던 회귀의 원인이었다.
+`normalize.test.js` 의 대조 assert `playerTotals(allStats) === dto.totals` 가 두 구현 갈라지는
+순간을 잠근다.
+
+아직 지나가지 않은 것: `matchStats.js`·`lineups.js` 의 `null` 이다.
+그 화면들은 백엔드에 API 가 없어 Mock 전용이고, 실 API 로 바뀔 때 이 계층을 지난다.
 
 ---
 
@@ -165,6 +201,16 @@ FA컵 전량 수집은 5년 기준 약 15,000콜을 통계 0인 아마추어 경
 전 컵 공통으로 `standings`가 `false`다. 정상이다.
 대회 화면이 리그와 구조가 달라야 하고, 대진표(`knockout_ties` + `win_reason`)가 필요하다.
 
+### 5-4. 컵은 시즌 등록이 리그보다 늦다 (2026-09-07 실측)
+
+9월 초 L0 실행에서 Copa del Rey(143) · Coupe de France(66) · Supercoppa Italiana(547)는
+`/leagues` 응답에 2026 시즌이 아직 없었다. 리그 5개와 UCL 은 있었다.
+컵은 1부 팀이 진입하는 라운드 무렵에야 시즌이 생기는 것으로 보인다.
+
+수집기는 이것을 오류가 아니라 "아직 없음"으로 다룬다 — 경고만 남기고 있는 시즌만 넣는다.
+L1 diff 가 매일 `/leagues` 를 다시 보므로 시즌이 생기면 그때 들어온다.
+화면에서 컵 2026 시즌이 비어 있으면 그 이유는 여기다.
+
 ---
 
 ## 6. 커버리지 플래그를 수집 조건으로 쓰지 않는다 ★
@@ -179,6 +225,19 @@ FA컵 전량 수집은 5년 기준 약 15,000콜을 통계 0인 아마추어 경
 또한 대회마다 시즌 등록 시점이 다르다 — 2026-09-04 기준
 Copa del Rey·Coupe de France는 2026 시즌이 아직 없다.
 `competition_seasons.status`(UPCOMING / IN_PROGRESS / FINISHED)가 이래서 필요하다.
+
+### 6-1. `/status` 의 호출 카운터 — 늦게 반영되지만 쿼터 판단은 이 값으로 한다 (2026-09-07 실측 2회 · 2026-10-16 정정)
+
+L0 가 99콜을 보낸 직후 `/status` 의 `requests.current` 는 22 만큼(1회차), 11 만큼(2회차) 늘어 있었다.
+지연 반영으로 보이며 얼마나 늦는지는 모른다.
+~~쿼터 판단(경고선 6,000콜/일)은 **클라이언트가 직접 센 콜 수**(`ApiFootballClient.callCount` → `ingestion_runs.calls_used`)로 한다.~~
+~~`/status` 값은 `api_quota_snapshots` 에 참고로만 저장한다.~~
+
+**2026-10-16 정정 — 예측이 틀렸고 코드가 맞았다.** 코드의 쿼터 판단은 라이브 폴러·상세 백필 모두 **`/status` 의 used** 로 한다 —
+클라이언트 자체 콜 카운트가 아니다. 왜 틀렸나: **`/status` 는 쿼터를 소비하지 않아** 매 경기 앞에서 불러도 예산이 줄지 않는다 —
+10-14 운영 하루에 `/status` 를 13,546회 불렀는데도 used 가 한도 7,500 에 닿지 않았다 (EC2 journal 실측).
+`api_quota_snapshots` 는 이 판단에 쓰이지 않는다 — 읽는 코드가 없고, INSERT 는 하루 1회 `QuotaSnapshotJob` 과 CLI(`cli/ingest.ts` — `status` 와 l0·l1·l2·l6·backfill·probe-details·probe-players 앞뒤)만
+한다 (`SCHEMA_DESIGN.md` 3-6). 라이브 폴러의 강등·정지 임계값은 `INGESTION_STRATEGY.md` 3-5.
 
 ---
 
@@ -196,3 +255,39 @@ Copa del Rey·Coupe de France는 2026 시즌이 아직 없다.
 "많이 쐈지만 좋은 기회는 아니었다"가 읽힌다 — 일반 사이트에 흔치 않다.
 
 컵 경기 상세는 **통계 탭이 비는 것이 정상 상태**다. 오류와 구분해 보여준다 (3장 세 번째 상태).
+
+---
+
+## 8. 통계 랭킹의 소스와 집계 (2026-09-17 확정 · feat/statistics-self-aggregation)
+
+### 8-1. 소스는 `player_match_stats`
+
+`GET /api/stats/scorers`·`/api/stats/assisters`(및 후속 카테고리) 는 **`player_match_stats` 를 선수·대회시즌 축으로 SUM 해서 만든다.** `top_rankings` (API 공식 순위표) 를 읽지 않는다.
+
+`match_events` 는 소스가 아니다. 이유:
+- `player_match_stats` 에 `competition_season_id` 가 이미 있어 조인 한 단이 줄어든다
+- **자책골이 섞이지 않는다** — `player_match_stats.goals_total` 은 그 선수의 순수 득점만, `match_events` 의 `Goal` 이벤트는 종류(정규·자책·PK) 를 detail 로 구분해야 걸러진다
+
+사용 컬럼: `goals_total` · `assists` · `yellow_cards` · `red_cards` · `minutes`.
+
+### 8-2. 집계 범위는 `ingestScopeWhere` (19대회 전부)
+
+`competitionVisibleWhere` (리그5+UCL 6개) 가 아니다. 우리가 추적하는 대회 전부(리그5 + UCL + UEL + UECL + 국내 컵 6 + 슈퍼컵 5 = 19)의 경기를 합산한다.
+
+컵·유럽 대항전 팀도 랭킹에 등장할 수 있다. 화면 필터가 필요하면 프론트가 담당한다 — 백엔드는 데이터를 자르지 않는다.
+
+### 8-3. 공식 수치와 갈리면 우리 집계가 기준이다
+
+API 공식 순위(`top_rankings`) 와 자체 집계가 어긋날 수 있다 — 예: API 는 상위 N 만 주므로 그 밖의 선수는 없다, API 응답 시점과 최신 경기 사이 지연. 화면·어시스턴트 답변은 **자체 집계 기준**을 쓴다.
+
+`top_rankings` 테이블은 다음 판에서 제거 예정이다 (조회 경로에서 이미 빠졌다 · SCHEMA_DESIGN 9장).
+
+### 8-4. 수집률 표기 (`coverage`)
+
+랭킹 응답은 `coverage: { finished, collected, ratio }` 를 함께 낸다.
+
+- `finished` = 그 범위(대회시즌 or 시즌 전체 · status_short ∈ {FT, AET, PEN})의 종료 경기 수
+- `collected` = 그중 `detail_checked_at IS NOT NULL` — 즉 상세를 이미 받아 통계 반영 가능한 경기 수
+- `ratio` = `collected / finished` (finished=0 이면 0). 소수점 셋째 자리 반올림
+
+프론트는 "이 통계가 몇 %의 경기를 근거로 하는지" 를 이 값으로 표시한다. **백필-2 진행 중이거나 새 시즌 초기에는 낮게 나오는 것이 정상.**

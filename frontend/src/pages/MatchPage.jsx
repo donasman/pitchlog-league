@@ -10,19 +10,26 @@
  *   - 라인업 포메이션: 세로(모바일) / 가로(데스크톱)
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useData } from '@/hooks/useData'
-import { fetchMatchDetail } from '@/services/api'
+import { useLiveMatches } from '@/hooks/useLiveMatches'
+import { fetchMatchDetail, invalidateMatchDetail } from '@/services/api'
+import { mergeLive } from '@/utils/liveMerge'
 import MatchStatusBadge from '@/components/ui/MatchStatusBadge'
 import TeamBadge from '@/components/ui/TeamBadge'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton'
 import ErrorState from '@/components/ui/ErrorState'
 import EmptyState from '@/components/ui/EmptyState'
+import NotImplementedState from '@/components/ui/NotImplementedState'
 import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
-import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
+import { getLocalizedName, getLocalizedShortName, pickLocalized } from '@/utils/localization'
+import { formatRoundLabel } from '@/utils/roundLabel'
+import { formatPositionLabel } from '@/utils/positionLabel'
 import { isLive } from '@/utils/matchStatus'
+import { buildEventMapByRef } from '@/utils/matchEvents'
+import { computeBarPct } from './statsBar'
 
 /* ── 포메이션 파싱 및 선수 좌표 계산 ── */
 const POS_ORDER = { GK: 0, DEF: 1, MID: 2, FWD: 3 }
@@ -60,11 +67,13 @@ function computePitchPositions(startingXI, formation, isAway = false) {
   return result
 }
 
-/* ── 이벤트 맵 (선수이름 → 이벤트 목록) ── */
-function buildEventMap(events = []) {
+/* ── 이벤트 맵 폴백 (선수이름 → 이벤트 목록) ──
+ * Mock 라인업은 playerRef 가 없어 이름으로 붙인다. 실 API 는 buildEventMapByRef 를 쓴다.
+ */
+function buildEventMapByName(events = []) {
   const map = {}
   events.forEach(e => {
-    if (!e.playerName) return
+    if (!e?.playerName) return
     if (!map[e.playerName]) map[e.playerName] = []
     map[e.playerName].push(e.type)
   })
@@ -93,9 +102,9 @@ function ScoreBanner({ match, t, locale }) {
     >
       {/* 메타: 대회 · 시각 · 배지 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        <span className="t-cap">{match.competitionName}</span>
+        <span className="t-cap">{pickLocalized(match.competitionName, match.competitionOriginalName, locale)}</span>
         <span className="t-cap">·</span>
-        <span className="t-cap">{match.round ?? match.stage}</span>
+        <span className="t-cap">{formatRoundLabel(match.round ?? match.stage, t)}</span>
         {match.venue && (
           <>
             <span className="t-cap">·</span>
@@ -119,7 +128,7 @@ function ScoreBanner({ match, t, locale }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12 }}>
         {/* 홈팀 */}
         <div style={{ display: 'grid', gap: 8, justifyItems: 'center', minWidth: 0 }}>
-          <TeamBadge initials={match.homeTeam?.initials} color={match.homeTeam?.color} size="lg" name={match.homeTeam?.name} />
+          <TeamBadge initials={match.homeTeam?.initials} color={match.homeTeam?.color} logoUrl={match.homeTeam?.logoUrl} size="lg" name={match.homeTeam?.name} />
           <span className="tname t-card" style={{ fontWeight: 700, textAlign: 'center', width: '100%' }} title={homeName}>
             {homeName}
           </span>
@@ -159,7 +168,7 @@ function ScoreBanner({ match, t, locale }) {
 
         {/* 원정팀 */}
         <div style={{ display: 'grid', gap: 8, justifyItems: 'center', minWidth: 0 }}>
-          <TeamBadge initials={match.awayTeam?.initials} color={match.awayTeam?.color} size="lg" name={match.awayTeam?.name} />
+          <TeamBadge initials={match.awayTeam?.initials} color={match.awayTeam?.color} logoUrl={match.awayTeam?.logoUrl} size="lg" name={match.awayTeam?.name} />
           <span className="tname t-card" style={{ fontWeight: 700, textAlign: 'center', width: '100%' }} title={awayName}>
             {awayName}
           </span>
@@ -258,6 +267,53 @@ function StatusNotice({ state, t }) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   UnavailableCard — availability 두 값('not_provided'|'not_collected') 을
+   서로 다른 문구로 그린다. NotImplementedState 와 다르다:
+     · not_provided — 그 경기가 원본에서 라인업/통계를 안 준 것 (하위 리그·컵)
+     · not_collected — 백엔드가 아직 안 받아온 것 (백필 대기)
+     · NotImplementedState — 기능 자체가 백엔드에 없는 것 (H2H)
+───────────────────────────────────────────────────────────── */
+function UnavailableCard({ status, kind, t }) {
+  // status 는 'not_provided' 또는 'not_collected'. 그 외 값이면 아무것도 안 그린다
+  if (status !== 'not_provided' && status !== 'not_collected') return null
+  const message = t(`match.unavailable.${status}.${kind}`)
+  return (
+    <div
+      className="pl-card"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '48px 24px',
+        gap: 12,
+        textAlign: 'center',
+      }}
+      role="status"
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 48, height: 48, borderRadius: 12,
+          background: 'var(--pl-fill)',
+          display: 'grid', placeItems: 'center',
+        }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+             stroke="var(--pl-sub)" strokeWidth="1.6"
+             strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4M12 16h.01" />
+        </svg>
+      </span>
+      <p style={{ fontWeight: 600, fontSize: 15, color: 'var(--pl-text)', margin: 0 }}>
+        {message}
+      </p>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    TabBar
 ───────────────────────────────────────────────────────────── */
 function TabBar({ active, onSelect, t }) {
@@ -308,7 +364,8 @@ function TabBar({ active, onSelect, t }) {
    가로(데스크톱): left=px%, top=py%
 ───────────────────────────────────────────────────────────── */
 function PlayerMarker({ player, eventMap = {}, isAway, vertical }) {
-  const events = eventMap[player.name] ?? []
+  // 실 API 라인업은 playerRef 로 매칭한다. Mock 라인업은 playerRef 가 없어 이름 폴백.
+  const events = (player.playerRef && eventMap[player.playerRef]) || eventMap[player.name] || []
   const hasGoal = events.includes('goal')
   const hasYellow = events.includes('yellow_card')
   const hasRed = events.includes('red_card')
@@ -497,16 +554,17 @@ function PitchView({ homeLineup, awayLineup, homeEvents, awayEvents, vertical, h
 /* ─────────────────────────────────────────────────────────────
    LineupTab
 ───────────────────────────────────────────────────────────── */
-function BenchPanel({ teamName, players, t }) {
+function BenchPanel({ teamName, players, t, className }) {
   if (!players?.length) return null
   return (
-    <div className="pl-card" style={{ overflow: 'hidden' }}>
+    <div className={className ? `pl-card ${className}` : 'pl-card'} style={{ overflow: 'hidden' }}>
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--pl-line)' }}>
         <span className="t-card">{teamName} {t('match.bench')}</span>
       </div>
       {players.map(p => (
         <div
-          key={p.number}
+          // number 는 null 이거나 겹칠 수 있다 — playerRef 우선, 없으면 번호·이름 조합
+          key={p.playerRef ?? `${p.number ?? ''}-${p.name}`}
           style={{
             display: 'grid',
             gridTemplateColumns: '28px 1fr auto',
@@ -519,7 +577,7 @@ function BenchPanel({ teamName, players, t }) {
         >
           <span className="num t-sub" style={{ fontWeight: 700 }}>{p.number}</span>
           <span className="t-body" style={{ fontWeight: 600 }}>{p.name}</span>
-          <span className="t-cap">{p.position}</span>
+          <span className="t-cap">{formatPositionLabel(p.position, t)}</span>
         </div>
       ))}
     </div>
@@ -548,7 +606,7 @@ function TopRatedPanel({ players, t }) {
         </span>
         <div style={{ display: 'grid' }}>
           <span className="t-card">{top.name}</span>
-          <span className="t-cap">{top.position}</span>
+          <span className="t-cap">{formatPositionLabel(top.position, t)}</span>
         </div>
         {stats?.games?.rating != null && (
           <span
@@ -586,26 +644,41 @@ function LineupTab({ match, lineup, topRated, t, locale }) {
     )
   }
 
-  const eventMap = buildEventMap(match.events)
-  const homeEventMap = {}
-  const awayEventMap = {}
-  Object.entries(eventMap).forEach(([name, types]) => {
-    // heuristic: assign based on score events
-    const ev = (match.events ?? []).find(e => e.playerName === name)
-    if (ev?.team === 'home') homeEventMap[name] = types
-    else if (ev?.team === 'away') awayEventMap[name] = types
-  })
+  // 홈·원정 이벤트 분리. 실 API 는 playerRef 기준, Mock 은 playerName 기준.
+  // 이벤트 자체에 team='home'|'away' 가 이미 실려 있으므로(normalize.matchDetail 이 판정) 그걸로 가른다.
+  const events = match.events ?? []
+  const homeEvents = events.filter(e => e?.team === 'home')
+  const awayEvents = events.filter(e => e?.team === 'away')
+  // 실 API: playerRef 기준. Mock: playerRef 가 없어 결과 맵이 비지만 이름 폴백이 산다
+  const homeEventMapByRef  = buildEventMapByRef(homeEvents)
+  const awayEventMapByRef  = buildEventMapByRef(awayEvents)
+  const homeEventMapByName = buildEventMapByName(homeEvents)
+  const awayEventMapByName = buildEventMapByName(awayEvents)
+  // 두 맵을 병합 — PlayerMarker 가 ref 로 먼저 찾고, 없으면 name 으로 폴백
+  const homeEventMap = { ...homeEventMapByName, ...homeEventMapByRef }
+  const awayEventMap = { ...awayEventMapByName, ...awayEventMapByRef }
 
   const homePlayers = computePitchPositions(lineup.home.startingXI, lineup.home.formation, false)
   const awayPlayers = computePitchPositions(lineup.away.startingXI, lineup.away.formation, true)
+
+  // 우측 칸은 TopRatedPanel 이 그릴 게 있을 때만 둔다 — 없으면 피치 카드가 전체 폭 (빈 300px 칸 방지).
+  // 판정은 TopRatedPanel 의 null 조건(players 비었거나 players[0] 없음)과 같게 맞춘다.
+  const hasTopRated = Boolean(topRated?.length && topRated[0])
+
+  // 벤치 — 한 팀 라인업만 있는 경기는 lineup.home/away 가 null 일 수 있다 (normalize.matchDetail)
+  const homeBench = lineup.home?.substitutes
+  const awayBench = lineup.away?.substitutes
+  const hasBench = Boolean(homeBench?.length || awayBench?.length)
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div
         style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}
-        className="lg-lineup-grid"
+        className={hasTopRated ? 'lg-lineup-grid' : undefined}
       >
-        <style>{`@media(min-width:768px){.lg-lineup-grid{grid-template-columns:1fr 300px!important}}`}</style>
+        {hasTopRated && (
+          <style>{`@media(min-width:768px){.lg-lineup-grid{grid-template-columns:1fr 300px!important}}`}</style>
+        )}
 
         {/* 피치 카드 */}
         <div className="pl-card" style={{ padding: 14, display: 'grid', gap: 10 }}>
@@ -671,16 +744,35 @@ function LineupTab({ match, lineup, topRated, t, locale }) {
           </div>
         </div>
 
-        {/* 우측 패널 (md+) */}
-        <div style={{ display: 'grid', gap: 12 }}>
-          <TopRatedPanel players={topRated} t={t} />
+        {/* 우측 패널 (md+) — 최고 평점만 */}
+        {hasTopRated && (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <TopRatedPanel players={topRated} t={t} />
+          </div>
+        )}
+      </div>
+
+      {/* 벤치 — 모바일 1열(홈 → 원정) · md+ 2열(홈 왼쪽 · 원정 오른쪽) */}
+      {hasBench && (
+        <div
+          style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}
+          className="lg-bench-grid"
+        >
+          {/* 원정 칸 고정 — 홈 벤치가 없어도 원정은 오른쪽에 둔다 */}
+          <style>{`@media(min-width:768px){.lg-bench-grid{grid-template-columns:1fr 1fr!important}.lg-bench-grid>.lg-bench-away{grid-column:2}}`}</style>
           <BenchPanel
             teamName={getLocalizedShortName(match.homeTeam, locale) || match.homeTeam?.shortName}
-            players={lineup.home.substitutes}
+            players={homeBench}
             t={t}
           />
+          <BenchPanel
+            teamName={getLocalizedShortName(match.awayTeam, locale) || match.awayTeam?.shortName}
+            players={awayBench}
+            t={t}
+            className="lg-bench-away"
+          />
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -690,13 +782,8 @@ function LineupTab({ match, lineup, topRated, t, locale }) {
 ───────────────────────────────────────────────────────────── */
 function StatRow({ label, homeVal, awayVal, unit = '', barHome, note }) {
   const fmt = v => v == null ? '—' : `${v}${unit}`
-
-  let pct = 50  // default 50/50
-  if (barHome != null) {
-    pct = Math.max(5, Math.min(95, barHome))
-  } else if (homeVal != null && awayVal != null && homeVal + awayVal > 0) {
-    pct = Math.round((homeVal / (homeVal + awayVal)) * 100)
-  }
+  // pct === null → 막대 트랙 자체를 안 그린다. "동점 위장(50:50)" 금지 (DATA_RULES 3장).
+  const pct = computeBarPct({ barHome, homeVal, awayVal })
 
   return (
     <div style={{ display: 'grid', gap: 6 }}>
@@ -705,10 +792,12 @@ function StatRow({ label, homeVal, awayVal, unit = '', barHome, note }) {
         <span className="t-sub" style={{ textAlign: 'center' }}>{label}</span>
         <span className="num t-body" style={{ fontWeight: 700, textAlign: 'right' }}>{fmt(awayVal)}</span>
       </div>
-      <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: 'var(--pl-fill-2)' }}>
-        <span style={{ width: `${pct}%`, background: 'var(--pl-text)', transition: 'width .3s' }} />
-        <span style={{ flex: 1, background: 'var(--pl-fill-2)' }} />
-      </div>
+      {pct !== null && (
+        <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: 'var(--pl-fill-2)' }}>
+          <span style={{ width: `${pct}%`, background: 'var(--pl-text)', transition: 'width .3s' }} />
+          <span style={{ flex: 1, background: 'var(--pl-fill-2)' }} />
+        </div>
+      )}
       {note && <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>{note}</span>}
     </div>
   )
@@ -727,7 +816,7 @@ function StatsPanel({ stats, t }) {
     { label: t('match.shotsOnGoal'),   hv: h.shotsOnGoal,    av: a.shotsOnGoal },
     { label: t('match.cornerKicks'),   hv: h.cornerKicks,    av: a.cornerKicks },
     { label: t('match.fouls'),         hv: h.fouls,          av: a.fouls },
-    { label: t('match.passAccuracy'),  hv: h.passesPercent,  av: a.passesPercent, unit: '%', barHome: h.passesPercent },
+    { label: t('match.passAccuracy'),  hv: h.passesPercentage, av: a.passesPercentage, unit: '%', barHome: h.passesPercentage },
     /* xG — null은 0으로 바꾸지 않는다 */
     {
       label: t('match.xGoals'),
@@ -895,11 +984,33 @@ export default function MatchPage() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
 
-  const { data, loading, error } = useData(() => fetchMatchDetail(fixtureId), [fixtureId])
+  const [reloadKey, setReloadKey] = useState(0)
+  const { data, loading, error } = useData(() => fetchMatchDetail(fixtureId), [fixtureId, reloadKey])
+
+  const { liveMap } = useLiveMatches()
+  const mergedMatch = useMemo(
+    () => data?.match ? mergeLive([data.match], liveMap)[0] : null,
+    [data?.match, liveMap]
+  )
+
+  // live/halftime → final/recheck/confirmed 로 넘어가는 순간 상세 캐시 무효화 + 재요청.
+  // 이벤트·라인업·통계가 라이브 폴링에는 없으므로, 종료 직후에는 상세 API 를 다시 불러야 반영된다.
+  const prevStateRef = useRef(null)
+  useEffect(() => {
+    const prev = prevStateRef.current
+    const cur  = mergedMatch?.displayState
+    const wasLive     = prev === 'live' || prev === 'halftime'
+    const nowFinished = cur === 'final' || cur === 'recheck' || cur === 'confirmed'
+    if (wasLive && nowFinished) {
+      invalidateMatchDetail(fixtureId)
+      setReloadKey(k => k + 1)
+    }
+    prevStateRef.current = cur
+  }, [mergedMatch?.displayState, fixtureId])
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+      <div className="pl-container" style={{ paddingBlock: '24px' }}>
         <LoadingSkeleton rows={8} />
       </div>
     )
@@ -907,35 +1018,41 @@ export default function MatchPage() {
 
   if (error || !data?.match) {
     return (
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+      <div className="pl-container" style={{ paddingBlock: '24px' }}>
         <ErrorState title={t('common.errorTitle')} description={error} />
       </div>
     )
   }
 
   const { match, stats, lineup, topRated } = data
+  // availability 는 각 갈래마다 세 값('ok'|'not_provided'|'not_collected') 을 실어 온다.
+  // 'ok' 면 정상 렌더, 그 외 값이면 UnavailableCard 가 두 갈래 문구로 그린다.
+  // 실 API 도 Mock 도 같은 shape 을 준다 — 없으면(방어) 전부 'ok' 로 가정한다.
+  const availability = data.availability ?? {
+    lineups: 'ok', events: 'ok', teamStats: 'ok', playerStats: 'ok',
+  }
   const showStatus = ['final', 'recheck', 'confirmed'].includes(match.displayState)
 
   const homeShort = getLocalizedShortName(match.homeTeam, locale) || match.homeTeam?.shortName
   const awayShort = getLocalizedShortName(match.awayTeam, locale) || match.awayTeam?.shortName
 
   return (
-    <div style={{ background: 'var(--pl-bg)', minHeight: '100dvh' }}>
+    <div style={{ background: 'var(--pl-bg)', minHeight: 'var(--pl-page-min-h)' }}>
       <div
-        style={{ maxWidth: 1100, margin: '0 auto', padding: '16px 16px 48px' }}
-        className="lg:px-8"
+        style={{ paddingBlock: '16px 48px' }}
+        className="pl-container"
       >
         {/* 뒤로 가기 */}
         <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Link to="/matches" className="pl-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44 }}>
             ← {t('match.matchList')}
           </Link>
-          <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>/ {match.competitionName}</span>
+          <span className="t-cap" style={{ color: 'var(--pl-sub)' }}>/ {pickLocalized(match.competitionName, match.competitionOriginalName, locale)}</span>
         </div>
 
         <div style={{ display: 'grid', gap: 10 }}>
-          {/* 스코어보드 */}
-          <ScoreBanner match={match} t={t} locale={locale} />
+          {/* 스코어보드 — 라이브 폴링 값이 있으면 병합본으로 그린다 */}
+          <ScoreBanner match={mergedMatch ?? match} t={t} locale={locale} />
 
           {/* 상태 안내 (재검증/확정/종료) */}
           {showStatus && <StatusNotice state={match.displayState} t={t} />}
@@ -945,13 +1062,17 @@ export default function MatchPage() {
 
           {/* 탭 콘텐츠 */}
           {tab === 'lineup' && (
-            <LineupTab
-              match={match}
-              lineup={lineup}
-              topRated={topRated}
-              t={t}
-              locale={locale}
-            />
+            availability.lineups === 'ok'
+              ? (
+                <LineupTab
+                  match={match}
+                  lineup={lineup}
+                  topRated={topRated}
+                  t={t}
+                  locale={locale}
+                />
+              )
+              : <UnavailableCard status={availability.lineups} kind="lineup" t={t} />
           )}
 
           {tab === 'stats' && (
@@ -960,17 +1081,29 @@ export default function MatchPage() {
               className="stats-grid"
             >
               <style>{`@media(min-width:768px){.stats-grid{grid-template-columns:1fr 300px!important}}`}</style>
-              <StatsPanel stats={stats} t={t} />
-              <TimelinePanel
-                events={match.events}
-                homeTeamName={homeShort}
-                awayTeamName={awayShort}
-                t={t}
-              />
+              {availability.teamStats === 'ok'
+                ? <StatsPanel stats={stats} t={t} />
+                : <UnavailableCard status={availability.teamStats} kind="stats" t={t} />}
+              {availability.events === 'ok'
+                ? (
+                  <TimelinePanel
+                    events={match.events}
+                    homeTeamName={homeShort}
+                    awayTeamName={awayShort}
+                    t={t}
+                  />
+                )
+                : <UnavailableCard status={availability.events} kind="events" t={t} />}
             </div>
           )}
 
-          {tab === 'h2h' && <H2HTab match={match} t={t} locale={locale} />}
+          {/* H2H 는 백엔드에 아직 기능 자체가 없다.
+              Mock 에는 match.headToHead 가 있어 여전히 그리고, 실 API 는 null → NotImplementedState */}
+          {tab === 'h2h' && (
+            match.headToHead
+              ? <H2HTab match={match} t={t} locale={locale} />
+              : <div className="pl-card"><NotImplementedState featureKey="errors.feature.h2h" /></div>
+          )}
 
           {tab === 'timeline' && (
             <div
@@ -978,13 +1111,19 @@ export default function MatchPage() {
               className="timeline-grid"
             >
               <style>{`@media(min-width:768px){.timeline-grid{grid-template-columns:1fr 300px!important}}`}</style>
-              <TimelinePanel
-                events={match.events}
-                homeTeamName={homeShort}
-                awayTeamName={awayShort}
-                t={t}
-              />
-              <StatsPanel stats={stats} t={t} />
+              {availability.events === 'ok'
+                ? (
+                  <TimelinePanel
+                    events={match.events}
+                    homeTeamName={homeShort}
+                    awayTeamName={awayShort}
+                    t={t}
+                  />
+                )
+                : <UnavailableCard status={availability.events} kind="events" t={t} />}
+              {availability.teamStats === 'ok'
+                ? <StatsPanel stats={stats} t={t} />
+                : <UnavailableCard status={availability.teamStats} kind="stats" t={t} />}
             </div>
           )}
         </div>

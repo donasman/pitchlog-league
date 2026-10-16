@@ -4,4 +4,4 @@
 
 - `presentations/`: 최신본 이전의 PPT 원본
 
-현재 발표본은 `../output/PitchLog_1차_기획설계_발표_v3.pptx`임.
+현재 발표본(`.pptx`)은 저장소에 포함하지 않으며 로컬 및 GitHub Release로 관리함.

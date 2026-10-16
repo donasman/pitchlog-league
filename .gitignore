@@ -23,12 +23,16 @@ frontend/.env.*.local
 # 발표 자료 바이너리 (저장소 미포함, 로컬/Release 로 관리)
 *.pptx
 
+# 발표 산출물 작업 폴더 (로컬 전용, 저장소 미포함)
+output/
+Claude outputs/
+
 # 로컬 백업 아카이브
 _v.tgz
 *.tgz
 
 # 에이전트 로컬 설정
-.claude/settings.local.json
+**/.claude/settings.local.json
 
 # backend (NestJS + Prisma)
 backend/node_modules/
@@ -39,3 +43,15 @@ backend/.env.*.local
 backend/src/generated/
 backend/coverage/
 backend/*.tsbuildinfo
+
+# DB 백업 덤프 (기본 저장 위치는 저장소 밖이지만, 실수로 안에 만들어도 막는다)
+*.dump
+
+# smoke 스크립트 로그
+backend/smoke.log
+
+# 에이전트 도구·세션 상태 (로컬 전용)
+.omc/
+.agents/
+.aider-desk/
+skills-lock.json

@@ -1,0 +1,517 @@
+/**
+ * L2 — 라운드 · 경기 · 순위 (BACKEND_FEATURES #13·#15, INGESTION_STRATEGY 2-2)
+ *
+ * 기본은 **수집 범위(`ingestScopeWhere` = isTracked) 19대회의 현재 시즌**이다.
+ * 리그 5·UEFA 3 은 대회시즌당 3콜(rounds · fixtures · standings), 컵 6·슈퍼컵 5(KNOCKOUT)는 standings 없이 2콜.
+ * `--all-seasons` 는 같은 코드를 `SEASON_YEARS` 5시즌으로 돌린다 (백필-1, NEXT_STEPS 8-b) —
+ * 최신 시즌부터 역순(INGESTION_STRATEGY 5-3). 녹아웃 tie·대진표 슬롯은 L2-b 다 (8-d).
+ *
+ * ⚠ 과거 시즌을 돌릴 때 **1부 팀 집합은 그 시즌의 것**이어야 한다. `is_current` 로 뽑으면
+ * 2022 컵을 2026 리그 참가팀으로 컷 판정해 그 시즌이 통째로 0건이 되고 로그에는
+ * "1부 팀이 한 라운드에도 없다" 만 남는다 — 조용한 실패다 (`topFlightApiTeamIds`).
+ *
+ * ## 왜 라운드를 먼저 받나
+ * 라운드 이름으로 자르지 않기 때문이다. `/fixtures/rounds` 가 주는 **순서**가 ordinal 이고,
+ * 컷은 경기 목록에서 계산한다 — 1부 팀이 처음 등장하는 라운드부터 (`round-scope.ts`).
+ *
+ * ## 소유권 경계
+ * L2 는 일정·스코어를 쓴다. 그러나 `has_events`·`has_lineups`·`has_team_stats`·
+ * `has_player_stats`·`detail_checked_at`·`data_version`·`tie_id`·`leg` 은 건드리지 않는다 —
+ * L3~L5 와 L2-b 의 것이다. 재실행이 저쪽 진행 상태를 지우면 안 된다.
+ *
+ * ⚠ L4(라이브 폴링)가 붙은 뒤로 진행 중 경기의 스코어 주인은 L4 다. L2 의 matches upsert 는
+ * `updateWhere` 로 "진행 중 9종 상태 AND 킥오프 6시간 이내" 행을 덮지 않는다
+ * (아래 collectOne · SCHEMA_DESIGN 충돌 ①, `data_version`).
+ *
+ * missingTeams 시 /teams 1회 재수집 (L0 위임) · 현재 시즌만 — 대회시즌당 최대 1콜. 팀·경기장·참가 쓰기는 L0 코드가 한다 (SCHEMA_DESIGN 5장).
+ */
+import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client.js';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { ApiFootballClient } from '../api-football/api-football.client.js';
+import { IngestionRunService } from '../ingestion-run.service.js';
+import { batchUpsert } from '../../prisma/batch-upsert.js';
+import { ingestScopeWhere } from '../screen-scope.js';
+import { SEASON_YEARS } from '../l0/competitions.catalog.js';
+import { ApiQuotaExhaustedError } from '../api-football/api-football.errors.js';
+import { CompetitionFormat, IngestionLayer } from '../../generated/prisma/client.js';
+import type { ApiFixture, ApiStandings } from '../api-football/api-football.types.js';
+import { resolveRoundScope, type FixtureRef } from './round-scope.js';
+import { standingKeepKeys } from './standings-keep.js';
+import { L0Service } from '../l0/l0.service.js';
+
+export interface L2CompetitionResult {
+  name: string;
+  seasonYear: number;
+  rounds: number;
+  matches: number;
+  standings: number;
+  /** 저장 시작 라운드 (INGESTION_STRATEGY 2-2). null 이면 1부 팀이 없어 아무것도 안 넣었다 */
+  cutRound: string | null;
+  droppedRounds: number;
+  unknownRounds: string[];
+  missingTeams: number[];
+  /** /teams 재수집으로 해소된 팀 수. 재수집을 안 했으면 undefined */
+  teamsRefreshed?: number;
+  /** 이 대회시즌이 온전히 들어가지 않았다 — 시즌 단위 ingestion_runs 가 PARTIAL 로 남는다 */
+  partial?: boolean;
+  /**
+   * 정상 진행 중 "아직 없음" — partial 이 아니라 성공 계열이다.
+   *   no_fixtures  : 라운드/경기 목록이 비어 있음 (시즌 등록 전 · 일정 미발표)
+   *   no_top_flight: 1부 팀이 한 라운드에도 없음 (컵 예선 단계 · FA Cup·Copa del Rey 등이 1월 본선 진입 전까지)
+   * 매일 partial 로 찍혀 진짜 이상(missingTeams·unknownRounds)을 가리던 문제를 분리한다.
+   */
+  pending?: 'no_fixtures' | 'no_top_flight';
+}
+
+export interface L2Summary {
+  competitions: L2CompetitionResult[];
+  totals: { rounds: number; matches: number; standings: number };
+  skipped: string[];
+  partial?: boolean;
+  /** "정상 진행 중 대기" 대회시즌 라벨 목록 (예: "FA Cup 2026 (no_top_flight)"). partial 과 분리. */
+  pending: string[];
+}
+
+export interface L2RunOptions {
+  /** `SEASON_YEARS` 5시즌 전부 — 백필-1 (NEXT_STEPS 8-b) */
+  allSeasons?: boolean;
+  /** 이 시즌 하나만. `allSeasons` 보다 우선한다 */
+  seasonYear?: number;
+}
+
+@Injectable()
+export class L2Service {
+  private readonly logger = new Logger(L2Service.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly api: ApiFootballClient,
+    private readonly runs: IngestionRunService,
+    private readonly l0: L0Service,
+  ) {}
+
+  /**
+   * 기본은 현재 시즌. `allSeasons`·`seasonYear` 로 과거 시즌까지 넓힌다.
+   *
+   * `season.year in SEASON_YEARS` 를 반드시 건다 — L0 가 `/leagues?id=` 를 시즌 없이 불러
+   * 1992년까지의 대회시즌이 `competition_seasons` 에 들어와 있을 수 있다.
+   *
+   * ⚠ `ingestion_runs.calls_used` 를 합산할 때는 **`competition_season_id IS NULL` 행만 센다.**
+   * 이 실행은 행을 두 겹으로 남긴다 — 바깥 1행(CLI 1회 전체) + 대회시즌마다 1행. 안쪽 행은
+   * 시즌별 내역이라 바깥 행과 같은 콜을 다시 적은 것이고, 다 더하면 정확히 2배가 된다.
+   * 경고선 판단(DATA_RULES 의 calls_used)이 이 컬럼을 쓰므로 여기서 못박아 둔다.
+   */
+  async run(opts: L2RunOptions = {}): Promise<L2Summary> {
+    return this.runs.wrap(IngestionLayer.L2, null, async () => {
+      const summary: L2Summary = {
+        competitions: [],
+        totals: { rounds: 0, matches: 0, standings: 0 },
+        skipped: [],
+        pending: [],
+      };
+
+      const scoped = opts.seasonYear !== undefined || opts.allSeasons === true;
+      const where =
+        opts.seasonYear !== undefined
+          ? { competition: ingestScopeWhere, season: { year: opts.seasonYear } }
+          : opts.allSeasons === true
+            ? { competition: ingestScopeWhere, season: { year: { in: [...SEASON_YEARS] } } }
+            : { isCurrent: true, competition: ingestScopeWhere };
+
+      const seasons = await this.prisma.competitionSeason.findMany({
+        where,
+        include: { competition: true, season: true },
+        // 최신 시즌부터 역순 (INGESTION_STRATEGY 5-3) — 오래된 것부터 채우면 그동안 아무것도 못 보여준다
+        orderBy: scoped
+          ? [{ season: { year: 'desc' as const } }, { competition: { displayOrder: 'asc' as const } }]
+          : { competition: { displayOrder: 'asc' as const } },
+      });
+      if (seasons.length === 0) {
+        throw new Error(
+          opts.seasonYear !== undefined
+            ? `${opts.seasonYear} 시즌인 화면 대회가 없다 — L0 를 먼저 돌린다`
+            : opts.allSeasons === true
+              ? '화면 대회의 대회시즌이 하나도 없다 — L0 를 먼저 돌린다'
+              : '현재 시즌인 화면 대회가 없다 — L0 를 먼저 돌린다',
+        );
+      }
+      const mode = opts.seasonYear !== undefined ? `${opts.seasonYear} 시즌` : opts.allSeasons === true ? '전 시즌' : '현재 시즌';
+      this.logger.log(`L2 시작 — ${mode} · 대회시즌 ${seasons.length}개`);
+
+      const teamIdByApi = await this.teamIdMap();
+
+      for (const cs of seasons) {
+        const label = `${cs.competition.name} ${cs.season.year}`;
+        try {
+          // 시즌마다 ingestion_runs 행을 남긴다 — competition_season_id 가 이걸 위해 있다.
+          // 시즌별 콜 수가 백필-2 예산의 입력이다. 바깥 wrap(null) 은 CLI 1회 = 1행으로 남는다
+          const r = await this.runs.wrap(IngestionLayer.L2, cs.id, () => this.collectOne(cs, teamIdByApi));
+          summary.competitions.push(r);
+          summary.totals.rounds += r.rounds;
+          summary.totals.matches += r.matches;
+          summary.totals.standings += r.standings;
+          if (r.partial === true) summary.partial = true;
+          if (r.pending) summary.pending.push(`${label} (${r.pending})`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.logger.warn(`${label} 실패 — ${msg}`);
+          summary.skipped.push(`${label}: ${msg}`);
+          summary.partial = true;
+          // 일일 한도는 재시도해도 같은 결과다 — 남은 대회시즌을 다 실패로 쌓지 않는다
+          if (err instanceof ApiQuotaExhaustedError) {
+            this.logger.error('API-Football 일일 한도 소진 — 남은 대회시즌을 중단한다');
+            break;
+          }
+        }
+      }
+
+      this.logger.log(
+        `L2 완료 — 라운드 ${summary.totals.rounds} · 경기 ${summary.totals.matches} · 순위 ${summary.totals.standings}` +
+          (summary.skipped.length ? ` · 건너뜀 ${summary.skipped.length}` : '') +
+          (summary.pending.length ? ` · 대기 ${summary.pending.length}` : ''),
+      );
+      return summary;
+    });
+  }
+
+  private async teamIdMap(): Promise<Map<number, number>> {
+    const teams = await this.prisma.team.findMany({ select: { id: true, apiTeamId: true } });
+    return new Map(teams.map((t) => [t.apiTeamId, t.id]));
+  }
+
+  /**
+   * 이 대회시즌의 1부 팀 (API team id).
+   *   리그  → 자기 참가팀 (모든 라운드가 1부다)
+   *   컵    → top_flight_competition 의 **같은 시즌** 참가팀
+   *   UCL   → top_flight 가 없다. 추적하는 리그(ROUND_ROBIN)의 **같은 시즌** 참가팀 합집합
+   *
+   * 시즌을 `seasonId` 로 묶는다. `is_current` 로 뽑으면 과거 시즌이 현재 시즌 참가팀으로
+   * 판정돼 컷이 안 잡히고 그 시즌이 통째로 0건이 된다 (파일 머리말).
+   */
+  private async topFlightApiTeamIds(cs: {
+    id: number;
+    seasonId: number;
+    competitionId: number;
+    competition: { format: CompetitionFormat; topFlightCompetitionId: number | null };
+  }): Promise<Set<number>> {
+    if (cs.competition.format === CompetitionFormat.ROUND_ROBIN) {
+      return this.entryApiTeamIds({ competitionSeasonId: cs.id });
+    }
+    if (cs.competition.topFlightCompetitionId !== null) {
+      return this.entryApiTeamIds({
+        competitionSeason: { seasonId: cs.seasonId, competitionId: cs.competition.topFlightCompetitionId },
+      });
+    }
+    // UCL — 같은 시즌 5대 리그 합집합
+    return this.entryApiTeamIds({
+      competitionSeason: {
+        seasonId: cs.seasonId,
+        competition: { ...ingestScopeWhere, format: CompetitionFormat.ROUND_ROBIN },
+      },
+    });
+  }
+
+  private async entryApiTeamIds(where: Record<string, unknown>): Promise<Set<number>> {
+    const rows = await this.prisma.competitionEntry.findMany({
+      where: where as never,
+      select: { team: { select: { apiTeamId: true } } },
+    });
+    return new Set(rows.map((r) => r.team.apiTeamId));
+  }
+
+  private async collectOne(
+    cs: { id: number; seasonId: number; competitionId: number; isCurrent: boolean; competition: { name: string; apiCompetitionId: number; format: CompetitionFormat; topFlightCompetitionId: number | null }; season: { year: number } },
+    teamIdByApi: Map<number, number>,
+  ): Promise<L2CompetitionResult> {
+    const league = cs.competition.apiCompetitionId;
+    const season = cs.season.year;
+    const label = `${cs.competition.name} ${season}`;
+
+    const [roundsRes, fixturesRes] = await Promise.all([
+      this.api.get<string[]>('/fixtures/rounds', { league, season }),
+      this.api.get<ApiFixture[]>('/fixtures', { league, season }),
+    ]);
+    const roundNames = roundsRes.response;
+    const fixtures = fixturesRes.response;
+
+    const result: L2CompetitionResult = {
+      name: cs.competition.name,
+      seasonYear: season,
+      rounds: 0,
+      matches: 0,
+      standings: 0,
+      cutRound: null,
+      droppedRounds: 0,
+      unknownRounds: [],
+      missingTeams: [],
+    };
+
+    if (roundNames.length === 0 || fixtures.length === 0) {
+      // 시즌 등록 전이거나 일정 미발표. 실패가 아니라 "아직 없음" (DATA_RULES 5-4)
+      // partial 이 아니라 pending — 매일 partial 로 찍혀 진짜 이상을 가리지 않도록.
+      this.logger.warn(`${label}: 라운드 ${roundNames.length} · 경기 ${fixtures.length} — 건너뜀`);
+      result.pending = 'no_fixtures';
+      return result;
+    }
+
+    const topFlight = await this.topFlightApiTeamIds(cs);
+    const refs: FixtureRef[] = fixtures.map((f) => ({
+      round: f.league.round,
+      homeApiTeamId: f.teams.home.id,
+      awayApiTeamId: f.teams.away.id,
+      kickoffAt: f.fixture.date,
+    }));
+    const scope = resolveRoundScope({ roundNames, fixtures: refs, topFlightApiTeamIds: topFlight });
+
+    result.unknownRounds = scope.unknownRounds;
+    result.droppedRounds = scope.rounds.filter((r) => !r.included).length;
+    if (scope.cutOrdinal === null) {
+      // 컵 예선 단계 등 정상 "아직 없음". FA Cup·Copa del Rey 는 1월 본선 진입 전까지 여기에 걸린다.
+      // partial 이 아니라 pending — WARN 로그로 관측만 유지한다.
+      this.logger.warn(`${label}: 1부 팀이 한 라운드에도 없다 — 아무것도 저장하지 않는다`);
+      result.pending = 'no_top_flight';
+      return result;
+    }
+    result.cutRound = scope.rounds[scope.cutOrdinal].name;
+
+    // 1. 라운드
+    const included = scope.rounds.filter((r) => r.included);
+    const roundRows = included.map((r) => ({
+      competition_season_id: cs.id,
+      name: r.name,
+      ordinal: r.ordinal,
+      team_count: r.teamCount,
+      match_count: r.matchCount,
+      is_late_stage: r.isLateStage,
+      has_top_flight: r.hasTopFlight,
+      first_kickoff_at: r.firstKickoffAt,
+    }));
+    const roundRes = await batchUpsert<(typeof roundRows)[number], { id: number; name: string }>(this.prisma, {
+      table: 'competition_rounds',
+      columns: {
+        competition_season_id: 'int', name: 'text', ordinal: 'int', team_count: 'int',
+        match_count: 'int', is_late_stage: 'boolean', has_top_flight: 'boolean', first_kickoff_at: 'timestamptz',
+      },
+      conflict: ['competition_season_id', 'name'],
+      returning: ['id', 'name'],
+    }, roundRows);
+    result.rounds = roundRes.rows;
+    const roundIdByName = new Map(roundRes.returned.map((r) => [r.name, r.id]));
+    const detailByName = new Map(included.map((r) => [r.name, r.detailEligible]));
+
+    // 2. 경기장 — 중립 경기장 등 L0 에 없던 것이 나온다
+    const venueRows = fixtures
+      .filter((f) => f.fixture.venue.id && f.fixture.venue.name && roundIdByName.has(f.league.round))
+      .map((f) => ({ api_venue_id: f.fixture.venue.id as number, name: f.fixture.venue.name as string, city: f.fixture.venue.city }));
+    const venueRes = await batchUpsert<(typeof venueRows)[number], { id: number; api_venue_id: number }>(this.prisma, {
+      table: 'venues',
+      columns: { api_venue_id: 'int', name: 'text', city: 'text' },
+      conflict: ['api_venue_id'],
+      update: ['name', 'city'],
+      returning: ['id', 'api_venue_id'],
+    }, venueRows);
+    const venueIdByApi = new Map(venueRes.returned.map((v) => [v.api_venue_id, v.id]));
+
+    // 3. 경기
+    let { rows: matchRows, missing } = buildMatchRows(fixtures, cs, roundIdByName, detailByName, venueIdByApi, teamIdByApi);
+
+    // DB 에 없는 팀 — 컵 하부 팀이 L0 이후 참가팀 목록에 추가된 경우다 (10-08 Copa del Rey R128 실측).
+    // 팀·경기장·참가는 L0 소유라 L0 코드에 위임해 /teams 를 1회만 다시 받는다 (SCHEMA_DESIGN 5장)
+    // 현재 시즌만 — 재수집은 참가팀 전부의 name·logo·venue_id 와 venues 를 그 시즌 값으로 덮는다.
+    // L0 는 오래된→최신 순이라 최신 값이 남지만(l0.service run() 주석) L2 전 시즌 모드는 최신→오래된 순이라
+    // 과거 시즌에서 재수집하면 옛 값이 현재 팀 정보를 덮는다
+    if (missing.size > 0 && cs.isCurrent !== true) {
+      this.logger.warn(`${label}: DB 에 없는 팀 ${missing.size}개 — 과거 시즌이라 /teams 재수집 안 함 (L0 수동 실행)`);
+    }
+    if (missing.size > 0 && cs.isCurrent === true) {
+      const before = missing.size;
+      try {
+        const r = await this.l0.refreshTeamsForSeason({
+          competitionSeasonId: cs.id,
+          competitionId: cs.competitionId,
+          apiCompetitionId: league,
+          year: season,
+          label: cs.competition.name,
+        });
+        // 공유 맵 — 같은 실행의 순위·뒤 대회시즌도 혜택을 본다
+        for (const [apiId, id] of r.teamIdByApi) teamIdByApi.set(apiId, id);
+        ({ rows: matchRows, missing } = buildMatchRows(fixtures, cs, roundIdByName, detailByName, venueIdByApi, teamIdByApi));
+        result.teamsRefreshed = before - missing.size;
+        this.logger.log(`${label}: DB 에 없는 팀 ${before}개 → /teams 재수집 → ${before - missing.size}개 해소`);
+      } catch (err) {
+        // 일일 한도는 run() 루프가 끊어야 한다 — 삼키지 않는다
+        if (err instanceof ApiQuotaExhaustedError) throw err;
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`${label}: /teams 재수집 실패 — ${msg} · 빠진 팀은 partial 로 남긴다`);
+      }
+    }
+
+    result.missingTeams = [...missing].sort((a, b) => a - b);
+    if (missing.size > 0) {
+      this.logger.warn(`${label}: DB 에 없는 팀 ${missing.size}개 — 그 경기는 건너뛴다. L0 를 다시 돌린다`);
+    }
+
+    const matchRes = await batchUpsert<(typeof matchRows)[number]>(this.prisma, {
+      table: 'matches',
+      columns: {
+        api_fixture_id: 'int', competition_season_id: 'int', round_id: 'int', kickoff_at: 'timestamptz',
+        status_short: 'text', status_long: 'text', elapsed: 'int', extra_elapsed: 'int',
+        venue_id: 'int', referee: 'text', home_team_id: 'int', away_team_id: 'int',
+        goals_home: 'int', goals_away: 'int', ht_home: 'int', ht_away: 'int', ft_home: 'int', ft_away: 'int',
+        et_home: 'int', et_away: 'int', pen_home: 'int', pen_away: 'int',
+        winner_team_id: 'int', detail_eligible: 'boolean', as_of: 'timestamptz',
+      },
+      conflict: ['api_fixture_id'],
+      // has_* · detail_checked_at · data_version · tie_id · leg 은 L3~L5·L2-b 의 것이다.
+      // 재실행이 저쪽 진행 상태를 지우면 안 된다
+      update: [
+        'competition_season_id', 'round_id', 'kickoff_at', 'status_short', 'status_long', 'elapsed', 'extra_elapsed',
+        'venue_id', 'referee', 'home_team_id', 'away_team_id',
+        'goals_home', 'goals_away', 'ht_home', 'ht_away', 'ft_home', 'ft_away',
+        'et_home', 'et_away', 'pen_home', 'pen_away', 'winner_team_id', 'detail_eligible', 'as_of',
+      ],
+      updatedAtColumn: 'updated_at',
+      // L4 (라이브 폴링) 가 진행 중 경기의 스코어 주인이다.
+      // L2 매일 upsert 가 캐시된 옛 값으로 라이브 컬럼을 덮지 않도록 진행 중 상태(9종) + 킥오프 6시간 이내 는 UPDATE 대상에서 제외한다.
+      // 킥오프 6시간이 지난 진행 중 행은 (L4 가 FT 를 놓쳤을 것이므로) L2 가 다시 덮어 복구한다.
+      // LIVE_STATUSES 리터럴 값은 backend/src/ingestion/l4/status-rank.ts 와 일치해야 한다 (batch-upsert.spec 정합 검사).
+      // kickoff 6h 값은 backend/src/ingestion/l4/status-rank.ts LIVE_LOOKBACK_MS 와 일치.
+      updateWhere: Prisma.sql`NOT ("matches"."status_short" IN ('1H','HT','2H','ET','BT','P','SUSP','INT','LIVE') AND "matches"."kickoff_at" > now() - interval '6 hours')`,
+    }, matchRows);
+    result.matches = matchRes.rows;
+
+    // 4. 순위 — 컵은 순위표가 없다 (DATA_RULES 5-3)
+    if (cs.competition.format !== CompetitionFormat.KNOCKOUT) {
+      result.standings = await this.collectStandings(cs.id, league, season, label, teamIdByApi);
+    }
+
+    result.partial = result.cutRound === null || result.unknownRounds.length > 0 || result.missingTeams.length > 0;
+
+    this.logger.log(
+      `${label}: 라운드 ${result.rounds}(제외 ${result.droppedRounds}) · 경기 ${result.matches} · 순위 ${result.standings}` +
+        (result.cutRound ? ` · 컷 "${result.cutRound}"` : ''),
+    );
+    return result;
+  }
+
+  async collectStandings(competitionSeasonId: number, league: number, season: number, label: string, teamIdByApi: Map<number, number>): Promise<number> {
+    const { response } = await this.api.get<ApiStandings[]>('/standings', { league, season });
+    const groups = response[0]?.league?.standings ?? [];
+    const rows = groups.flat().flatMap((r) => {
+      const teamId = teamIdByApi.get(r.team.id);
+      if (teamId === undefined) return [];
+      return [{
+        competition_season_id: competitionSeasonId,
+        team_id: teamId,
+        // NULL 은 unique 인덱스에서 서로 다른 값이라 중복이 들어온다. 항상 값을 넣는다
+        group_name: r.group || label,
+        rank: r.rank,
+        points: r.points,
+        played: r.all.played, win: r.all.win, draw: r.all.draw, lose: r.all.lose,
+        goals_for: r.all.goals.for, goals_against: r.all.goals.against, goal_diff: r.goalsDiff,
+        home_played: r.home.played, home_win: r.home.win, home_draw: r.home.draw, home_lose: r.home.lose,
+        home_gf: r.home.goals.for, home_ga: r.home.goals.against,
+        away_played: r.away.played, away_win: r.away.win, away_draw: r.away.draw, away_lose: r.away.lose,
+        away_gf: r.away.goals.for, away_ga: r.away.goals.against,
+        form: r.form, description: r.description, status: r.status,
+        as_of: new Date().toISOString(),
+      }];
+    });
+
+    if (rows.length === 0) {
+      // 리그페이즈 시작 전이면 비어 있다. 실패가 아니다.
+      // 빈 응답에 기존 행 전부를 지우지 않도록 조기 return — 옛 값 그대로 두는 게 낫다.
+      this.logger.warn(`${label}: 순위표 0건 — 아직 시작 전`);
+      return 0;
+    }
+
+    // 이번 응답에서 살아남을 (team_id, group_name) 키. 아래 DELETE 절에서 NOT IN 목록으로 쓴다.
+    const keepKeys = standingKeepKeys(rows);
+    const keepTuples = Prisma.join(
+      keepKeys.map((k) => Prisma.sql`(${k.teamId}::int, ${k.groupName}::text)`),
+    );
+
+    // upsert 와 옛 행 DELETE 를 한 트랜잭션으로 묶어, 외부 API 가 group_name 을 바꿔도
+    // (예: UCL "League Phase" → "UEFA Champions League") 옛 행이 영구 잔존하지 않도록 한다.
+    const { upserted, deleted } = await this.prisma.$transaction(async (tx) => {
+      const res = await batchUpsert<(typeof rows)[number]>(tx, {
+        table: 'standings',
+        columns: {
+          competition_season_id: 'int', team_id: 'int', group_name: 'text', rank: 'int', points: 'int',
+          played: 'int', win: 'int', draw: 'int', lose: 'int',
+          goals_for: 'int', goals_against: 'int', goal_diff: 'int',
+          home_played: 'int', home_win: 'int', home_draw: 'int', home_lose: 'int', home_gf: 'int', home_ga: 'int',
+          away_played: 'int', away_win: 'int', away_draw: 'int', away_lose: 'int', away_gf: 'int', away_ga: 'int',
+          form: 'text', description: 'text', status: 'text', as_of: 'timestamptz',
+        },
+        conflict: ['competition_season_id', 'team_id', 'group_name'],
+        updatedAtColumn: 'updated_at',
+      }, rows);
+
+      const deletedCount = await tx.$executeRaw`
+        DELETE FROM "standings"
+        WHERE "competition_season_id" = ${competitionSeasonId}::int
+          AND ("team_id", "group_name") NOT IN (VALUES ${keepTuples})
+      `;
+      return { upserted: res.rows, deleted: Number(deletedCount) };
+    });
+
+    if (deleted > 0) this.logger.log(`${label}: 순위 옛 행 삭제 ${deleted}`);
+    return upserted;
+  }
+}
+
+/**
+ * 경기 행 계산 — 저장 라운드에 속한 경기만. DB 에 없는 팀이 낀 경기는 건너뛰고 그 API 팀 id 를 `missing` 에 모은다.
+ * collectOne 이 /teams 재수집 뒤 한 번 더 부르므로 순수 함수로 둔다 (DB·API 접근 없음).
+ */
+function buildMatchRows(
+  fixtures: ApiFixture[],
+  cs: { id: number },
+  roundIdByName: Map<string, number>,
+  detailByName: Map<string, boolean>,
+  venueIdByApi: Map<number, number>,
+  teamIdByApi: Map<number, number>,
+) {
+  const missing = new Set<number>();
+  const rows = fixtures
+    .filter((f) => roundIdByName.has(f.league.round))
+    .map((f) => {
+      const home = teamIdByApi.get(f.teams.home.id);
+      const away = teamIdByApi.get(f.teams.away.id);
+      if (home === undefined) missing.add(f.teams.home.id);
+      if (away === undefined) missing.add(f.teams.away.id);
+      if (home === undefined || away === undefined) return null;
+      const winner = f.teams.home.winner === true ? home : f.teams.away.winner === true ? away : null;
+      return {
+        api_fixture_id: f.fixture.id,
+        competition_season_id: cs.id,
+        round_id: roundIdByName.get(f.league.round) as number,
+        kickoff_at: f.fixture.date,
+        status_short: f.fixture.status.short,
+        status_long: f.fixture.status.long,
+        elapsed: f.fixture.status.elapsed,
+        extra_elapsed: f.fixture.status.extra,
+        venue_id: f.fixture.venue.id ? (venueIdByApi.get(f.fixture.venue.id) ?? null) : null,
+        referee: f.fixture.referee,
+        home_team_id: home,
+        away_team_id: away,
+        goals_home: f.goals.home,
+        goals_away: f.goals.away,
+        ht_home: f.score.halftime.home,
+        ht_away: f.score.halftime.away,
+        ft_home: f.score.fulltime.home,
+        ft_away: f.score.fulltime.away,
+        et_home: f.score.extratime.home,
+        et_away: f.score.extratime.away,
+        pen_home: f.score.penalty.home,
+        pen_away: f.score.penalty.away,
+        winner_team_id: winner,
+        detail_eligible: detailByName.get(f.league.round) ?? false,
+        as_of: new Date().toISOString(),
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+  return { rows, missing };
+}

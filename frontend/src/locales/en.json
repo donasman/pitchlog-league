@@ -6,7 +6,13 @@
     "teams": "Teams",
     "players": "Players",
     "standings": "Standings",
-    "stats": "Stats"
+    "stats": "Stats",
+    "competitionGroup": {
+      "league": "Leagues",
+      "european": "European",
+      "domesticCup": "Domestic cup",
+      "superCup": "Super cup"
+    }
   },
   "header": {
     "competitionSelect": "Competition",
@@ -21,7 +27,8 @@
     "leaguePhaseOngoing": "League Phase ongoing",
     "season": "season",
     "competitionsSection": "Competitions",
-    "language": "Language"
+    "language": "Language",
+    "accountSection": "Account"
   },
   "theme": {
     "toDark": "Switch to dark mode",
@@ -108,6 +115,20 @@
       "stats": "Stats",
       "h2h": "H2H",
       "timeline": "Timeline"
+    },
+    "unavailable": {
+      "not_provided": {
+        "lineup": "Lineup was not provided for this match",
+        "stats": "Stats were not provided for this match",
+        "events": "Events were not provided for this match",
+        "playerStats": "Player stats were not provided for this match"
+      },
+      "not_collected": {
+        "lineup": "Lineup has not been collected yet",
+        "stats": "Stats have not been collected yet",
+        "events": "Events have not been collected yet",
+        "playerStats": "Player stats have not been collected yet"
+      }
     }
   },
   "matches": {
@@ -118,6 +139,8 @@
     "allStatuses": "All",
     "noMatches": "No matches",
     "noMatchesDesc": "No matches for the selected filters.",
+    "pickCompetition": "Select a competition",
+    "pickCompetitionDesc": "Past seasons hold too many matches to list at once — pick one competition to see its fixtures.",
     "today": "Today",
     "tomorrow": "Tomorrow",
     "standingsPanel": "Standings",
@@ -127,7 +150,18 @@
     "statusScheduled": "Upcoming",
     "statusFinished": "Finished",
     "liveMatchCount": "{{count}} live",
-    "matchCount": "{{count}} matches"
+    "matchCount": "{{count}} matches",
+    "focus": {
+      "recent": "Recent results",
+      "upcoming": "Upcoming matches",
+      "noRecent": "No recent results yet.",
+      "noUpcoming": "No upcoming matches."
+    },
+    "showPast": "Show past ({{count}} days · {{matches}} matches)",
+    "showPast_one": "Show past ({{count}} day · {{matches}} matches)",
+    "showPast_other": "Show past ({{count}} days · {{matches}} matches)",
+    "hidePast": "Hide past matches",
+    "futureEmpty": "No matches scheduled from today. Use the button above to see past matches."
   },
   "standings": {
     "title": "Standings",
@@ -149,8 +183,12 @@
     "mobileHint": "Rank & team fixed · swipe left to see more columns",
     "zoneNote": "Zone — distinguished by colour and pattern on the left indicator",
     "uclLeagueNote": "36-team single table · not group stage",
+    "uclGroupNote": "Eight groups of four",
     "legend": {
+      "champion": "Champion",
+      "championLeader": "Leader",
       "ucl": "UCL direct",
+      "uclQualPlayoff": "UCL qualifying PO",
       "uel": "Europa League",
       "uecl": "Conference League",
       "relegation": "Relegation",
@@ -163,7 +201,8 @@
     "noDataDesc": "Standings for this competition have not been calculated yet.",
     "leaguePhaseTitle": "League Phase ongoing",
     "leaguePhaseDesc": "Top 8: R16 direct · 9–24: Playoff · 25+: Eliminated",
-    "leaguePhaseLink": "Knockout bracket",
+    "groupPhaseTitle": "Group stage",
+    "groupPhaseDesc": "Top two of each group reach the round of 16 · third drops to the Europa League · fourth is out",
     "errorTitle": "Could not load standings",
     "season": "2026-27 season",
     "leaguePhaseLabel": "UCL League Phase",
@@ -187,10 +226,6 @@
     "redCards": "Red",
     "cleanSheets": "Clean Sheets",
     "saves": "Saves",
-    "statusConfirmed": "Confirmed",
-    "statusPending": "Pending",
-    "statusUnavailable": "No data",
-    "statusRecheck": "Under review",
     "totalStats": "All competitions",
     "noStats": "No stats available.",
     "noStats2627": "No 2026-27 season stats for this player.",
@@ -201,7 +236,12 @@
     "team": "Club",
     "captain": "(C)",
     "age": "Age {{age}}",
-    "errorTitle": "Could not load player"
+    "errorTitle": "Could not load player",
+    "thisSeasonSection": "This season",
+    "thisSeasonNoData": "No stats for this season yet",
+    "sourceOfficial": "Official",
+    "sourceMatchRecords": "From match records",
+    "totalRow": "Total"
   },
   "team": {
     "stadium": "Stadium",
@@ -209,8 +249,8 @@
     "founded": "Founded",
     "manager": "Manager",
     "competitions": "Competitions",
-    "eplRank": "EPL Rank",
-    "eplRankPoints": "{{pts}} pts",
+    "leagueRank": "League Rank",
+    "leagueRankPoints": "{{pts}} pts",
     "allCompetitions": "All",
     "fixtures": "All Fixtures",
     "todayDivider": "Today",
@@ -223,7 +263,7 @@
     "live": "In progress",
     "upcoming": "Upcoming",
     "results": "Results",
-    "noSquad": "No player data.",
+    "noSquad": "Squad data has not been collected yet",
     "noFixtures": "No fixtures for this competition.",
     "season": "2026-27 season",
     "fixtureSubtitle": "2026-27 season · domestic + UCL",
@@ -233,17 +273,28 @@
     "filterLabel": "Competition"
   },
   "competition": {
-    "knockoutLink": "Knockout bracket",
     "leaguePhaseOngoing": "League Phase ongoing",
     "season": "2026-27 season",
     "leagueRank": "League Standings",
     "uclLeaguePhase": "UCL League Phase",
     "tabs": {
+      "bracket": "Bracket",
       "schedule": "Schedule",
       "standings": "Standings",
       "stats": "Stats"
     },
-    "mainMatches": "Key Matches",
+    "schedule": {
+      "live": "Live",
+      "upcoming": "Upcoming",
+      "results": "Results"
+    },
+    "round": {
+      "previous": "Previous round",
+      "next": "Next round",
+      "progressLabel": "Round progress",
+      "pkPrefix": "PK",
+      "noRoundsYet": "No rounds scheduled yet"
+    },
     "teams": "Clubs",
     "topScorers": "Top Scorers",
     "topAssisters": "Top Assists",
@@ -251,39 +302,27 @@
     "noStandings": "No standings data.",
     "allCompetitions": "All competitions",
     "allCompetitionsChip": "All ({{count}})",
-    "allMatches": "All fixtures",
-    "errorTitle": "Could not load competition"
+    "errorTitle": "Could not load competition",
+    "noDataYet": "Data collection has not started for this competition yet.",
+    "sidebarLabel": "Competitions",
+    "chipsLabel": "Choose competition",
+    "moreCompetitions": "More"
   },
-  "knockout": {
-    "pageTitle": "UEFA Champions League — Knockout",
-    "pageSubtitle": "2026-27 season · 2-leg aggregate",
-    "backLink": "Back to competition",
-    "legendInProgress": "In progress",
-    "legendConfirmed": "Through",
-    "legendTbd": "TBD",
-    "legendAgg": "Agg.: Leg1 (home) + Leg2 (away)",
-    "roundOf16": "Round of 16",
-    "quarterFinal": "Quarter-final",
-    "semiFinal": "Semi-final",
-    "final": "Final",
-    "leg1": "1st Leg",
-    "leg2Pending": "Awaiting 2nd leg",
-    "tbd": "TBD",
-    "leg2": "2nd Leg",
-    "aggregate": "Agg.",
-    "winner": "Through",
-    "through": "{{team}} through",
-    "inProgress": "In progress",
-    "tbd": "TBD",
-    "tieTbd": "TBD",
-    "tieComplete": "FT",
-    "noWinner": "No teams confirmed yet",
-    "noTeam": "TBD",
-    "errorTitle": "Could not load bracket"
+  "tie": {
+    "leg1": "Leg 1",
+    "leg2": "Leg 2",
+    "aggregate": "Aggregate",
+    "pending": "TBD",
+    "inProgress": "In progress"
+  },
+  "bracket": {
+    "emptyRound": "Bracket not drawn yet",
+    "byeLeaguePhase": "League phase bye",
+    "treeFromR16": "Bracket tree starts from the Round of 16 · currently {{round}}"
   },
   "home": {
-    "heroHeadline": "Europe's top 5 leagues and UCL, in one place",
-    "heroSubtitle": "Live matches in real time, finished matches until official stats are confirmed. EPL, La Liga, Bundesliga, Serie A, Ligue 1 and UCL — all by the same standard.",
+    "heroHeadline": "Every European football record, in one place",
+    "heroSubtitle": "From domestic leagues to cups and UEFA competitions — results, standings and player stats, updated live.",
     "btnTodayMatches": "Today's matches",
     "askPlaceholder": "Ask about player records or standings",
     "askCta": "Ask",
@@ -293,7 +332,7 @@
     "nextKickoffLabel": "Next kickoff",
     "viewAllLive": "View all live matches",
     "viewSchedule": "View today's schedule",
-    "competitionSection": "6 Competitions",
+    "competitionSection": "Top leagues",
     "competitionSectionDesc": "Click a card to go to that competition's standings",
     "viewAllComps": "View all competitions",
     "leaderLabel": "Leader",
@@ -311,7 +350,8 @@
     "statsLabel": "Stats",
     "teamsLabel": "Teams",
     "epl3Label": "EPL Top 3",
-    "allScorerLabel": "All competitions",
+    "leagueScorers": "Top scorers by league",
+    "eplScorersLabel": "EPL Top 3 scorers",
     "topTeamsLabel": "Leaders",
     "dataSource": "Data by API-Football",
     "openAll": "View all",
@@ -346,7 +386,15 @@
     "aggregateScore": "{{home}} – {{away}} agg.",
     "sideStandingsTitle": "Standings",
     "sideScoringTitle": "Top Scorers",
-    "eplTopScorerLabel": "EPL Top Scorer"
+    "eplTopScorerLabel": "EPL Top Scorer",
+    "myTeams": {
+      "title": "My Teams",
+      "empty_hint": "Tap the star on any team to add it to your favorites. Their next match and latest result will appear here.",
+      "browser_only_notice": "Saved on this browser only. Won't appear in other devices or private windows.",
+      "no_next_match": "No upcoming match",
+      "no_last_result": "No recent result",
+      "no_ranking": "No league ranking"
+    }
   },
   "stats": {
     "pageTitle": "Stats",
@@ -357,9 +405,10 @@
     "errorTitle": "Could not load stats",
     "noData": "No data",
     "noDataDesc": "No stats available for this competition.",
-    "allLeagues": "All competitions",
-    "allDesc": "Combined totals include breakdown by competition",
-    "breakdown": "By competition",
+    "filterCompLabel": "Competition",
+    "coverageLabel": "Coverage",
+    "appearances": "Apps",
+    "minutes": "Min",
     "rank": "#",
     "player": "Player",
     "team": "Team",
@@ -374,12 +423,21 @@
     "emptyTitle": "What can I find for you?",
     "emptyDesc": "Ask about fixtures, standings or player stats. Numbers come directly from the database.",
     "suggestLabel": "Suggested",
+    "suggested": {
+      "q1": "How is Son Heung-min doing this season?",
+      "q2": "When is Liverpool's next match?",
+      "q3": "Compare the last 5 matches of the EPL top 4",
+      "q4": "Which teams reached the Champions League Round of 16?"
+    },
     "disclaimer": "No predictions or opinions — only data that can be looked up.",
     "evidenceBtn": "Show source",
     "evidenceTool": "Tool",
     "evidenceAsOf": "As of",
     "evidenceSource": "Source",
     "asOfSuffix": "as of",
+    "dataLabel": "Data",
+    "showData": "Show source data",
+    "hideData": "Hide source data",
     "dataNote": "Numbers in answers are retrieved data. Source and timestamp shown below.",
     "thinking": "Looking up",
     "thinkingTools": "Tools",
@@ -394,7 +452,21 @@
     "comparison": "Comparison",
     "liveNote": "Live match — numbers change as the game progresses.",
     "recoverTip": "Get a notification when stats are confirmed?",
-    "clearChat": "Clear"
+    "clearChat": "Clear",
+    "viewAllStandings": "View full standings",
+    "viewAllMatches": "View all matches ({{total}})",
+    "topScorers": "Top scorers",
+    "topAssisters": "Top assisters",
+    "unitGoals": "goals",
+    "unitAssists": "assists",
+    "asOfLabel": "Answer as of",
+    "error": {
+      "not_configured": "Assistant is not configured yet. Please contact the administrator.",
+      "rate_limited": "Please try again in a moment.",
+      "model_error": "Failed to generate an answer. Please try again.",
+      "timeout": "Response is taking too long. Please try again.",
+      "generic": "An error occurred."
+    }
   },
   "notif": {
     "bell": "Notifications",
@@ -475,6 +547,94 @@
     "captain": "(C)",
     "phase5": "Phase 5",
     "season": "2026-27 season",
-    "country": "Country"
+    "country": "Country",
+    "scrollPrev": "Previous",
+    "scrollNext": "Next",
+    "pause": "Pause",
+    "play": "Play",
+    "position": {
+      "gk": "GK",
+      "def": "DEF",
+      "mid": "MID",
+      "fwd": "FWD",
+      "goalkeeper": "Goalkeeper",
+      "defender": "Defender",
+      "midfielder": "Midfielder",
+      "attacker": "Attacker"
+    }
+  },
+  "round": {
+    "regularSeason": "Matchday {{n}}",
+    "leaguePhaseMatchday": "League Stage · Matchday {{n}}",
+    "matchday": "Matchday {{n}}",
+    "oneOverN": "1/{{n}}-finals",
+    "roundOfN": "Round of {{n}}",
+    "quarterFinals": "Quarter-finals",
+    "semiFinals": "Semi-finals",
+    "grandFinal": "Grand Final",
+    "final": "Final",
+    "thirdPlaceFinal": "3rd-place final",
+    "groupX": "Group {{group}}",
+    "groupStage": "Group Stage",
+    "leaguePhase": "League Stage",
+    "knockoutPlayoffs": "Knockout Play-offs",
+    "preliminaryRound": "Preliminary Round",
+    "preliminaryFinal": "Preliminary Final",
+    "playoffs": "Play-offs",
+    "relegationPlayoff": "Relegation Play-off",
+    "promotionPlayoff": "Promotion Play-off",
+    "qualifyingRoundOrdinal": "Qualifying Round {{n}}",
+    "ordinalRound": "Round {{n}}"
+  },
+  "country": {
+    "England": "England",
+    "Scotland": "Scotland",
+    "Wales": "Wales",
+    "NorthernIreland": "Northern Ireland",
+    "World": "International"
+  },
+  "favorites": {
+    "add": "Add {{name}} to favorites",
+    "remove": "Remove {{name}} from favorites",
+    "limit_reached": "You can save up to {{limit}} favorites.",
+    "loginRequired": "Sign in to save your favourite teams.",
+    "loginCta": "Sign in with Google",
+    "errors": {
+      "unknown_team": "That team is not available.",
+      "duplicate": "This team is already in your list.",
+      "network": "Please try again in a moment.",
+      "load_failed": "Couldn't load your favorites.",
+      "session_missing": "We couldn't verify your sign-in. Please sign in again."
+    }
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signInWithGoogle": "Continue with Google",
+    "signOut": "Sign out",
+    "profile": {
+      "email": "Email"
+    },
+    "error": {
+      "signInCancelled": "Sign-in cancelled.",
+      "signInFailed": "Sign-in failed. Please try again in a moment."
+    }
+  },
+  "live": {
+    "lastUpdated": "Last updated {{time}}",
+    "stale": "Update delayed"
+  },
+  "errors": {
+    "notImplemented": "Not available from the backend yet ({{what}})",
+    "networkFailed": "Could not reach the backend: {{detail}}",
+    "requestFailed": "Request failed ({{status}}): {{detail}}",
+    "competitionRequired": "A competition must be specified",
+    "competitionNotFound": "Competition not found: {{ref}}",
+    "feature": {
+      "h2h": "head-to-head",
+      "top_scorers": "top scorers",
+      "top_assisters": "top assisters",
+      "favorites": "favorites",
+      "notifications": "notifications"
+    }
   }
 }

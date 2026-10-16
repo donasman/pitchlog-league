@@ -10,9 +10,11 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { searchAll } from '@/utils/searchIndex'
+import { useSearch } from '@/hooks/useSearch'
 import TeamBadge from '@/components/ui/TeamBadge'
 import { getLocalizedName } from '@/utils/localization'
+
+const EMPTY_GROUP = []
 
 export default function SearchPanel({ onClose }) {
   const { t, i18n } = useTranslation()
@@ -22,10 +24,14 @@ export default function SearchPanel({ onClose }) {
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(-1)
 
-  const results = useMemo(() => searchAll(query), [query])
+  // 검색은 백엔드가 매칭한다 — 250ms 디바운스 + AbortController 는 훅 안에서
+  const { results, loading, error: searchError } = useSearch(query)
+  const teams        = results?.teams        ?? EMPTY_GROUP
+  const players      = results?.players      ?? EMPTY_GROUP
+  const competitions = results?.competitions ?? EMPTY_GROUP
   const flat = useMemo(
-    () => [...results.teams, ...results.players, ...results.competitions],
-    [results]
+    () => [...teams, ...players, ...competitions],
+    [teams, players, competitions]
   )
 
   // 마운트 시 입력창 자동 포커스
@@ -61,6 +67,9 @@ export default function SearchPanel({ onClose }) {
   }
 
   function go(item) {
+    // iOS 는 input 포커스 상태에서 라우트가 바뀌어도 확대 상태·소프트 키보드를 붙잡고 있다.
+    // 이동 직전에 blur 로 확실히 놓아준다.
+    inputRef.current?.blur()
     const path = item.type === 'team'    ? `/teams/${item.slug}`
       : item.type === 'player'           ? `/players/${item.slug}`
       : `/competitions/${item.slug}`
@@ -69,7 +78,9 @@ export default function SearchPanel({ onClose }) {
   }
 
   const hasResults = flat.length > 0
-  const showNoResults = query.trim() && !hasResults
+  // "결과 없음" 은 실제로 응답이 왔고 (results !== null) 로딩·오류가 아닐 때만 —
+  // 첫 요청 진행 중이거나 실패한 경우를 결과 없음으로 위장하지 않는다
+  const showNoResults = query.trim() && !loading && !searchError && results !== null && !hasResults
 
   return (
     <>
@@ -111,16 +122,26 @@ export default function SearchPanel({ onClose }) {
 
           {/* 결과 영역 */}
           <div className="max-h-[60vh] overflow-y-auto">
-            {showNoResults && (
+            {searchError && (
+              <p className="text-sm text-destructive text-center py-8">{searchError}</p>
+            )}
+
+            {!searchError && loading && !hasResults && (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                {t('common.loading')}
+              </p>
+            )}
+
+            {!searchError && showNoResults && (
               <p className="text-sm text-muted-foreground text-center py-8">
                 {t('header.searchNoResults')}
               </p>
             )}
 
-            {results.teams.length > 0 && (
+            {teams.length > 0 && (
               <ResultGroup
                 label={t('nav.teams')}
-                items={results.teams}
+                items={teams}
                 startIdx={0}
                 activeIdx={activeIdx}
                 locale={locale}
@@ -128,22 +149,22 @@ export default function SearchPanel({ onClose }) {
               />
             )}
 
-            {results.players.length > 0 && (
+            {players.length > 0 && (
               <ResultGroup
                 label={t('nav.players')}
-                items={results.players}
-                startIdx={results.teams.length}
+                items={players}
+                startIdx={teams.length}
                 activeIdx={activeIdx}
                 locale={locale}
                 onSelect={go}
               />
             )}
 
-            {results.competitions.length > 0 && (
+            {competitions.length > 0 && (
               <ResultGroup
                 label={t('nav.competition')}
-                items={results.competitions}
-                startIdx={results.teams.length + results.players.length}
+                items={competitions}
+                startIdx={teams.length + players.length}
                 activeIdx={activeIdx}
                 locale={locale}
                 onSelect={go}
@@ -181,7 +202,7 @@ function ResultGroup({ label, items, startIdx, activeIdx, locale, onSelect }) {
             }`}
           >
             {item.type === 'team' && (
-              <TeamBadge initials={item.initials} color={item.color} size="xs" name={item.label} />
+              <TeamBadge initials={item.initials} color={item.color} logoUrl={item.logoUrl} size="xs" name={item.label} />
             )}
             {item.type === 'player' && (
               <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-muted-foreground">

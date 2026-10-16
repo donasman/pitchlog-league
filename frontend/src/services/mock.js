@@ -1,0 +1,528 @@
+/**
+ * Mock 구현 — 화면 검증용. 실제 서비스 데이터가 아니다.
+ *
+ * 페이지는 이 파일을 직접 import 하지 않는다. `services/api.js` 가
+ * VITE_USE_MOCK 에 따라 이 구현과 `services/live.js` 중 하나를 고른다.
+ *
+ * 오류를 빈 배열로 숨기지 않고 throw. 페이지는 catch 후 ErrorState 를 표시한다.
+ */
+
+import { COMPETITION_OVERVIEW, LIVE_PULSE, NEXT_KICKOFF, DATA_AS_OF } from '@/mocks/overview'
+import { COMPETITIONS, SEASONS, getCompetitionBySlug } from '@/mocks/competitions'
+import { MATCHES, getMatchById, getMatchesByCompetition, getMatchesByTeam } from '@/mocks/matches'
+import { MATCH_TEAM_STATS } from '@/mocks/matchStats'
+import { getLineup, getTopRated } from '@/mocks/lineups'
+import { STANDINGS, getStandings } from '@/mocks/standings'
+import { TEAMS, getTeamBySlug, getTeamsByCompetition } from '@/mocks/teams'
+import {
+  PLAYERS,
+  getPlayerBySlug,
+  getPlayerStats,
+  calcTotalStats,
+  TOP_SCORERS,
+  TOP_ASSISTERS,
+  getCompetitionScorers,
+  getCompetitionAssisters,
+} from '@/mocks/players'
+import { ASSISTANT_SAMPLES } from '@/mocks/assistant'
+import { apiIdFromAlias, normalizeLiveMatch, normalizePlayerDetail } from './normalize'
+import { NotImplementedError } from './http'
+
+// ─── 대회 ──────────────────────────────────────────────────────
+
+/** 대회 목록 */
+export async function fetchCompetitions() {
+  return COMPETITIONS
+}
+
+/**
+ * 통계 페이지 전용 대회 목록. Mock 은 6대회만 시드하므로 결과는 fetchCompetitions 와 같다 —
+ * 드롭다운 원소가 없어도 chip 6개로 정상 (mock 회귀 검사 대상 아님). live 와 시그니처만 맞춘다.
+ */
+export async function fetchCompetitionsForStats() {
+  return COMPETITIONS
+}
+
+/**
+ * 시즌 목록. 실 API 와 시그니처를 맞춘다 — 호출부(AppHeader)가 대회를 넘긴다.
+ * Mock 은 대회별 시즌 데이터가 없어 어느 대회든 같은 목록을 준다.
+ * @param {string} [_slugOrRef]
+ */
+export async function fetchSeasons(_slugOrRef) {
+  return SEASONS
+}
+
+/** 대회 상세 */
+export async function fetchCompetition(slug) {
+  const comp = getCompetitionBySlug(slug)
+  if (!comp) throw new Error(`Competition not found: ${slug}`)
+  return comp
+}
+
+/**
+ * 대회 허브 — 한 번의 호출로 화면에 필요한 데이터를 묶어 반환
+ * @param {string} slug
+ */
+export async function fetchCompetitionHub(slug, _season) {
+  const comp = getCompetitionBySlug(slug)
+  if (!comp) throw new Error(`Competition not found: ${slug}`)
+  return {
+    comp,
+    matches:   getMatchesByCompetition(slug),
+    standings: getStandings(slug),
+    teams:     getTeamsByCompetition(slug),
+    topScorers:   getCompetitionScorers(slug).length > 0 ? getCompetitionScorers(slug) : TOP_SCORERS,
+    topAssisters: getCompetitionAssisters(slug).length > 0 ? getCompetitionAssisters(slug) : TOP_ASSISTERS,
+  }
+}
+
+// ─── 경기 ──────────────────────────────────────────────────────
+
+/**
+ * 전체 경기 목록 (옵션 필터). Mock 은 시즌별 데이터가 없어 season 은 무시한다.
+ * 반환 모양은 실 API 와 같아야 한다 — `unavailableReason` 은 Mock 에서 항상 null 이다.
+ */
+export async function fetchAllMatches({ competitionSlug, displayState, season: _season } = {}) {
+  let result = [...MATCHES]
+  if (competitionSlug) result = result.filter(m => m.competitionSlug === competitionSlug)
+  if (displayState)    result = result.filter(m => m.displayState === displayState)
+  return { items: result, unavailableReason: null }
+}
+
+/** 대회별 경기 */
+export async function fetchMatchesByCompetition(slug, _season) {
+  return getMatchesByCompetition(slug)
+}
+
+/** 경기 상세 */
+export async function fetchMatch(id) {
+  const match = getMatchById(id)
+  if (!match) throw new Error(`Match not found: ${id}`)
+  return match
+}
+
+/**
+ * 경기 상세 + 팀 통계 + 라인업 + 평점 상위 선수
+ * availability 는 실 API 와 shape 을 맞춘다 — 라인업이 없으면 'not_provided' (킥오프 1h 전 공개 규약).
+ * Mock 은 이벤트·통계·선수 통계 원본이 있으면 'ok' · 없으면 'not_provided'.
+ */
+export async function fetchMatchDetail(id) {
+  const match = getMatchById(id)
+  if (!match) throw new Error(`Match not found: ${id}`)
+  const stats  = MATCH_TEAM_STATS[id] ?? null
+  const lineup = getLineup(id)
+  return {
+    match,
+    stats,
+    lineup,                                // null = 라인업 미공개 (31경기)
+    topRated: getTopRated(id, 3),
+    availability: {
+      lineups:     lineup ? 'ok' : 'not_provided',
+      events:      (match.events && match.events.length > 0) ? 'ok' : 'not_provided',
+      teamStats:   stats  ? 'ok' : 'not_provided',
+      playerStats: getTopRated(id, 3).length > 0 ? 'ok' : 'not_provided',
+    },
+  }
+}
+
+// ─── 팀 ────────────────────────────────────────────────────────
+
+/**
+ * 팀 목록. 실 구현(live.js)은 competition 이 필수라 시그니처를 맞춰 둔다.
+ * @param {{ competition?: string }} [params]
+ */
+export async function fetchTeams({ competition } = {}) {
+  if (!competition) return TEAMS
+  return getTeamsByCompetition(competition)
+}
+
+/** 국내 리그별 팀 그룹 목록 */
+export async function fetchTeamsByLeague() {
+  // 백엔드 연결 시 GET /api/teams/by-league 로 교체
+  const DOMESTIC_SLUGS = ['premier-league', 'la-liga', 'bundesliga', 'serie-a', 'ligue-1']
+  return DOMESTIC_SLUGS.map(slug => ({
+    comp: getCompetitionBySlug(slug),
+    teams: TEAMS.filter(t => t.competitions.includes(slug)),
+  })).filter(g => g.comp && g.teams.length > 0)
+}
+
+/** 팀 목록 (대회 필터) */
+export async function fetchTeamsByCompetition(slug) {
+  return getTeamsByCompetition(slug)
+}
+
+/** 팀 상세 */
+export async function fetchTeam(slug) {
+  const team = getTeamBySlug(slug)
+  if (!team) throw new Error(`Team not found: ${slug}`)
+  return team
+}
+
+/** 팀 경기 목록 */
+export async function fetchTeamMatches(slug) {
+  return getMatchesByTeam(slug)
+}
+
+/**
+ * 팀 상세 페이지 묶음 데이터
+ * @param {string} slug
+ */
+export async function fetchTeamDetail(slug) {
+  const team = getTeamBySlug(slug)
+  if (!team) throw new Error(`Team not found: ${slug}`)
+  const matches      = getMatchesByTeam(slug)
+  const leagueRank   = STANDINGS['premier-league']?.entries.find(e => e.teamSlug === slug) ?? null
+  const players      = PLAYERS.filter(p => p.teamSlug === slug)
+  const competitions = team.competitions.map(s => getCompetitionBySlug(s)).filter(Boolean)
+  return { team, matches, leagueRank, players, competitions }
+}
+
+/**
+ * 팀 전체 일정 페이지 묶음 데이터
+ * @param {string} slug
+ */
+export async function fetchTeamFixtures(slug) {
+  const team = getTeamBySlug(slug)
+  if (!team) throw new Error(`Team not found: ${slug}`)
+  const matches      = getMatchesByTeam(slug)
+  const competitions = team.competitions.map(s => getCompetitionBySlug(s)).filter(Boolean)
+  return { team, matches, competitions }
+}
+
+// ─── 순위 ──────────────────────────────────────────────────────
+
+/** 순위 */
+export async function fetchStandings(competitionSlug, _season) {
+  const s = getStandings(competitionSlug)
+  if (!s) throw new Error(`Standings not found: ${competitionSlug}`)
+  return s
+}
+
+// ─── 선수 ──────────────────────────────────────────────────────
+
+/**
+ * 선수 상세 페이지 묶음 데이터.
+ *
+ * Mock 도 실 API 와 같은 shape 을 만들어 `normalizePlayerDetail` 을 통과시킨다 —
+ * 정규화 이전 형태를 페이지가 소비하면 두 분기의 계약이 갈리고, 컴포넌트가 필드 존재
+ * 여부로 분기 판정을 하게 된다 (dataStatus 판단이 컴포넌트로 흩어졌던 044d0ae 회귀 배경).
+ * @param {string} slug
+ */
+export async function fetchPlayerDetail(slug) {
+  const player = getPlayerBySlug(slug)
+  if (!player) throw new Error(`Player not found: ${slug}`)
+  const rawStats = getPlayerStats(slug)
+  // Mock 원본은 `dataStatus`·오브젝트 없는 평면 shape 이다.
+  // 백엔드 `PlayerSeasonStatDto` shape (competition·season·team 오브젝트)으로 조립한다.
+  const seasonStats = rawStats.map(s => ({
+    competition: {
+      // alias.id('epl') → apiId(39) 역매핑. 미매핑이면 undefined 로 두어 normalize 가 ref 폴백.
+      apiId:       apiIdFromAlias(s.competitionId) ?? undefined,
+      ref:         s.competitionId,
+      displayName: s.competitionName,
+    },
+    season: { year: 2026, label: '2026-27' },
+    team: {
+      apiId:            player.teamId,   // mock 은 문자열 slug — teamColor 가 0 으로 fallback (색 하나만 나옴)
+      displayName:      player.teamName,
+      shortDisplayName: player.teamName,
+    },
+    appearances:    s.appearances,
+    starts:         s.starts,
+    minutes:        s.minutesPlayed,     // mock 필드명은 minutesPlayed → 백엔드 필드명은 minutes
+    goals:          s.goals,
+    assists:        s.assists,
+    yellowCards:    s.yellowCards,
+    yellowredCards: null,                // mock 은 이 필드 없음
+    redCards:       s.redCards,
+    asOf:           new Date().toISOString(),
+  }))
+  // dto.totals 는 백엔드가 계산해 준 값의 자리다. Mock 은 원본 rawStats 로 같은 규약(assists 하나라도
+  // null 이면 null)을 재현하려 했지만, mock PLAYER_STATS 는 assists 가 전부 정수라 갈림 없음.
+  const totals = calcTotalStats(rawStats)
+  const totalMinutes = seasonStats.reduce((a, s) => a + s.minutes, 0)
+
+  // feat/stats-frontend-redesign — `seasonTotals` 새 필드. player_match_stats 자체집계 소스라
+  // assists 는 number 로 채운다 (null 안 만듦). breakdown 은 rawStats 의 대회별 항목을 그대로 옮긴다.
+  const seasonTotalsBreakdown = rawStats.map(s => ({
+    competition: {
+      apiId:            apiIdFromAlias(s.competitionId) ?? undefined,
+      ref:              s.competitionId,
+      displayName:      s.competitionName,
+      shortDisplayName: s.competitionName,
+    },
+    goals:   s.goals,
+    assists: s.assists ?? 0,
+    apps:    s.appearances,
+    minutes: s.minutesPlayed,
+  }))
+
+  const dto = {
+    apiId:            player.id,
+    ref:              `${player.id}-${slug}`,
+    displayName:      player.name,
+    shortDisplayName: player.shortName ?? player.name,
+    originalName:     player.name,
+    firstname:    null,
+    lastname:     null,
+    birthDate:    player.dateOfBirth,
+    birthPlace:   null,
+    birthCountry: null,
+    nationality:  player.nationality,
+    heightCm:     null,
+    weightKg:     null,
+    photoUrl:     null,
+    primaryTeam: player.teamId ? {
+      apiId:            player.teamId,
+      ref:              `${player.teamId}-${player.teamSlug}`,
+      displayName:      player.teamName,
+      shortDisplayName: player.teamName,
+      code:             undefined,
+      logoUrl:          undefined,
+    } : null,
+    jerseyNumber: player.number,
+    position:     player.position,
+    seasonStats,
+    totals: {
+      appearances: totals.appearances,
+      minutes:     totalMinutes,
+      goals:       totals.goals,
+      assists:     totals.assists,
+      yellowCards: totals.yellowCards,
+      redCards:    totals.redCards,
+    },
+    seasonTotals: rawStats.length > 0 ? {
+      season:      { year: 2026, label: '2026-27' },
+      goals:       totals.goals,
+      assists:     totals.assists ?? 0,
+      apps:        totals.appearances,
+      minutes:     totalMinutes,
+      yellowCards: totals.yellowCards,
+      redCards:    totals.redCards,
+      breakdown:   seasonTotalsBreakdown,
+    } : null,
+    asOf: new Date().toISOString(),
+  }
+  return normalizePlayerDetail(dto)
+}
+
+// UCL 녹아웃 대진표는 T 판 (feat/tournament-bracket) 에서 대진표 탭 (buildTies) 으로 이관 · fetchUCLKnockout 삭제.
+// `mocks/matches.js:UCL_KNOCKOUT_TIES` 상수는 src/mocks/** 무건드 원칙에 따라 별개 판에서 정리.
+
+// ─── 홈 화면 묶음 ──────────────────────────────────────────────
+
+/**
+ * 홈 오버뷰 — 제품 앞장에 필요한 데이터를 한 번에 반환
+ * 백엔드 연결 시 GET /api/overview 로 교체
+ *
+ * feat/stats-frontend-redesign — 실 API 와 같은 shape 을 만들기 위해 `leagueScorers` 3개
+ * (EPL · La Liga · Bundesliga) 를 조립한다. 각 카드는 `{competitionSlug, competitionName, entries, error}` 형태다.
+ * Mock 은 오류를 시뮬레이션하지 않으므로 error 는 항상 null.
+ */
+export async function fetchOverview() {
+  const eplStandings = getStandings('premier-league')?.entries?.slice(0, 3) ?? []
+  // 실 API 대회 객체와 같이 currentSeason 을 붙인다 — 홈 푸터가 읽는다 (오버뷰 Mock 에는 없음)
+  const competitions = COMPETITION_OVERVIEW.map(o => ({
+    ...o,
+    currentSeason: COMPETITIONS.find(c => c.slug === o.slug)?.currentSeason ?? null,
+  }))
+  // 리그별 득점 카드 3개 — mock 의 대회별 득점 순위에서 상위 5명씩 slice.
+  // getCompetitionScorers 가 비면 TOP_SCORERS(EPL 상위) 로 폴백해 shape 이 항상 채워지게 한다.
+  const HOME_SLUGS = ['premier-league', 'la-liga', 'bundesliga']
+  const leagueScorers = HOME_SLUGS.map(slug => {
+    const list = getCompetitionScorers(slug)
+    const entries = (list.length > 0 ? list : TOP_SCORERS).slice(0, 5)
+    return {
+      competitionSlug: slug,
+      competitionName: COMPETITIONS.find(c => c.slug === slug)?.name ?? slug,
+      entries,
+      error: null,
+    }
+  })
+  return {
+    competitions,
+    livePulse:    LIVE_PULSE,
+    nextKickoff:  NEXT_KICKOFF,
+    dataAsOf:     DATA_AS_OF,
+    leagueScorers,
+    eplTop3:      eplStandings,
+  }
+}
+
+/**
+ * 통계 페이지 — 대회별 득점·도움 순위
+ * 백엔드 연결 시 GET /api/stats?competition= 으로 대체
+ *
+ * feat/stats-frontend-redesign — 실 API 는 `coverage`·`asOf` 를 최상단에 붙인다.
+ * Mock 은 결정론적이어야 하므로 고정 값을 실어 준다 (값은 임의 · shape 만 정확히 맞춘다).
+ * @param {string} slug  대회 slug
+ */
+export async function fetchCompetitionStats(slug) {
+  const comp = getCompetitionBySlug(slug)
+  if (!comp) throw new Error(`Competition not found: ${slug}`)
+  return {
+    comp,
+    topScorers:   getCompetitionScorers(slug),
+    topAssisters: getCompetitionAssisters(slug),
+    coverage: { finished: 0, collected: 0, ratio: 1.0 },
+    asOf:     new Date(0).toISOString(),
+  }
+}
+
+// ─── 검색 ──────────────────────────────────────────────────────
+
+/**
+ * 검색 Mock — 클라이언트 인덱스(`utils/searchIndex.js`)를 그대로 재사용.
+ *
+ * 실 API 는 백엔드가 매칭하지만 Mock 모드는 백엔드가 없다 —
+ * `getSearchIndex()` 로 팀·선수·대회 인덱스를 한 번 만든 뒤 `searchAll` 로 걸러 낸다.
+ * 반환 shape 은 실 API 와 같은 { teams, players, competitions }.
+ *
+ * signal 은 Mock 에서 의미가 없지만 시그니처는 실 API 와 맞춘다 —
+ * useSearch 가 abort 됐다고 판정하면 그 결과를 버리므로 결과가 유해하지 않다.
+ *
+ * @param {string} q
+ * @param {{ signal?: AbortSignal, limit?: number, locale?: string }} [_opts]
+ */
+export async function fetchSearch(q, _opts = {}) {
+  const { getSearchIndex, searchAll } = await import('@/utils/searchIndex')
+  const limit = _opts.limit ?? 5
+  const index = await getSearchIndex()
+  // searchAll 은 기존 클라이언트 인덱스 아이템 shape(초기 label/sublabel/initials/color/logoUrl/shortName/names)을 그대로 준다 —
+  // SearchPanel 이 같은 shape 를 소비하므로 여기서 다시 정규화하지 않는다
+  return searchAll(index, q, limit)
+}
+
+// ─── 어시스턴트 ────────────────────────────────────────────────
+
+/**
+ * AI 어시스턴트 Mock — ASSISTANT_SAMPLES 를 실 API 응답 shape 으로 변환.
+ * 실 shape: { answer, evidence: [{tool, args, asOf}], data: [], truncated, model }.
+ * ASSISTANT_SAMPLES 는 evidence 가 단일 객체(tool/args/asOf/source)라 배열로 감싸고,
+ * 카드 데이터는 data 배열로 옮긴다. 매칭 안 되는 질문은 tool 없이 "그 질문은 아직 데이터가 없다".
+ * @param {string} question
+ */
+export async function askAssistant(question) {
+  const sample = ASSISTANT_SAMPLES.find(s => s.question === question)
+  if (!sample) {
+    // 백엔드 응답 shape 을 흉내낸다. answer 는 도구 결과 문장 자리 —
+    // 실 서비스에서는 LLM/도구 결과가 그대로 오므로 서비스 계층에서 번역하지 않는다.
+    return {
+      answer:    'No data available for that question yet.',
+      evidence:  [],
+      data:      [],
+      truncated: false,
+      model:     'mock',
+    }
+  }
+  const evidence = sample.evidence
+    ? [{ tool: sample.evidence.tool, args: sample.evidence.args, asOf: sample.evidence.asOf }]
+    : []
+  return {
+    answer:    sample.answer,
+    evidence,
+    data:      sample.cards ?? [],
+    truncated: false,
+    model:     'mock',
+  }
+}
+
+// ─── 라이브 폴링 ───────────────────────────────────────────────
+
+/**
+ * 매 호출 카운터 — 모듈 스코프라 리렌더로 씻기지 않는다.
+ * B 판 훅이 폴링을 걸었을 때 elapsed 가 올라가는 착시를 만든다.
+ */
+let _liveCallCount = 0
+
+/**
+ * Mock 라이브 폴링 — `LIVE_PULSE` 를 `LiveMatchDto` 로 변환한 뒤 `normalizeLiveMatch` 로 정규화한다.
+ *
+ * 결정론적 애니메이션 규약:
+ *   - 매 호출마다 카운터 +1.
+ *   - elapsed = elapsedBase + (count % 20) — 20 콜마다 순환 (HMR·다중 마운트로 90 에 못 붙게).
+ *   - 45 ≤ elapsed < 47 구간에서 extraElapsed = count % 4 (그 밖은 null).
+ *   - goalBump = floor(count / 4) — 매 4번째 호출마다 첫 항목 home 골 +1.
+ *   - dataVersion = 1 + goalBump — 스코어가 바뀔 때만 오른다.
+ *
+ * apiId 는 실 API 와 겹치지 않도록 900000+ 대역을 쓴다. 로고는 null.
+ * mock 은 network 를 안 타므로 signal 은 무시.
+ *
+ * @param {{ signal?: AbortSignal }} [_opts]
+ * @returns {Promise<{ asOf: string, matches: Array<ReturnType<typeof normalizeLiveMatch>> }>}
+ */
+export async function fetchLiveMatches(_opts) {
+  _liveCallCount++
+  const bump = _liveCallCount
+  const goalBump = Math.floor(bump / 4)
+  const nowIso = new Date().toISOString()
+  const matches = LIVE_PULSE.map((p, i) => {
+    const elapsedBase = p.minute ?? 0
+    const elapsed = elapsedBase + (bump % 20)
+    const extra = elapsed >= 45 && elapsed < 47 ? (bump % 4) : 0
+    const homeScoreBase = p.home.score ?? 0
+    const awayScoreBase = p.away.score ?? 0
+    return {
+      id: 900000 + i,
+      kickoffAt: DATA_AS_OF,
+      competition: {
+        ref: `mock-${p.competitionSlug}`,
+        apiId: 100 + i,
+        displayName: p.competitionSlug,
+        shortDisplayName: p.competitionSlug,
+        originalName: p.competitionSlug,
+        type: 'LEAGUE',
+        format: 'ROUND_ROBIN',
+      },
+      home: {
+        ref: `mock-team-${i}h`,
+        apiId: 1000 + i * 2,
+        displayName: p.home.name,
+        shortDisplayName: p.home.initials,
+        originalName: p.home.name,
+        logoUrl: null,
+      },
+      away: {
+        ref: `mock-team-${i}a`,
+        apiId: 1001 + i * 2,
+        displayName: p.away.name,
+        shortDisplayName: p.away.initials,
+        originalName: p.away.name,
+        logoUrl: null,
+      },
+      statusShort: p.displayState === 'halftime' ? 'HT' : '2H',
+      elapsed,
+      extraElapsed: extra > 0 ? extra : null,
+      goals: {
+        home: i === 0 ? homeScoreBase + goalBump : homeScoreBase,
+        away: awayScoreBase,
+      },
+      dataVersion: 1 + goalBump,
+      asOf: nowIso,
+    }
+  })
+  return { asOf: nowIso, matches: matches.map(normalizeLiveMatch) }
+}
+
+/**
+ * Mock 경기 상세 캐시 무효화 — Mock 은 `_cachedGet` 계층을 안 타므로 실제로 지울 것이 없다.
+ * live 구현과 시그니처만 맞춘다 (B 판 훅이 스위치 뒤 API 를 그대로 소비).
+ */
+export function invalidateMatchDetail(_id) {}
+
+// ─── 즐겨찾기 (인증 필요) ──────────────────────────────────────
+//
+// Mock 모드에서는 즐겨찾기 서버 저장이 존재하지 않는다. Supabase 로그인·백엔드 JWT 검증이
+// Mock 파이프라인 밖이기 때문 — 여기서 빈 배열을 돌려주면 로그인·비로그인 갈래가 무의미해지고
+// 실 API 스위치에서 회귀가 났을 때 화면이 조용히 성공한 것처럼 보인다.
+// isFavoritesEnabled 자체가 `USE_MOCK !== 'true'` 로 잠기므로 Provider 는 이 함수를 부르지 않는다.
+// 함수를 남겨두는 이유: api.js 스위치가 두 구현의 export 세트를 대칭으로 유지.
+// 방어선으로 NotImplementedError 를 던진다 — 실수로 스위치가 뒤집혀도 화면에 이유가 드러난다.
+
+export async function fetchMyFavorites() {
+  throw new NotImplementedError('errors.feature.favorites')
+}
+
+export async function putMyFavorites() {
+  throw new NotImplementedError('errors.feature.favorites')
+}

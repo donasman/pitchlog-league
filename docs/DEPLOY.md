@@ -1,0 +1,726 @@
+# PitchLog 배포 — EC2 (백엔드) + Vercel (프론트)
+
+> 판: `infra/ec2-deploy` (2026-09-15) · `docs/NEXT_STEPS.md` 1장 4번 · 14장
+> 근거 결정: 백엔드 EC2 t3.small · systemd · Docker 안 씀 · Vercel `/api/*` rewrite 로 same-origin
+
+## 준비물
+
+| 항목 | 상태 | 값·비고 |
+|---|---|---|
+| EC2 인스턴스 | ✅ | t3.small · Ubuntu 24.04 · ap-northeast-2 |
+| 탄력적 IP | ✅ | **3.36.159.128** |
+| SSH 사용자 | ✅ | `ubuntu` (키쌍 등록됨) |
+| 보안 그룹 | ✅ | 22(내 IP) · 3000(0.0.0.0/0) |
+| Supabase | ✅ | `pitchlog-league-dev` (서울) |
+| Vercel 계정 | ✅ | GitHub 연동 |
+| DATABASE_URL | 채워야 함 | Supabase Session Pooler 5432 · `sslmode=require` |
+| GEMINI_API_KEY | 채워야 함 | AI Studio |
+| API_FOOTBALL_KEY | 채워야 함 | rapidapi (서버는 조회만이면 비워도 됨) |
+| SUPABASE_URL | 채워야 함 (09-28 #129 부터 **필수**) | `https://<프로젝트>.supabase.co` — 없으면 env 검증에서 부팅 실패 (`env.validation.ts:113`). 아래 "Google 로그인" 절 |
+
+## 첫 배포 (1회)
+
+### 1. `infra/ec2/` 폴더 전체를 서버에 복사
+
+```bash
+scp -r infra/ec2 ubuntu@3.36.159.128:~/
+```
+
+bootstrap.sh 가 옆의 `backend.env.example` 과 `pitchlog-backend.service` 를 읽어서 자리를 잡는다. 파일 하나만 보내면 안 된다.
+
+### 2. bootstrap 실행 (약 3~5분)
+
+```bash
+ssh -i ~/.ssh/pitchlog-league-ec2.pem ubuntu@3.36.159.128
+sudo bash ec2/bootstrap.sh
+```
+
+설치되는 것:
+- Node.js 22 (NodeSource)
+- **postgresql-client 17 (PGDG 저장소)** — Ubuntu 24.04 apt 기본은 16 인데 Supabase 는 pg_dump 17 을 요구
+- git · swapfile 2GB · pitchlog 시스템 사용자
+- `/etc/pitchlog/backend.env` (템플릿 · 0600)
+- systemd 유닛 `pitchlog-backend` (enable · 아직 안 뜸)
+- sudoers (`ubuntu` 가 재시작·상태·로그만 비밀번호 없이)
+
+### 3. 환경변수 채우기
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+```
+
+필수: `DATABASE_URL` · `SUPABASE_URL`(09-28 #129 부터) · `GEMINI_API_KEY` · `API_FOOTBALL_KEY`. 나머지는 기본값. `GEMINI_MODEL=gemini-3.5-flash-lite` 확인 (RPD 500).
+
+### 4. 저장소 clone
+
+```bash
+cd /opt/pitchlog
+git clone https://github.com/donasman/pitchlog-league.git .
+```
+
+`/opt/pitchlog` 는 bootstrap 이 `ubuntu:ubuntu` 로 만들어놨다. clone 후 소유권 그대로 둔다 — systemd 는 `pitchlog` 로 돌지만 파일은 읽기만 하면 되고, 배포는 `ubuntu` 가 한다.
+
+### 5. 첫 배포
+
+```bash
+bash /opt/pitchlog/infra/ec2/deploy.sh
+```
+
+인자가 없으면 `main` 기준 (`deploy.sh:22` `REF="${1:-main}"`). `npm ci` → `prisma generate` → `nest build` → systemd 재시작 → health 30초 대기.
+
+> ⚠️ **10-07 기준 운영 배포는 `dev` 다** — `main` 은 09-07(#4) 에 멈춰 있고 `infra/ec2/` 도 없다(`infra/README.md` 뿐).
+> `dev` → `main` 릴리즈 PR 을 한 번도 내지 않았으므로 `bash /opt/pitchlog/infra/ec2/deploy.sh dev` 로 배포한다.
+> Vercel Production Branch 도 `dev` (아래 Vercel 절 4번).
+>
+> **`deploy.sh` 는 마이그레이션을 적용하지 않는다** (`prisma migrate` 단계 없음). 새 마이그레이션이 든 판은
+> 배포 전에 따로 적용해야 한다 — 09-28 #129 의 `20260928120000_enable_rls_public` · `20260928120100_add_user_favorite_teams`.
+> **10-08 운영 DB 에 적용** — 백업(`pitchlog-20261008-1500.dump` · 18.7 MB) 뒤 `prisma migrate deploy` 로 미적용 3개
+> (`20260910120000_search_indexes` 포함) 적용, `migrate status` = up to date. 아래 "Google 로그인" 절.
+> **10-15 운영 DB 에 적용** — `20261015120000_match_detail_attempts` (#139 · `matches.detail_attempts` · `detail_last_attempt_at` 추가 ·
+> 같은 폴더에 `rollback.sql`). **배포 전에 적용해야 한다** — 새 Prisma client 가 새 컬럼을 SELECT 한다
+> (`match-details-backfill.service.ts:240` `select: { …, detailAttempts }`). 10-15 은 마이그레이션 적용 **후** 배포했다.
+
+### 6. 확인
+
+```bash
+curl -i http://localhost:3000/health
+sudo systemctl status pitchlog-backend
+```
+
+`{ "status": "ok", "db": true, "asOf": "..." }` 나와야 정상.
+
+## Vercel (프론트)
+
+1. Vercel Dashboard → **Import Project** → 저장소 선택
+2. **Root Directory**: `frontend`
+3. **Environment Variables**:
+   - `VITE_USE_MOCK=false`
+   - `VITE_API_BASE_URL` 은 **비워 둔다** (same-origin · `services/http.js:15` 이 빈 값이면 `/api/...` 상대경로로 fetch)
+   - `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` (09-28 #129) — **둘 다 있어야 로그인 UI 가 뜬다.** 하나라도 비면 로그인·즐겨찾기가 조용히 꺼진다(콘솔 경고 1회 · `frontend/.env.example`). 빌드 시점에 박히므로 값을 바꾸면 재배포
+4. **Production Branch**: `dev` — 저장소 기본 브랜치가 `dev` 이므로 Vercel Settings → Git → Production Branch 를 `dev` 로 (main 은 뒤처져 있어 `vercel.json` 이 없다)
+5. **SPA fallback rewrite 필수** — `vercel.json` 에 `/((?!api/|assets/).*)` → `/index.html` 규칙이 있어야 딥링크(주소창 직접 진입·새로고침·북마크) 가 404 안 뜬다. `/api/` 규칙 뒤 순서 유지. `/assets/` 는 Vite 빌드 정적 자산이라 명시 제외 (Vercel filesystem 매치가 rewrite 앞선다지만 안전 보장 위해 · root 정적 favicon 등은 filesystem 우선 매치에 의존).
+6. 배포 후 확인:
+   - Vercel URL 접속 → 홈에서 순위표 로딩되면 성공
+   - 로딩되면 `vercel.json` 의 rewrite (`/api/:path*` → `http://3.36.159.128:3000/api/:path*`) 가 동작 중
+   - **딥링크 검증**: (a) `/matches/<id>` 직접 진입 200 (b) `/api/competitions` 는 백엔드 응답 (`/api/health` 는 안 됨 — health 는 `/health` 로만 매핑돼 있어 `/api/health` 는 `Cannot GET` 을 돌려준다) (c) 존재하지 않는 경로 `/없는경로` 는 앱 자체 404 화면 (Vercel 404 아님) · **없는 정적 파일은 진짜 404**: `curl -sI https://<앱>.vercel.app/logos/teams/999999.webp` 가 `HTTP/2 404` · content-type 이 `image/webp` 나 `text/html` 이 아니어야 한다 (fix/logos-and-spa-fallback 판)
+
+## 서버 접속
+
+두 경로 중 하나. 집 Wi-Fi 는 22번을 막는 경우가 있어 SSM 이 확실하다.
+
+### SSH (내 IP 22번 허용 상태)
+
+```bash
+ssh -i ~/.ssh/pitchlog-league-ec2.pem ubuntu@3.36.159.128
+```
+
+Wi-Fi 이동으로 공인 IP 가 바뀌면 트러블슈팅 "ssh Connection timed out" 항 참조.
+
+### AWS Session Manager (22번 차단 환경 · 권장 폴백)
+
+AWS Console → **EC2** → 인스턴스 선택 → **연결** → **웹 브라우저에서** → **Session Manager** → 세션 시작.
+브라우저 안 셸이 `ssm-user` 로 열린다. 우리 서비스는 `ubuntu` 아래에서 배포하므로 바로:
+
+```bash
+sudo su - ubuntu
+```
+
+**전제**: 인스턴스에 SSM Agent (Ubuntu 24.04 AMI 기본 포함) · IAM 역할에 `AmazonSSMManagedInstanceCore` 정책 부착.
+후자 없으면 콘솔에서 "연결" 버튼이 회색이다.
+
+## 재배포
+
+```bash
+bash /opt/pitchlog/infra/ec2/deploy.sh          # 최신 main
+bash /opt/pitchlog/infra/ec2/deploy.sh dev      # dev 브랜치
+bash /opt/pitchlog/infra/ec2/deploy.sh v1-...   # 태그
+```
+
+이전 dist 는 자동으로 `dist.prev` 로 보존된다 — **배포 시작 시점에 서비스가 health 를 통과할 때만** 갱신하므로, 실패한 배포를 반복해도 마지막 성공본이 남는다 (10-07 결함 실측 · 10-08 PR #133). health 실패 시 스크립트가 롤백 명령을 출력한다.
+
+**원격 이력을 다시 쓴 뒤 첫 배포 (10-16)** — `deploy.sh` 는 `git pull --ff-only origin "$REF"` (`deploy.sh:51`) 라 이력이 다시 쓰이면
+`/opt/pitchlog` 의 옛 커밋에서 fast-forward 할 수 없다. 10-16 `dev`·`main` 이력 재작성(커밋 메시지·저자만 · 파일 내용·트리 불변) 뒤
+첫 배포 전에 서버 저장소를 새 이력으로 한 번 맞췄다 — 파일 내용이 같은 새 커밋으로 `git checkout -B dev <sha>` → `bash /opt/pitchlog/infra/ec2/deploy.sh dev`.
+이 재작성으로 모든 커밋 SHA 가 바뀌었다.
+
+## 롤백
+
+```bash
+cd /opt/pitchlog/backend
+rm -rf dist && mv dist.prev dist
+sudo systemctl restart pitchlog-backend
+curl -sf http://localhost:3000/health
+```
+
+## 트러블슈팅
+
+### `prisma generate` 실패: `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL`
+
+첫 실 배포 (2026-09-15) 에서 나옴. 원인: `backend/prisma.config.ts` 가 로딩 시 `DATABASE_URL` 을 요구하는데, `deploy.sh` 는 `ubuntu` 로 돌아 `/etc/pitchlog/backend.env` (0600 · `pitchlog` 소유) 를 읽지 못한다. `prisma generate` 는 DB 에 접속하지 않으므로 실 값이 필요 없다.
+
+수정: `deploy.sh` 가 `prisma generate` 앞에 placeholder `DATABASE_URL` 을 인라인으로 세팅 (`fix/deploy-prisma-generate-env` 판). **한 번만 돌린다** — `deploy.sh` 는 pull 로 자기 자신이 바뀌면 자동 재실행된다 (`fix/deploy-self-update` 판).
+
+### ssh `Connection timed out` (3000 포트는 정상)
+
+증상: `ssh -i ~/.ssh/pitchlog-league-ec2.pem ubuntu@3.36.159.128` 이 timed out · 브라우저·curl 로 `http://3.36.159.128:3000/*` 는 정상 응답.
+
+원인: EC2 보안 그룹 SSH(22) 인바운드 규칙 소스가 "내 IP/32" 로 잡혀 있는데 로컬 공인 IP 가 바뀜 (Wi-Fi 이동·ISP DHCP 갱신 등). 3000 포트는 0.0.0.0/0 이라 무관.
+
+조치: AWS EC2 콘솔 → 보안 그룹 `pitchlog-league-backend-sg` → 인바운드 규칙 편집 → SSH 소스 **"내 IP"** 재선택 → 규칙 저장. 몇 초 뒤 ssh 재시도.
+
+### 없는 정적 파일이 `200` + HTML 로 응답 (로고 폴백 안 뜸)
+
+증상 (2026-09-17 실측 · Cowork Chrome): `curl -sI https://<앱>/logos/teams/999999.webp` 가 `HTTP/2 200 · content-type: text/html · 989 B` (index.html). 브라우저 `<img onError>` 폴백이 안 걸려 배지 자리가 빈 채로.
+
+원인: `vercel.json` SPA fallback `/((?!api/).*)` 가 **점 포함 경로까지 삼킴** — 존재하지 않는 정적 파일도 index.html 로 되돌림. 따라서 이미지 요청이 200 + HTML 로 성공하고, `<img>` 는 파싱 실패로 조용히 실패.
+
+수정 (`fix/logos-and-spa-fallback` 판): fallback regex 를 `/((?!api/)[^.]*)` 로 변경 — **점이 없는 경로만** index.html 로. 정적 자산은 확장자로 판정되어 filesystem 매치가 우선. SPA 라우트는 점 없음(팀·경기 ref 는 숫자·하이픈).
+
+**검증**: `curl -sI .../logos/teams/999999.webp | grep -i content-type` 이 `text/html` 이면 잘못된 상태 · 정상은 `HTTP/2 404`.
+
+### 직접 URL 진입 시 `404: NOT_FOUND` (클릭 이동은 정상)
+
+증상 (2026-09-16 실측 · Chrome · 재현 2/2): `https://pitchlog-league.vercel.app/matches/1552754` 를 주소창에 직접 열면 Vercel `404: NOT_FOUND`. 홈 → 경기 → 카드 클릭으로 같은 URL 에 도달하면 정상. 새로고침·링크 공유·북마크 전부 404.
+
+원인: `frontend/vercel.json` 에 `/api/:path*` rewrite 만 있고 나머지 경로를 `index.html` 로 보내는 SPA fallback 이 없음. Vercel 은 정적 파일이 없으면 그대로 404.
+
+수정 (`fix/vercel-spa-fallback` 판): rewrites 에 `{ "source": "/((?!api/|assets/).*)", "destination": "/index.html" }` 규칙 추가 · `/api/` 규칙 뒤 순서. `/assets/` 는 Vite 빌드 정적 자산이라 명시 제외.
+
+### 어시스턴트가 무슨 질문에도 같은 답 (Vercel 엣지 캐시)
+
+증상: 두 번째 이후 질문의 응답이 첫 답과 동일. 브라우저 devtools 응답 헤더에 `x-vercel-cache: HIT` · 응답 ~19ms · 같은 ETag.
+
+원인: `CacheHeaderInterceptor` 가 HTTP 메서드를 안 가려 POST `/api/assistant` 응답에도 `Cache-Control: public, max-age=60` 이 붙음. Vercel 엣지가 정직하게 60초 캐시 → 같은 URL 로 오는 후속 POST 에 첫 답 재사용.
+
+수정: 인터셉터가 GET 이외 메서드에 `Cache-Control: no-store` 를 명시 (`fix/cache-header-post` 판). Vercel 엣지가 no-store 를 보고 캐시하지 않음. **한 번만 돌린다** — `deploy.sh` 는 pull 로 자기 자신이 바뀌면 자동 재실행된다 (`fix/deploy-self-update` 판).
+
+### 첫 실 배포 결함이 다시 나오면
+
+첫 실 배포 (2026-09-15) 에서 잡힌 결함 2건이 이 판(`fix/deploy-prisma-generate-env`)으로 정정됨:
+1. 위 `prisma generate` 실패
+2. `dist.prev` 없는 첫 배포에서 실패 시 trap 이 성립하지 않는 "mv dist.prev dist" 롤백 문구를 찍음 → 이제 존재 여부를 조건 분기.
+
+**한 번만 돌린다** — `deploy.sh` 는 pull 로 자기 자신이 바뀌면 자동 재실행된다 (`fix/deploy-self-update` 판).
+
+### bootstrap: `Package 'awscli' has no installation candidate`
+
+증상 (2026-09-15 실측): `sudo bash bootstrap.sh` 실행 시 `▶ AWS CLI` 단계에서 `E: Package 'awscli' has no installation candidate` 로 중단. 뒤의 백업 디렉터리·systemd 유닛 설치까지 함께 실행되지 않는다.
+
+원인: Ubuntu 23.10+ apt 저장소에서 `awscli` 패키지가 제거됨. 초판 bootstrap 이 apt 기본 v1 을 기대했으나 24.04 에는 없다.
+
+수정 (`infra/bootstrap-awscli-v2` 판): AWS CLI 블록을 공식 v2 zip 설치로 교체 (`awscli-exe-linux-x86_64.zip` → `./aws/install`). 멱등 — `command -v aws` 있으면 버전만 출력하고 건너뜀. 재실행하면 뒤의 백업 디렉터리·유닛 설치까지 이어진다.
+
+이미 수동으로 AWS CLI v2 를 깐 상태라면 bootstrap 재실행에서 그 aws 를 감지하고 건너뜀.
+
+### deploy.sh 가 세 번 돌아야 새 코드가 반영됐다면 (자기 자신 갱신 결함)
+
+증상 (2026-09-15 실측): `deploy.sh` 를 실행했는데 이전 판의 결함(예: prisma 에러) 이 계속 재현. 두 번째 실행에서도 옛 trap 문구 · 옛 41행. 세 번째 실행에서야 새 코드가 돌았음.
+
+원인: bash 는 실행 중 열어둔 파일(옛 inode)을 계속 읽고 `git pull` 은 새 inode 로 파일을 교체한다. `deploy.sh` 자기 자신이 pull 로 바뀌어도 이번 실행은 옛 코드로 끝까지 돈다.
+
+수정 (`fix/deploy-self-update` 판): 인자 파싱에 `--no-pull` 재진입 플래그 추가. pull 후 HEAD 가 바뀌었으면 `exec bash "$0" --no-pull "$REF"` 로 프로세스를 새 파일로 갈아 재실행. `--no-pull` 이면 최신화 단계를 건너뛰어 무한 재실행 방지.
+
+이후 배포는 그대로 `bash /opt/pitchlog/infra/ec2/deploy.sh` — 자기 자신이 바뀌면 로그에 "▶ deploy.sh 갱신됨 → 새 버전으로 재실행" 이 한 줄 뜨고 새 코드로 이어진다.
+
+## 백업 자동화 (S3)
+
+`infra/backup-s3` 판 (2026-09-15) — 매일 KST 04:00 (UTC 19:00) 에 `pitchlog-backup.timer` 가 발동해 `backup-to-s3.sh` → `backup.mjs` (로컬 `pg_dump 17`) → `aws s3 cp` 로 `s3://<BUCKET>/dumps/pitchlog-YYYYMMDD-HHMM.dump` 업로드. 로컬 사본은 `/var/backups/pitchlog` 에 backup.mjs 보관 정책(최근 8 + 월별 12) 그대로. S3 는 버킷 수명 주기 30일.
+
+### 준비 (사용자 몫 · 이 판 밖)
+
+- 버킷 생성 · 리전 `ap-northeast-2` · 수명 주기 30일
+- EC2 인스턴스 IAM 역할에 정책 부착 — `s3:PutObject` · `s3:ListBucket` · `s3:GetObject` (버킷 자체와 `arn:aws:s3:::<BUCKET>/dumps/*`)
+- 인스턴스에 역할 attach
+- `sudoedit /etc/pitchlog/backend.env` → `BACKUP_S3_BUCKET=<실 버킷>` 채움
+
+### 확인
+
+```bash
+# 역할 확인 (없으면 curl 실패)
+curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/
+
+# 타이머 확인 — 다음 실행 시각·최근 실행
+systemctl list-timers pitchlog-backup*
+
+# 수동 1회 실행 (첫 성공 확인)
+sudo systemctl start pitchlog-backup
+sudo journalctl -u pitchlog-backup -n 30
+
+# S3 확인
+aws s3 ls s3://<BUCKET>/dumps/ | tail -3
+```
+
+### 복원 리허설 (PC · Docker 필요)
+
+EC2 엔 Docker 를 깔지 않는다. 리허설은 PC 에서:
+
+```bash
+aws s3 cp s3://<BUCKET>/dumps/<최신 파일명> .
+cd backend
+npm run backup:verify -- <경로>
+```
+
+행 수 일치 출력을 `docs/AGENT_RUNS.md` 판 행에 남긴다.
+
+**확장**: 덤프는 `pg_dump -n public` 라 `CREATE EXTENSION` 이 포함되지 않는다 (`backup.mjs` 결정 · 무건드). 복원 리허설은 `pg_restore` 를 세 섹션으로 분할해 **pre-data (스키마·테이블) 복원 뒤 · post-data (인덱스·제약) 앞** 에 확장을 만든다 — 현재 `pg_trgm` 하나 (`restore-check.mjs` 의 `REQUIRED_EXTENSIONS` 상수). **새 확장을 스키마에 도입하면 이 상수를 갱신해야 리허설이 통과한다.** `BACKUP_RESTORE_EXTENSIONS` env 로 쉼표 구분 오버라이드 가능.
+
+**정적 검사 한계**: `node --check` 는 문법만 검사한다 · 정의되지 않은 식별자(no-undef) 는 잡지 못한다. `restore-check.mjs` 같은 스크립트의 실패 경로(pg_restore 오류 처리 등)는 사람이 3회 루프에서 재현해야 검증된다. `backend/` 에 eslint 도입은 별도 판 (현재 `oxlint` 는 `src/ test/` 만 대상 · `scripts/` 밖).
+
+### 리허설 실패: `FATAL: the database system is starting up`
+
+증상 (2026-09-16 실측 · Windows Docker Desktop · postgres:17): `npm run backup:verify -- <경로>` 1단계 "준비됨" 직후 2단계에서 `psql: error: connection to server on socket ... FATAL: the database system is starting up` → docker 종료 코드 2 → 실패.
+
+원인: 공식 postgres 이미지는 첫 기동 시 initdb 후 임시 서버(localhost-only) 를 내리고 본 서버를 재기동한다. 초판 준비 판정(`pg_isready` 1회 성공)이 임시 서버 단계에서도 통과해 재기동 사이에 걸림.
+
+수정 (`fix/restore-check-ready-race` 판): 준비 판정을 `docker exec psql -Atc 'select 1'` **연속 2회 성공** (1초 간격 · 최대 60초) 으로 교체. 임시 서버 → 본 서버 재기동 사이 흔들림을 잡는다.
+
+### 리허설 실패: `operator class "public.gin_trgm_ops" does not exist`
+
+증상 (2026-09-16 실측 · #74 머지 후): 1·2단계 통과 후 3단계 `pg_restore` 실패 —
+```
+ERROR: operator class "public.gin_trgm_ops" does not exist for access method "gin"
+Command was: CREATE INDEX competitions_name_trgm_idx ON public.competitions USING gin (name public.gin_trgm_ops);
+```
+
+원인: `backup.mjs` 는 `pg_dump -n public` 이라 `CREATE EXTENSION` 이 덤프에 포함되지 않음. 복원 대상 pitchlog_verify 에 `pg_trgm` 이 없어 trgm 인덱스 생성이 실패.
+
+수정 (`fix/restore-check-sections` 판): 3단계 `pg_restore` 를 `--section=pre-data` → `CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA public` → `--section=data` → `--section=post-data` 로 분할. pre-data 가 `CREATE SCHEMA public` 을 만들고 · 그 뒤 확장이 생기고 · 마지막 post-data 인덱스가 `public.gin_trgm_ops` 를 참조. 새 확장 추가 시 `REQUIRED_EXTENSIONS` 상수 갱신.
+
+### 리허설 실패: `schema "public" already exists`
+
+증상 (2026-09-16 실측 · #75 머지 후): 2단계 "확장 생성: pg_trgm" 통과 후 3단계 `pg_restore` 실패 — `Command was: CREATE SCHEMA public;`.
+
+원인: 덤프 안에 `CREATE SCHEMA public` 이 포함돼 있어 스크립트가 미리 `CREATE SCHEMA IF NOT EXISTS public` 을 만들면 `pg_restore --exit-on-error` 가 already exists 로 실패. #75 판이 두 경로 중 IF NOT EXISTS 를 택했으나 실측이 CREATE SCHEMA 포함 사실을 확정.
+
+수정 (`fix/restore-check-sections` 판): 2단계에서 `CREATE SCHEMA` · 확장 생성 호출을 제거. 3단계 `pg_restore` 를 pre-data → 확장 → data → post-data 3분할 — public 은 pg_restore pre-data 가 만든다.
+
+### 유닛 문법 검증 (서버에서)
+
+```bash
+sudo systemd-analyze verify /etc/systemd/system/pitchlog-backup.service
+sudo systemd-analyze verify /etc/systemd/system/pitchlog-backup.timer
+```
+
+### 이 판이 하지 않은 것 (별도 판)
+
+- **리허설 자동화** — EC2 네이티브 `postgresql-17` + 주간 타이머 · `restore-check.mjs` 에 로컬 러너 추가. 4-b 워커 뒤 별도 판 (`docs/NEXT_STEPS.md` 4장 예약).
+- **실패 알림** — journald 감시·통지는 4-b 스케줄러 판에서 (지금은 실패도 journald 에만 남음).
+- **S3 버전 관리** — 스코프 밖.
+
+## 백필 워커 (4-b-1)
+
+`MatchDetailsBackfillService` 를 `@Cron` 트리거로 반복 호출해 백필-2 나머지 4시즌을 무인 실행한다. 종료 사유 3분류 (`cap_reached`/`no_targets`/`error`) 로 상태 갱신 · 겹침 방지 · ~~커서 재개~~ → 경기 단위 재시도로 재개 (10-15 #139 · 아래 "안전장치").
+
+### 켜기 (재시작이 곧 스위치)
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# SCHEDULER_ENABLED=true
+# BACKFILL_WORKER_ENABLED=true
+sudo systemctl restart pitchlog-backend
+sudo journalctl -u pitchlog-backend -f
+# 부팅 로그: "scheduler: enabled · jobs=[QuotaSnapshotJob, BackfillWorkerJob]"
+# 각 트리거: "backfill-worker cap_reached · processed=..."
+```
+
+### 상태 확인
+
+```bash
+curl -s http://localhost:3000/health | jq .scheduler
+```
+
+`scheduler.jobs.backfillWorker.lastOutcome` 가 `cap_reached` / `no_targets` / `error` 중 하나로 갱신됨. `running=true` 면 진행 중.
+
+### 끄기
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# SCHEDULER_ENABLED=false   (마스터 · 모든 잡 중지)
+# 또는 BACKFILL_WORKER_ENABLED=false (백필만 중지 · quota-snapshot 은 유지)
+sudo systemctl restart pitchlog-backend
+```
+
+### env (6개)
+
+- `SCHEDULER_ENABLED` (true/false · 기본 false) — 마스터. false 면 어떤 잡도 등록되지 않는다 (부팅 로그 "scheduler: disabled").
+- `BACKFILL_WORKER_ENABLED` (true/false · 기본 false) — 백필 잡 개별.
+- `BACKFILL_WORKER_CRON` (기본 `5 * * * *` · 매시 5분) — 5 필드 cron. 유효성은 부팅 시 `CronJob` 생성자가 검사 (잘못된 값이면 부팅 실패).
+- `BACKFILL_WORKER_LIMIT` (정수 · 기본 200) — 1회 실행당 경기 수 상한 (4콜/경기 · 200 = 800콜).
+- `BACKFILL_WORKER_SEASONS` (쉼표 구분 · 기본 빈 값) — 순회할 시즌 목록. 빈 값이면 현재 시즌만 순회 (초판 동작). 각 항목은 `SEASON_YEARS` (2022~2026) 안 · 중복·빈 항목 금지 · 부팅 시 거부.
+- `BACKFILL_DAILY_CAP` (정수 · 1~7500 · **기본 5700**) — 일일 자율 상한. 하드 한도 7,500 미만으로 지킨다. `/status` 카운터 약 2분 지연 · 실제 사용량은 상한보다 최대 ~320콜 많을 수 있음. **백필-2 기간 운영값 6800** 권장 (여유 380). 변경 절차: `sudoedit /etc/pitchlog/backend.env` → `sudo systemctl restart pitchlog-backend` → 시작 로그 `일일 상한 <N>콜` 확인. 하드 한도 7,500 초과 시 429 로 멈추지만 ~~커서(`backfill_jobs.cursor_match_id`)로 재개된다 (손실·중복 없음)~~ → 다음 트리거의 대상 SELECT 가 미확정 경기를 다시 고른다 (10-15 #139 · 아래 "안전장치").
+
+### 백필-2 켜기 (나머지 4시즌 무인)
+
+**현재 시즌은 이미 CONFIRMED (#46) 이라 빈 값이면 매 트리거 `no_targets`.** 백필-2 를 켜려면 시즌 목록을 넣는다:
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# BACKFILL_WORKER_SEASONS=2026,2025,2024,2023,2022
+# 현재 시즌(2026) 을 맨 앞에 두는 이유: 진행 중 시즌 경기가 사이트에서 가장 많이 조회되므로
+# 새 경기가 CONFIRMED 로 승격되는 것을 최우선. 서버 실제 값도 이 순서.
+sudo systemctl restart pitchlog-backend
+sudo journalctl -u pitchlog-backend -f
+# 다음 트리거 로그 예: "backfill-worker cap_reached · 2026: processed=143 failed=0 · total=143"
+curl -s http://localhost:3000/health | jq .scheduler.jobs.backfillWorker.currentSeason
+```
+
+**CRON 값 따옴표 필수**:
+```
+BACKFILL_WORKER_CRON="*/10 * * * *"
+```
+따옴표 없으면 `bash source` 로 env 를 읽을 때 `*/10` 까지만 값으로 잡히고 뒤의 `* * * *` 가 **글로브 확장**되어 현재 디렉터리의 첫 파일을 명령으로 실행하려 한다 (2026-09-17 실측: `/opt/pitchlog` 에서 `CLAUDE.md: command not found` · `backend` 에서 `README.md: command not found`). systemd 는 따옴표를 벗겨 읽으므로 서비스 동작에는 영향 없다 — CLI 를 `sudo bash -c 'set -a; . env; ...'` 로 돌릴 때만 문제.
+
+**완료 판정**: 모든 시즌이 `no_targets` 이고 `total=0` 이면 로그 `all seasons done` 한 줄이 뜨고 `lastOutcome=no_targets` 로 수렴. 이후 재시작 없이 이 상태가 지속되면 백필-2 완료.
+
+**대상 범위**: ~~워커는 `screenCompetitionWhere` (displayOrder ≤ 100) 만 순회 — 리그 5개 + UCL 만. 국내 컵 6개는 워커 순회에서 제외~~ →
+09-17 4층 분리(`e8f6977`) 이후 워커가 부르는 `MatchDetailsBackfillService` 는 `ingestScopeWhere`(isTracked 전부 · **19대회**)를 순회한다
+(`match-details-backfill.service.ts:135-137`). 컵·슈퍼컵·UEL·UECL 경기도 `detail_eligible` 이면 워커 대상이다.
+
+### 안전장치
+
+- **API_FOOTBALL_KEY 없음** — `SCHEDULER_ENABLED=true` 여도 잡 등록 안 됨 (부팅 경고 · 부팅 성공).
+- **겹침 방지** — 이전 실행 중이면 다음 트리거 skip (in-memory 플래그 · 재시작 시 초기화).
+- **에러 재시도** — `error` 는 다음 트리거에서 재시도. 재개는 ~~커서 (`backfill_jobs.cursor_match_id`)~~ 가 아니라 대상 SELECT 가 한다 (10-15 #139 · 컬럼은 남았고 상세 백필은 읽지도 쓰지도 않는다):
+  `detail_checked_at IS NULL` 인 종료 경기를 경기마다 `detail_attempts` 로 다시 고른다 — 0회 즉시 · 1회 뒤 1시간 · 2회 뒤 6시간 · 3회 포기 (warn 에 복구 SQL).
+  복구: `UPDATE matches SET detail_attempts = 0, detail_last_attempt_at = NULL WHERE detail_checked_at IS NULL AND detail_attempts >= 3;`
+- **DAILY_CAP** — 워커가 매 경기 앞에서 `/status` 로 확인 · 상한 `min(API 한도, BACKFILL_DAILY_CAP)` (`match-details-backfill.service.ts:206` · 기본 5,700 · 운영 env 6,800) 까지 남은 콜이 한 경기분(4콜) 미만이면 자연 중단 (`cap_reached` · `:293-295`).
+  10-16 #141 부터 대회시즌마다 대상 count 를 먼저 하고 0 이면 확인하지 않는다 (`no_targets`). 확인은 `QuotaService.current()` — 사용량만 보고 기록하지 않는다.
+- **`/status` 스냅숏** — `SCHEDULER_ENABLED=true` 면 매일 UTC 23:50 자동 (개별 스위치 없음). `api_quota_snapshots` INSERT 는 하루 1회 `QuotaSnapshotJob` 과 CLI(`cli/ingest.ts` — `status` 와 l0·l1·l2·l6·backfill·probe-details·probe-players 앞뒤)만 한다 ·
+  읽는 코드는 없다 · 보존 기간 정리 코드 없음 (10-16 #141). `/status` 는 쿼터를 소비하지 않는다 (10-14 하루 13,546회 호출에도 used 가 한도 7,500 미도달).
+
+## L2 매일 · L1 매주 (4-b-2)
+
+`L2Service.run()` · `L1Service.run()` 을 `@Cron` 트리거로 부른다. 백필 워커가 어제 경기(FT/AET/PEN · kickoff < now-24h) 를 잡으려면 L2 가 그전에 상태를 갱신해 둬야 한다 — 그게 이 잡이다. L1 은 이적·부상으로 스쿼드가 바뀌었을 때 다음 라운드에 반영되도록 주 1회 돈다.
+
+**동시 실행 정책**: 세 이송 잡(backfill · l2-daily · l1-weekly)은 완전 독립이다. matches 컬럼 소유권이 이미 분리(L2 = 스코어·라운드·순위 / L3~L5 = detail_*, `l2.service.ts` 소유권 경계) 되어 있어 같은 시각에 돌아도 안전. 각 잡은 자기 겹침만 in-memory 플래그로 막는다. quota 는 백필 워커만 매 경기 앞에서 `/status` 로 확인 — L2 는 ~~대회당 3콜 × 12 ≈ 36~~ → 현재 시즌 19대회(리그 5·UEFA 3 × 3콜 + 컵·슈퍼컵 11 × 2콜 = 최대 46콜 · missingTeams 시 대회시즌당 `/teams` +1콜, 10-08 #135), L1 은 팀당 1콜로 예산 대비 미미해 별도 방어를 두지 않는다.
+
+### 켜기 (개별 스위치)
+
+새 잡은 **꺼진 상태로 배포** 후 마스터 → 개별 스위치 순서로 켠다. 첫 관측이 정상이면 원복.
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# SCHEDULER_ENABLED=true           (마스터)
+# L2_DAILY_ENABLED=true            (매일 UTC 04:10 = KST 13:10)
+# L1_WEEKLY_ENABLED=true           (매주 월 UTC 05:30 = KST 14:30)
+sudo systemctl restart pitchlog-backend
+sudo journalctl -u pitchlog-backend -f
+# 부팅 로그: "l2-daily registered · cron=\"10 4 * * *\" UTC" · "l1-weekly registered · ..."
+# 각 트리거: "l2-daily ok · rounds=229 matches=2566 standings=204"
+```
+
+### 첫 관측 요령 (cron 을 임시로 가깝게)
+
+정기 시각까지 기다리지 않고 즉시 첫 실행을 보려면 CRON 을 몇 분 뒤로 잡는다. 예: 현재 05:12 UTC 라면 `L2_DAILY_CRON="15 5 * * *"` 로 3분 뒤 트리거. 관측 뒤 원복하고 restart.
+
+### 상태 확인
+
+```bash
+curl -s http://localhost:3000/health | jq '.scheduler.jobs'
+# {
+#   "backfillWorker": {...},
+#   "l2Daily":  { "enabled": true, "lastOutcome": "ok",      "lastTotals": {"rounds":229,"matches":2566,"standings":204}, ... },
+#   "l1Weekly": { "enabled": true, "lastOutcome": "ok",      "lastTeams": {"target":12,"covered":12,"failed":0}, "lastPlayers":456, ... }
+# }
+```
+
+### env (새 4개)
+
+- `L2_DAILY_ENABLED` (true/false · 기본 false) — 개별 스위치. `SCHEDULER_ENABLED=true` 여야 효과.
+- `L2_DAILY_CRON` (기본 `10 4 * * *` · UTC 04:10 = KST 13:10) — 5 필드. UTC 로 등록. **유럽 저녁 경기 종료(최대 22:00 UTC) 뒤 · 워커 24h 컷 앞** 시각. 잘못된 값이면 부팅 실패.
+- `L1_WEEKLY_ENABLED` (true/false · 기본 false) — 개별 스위치.
+- `L1_WEEKLY_CRON` (기본 `30 5 * * 1` · 매주 월 UTC 05:30 = KST 14:30) — 백필 워커 매시 5분 트리거·L2 데일리와 겹치지 않는 시각.
+
+### outcome 3분류
+
+`L2Summary.partial` · `L1Summary.partial` 을 그대로 반영한다:
+
+- `ok`      — partial 없음
+- `partial` — 일부 대회·팀이 안 들어감 (unknownRounds · missingTeams 등 진짜 이상). journalctl 요약 줄에 `skipped=[...]`.
+  10-08 실측: Copa del Rey 2026 Round of 128 에 3~5부 9팀이 teams 에 없어 54경기 중 9경기 누락 → `l2Daily=partial`.
+  그날은 `ingest -- l0`(19대회 · 대회시즌 94 · 팀 7814 · 경기장 7290 · 참가 7814 — L0 요약 = 대회시즌별 upsert 합계 · 고유 수 아님 · 경고 `Coupe de France: 시즌 미제공 2026`) 뒤
+  `ingest -- l2` 재실행으로 54/54 · partial 0 (pending `FA Cup 2026 (no_top_flight)`). 같은 날 PR #135 부터는 L2 가
+  현재 시즌의 missingTeams 를 만나면 그 대회시즌 `/teams` 1콜을 스스로 다시 받는다 (결과 필드 `teamsRefreshed`).
+- `error`   — `run()` throw. 다음 트리거에서 재시도.
+
+**pending** (L2 만) — outcome 과 별개로 요약 로그 끝에 `pending=[...]` 로 표기된다. "정상 진행 중 대기" 대회시즌 (FA Cup·Copa del Rey 가 1월 본선 진입 전 등 예선 단계) 이 여기 들어간다. outcome 은 `ok` 로 유지 — 매일 partial 로 찍혀 진짜 이상을 가리던 문제를 분리하기 위함 (fix/l2-pending-not-partial).
+
+### 끄기
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# L2_DAILY_ENABLED=false            (L2 만 중지 · 나머지 잡 유지)
+# 또는 SCHEDULER_ENABLED=false      (마스터 · 모든 잡 중지)
+sudo systemctl restart pitchlog-backend
+```
+
+### 실측 체크리스트 (켠 다음 날)
+
+- [ ] `curl -s http://localhost:3000/health | jq '.scheduler.jobs.l2Daily.lastOutcome'` → `"ok"`
+- [ ] `curl -s http://localhost:3000/api/matches | jq '.asOf'` — 어제 갱신 시각으로 이동했는가
+- [ ] `journalctl -u pitchlog-backend --since "24h ago" | grep backfill-worker | grep processed` — `processed>0` 이 있는가 (어제 경기 상세가 붙었는가)
+
+## L4 라이브 폴러 (관측 · 쓰기 · 2판)
+
+> 1판(관측)은 아래 절 그대로. 2판이 얹은 것: `LIVE_POLLER_MODE=observe|write` 스위치 · 조건부 UPDATE (역행 가드) · L2 매일이 진행 중 경기 덮지 않음 · `GET /api/live`.
+
+### 2판 스위치·전환 (모드 · 관측→쓰기)
+
+기본은 `observe` (관측만 · 1판과 동일 동작). `write` 로 바꾸는 것은 클럽 복귀일·첫 킥오프 전에 한다.
+
+```bash
+sudo su - ubuntu
+bash /opt/pitchlog/infra/ec2/deploy.sh dev
+curl -s localhost:3000/health | jq '.scheduler.jobs.livePoller | {enabled, mode}'
+# → { "enabled": true, "mode": "observe" }
+```
+
+**쓰기로 전환**
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_POLLER_MODE=write
+sudo systemctl restart pitchlog-backend
+```
+
+전환 후 경기 중 확인:
+```bash
+sudo journalctl -u pitchlog-backend --since "10 min ago" | grep -E "live-poller (write|blocked)"
+curl -s localhost:3000/health | jq '.scheduler.jobs.livePoller | {mode, writtenToday, blockedToday}'
+```
+
+**되돌리기 (문제 시)**
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_POLLER_MODE=observe
+sudo systemctl restart pitchlog-backend
+# 쓰인 값은 다음 L2 매일(UTC 04:10) 이 공식값으로 덮음.
+```
+
+### 2판 로그 앵커 (grep · 1판 앵커 위에 추가)
+
+```
+live-poller registered · mode=<observe|write> · period=15s · slowAt=6000 · stopAt=7000
+live-poller write · <apiFixtureId> <home>-<away> <prev>→<next> <hg>-<ag>
+live-poller blocked · <apiFixtureId> <curStatus>(<curElapsed>) ← <newStatus>(<newElapsed>)
+```
+
+대기 tick 로그 (`live-poller tick · targets=0 ...`) 는 2판부터 억제 (창 open/closed 는 유지).
+
+### 2판 `/api/live` 확인
+
+```bash
+curl -s -D - localhost:3000/api/live -o /dev/null | grep -i cache-control
+# → Cache-Control: public, max-age=0, s-maxage=5
+curl -s localhost:3000/api/live | jq '{asOf, count: (.matches|length)}'
+# 진행 중 경기 + FT/AET/PEN 후 3시간 이내 경기 반환. 없으면 count=0.
+```
+
+다른 `/api/*` 헤더가 안 바뀌었는지 확인:
+```bash
+curl -s -D - localhost:3000/api/matches -o /dev/null | grep -i cache-control
+# → Cache-Control: public, max-age=60
+```
+
+### 3판 스위치 (FT 즉시 상세 저장 · winner · standings 갱신)
+
+기본은 `false` (기존 2판 동작 유지). `MODE=write` 여야 3판 효과.
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_POLLER_MODE=write
+# LIVE_FT_DETAILS_ENABLED=true
+sudo systemctl restart pitchlog-backend
+curl -s localhost:3000/health | jq '.scheduler.jobs.livePoller | {mode, finalizedToday, standingsRefreshedToday}'
+# → { "mode": "write", "finalizedToday": 0, "standingsRefreshedToday": 0 }
+```
+
+**되돌리기 (문제 시)**
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_FT_DETAILS_ENABLED=false
+sudo systemctl restart pitchlog-backend
+# 이미 저장된 상세는 남는다. 승격(detail_checked_at) 은 24h 뒤 백필 워커가 4콜로 마감.
+```
+
+### 3판 로그 앵커 (grep · 2판 앵커 위에 추가)
+
+```
+live-poller registered · mode=<observe|write> · finalize=<true|false> · period=15s · slowAt=6000 · stopAt=7000
+live-poller finalize · <apiFixtureId> <home>-<away> lineups=<N> events=<N> teamStats=<N> playerStats=<N> winner=<teamId|null>
+live-poller standings · <competition label> rows=<N>
+live-poller finalize error · <apiFixtureId> <gate>: <message>
+```
+
+FT 직후 확인:
+```bash
+sudo journalctl -u pitchlog-backend --since "10 min ago" | grep -E "live-poller (finalize|standings)"
+curl -s localhost:3000/health | jq '.scheduler.jobs.livePoller | {finalizedToday, standingsRefreshedToday}'
+```
+
+### 3판 동작 세부
+
+- **호출 조건**: `MODE=write` AND `LIVE_FT_DETAILS_ENABLED=true` AND !probe AND status ∈ {FT,AET,PEN} 첫 진입 (`isFirstTerminal` OR `kind='status'`) AND `finalized Set` 에 없음. 조건 하나라도 어긋나면 finalize 스킵.
+- **API 콜**: FT 상세 저장은 **추가 콜 0** (ids 응답을 그대로 사용). 순위표 재계산은 tick 끝에서 dedup 된 대회시즌당 1콜 (`Competition.format=KNOCKOUT` 만 스킵 · `LEAGUE_PHASE_KNOCKOUT` 은 대상).
+- **승격 보류**: 4갈래 저장은 `{promote:false}` — `detail_checked_at·stats_state=CONFIRMED` 은 24h 뒤 백필 워커가 4콜로 마감. FT 직후 개별 엔드포인트가 준비되지 않은 편차를 흡수하기 위함.
+- **winner_team_id**: FT/AET/PEN 상태에서만 CASE 로 SET. `teams.winner=true` 로 판정 · 무승부 NULL. 팀 매핑 실패도 NULL — L2 매일이 다음날 정정.
+- **finalized Set**: matchId 단위 tick 사이 유지 · UTC 자정 롤오버에 clear.
+
+---
+
+## L4 라이브 폴러 (관측 모드 · 1판)
+
+경기 진행 중 상태(스코어·경기 시간)를 실시간에 가깝게 관측한다. **이 판은 DB 쓰기 없음** — 응답을 파싱해 "쓰면 바뀌었을 필드 수(`wouldWrite`)"만 계측·로그·`/health` 로 노출한다. 실제 DB 갱신은 2판에서 붙인다.
+
+**동작 요약**
+- 소스: `GET /fixtures?ids=<a-b-…>` (한 청크당 최대 20 id · '-' 결합)
+- 폴링 대상: DB 매치 (`kickoff_at ∈ [now-4h, now+5m]` · `Competition.isTracked=true` · 미종료) + `LIVE_POLLER_PROBE_FIXTURE_IDS` 로 지정한 A매치 (DB 에 없는 경기 · 부팅 시 + 매시 1회 fetch 후 메모리 적재)
+- 주기: 대상 있으면 15초(기본) · `used ≥ 6000` 이면 30초 · `used ≥ 7000` 이면 UTC 자정까지 정지(다음 날 자동 재개) · 대상 0 이면 60초 idle (`LIVE_IDLE_CHECK_SEC` 상수)
+- 겹침 방지: `running` 플래그 · 실행 중 트리거 skip
+- `wouldWrite` 규칙: **첫 관측**만 DB 값과 5컬럼(`status_short · elapsed · extra_elapsed · goals_home · goals_away`) 비교, 이후는 **직전 관측(lastSeen)** 과 비교. probe 매치는 첫 관측도 0
+- `/status` 최소 60초 간격 · `QuotaService.snapshot()` 미사용 (스냅샷 INSERT 원치 않음)
+
+### 켜기 (개별 스위치)
+
+기본 상태는 꺼짐. 마스터 → 개별 스위치 순서.
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# SCHEDULER_ENABLED=true          (마스터)
+# LIVE_POLLER_ENABLED=true        (개별)
+# (선택) LIVE_POLLER_PROBE_FIXTURE_IDS=1628999,1629003,1629005   # KOR 9/28 URU · 10/2 VEN · 10/6 UZB
+sudo systemctl restart pitchlog-backend
+sudo journalctl -u pitchlog-backend --since "3 min ago" | grep live-poller
+# 부팅 로그:   "live-poller registered · period=15s · slowAt=6000 · stopAt=7000"
+# probe 있으면: "live-poller probe registered · ids=1628999,1629003,1629005 · refresh=hourly"
+```
+
+### 상태 확인
+
+```bash
+curl -s http://localhost:3000/health | jq '.scheduler.jobs.livePoller'
+# {
+#   "enabled": true, "running": false, "windowOpen": false, "periodSec": 15,
+#   "stoppedReason": null, "targets": 0, "liveCount": 0,
+#   "lastTickAt": "2026-09-24T...", "lastTickMs": 32, "maxTickMsToday": 189,
+#   "ticksToday": 240, "callsToday": 12, "lastUsed": 3245,
+#   "wouldWriteToday": 68, "lastError": null
+# }
+```
+
+### 관측 로그 앵커 (grep)
+
+```
+live-poller tick · targets=N live=N chunks=N bytes=N ms=N used=N period=15s wouldWrite=N [· probe]
+live-poller transition · <id> <home>-<away> <prev>→<next> <hg>-<ag>
+live-poller detail · <id> events=N lineups=N statistics=N players=N [· probe]
+live-poller window open · targets=N
+live-poller window closed · ticks=N calls=N maxMs=N
+live-poller slow · used=N ≥ 6000 · period=30s
+live-poller stop · used=N ≥ 7000
+```
+
+### env 6개
+
+- `LIVE_POLLER_ENABLED` (true/false · 기본 false) — 개별 스위치. `SCHEDULER_ENABLED=true` 여야 효과.
+- `LIVE_POLLER_PERIOD_SEC` (5~300 · 기본 15) — 정상 주기 초.
+- `LIVE_POLLER_SLOW_PERIOD_SEC` (10~600 · 기본 30 · **반드시 `PERIOD_SEC` 보다 큼**) — 강등 주기.
+- `LIVE_POLLER_SLOW_AT` (1~7500 · 기본 6000) — `/status` 응답의 `used` 이 값 이상이면 강등.
+- `LIVE_POLLER_STOP_AT` (1~7500 · 기본 7000 · **`SLOW_AT < STOP_AT ≤ 7500`**) — 이 값 이상이면 UTC 자정까지 정지.
+- `LIVE_POLLER_PROBE_FIXTURE_IDS` (쉼표 구분 apiFixtureId · 개수 ≤ 20 · 중복 금지 · 빈 값 OK) — DB 밖 매치 관측.
+
+### 끄기
+
+```bash
+sudoedit /etc/pitchlog/backend.env
+# LIVE_POLLER_ENABLED=false
+sudo systemctl restart pitchlog-backend
+```
+
+### 실측 체크리스트 (켠 다음 날 또는 A매치 관측 후)
+
+- [ ] `curl -s http://localhost:3000/health | jq '.scheduler.jobs.livePoller.ticksToday'` > 0
+- [ ] `curl -s http://localhost:3000/health | jq '.scheduler.jobs.livePoller.callsToday'` < 7500
+- [ ] `journalctl -u pitchlog-backend --since today | grep "live-poller transition"` — 실제 스코어·상태 변화만큼 잡혔는가
+- [ ] `journalctl -u pitchlog-backend --since today | grep "live-poller error"` — 0 (있으면 원인 조사 · `lastError` 는 메시지만 저장, 스택 없음)
+- [ ] `journalctl -u pitchlog-backend --since today | grep "live-poller stop"` — used ≥ 7000 에 실제로 도달했는지
+
+## Google 로그인 (Supabase Auth · 09-28 PR #129)
+
+로그인과 서버 저장 즐겨찾기(`GET/PUT /api/me/favorites`)가 이 판에서 들어왔다. 배포 쪽에서 필요한 것:
+
+| 자리 | 값 | 코드 근거 |
+|---|---|---|
+| EC2 `/etc/pitchlog/backend.env` | `SUPABASE_URL=https://<프로젝트>.supabase.co` (path 없음) — **필수** | `env.validation.ts:113` · JWKS `${SUPABASE_URL}/auth/v1/.well-known/jwks.json` · issuer `${SUPABASE_URL}/auth/v1` |
+| Vercel env | `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` | `frontend/.env.example` |
+| DB | 마이그레이션 2개 — `enable_rls_public` · `add_user_favorite_teams` (`deploy.sh` 가 적용하지 않음 · 운영 적용 10-08) | `backend/prisma/migrations/20260928*` |
+| Supabase 대시보드 | Google provider 켜기 · Redirect URLs 에 Vercel 도메인 허용 — 프론트가 `redirectTo = origin + pathname` 으로 보내므로 경로까지 허용해야 한다 (예: `https://<앱>.vercel.app/**`) | `AuthContext.jsx:78-84` |
+
+`infra/ec2/backend.env.example` 에 `SUPABASE_URL` 줄을 넣었다 (10-08 PR #133). 그 전 템플릿으로 만든 서버는 `/etc/pitchlog/backend.env` 에 직접 추가해야 한다 —
+10-07 운영 EC2 가 이 줄 없이 재시작 루프에 빠졌다 (`SUPABASE_URL must be a URL address`). 값만 넣고 `sudo systemctl restart pitchlog-backend` 하면 된다 (재빌드 불필요).
+
+**운영 설정 완료 (10-08)** — 위 네 자리 전부:
+
+| 자리 | 10-08 실제 |
+|---|---|
+| EC2 env | 10-07 `SUPABASE_URL` 추가로 재시작 루프 복구 |
+| DB | 백업 `pitchlog-20261008-1500.dump`(18.7 MB) 뒤 `prisma migrate deploy` — 미적용 3개 `20260910120000_search_indexes` · `20260928120000_enable_rls_public` · `20260928120100_add_user_favorite_teams` 적용 · `migrate status` up to date · Supabase REST 무키 요청 401 확인 |
+| Vercel env | `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` — Production · Preview, Type=Config |
+| Supabase 대시보드 | Google provider · Redirect URLs `https://pitchlog-league.vercel.app/**` · `https://pitchlog-league-git-*-donasman.vercel.app/**` |
+
+preview 실측과 운영 사용자 확인으로 **운영 Google 로그인·서버 저장 즐겨찾기 개시 (10-08)**.
+
+Vercel preview 는 Deployment Protection(SSO) 이 걸려 있어 `site.webmanifest` 요청이 콘솔에 CORS 오류로 찍힌다 —
+보호 페이지로 리다이렉트되는 것이고 운영 도메인에서는 200 이다. 로그인 결함이 아니다.
+
+확인:
+
+```bash
+curl -i http://localhost:3000/health                      # 부팅 성공 = SUPABASE_URL 통과
+curl -i http://localhost:3000/api/me/favorites            # 토큰 없이 401 이 정상
+```
+
+## 실측 체크리스트 (첫 배포 후)
+
+- [ ] **(a) 백엔드 직결**: `curl -i http://3.36.159.128:3000/health` — 200 · `db:true`
+- [ ] **(b) Vercel 프록시**: Vercel URL 홈 접속 → 리그 순위표 로드
+- [ ] **(c) 어시스턴트 왕복**: "음바페 통산 도움" — 응답 도착 (도구 호출 5~6회 · ~10초 이상 걸릴 수 있음). **Vercel 프록시 응답 상한을 실측한다** — 무료 서버리스 함수는 응답 상한이 짧아 어시스턴트가 초과하면 504 로 잘림. 초과 시 (i) `MAX_TOOL_EXECUTIONS` 축소 (ii) 유료 티어 (iii) rewrite 대신 CORS 로 브라우저 직결 중 판단
+- [ ] **(d) rate limit 기기별**: 한 IP 로 어시스턴트 11회 빠르게 → 11번째 429. **다른 IP 로 접속 시 별개 카운트** (trust proxy 가 X-Forwarded-For 를 각 사용자로 반영)
+
+## 알려진 한계
+
+### X-Forwarded-For 위조 우회 (감수)
+
+`backend/src/main.ts` 의 `app.set('trust proxy', 1)` 은 프록시 첫 홉의 X-Forwarded-For 를 그대로 신뢰한다.
+
+- **정상 경로 (Vercel 도메인)**: 안전. Vercel 이 클라이언트 IP 로 X-Forwarded-For 를 설정한다.
+- **직결 (EC2:3000)**: 보안 그룹이 3000 을 0.0.0.0/0 으로 열어놨으므로 누구나 `curl -H "X-Forwarded-For: 1.2.3.4"` 로 임의 IP 를 넣어 어시스턴트 rate limit 을 우회할 수 있다.
+
+**현 구성에서 감수한다.** 위조로 얻는 것은 어시스턴트 10회/분·IP 밖 호출 능력이 전부다 (IP 기반 제한은 `AssistantRateLimitGuard` 하나뿐).
+~~백엔드는 조회 API 뿐이라~~ → 09-28 #129 부터 인증된 쓰기 `PUT /api/me/favorites` 가 있다. 이 쓰기는 IP 가 아니라
+Supabase JWT 로 사용자를 가르고(`SupabaseAuthGuard`) 사용자당 10팀 상한·사용자 단위 advisory lock(10-08 #134)이 걸려 있다.
+X-Forwarded-For 는 이 쓰기의 인가·상한 어디에도 쓰이지 않아 위조로 남의 즐겨찾기를 바꿀 수는 없다. 손실 판단은 그대로다.
+
+**4-a-2 후속 판** 에서 둘 중 택일:
+1. Vercel 프록시가 공유 비밀 헤더 (`X-Proxy-Secret`) 를 추가 → 백엔드가 검사, 없으면 429 상수화 or 403
+2. 보안 그룹에서 3000 을 Vercel egress 대역으로 제한 (Vercel 에서 공개 대역 미공지 — 실사 필요)
+
+### Swagger 노출 (EC2 직결 시)
+
+`backend/src/main.ts:18` — `SwaggerModule.setup('docs', app, ...)` 이 `NODE_ENV` 분기 없이 항상 켠다.
+
+**실 경로** (SwaggerModule 은 global prefix `/api` 를 무시하므로 `/api/docs` 가 아님):
+- UI: `http://3.36.159.128:3000/docs`
+- 스펙: `http://3.36.159.128:3000/docs/openapi.json`
+
+**Vercel rewrite** 는 `/api/:path*` 만 프록시하므로 **Vercel 도메인 (`<앱>.vercel.app`) 에서는 노출되지 않는다.** EC2:3000 직결자에게만 보인다.
+
+~~12대회~~ → **19대회** (2026-09-17 · feat/scope-expansion) 조회 API 스펙이라 노출이 큰 문제는 아니지만 명시. prod 에서 끄고 싶으면 별도 판 (`main.ts` 에 `if (process.env.NODE_ENV !== 'production')` 로 SwaggerModule.setup 을 감쌈).
+
+### 이 판이 하지 않은 것
+
+- **GitHub Actions 자동 배포** — 4-a-2 후속 판 (10-07 기준 여전히 수동 `deploy.sh`)
+- ~~**백업 자동화 · S3 이전 · IAM 역할**~~ — ✅ 09-16 PR #72 (위 "백업 자동화 (S3)" 절)
+- ~~**스케줄러 · 워커 (백필-2 무인)**~~ — ✅ 09-16 PR #78·#79 (위 "백필 워커" 절) · 백필-2 는 09-24 서버 실측에서 완료 상태
+- **Caddy · 도메인 · 80/443 · CloudFront** — 필요 시 별도
+- **Dockerfile** — Docker 안 씀 결정
+- **프론트 코드 변경** — `vercel.json` 만

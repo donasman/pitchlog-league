@@ -12,9 +12,11 @@ import TeamBadge from './TeamBadge'
 import MatchStatusBadge from './MatchStatusBadge'
 import { toKSTTime, toKSTDate } from '@/utils/dateFormat'
 import { isLive } from '@/utils/matchStatus'
-import { getLocalizedName, getLocalizedShortName } from '@/utils/localization'
+import { getLocalizedName, getLocalizedShortName, pickLocalized } from '@/utils/localization'
+import { isMatchWinner } from '@/utils/matchWinner'
+import { formatRoundLabel } from '@/utils/roundLabel'
 
-function TeamRow({ team, score, win, live, compact, locale }) {
+function TeamRow({ team, score, win, live, compact, locale, eagerLogo = false }) {
   const name = compact
     ? getLocalizedShortName(team, locale) || team?.shortName || team?.name
     : getLocalizedName(team, locale) || team?.name
@@ -33,8 +35,10 @@ function TeamRow({ team, score, win, live, compact, locale }) {
       <TeamBadge
         initials={team?.initials}
         color={team?.color}
+        logoUrl={team?.logoUrl}
         size={compact ? 'xs' : 'sm'}
         name={team?.name}
+        loading={eagerLogo ? 'eager' : 'lazy'}
       />
       <span
         className="tname"
@@ -67,7 +71,7 @@ function TeamRow({ team, score, win, live, compact, locale }) {
   )
 }
 
-export default function MatchCard({ match, compact = false }) {
+export default function MatchCard({ match, compact = false, eagerLogo = false }) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
 
@@ -75,8 +79,8 @@ export default function MatchCard({ match, compact = false }) {
 
   const live     = isLive(match.displayState)
   const hasScore = match.score?.home !== null && match.score?.away !== null
-  const homeWin  = hasScore && match.score.home > match.score.away
-  const awayWin  = hasScore && match.score.away > match.score.home
+  const homeWin  = isMatchWinner(match, 'home')
+  const awayWin  = isMatchWinner(match, 'away')
 
   const pad = compact ? 10 : 14
 
@@ -106,7 +110,7 @@ export default function MatchCard({ match, compact = false }) {
         }}
       >
         <span className="t-cap" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {match.competition?.shortName ?? match.round ?? match.stage}
+          {match.competition?.shortName ?? formatRoundLabel(match.round ?? match.stage, t)}
         </span>
         <MatchStatusBadge state={match.displayState} />
       </div>
@@ -119,6 +123,7 @@ export default function MatchCard({ match, compact = false }) {
         live={live}
         compact={compact}
         locale={locale}
+        eagerLogo={eagerLogo}
       />
 
       {/* 원정팀 행 */}
@@ -130,6 +135,7 @@ export default function MatchCard({ match, compact = false }) {
           live={live}
           compact={compact}
           locale={locale}
+          eagerLogo={eagerLogo}
         />
       </div>
 
@@ -140,6 +146,16 @@ export default function MatchCard({ match, compact = false }) {
           style={{ marginTop: compact ? 4 : 6, textAlign: 'right' }}
         >
           {toKSTTime(match.date, locale)} · {toKSTDate(match.date, locale)}
+        </div>
+      )}
+
+      {/* 승부차기 캡션 — 종료된 경기의 PK 결과 (`normalizeMatch` 가 penHome/penAway 통과) */}
+      {hasScore && match.penHome != null && match.penAway != null && (
+        <div
+          className="t-cap num"
+          style={{ marginTop: compact ? 4 : 6, textAlign: 'right' }}
+        >
+          {t('competition.round.pkPrefix')} {match.penHome}-{match.penAway}
         </div>
       )}
 

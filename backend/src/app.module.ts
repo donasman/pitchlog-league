@@ -4,6 +4,28 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { validateEnv } from './config/env.validation.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { HealthModule } from './health/health.module.js';
+import { ApiFootballModule } from './ingestion/api-football/api-football.module.js';
+import { L0Module } from './ingestion/l0/l0.module.js';
+import { L1Module } from './ingestion/l1/l1.module.js';
+import { L2Module } from './ingestion/l2/l2.module.js';
+import { L3Module } from './ingestion/l3/l3.module.js';
+import { L5Module } from './ingestion/l5/l5.module.js';
+import { L6Module } from './ingestion/l6/l6.module.js';
+import { BackfillModule } from './ingestion/backfill/backfill.module.js';
+import { LogoModule } from './ingestion/logos/logo.module.js';
+import { ProbeModule } from './ingestion/probe/probe.module.js';
+import { CompetitionModule } from './competition/competition.module.js';
+import { TeamModule } from './team/team.module.js';
+import { MatchModule } from './match/match.module.js';
+import { LiveModule } from './live/live.module.js';
+import { StandingModule } from './standing/standing.module.js';
+import { PlayerModule } from './player/player.module.js';
+import { StatisticsModule } from './statistics/statistics.module.js';
+import { SearchModule } from './search/search.module.js';
+import { AssistantModule } from './assistant/assistant.module.js';
+import { SchedulerModule } from './scheduler/scheduler.module.js';
+import { AuthModule } from './auth/auth.module.js';
+import { UserFavoritesModule } from './user-favorites/user-favorites.module.js';
 
 /**
  * 모듈 경계 (BACKEND_GUIDE):
@@ -21,8 +43,30 @@ import { HealthModule } from './health/health.module.js';
       envFilePath: ['.env.local', '.env'],
     }),
     ScheduleModule.forRoot(),
+    SchedulerModule.forRoot(),
     PrismaModule,
     HealthModule,
+    ApiFootballModule,
+    L0Module,
+    L1Module,
+    L2Module,
+    L3Module,
+    L5Module,
+    L6Module,
+    BackfillModule,
+    LogoModule,
+    ProbeModule,
+    CompetitionModule,
+    TeamModule,
+    MatchModule,
+    LiveModule,
+    StandingModule,
+    PlayerModule,
+    StatisticsModule,
+    SearchModule,
+    AssistantModule,
+    AuthModule,
+    UserFavoritesModule,
   ],
 })
 export class AppModule {}

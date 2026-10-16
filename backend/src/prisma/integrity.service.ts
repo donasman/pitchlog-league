@@ -32,6 +32,16 @@ export const REFERENCE_CHECKS = [
   { child: 'standings',     column: 'team_id',               parent: 'teams' },
   { child: 'squad_entries', column: 'player_id',             parent: 'players' },
   { child: 'squad_entries', column: 'team_id',               parent: 'teams' },
+  // 시즌 집계 (L6) — FK 가 없는 설계에서 이 세 테이블의 유일한 방어 장치다.
+  // 선수 통계는 팀 맵에 없는 팀을 버리고, 랭킹은 선수를 먼저 upsert 한다. 그 규칙이 깨지면 여기서 잡힌다
+  { child: 'player_season_stats', column: 'player_id',             parent: 'players' },
+  { child: 'player_season_stats', column: 'team_id',               parent: 'teams' },
+  { child: 'player_season_stats', column: 'competition_season_id', parent: 'competition_seasons' },
+  { child: 'team_season_stats',   column: 'team_id',               parent: 'teams' },
+  { child: 'team_season_stats',   column: 'competition_season_id', parent: 'competition_seasons' },
+  { child: 'top_rankings',        column: 'player_id',             parent: 'players' },
+  { child: 'top_rankings',        column: 'team_id',               parent: 'teams' },
+  { child: 'top_rankings',        column: 'competition_season_id', parent: 'competition_seasons' },
   // 대진표
   { child: 'knockout_ties', column: 'round_id', parent: 'competition_rounds' },
   { child: 'bracket_slots', column: 'round_id', parent: 'competition_rounds' },

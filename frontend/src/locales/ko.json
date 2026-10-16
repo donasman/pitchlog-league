@@ -6,7 +6,13 @@
     "teams": "팀",
     "players": "선수",
     "standings": "순위",
-    "stats": "통계"
+    "stats": "통계",
+    "competitionGroup": {
+      "league": "리그",
+      "european": "유럽 대항전",
+      "domesticCup": "국내 컵",
+      "superCup": "슈퍼컵"
+    }
   },
   "header": {
     "competitionSelect": "대회 선택",
@@ -21,7 +27,8 @@
     "leaguePhaseOngoing": "리그 페이즈 진행 중",
     "season": "시즌",
     "competitionsSection": "대회",
-    "language": "언어"
+    "language": "언어",
+    "accountSection": "계정"
   },
   "theme": {
     "toDark": "다크 모드로 전환",
@@ -108,6 +115,20 @@
       "stats": "통계",
       "h2h": "H2H",
       "timeline": "타임라인"
+    },
+    "unavailable": {
+      "not_provided": {
+        "lineup": "이 경기는 라인업이 제공되지 않았습니다",
+        "stats": "이 경기는 통계가 제공되지 않았습니다",
+        "events": "이 경기는 이벤트가 제공되지 않았습니다",
+        "playerStats": "이 경기는 선수 기록이 제공되지 않았습니다"
+      },
+      "not_collected": {
+        "lineup": "라인업이 아직 수집되지 않았습니다",
+        "stats": "통계가 아직 수집되지 않았습니다",
+        "events": "이벤트가 아직 수집되지 않았습니다",
+        "playerStats": "선수 기록이 아직 수집되지 않았습니다"
+      }
     }
   },
   "matches": {
@@ -118,6 +139,8 @@
     "allStatuses": "전체",
     "noMatches": "경기 없음",
     "noMatchesDesc": "선택한 필터에 해당하는 경기가 없습니다.",
+    "pickCompetition": "대회를 선택해 주세요",
+    "pickCompetitionDesc": "지난 시즌은 경기 수가 많아 대회를 하나 고른 뒤에 일정을 보여드립니다.",
     "today": "오늘",
     "tomorrow": "내일",
     "standingsPanel": "순위",
@@ -127,7 +150,18 @@
     "statusScheduled": "예정",
     "statusFinished": "종료",
     "liveMatchCount": "진행 중 {{count}}",
-    "matchCount": "{{count}}경기"
+    "matchCount": "{{count}}경기",
+    "focus": {
+      "recent": "최근 결과",
+      "upcoming": "다가오는 경기",
+      "noRecent": "표시할 최근 결과가 없습니다.",
+      "noUpcoming": "다가오는 경기가 없습니다."
+    },
+    "showPast": "지난 경기 보기 ({{count}}일 · {{matches}}경기)",
+    "showPast_one": "지난 경기 보기 ({{count}}일 · {{matches}}경기)",
+    "showPast_other": "지난 경기 보기 ({{count}}일 · {{matches}}경기)",
+    "hidePast": "지난 경기 접기",
+    "futureEmpty": "오늘 이후 예정된 경기가 없습니다. 위 버튼을 눌러 지난 경기를 확인하세요."
   },
   "standings": {
     "title": "순위",
@@ -149,8 +183,12 @@
     "mobileHint": "순위·팀 고정 · 나머지 열은 가로로 밀어 보세요",
     "zoneNote": "구역 — 좌측 표시선의 색과 무늬로 구분합니다",
     "uclLeagueNote": "36개 팀 단일 순위표 · 조별리그 아님",
+    "uclGroupNote": "8개 조 × 4팀 · 조별리그",
     "legend": {
+      "champion": "우승",
+      "championLeader": "선두",
       "ucl": "UCL 직행",
+      "uclQualPlayoff": "UCL 예선 PO",
       "uel": "유로파리그",
       "uecl": "컨퍼런스리그",
       "relegation": "강등",
@@ -163,7 +201,8 @@
     "noDataDesc": "선택한 대회의 순위 데이터가 아직 집계되지 않았습니다.",
     "leaguePhaseTitle": "리그 페이즈 진행 중",
     "leaguePhaseDesc": "상위 8팀 16강 직행 · 9~24위 플레이오프 · 25위 이하 탈락",
-    "leaguePhaseLink": "녹아웃 대진 보기",
+    "groupPhaseTitle": "조별리그",
+    "groupPhaseDesc": "각 조 1·2위 16강 직행 · 3위 유로파리그 · 4위 탈락",
     "errorTitle": "순위 데이터를 불러오지 못했습니다",
     "season": "2026-27 시즌",
     "leaguePhaseLabel": "UCL 리그 페이즈 순위",
@@ -187,10 +226,6 @@
     "redCards": "퇴장",
     "cleanSheets": "무실점",
     "saves": "선방",
-    "statusConfirmed": "확정",
-    "statusPending": "집계 전",
-    "statusUnavailable": "데이터 없음",
-    "statusRecheck": "재검증 중",
     "totalStats": "전체 대회 합산",
     "noStats": "집계된 통계가 없습니다.",
     "noStats2627": "이 선수의 2026-27 시즌 통계가 아직 집계되지 않았습니다.",
@@ -201,7 +236,12 @@
     "team": "소속팀",
     "captain": "(주장)",
     "age": "만 {{age}}세",
-    "errorTitle": "선수 정보를 불러오지 못했습니다"
+    "errorTitle": "선수 정보를 불러오지 못했습니다",
+    "thisSeasonSection": "이번 시즌",
+    "thisSeasonNoData": "이번 시즌 통계가 아직 없습니다",
+    "sourceOfficial": "공식 집계",
+    "sourceMatchRecords": "경기 기록 집계",
+    "totalRow": "합계"
   },
   "team": {
     "stadium": "홈 구장",
@@ -209,8 +249,8 @@
     "founded": "창단",
     "manager": "감독",
     "competitions": "참가 대회",
-    "eplRank": "EPL 순위",
-    "eplRankPoints": "{{pts}}승점",
+    "leagueRank": "리그 순위",
+    "leagueRankPoints": "{{pts}}승점",
     "allCompetitions": "전체 대회",
     "fixtures": "전체 일정",
     "todayDivider": "오늘",
@@ -223,7 +263,7 @@
     "live": "진행 중",
     "upcoming": "예정",
     "results": "결과",
-    "noSquad": "선수 데이터가 없습니다.",
+    "noSquad": "선수단 데이터는 아직 수집되지 않았습니다",
     "noFixtures": "선택한 대회의 경기가 없습니다.",
     "season": "2026-27 시즌",
     "fixtureSubtitle": "2026-27 시즌 · 국내 리그 + UCL 포함",
@@ -233,17 +273,28 @@
     "filterLabel": "대회 필터"
   },
   "competition": {
-    "knockoutLink": "녹아웃 대진 보기",
     "leaguePhaseOngoing": "리그 페이즈 진행 중",
     "season": "2026-27 시즌",
     "leagueRank": "리그 순위",
     "uclLeaguePhase": "UCL 리그 페이즈",
     "tabs": {
+      "bracket": "대진표",
       "schedule": "일정",
       "standings": "순위",
       "stats": "통계"
     },
-    "mainMatches": "주요 경기",
+    "schedule": {
+      "live": "진행 중",
+      "upcoming": "예정",
+      "results": "결과"
+    },
+    "round": {
+      "previous": "이전 라운드",
+      "next": "다음 라운드",
+      "progressLabel": "라운드 진행",
+      "pkPrefix": "PK",
+      "noRoundsYet": "아직 편성된 라운드가 없어요"
+    },
     "teams": "참가 팀",
     "topScorers": "득점 순위",
     "topAssisters": "도움 순위",
@@ -251,39 +302,27 @@
     "noStandings": "순위 데이터가 없습니다.",
     "allCompetitions": "전체 대회",
     "allCompetitionsChip": "전체 대회 {{count}}",
-    "allMatches": "전체 일정",
-    "errorTitle": "대회 정보를 불러오지 못했습니다"
+    "errorTitle": "대회 정보를 불러오지 못했습니다",
+    "noDataYet": "이 대회는 아직 수집이 시작되지 않았습니다.",
+    "sidebarLabel": "대회 목록",
+    "chipsLabel": "대회 선택",
+    "moreCompetitions": "더 보기"
   },
-  "knockout": {
-    "pageTitle": "UEFA Champions League — 녹아웃 대진",
-    "pageSubtitle": "2026-27 시즌 · 1·2차전 합산 점수 기준",
-    "backLink": "대회 페이지로 돌아가기",
-    "legendInProgress": "진행 중",
-    "legendConfirmed": "진출 확정",
-    "legendTbd": "대진 미정",
-    "legendAgg": "합산: 1차전(홈) + 2차전(원정)",
-    "roundOf16": "16강",
-    "quarterFinal": "8강",
-    "semiFinal": "4강",
-    "final": "결승",
+  "tie": {
     "leg1": "1차전",
     "leg2": "2차전",
     "aggregate": "합산",
-    "leg2Pending": "2차전 대기",
-    "tbd": "대진 미정",
-    "winner": "진출",
-    "through": "{{team}} 진출",
-    "inProgress": "진행 중",
-    "tbd": "미정",
-    "tieTbd": "대진 미정",
-    "tieComplete": "종료",
-    "noWinner": "아직 확정된 팀이 없습니다",
-    "noTeam": "미정",
-    "errorTitle": "대진 데이터를 불러오지 못했습니다"
+    "pending": "미정",
+    "inProgress": "진행 중"
+  },
+  "bracket": {
+    "emptyRound": "대진표 미확정",
+    "byeLeaguePhase": "리그 페이즈 직행",
+    "treeFromR16": "16강부터 대진표로 표시됩니다 · 현재 {{round}} 진행"
   },
   "home": {
-    "heroHeadline": "유럽 5대 리그와 UCL, 한 곳에서",
-    "heroSubtitle": "진행 중인 경기는 실시간으로, 끝난 경기는 공식 기록이 확정될 때까지 표시해 둡니다. EPL · 라리가 · 분데스리가 · 세리에 A · 리그 1 · UCL을 같은 기준으로 봅니다.",
+    "heroHeadline": "유럽 축구의 모든 기록, 한 곳에서",
+    "heroSubtitle": "리그부터 컵 대회, UEFA 대회까지. 경기 결과·순위·선수 기록을 실시간으로 확인하세요.",
     "btnTodayMatches": "오늘 경기 보기",
     "askPlaceholder": "선수 기록이나 순위를 물어보세요",
     "askCta": "질문하기",
@@ -293,7 +332,7 @@
     "nextKickoffLabel": "다음 킥오프",
     "viewAllLive": "진행 중인 경기 모두 보기",
     "viewSchedule": "오늘 일정 전체 보기",
-    "competitionSection": "6개 대회 현황",
+    "competitionSection": "주요 리그",
     "competitionSectionDesc": "카드를 누르면 해당 대회 순위로 이동합니다",
     "viewAllComps": "모든 대회 보기",
     "leaderLabel": "선두",
@@ -311,7 +350,8 @@
     "statsLabel": "통계",
     "teamsLabel": "팀",
     "epl3Label": "EPL Top 3",
-    "allScorerLabel": "전체 득점",
+    "leagueScorers": "리그별 득점 순위",
+    "eplScorersLabel": "EPL 득점 Top 3",
     "topTeamsLabel": "선두 팀",
     "dataSource": "데이터 출처 API-Football",
     "openAll": "전체 보기",
@@ -346,7 +386,15 @@
     "aggregateScore": "{{home}} – {{away}} 합산",
     "sideStandingsTitle": "순위",
     "sideScoringTitle": "득점 순위",
-    "eplTopScorerLabel": "EPL 득점 1위"
+    "eplTopScorerLabel": "EPL 득점 1위",
+    "myTeams": {
+      "title": "내 팀",
+      "empty_hint": "관심 있는 팀의 별을 눌러 즐겨찾기에 담아두세요. 홈에서 다음 경기와 최근 결과를 바로 볼 수 있습니다.",
+      "browser_only_notice": "이 브라우저에만 저장됩니다. 다른 기기·시크릿 창에는 나타나지 않습니다.",
+      "no_next_match": "예정된 경기 없음",
+      "no_last_result": "최근 결과 없음",
+      "no_ranking": "리그 순위 없음"
+    }
   },
   "stats": {
     "pageTitle": "통계",
@@ -357,9 +405,10 @@
     "errorTitle": "통계 데이터를 불러오지 못했습니다",
     "noData": "데이터 없음",
     "noDataDesc": "선택한 대회의 통계 데이터가 없습니다.",
-    "allLeagues": "전체 합산",
-    "allDesc": "전체 합산에서는 대회별 분해를 함께 표기합니다",
-    "breakdown": "대회별 분해",
+    "filterCompLabel": "대회",
+    "coverageLabel": "집계 근거",
+    "appearances": "출전",
+    "minutes": "분",
     "rank": "#",
     "player": "선수",
     "team": "팀",
@@ -374,12 +423,21 @@
     "emptyTitle": "무엇을 찾아드릴까요?",
     "emptyDesc": "일정 · 순위 · 선수 기록을 물어보세요. 숫자는 데이터베이스에서 직접 가져옵니다.",
     "suggestLabel": "예시 질문",
+    "suggested": {
+      "q1": "손흥민 이번 시즌 기록 알려줘",
+      "q2": "리버풀 다음 경기 언제야?",
+      "q3": "EPL 상위 4팀 최근 5경기 비교해줘",
+      "q4": "챔피언스리그 16강 올라간 팀은?"
+    },
     "disclaimer": "승부 예측이나 의견은 답하지 않습니다 — 조회할 수 있는 기록만 알려드립니다.",
     "evidenceBtn": "근거 보기",
     "evidenceTool": "조회",
     "evidenceAsOf": "기준",
     "evidenceSource": "출처",
     "asOfSuffix": "기준",
+    "dataLabel": "데이터",
+    "showData": "근거 데이터 보기",
+    "hideData": "근거 데이터 접기",
     "dataNote": "답변의 숫자는 조회 결과입니다. 근거와 기준 시각이 함께 표시됩니다.",
     "thinking": "조회하는 중",
     "thinkingTools": "조회 도구",
@@ -394,7 +452,21 @@
     "comparison": "비교",
     "liveNote": "진행 중인 경기입니다. 숫자는 계속 바뀝니다.",
     "recoverTip": "확정 시 알림을 받으시겠어요?",
-    "clearChat": "초기화"
+    "clearChat": "초기화",
+    "viewAllStandings": "전체 순위 보기",
+    "viewAllMatches": "경기 전체 보기 ({{total}}개)",
+    "topScorers": "득점 순위",
+    "topAssisters": "도움 순위",
+    "unitGoals": "골",
+    "unitAssists": "도움",
+    "asOfLabel": "이 답변 기준",
+    "error": {
+      "not_configured": "어시스턴트가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요.",
+      "rate_limited": "잠시 후 다시 시도해 주세요.",
+      "model_error": "답변을 만들지 못했습니다. 다시 시도해 주세요.",
+      "timeout": "응답이 너무 오래 걸립니다. 다시 시도해 주세요.",
+      "generic": "오류가 발생했습니다."
+    }
   },
   "notif": {
     "bell": "알림",
@@ -475,6 +547,94 @@
     "captain": "(C)",
     "phase5": "Phase 5",
     "season": "2026-27 시즌",
-    "country": "국가"
+    "country": "국가",
+    "scrollPrev": "이전",
+    "scrollNext": "다음",
+    "pause": "일시정지",
+    "play": "재생",
+    "position": {
+      "gk": "GK",
+      "def": "DEF",
+      "mid": "MID",
+      "fwd": "FWD",
+      "goalkeeper": "골키퍼",
+      "defender": "수비수",
+      "midfielder": "미드필더",
+      "attacker": "공격수"
+    }
+  },
+  "round": {
+    "regularSeason": "{{n}}라운드",
+    "leaguePhaseMatchday": "리그 페이즈 {{n}}라운드",
+    "matchday": "{{n}}라운드",
+    "oneOverN": "1/{{n}} 결선",
+    "roundOfN": "{{n}}강",
+    "quarterFinals": "8강",
+    "semiFinals": "4강",
+    "grandFinal": "결승",
+    "final": "결승",
+    "thirdPlaceFinal": "3·4위전",
+    "groupX": "{{group}}조",
+    "groupStage": "조별리그",
+    "leaguePhase": "리그 페이즈",
+    "knockoutPlayoffs": "녹아웃 플레이오프",
+    "preliminaryRound": "예선",
+    "preliminaryFinal": "예선 결승",
+    "playoffs": "플레이오프",
+    "relegationPlayoff": "강등 플레이오프",
+    "promotionPlayoff": "승격 플레이오프",
+    "qualifyingRoundOrdinal": "{{n}}차 예선",
+    "ordinalRound": "{{n}}라운드"
+  },
+  "country": {
+    "England": "잉글랜드",
+    "Scotland": "스코틀랜드",
+    "Wales": "웨일스",
+    "NorthernIreland": "북아일랜드",
+    "World": "국제"
+  },
+  "favorites": {
+    "add": "{{name}} 즐겨찾기 추가",
+    "remove": "{{name}} 즐겨찾기 해제",
+    "limit_reached": "즐겨찾기는 최대 {{limit}}개까지 저장할 수 있습니다.",
+    "loginRequired": "로그인하면 응원 팀을 저장할 수 있어요.",
+    "loginCta": "Google 로 로그인",
+    "errors": {
+      "unknown_team": "존재하지 않는 팀입니다.",
+      "duplicate": "이미 목록에 있는 팀입니다.",
+      "network": "잠시 후 다시 시도해 주세요.",
+      "load_failed": "즐겨찾기를 불러오지 못했습니다.",
+      "session_missing": "로그인 정보를 확인하지 못했습니다. 다시 로그인해 주세요."
+    }
+  },
+  "auth": {
+    "signIn": "로그인",
+    "signInWithGoogle": "Google 로 계속하기",
+    "signOut": "로그아웃",
+    "profile": {
+      "email": "이메일"
+    },
+    "error": {
+      "signInCancelled": "로그인이 취소되었습니다.",
+      "signInFailed": "로그인에 실패했습니다. 잠시 후 다시 시도해 주세요."
+    }
+  },
+  "live": {
+    "lastUpdated": "마지막 갱신 {{time}}",
+    "stale": "갱신 지연"
+  },
+  "errors": {
+    "notImplemented": "아직 백엔드에 없는 데이터입니다 ({{what}})",
+    "networkFailed": "백엔드에 연결하지 못했습니다: {{detail}}",
+    "requestFailed": "요청이 실패했습니다 ({{status}}): {{detail}}",
+    "competitionRequired": "대회를 지정해야 합니다",
+    "competitionNotFound": "대회를 찾을 수 없습니다: {{ref}}",
+    "feature": {
+      "h2h": "상대 전적",
+      "top_scorers": "득점 순위",
+      "top_assisters": "도움 순위",
+      "favorites": "즐겨찾기",
+      "notifications": "알림"
+    }
   }
 }

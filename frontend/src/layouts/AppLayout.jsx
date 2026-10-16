@@ -10,18 +10,22 @@ import ToastContainer from '@/components/notifications/ToastContainer'
 import PermissionCard from '@/components/notifications/PermissionCard'
 import AssistantFab from '@/components/assistant/AssistantFab'
 import AssistantPanel from '@/components/assistant/AssistantPanel'
+import { USE_MOCK } from '@/services/env'
 
 export default function AppLayout() {
   const { t } = useTranslation()
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className="flex flex-col bg-background text-foreground" style={{ minHeight: 'var(--pl-page-min-h)' }}>
       <AppHeader />
       <main className="flex-1">
         <Outlet />
       </main>
-      <footer className="border-t border-border py-4 px-6 text-center text-xs text-muted-foreground">
-        PitchLog — {t('common.mockNotice')}
-      </footer>
+      {/* Mock 안내는 Mock 모드에서만 — 실 API 화면에 "Mock Data" 라고 쓰면 그게 거짓이다 */}
+      {USE_MOCK && (
+        <footer className="border-t border-border py-4 px-6 text-center text-xs text-muted-foreground">
+          PitchLog — {t('common.mockNotice')}
+        </footer>
+      )}
       <ScrollRestoration />
 
       {/* 전역 알림 레이어 */}

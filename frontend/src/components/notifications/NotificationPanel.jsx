@@ -73,36 +73,48 @@ function formatAt(isoString) {
   return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
 }
 
-export default function NotificationPanel({ onClose }) {
+export default function NotificationPanel({ onClose, containerRef }) {
   const { t } = useTranslation()
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications()
   const panelRef = useRef(null)
 
-  /* 바깥 클릭 닫기 */
+  /* 바깥 클릭 닫기 — containerRef(벨+패널 감싼 래퍼) 기준으로 판정해
+     벨 버튼 자체 클릭이 "바깥" 으로 잡혀 close→toggle 이 다시 여는 것을 막는다.
+     터치 대비로 pointerdown 사용. */
   useEffect(() => {
-    function handleClick(e) {
-      if (panelRef.current && !panelRef.current.contains(e.target)) onClose()
+    function handlePointerDown(e) {
+      const root = containerRef?.current ?? panelRef.current
+      if (root && !root.contains(e.target)) onClose()
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [onClose, containerRef])
+
+  /* Esc 닫기 (SearchPanel 과 동일 패턴) */
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
   }, [onClose])
 
   const empty = notifications.length === 0
 
   return (
+    <>
+      <style>{`
+        .notif-panel { position: fixed; top: 60px; left: 16px; right: 16px; width: auto; margin-top: 0; }
+        @media (min-width: 640px) {
+          .notif-panel { position: absolute; top: 100%; left: auto; right: 0; width: 400px; margin-top: 8px; }
+        }
+      `}</style>
     <div
       ref={panelRef}
-      className="pl-card"
+      className="pl-card notif-panel"
       style={{
-        width: 400,
         maxWidth: 'calc(100vw - 32px)',
         overflow: 'hidden',
         boxShadow: 'var(--sh-modal)',
-        position: 'absolute',
-        top: '100%',
-        right: 0,
-        marginTop: 8,
-        zIndex: 1000,
+        zIndex: 'var(--pl-z-panel)',
       }}
       role="dialog"
       aria-label={t('notif.bell')}
@@ -162,5 +174,6 @@ export default function NotificationPanel({ onClose }) {
         <span className="t-cap" style={{ marginLeft: 'auto' }}>{t('notif.browserOnly')}</span>
       </div>
     </div>
+    </>
   )
 }
