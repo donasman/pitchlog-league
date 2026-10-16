@@ -21,7 +21,7 @@ description: PitchLog 저장소에서 브랜치 → 검증 → 커밋 → push/P
 1. **브랜치** — `dev` 에서 판다. 이름: `feature/<주제>` · `fix/<주제>` · `docs/<주제>`. `dev` 에 직접 커밋하지 않는다.
    실수로 했으면 `git branch -f <새브랜치> HEAD && git reset --hard HEAD~1 && git checkout <새브랜치>` 로 옮긴다.
 2. **검증** — 백엔드 `npm run typecheck`(VM 에서는 `npx tsc --noEmit -p tsconfig.json`). 프론트 `npm run verify`. VM 에서 못 하는 것은 사용자에게 부탁한다. 순수 함수는 클라우드 컨테이너에서 vitest.
-3. **커밋** — Conventional Commits + 한국어 본문. 제목 `type(scope): 요약`, 본문에 **왜** (실측 수치·바뀐 결정). 커밋 하나에 파일 10개 이하가 목표(문서 동기화는 예외). 세션의 attribution footer(`Co-Authored-By` · `Claude-Session`)를 붙인다. pre-commit 훅(null byte · UTF-8 · .env · API 키)이 돈다.
+3. **커밋** — Conventional Commits + 한국어 본문. 제목 `type(scope): 요약`, 본문에 **왜** (실측 수치·바뀐 결정). 커밋 하나에 파일 10개 이하가 목표(문서 동기화는 예외). attribution 줄(`Co-Authored-By: Claude …` · `Claude-Session:` · `Generated with [Claude Code]`)은 커밋·PR 어디에도 붙이지 않는다 (2026-10-16 사용자 결정 — 기존 이력·PR 본문에서도 지웠다). pre-commit 훅(null byte · UTF-8 · .env · API 키)이 돈다.
 4. **push / PR** — 사용자에게:
    ```
    git push origin <브랜치>

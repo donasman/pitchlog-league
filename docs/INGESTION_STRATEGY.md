@@ -104,6 +104,7 @@ FA컵이 872 → 63으로 떨어진다. 참가 팀도 700개 이상에서 64개�
 
 **"1부 참가 = 전부 옴"이 아니다.** 이벤트와 라인업만 오고 통계가 없는 구간이 있다.
 결손 플래그를 **대회나 라운드가 아니라 경기 단위**로 두어야 하는 이유다 (4-2 ①).
+라인업도 팀 항목은 오는데 선수 명단이 없을 수 있다 (2026-10-15 실측 · Coupe de France 등 · 4-2 ①).
 
 ### 2-3. 대진표 — 골격을 만들고 슬롯을 채운다
 
@@ -187,7 +188,8 @@ Italy Super Cup(547) · Trophée des Champions(526). 합쳐 시즌당 약 11경�
 
 **09-07 점검에서 순서를 확정했다 — 폴링(6장)은 백필-2 가 끝난 뒤에 켠다.** 그러면 표의 첫 줄만
 해당한다: 운영 콜 ~~약 50(L2 매일 · L1 매주 · `status`)~~ (6대회 시절 추정)을 빼고 **하루 5,700** 을 백필 상한으로 잡는다.
-(10-08 정정 · 산식) 운영 콜은 L2 매일 ≤46 (19대회 현재 시즌) + quota-snapshot `/status` 1 (매일 UTC 23:50 · `quota-snapshot.job.ts:37`)
+(10-08 정정 · 산식) 운영 콜은 L2 매일 ≤46 (19대회 현재 시즌) + ~~quota-snapshot `/status` 1 (매일 UTC 23:50 · `quota-snapshot.job.ts:37`)~~
+(10-16 정정 · 예측이 틀렸다 — `/status` 는 쿼터를 소비하지 않는다: 10-14 하루 13,546회 호출에도 used 가 한도 7,500 에 닿지 않았다 · #141 실측)
 + missingTeams 시 대회시즌당 `/teams` 최대 1 (PR #135). L1 매주는 별도로 주 1회 팀당 1콜 (`/players/squads` · 09-07 실측 155콜).
 경기 상세 43,260콜 ÷ ~~5,700~~ → **6,800** (2026-09-16 env 화 이후 운영값) ≈ 6.4일 (컵 222/시즌 기준 옛 산식). **실측 잔여는 아래 절 5.4일** 참조. 이 표의 19일·45일 줄은 "폴링과 같이 돌리면" 의 경고로 남긴다.
 
@@ -215,8 +217,23 @@ Italy Super Cup(547) · Trophée des Champions(526). 합쳐 시즌당 약 11경�
 
 ### 3-5. 경고선
 
-**6,000콜/일**(한도의 80%)을 넘으면 폴링 주기를 15초로 자동 강등한다.
+~~**6,000콜/일**(한도의 80%)을 넘으면 폴링 주기를 15초로 자동 강등한다.~~
 `/status`의 `requests.current`로 실측할 수 있으므로, 스케줄러가 이 값을 주기적으로 읽어 판단한다.
+
+**2026-10-16 정정 — 예측이 틀렸고 코드가 맞았다.** 라이브 폴러의 실제 값 (env 기본값 · 운영 미지정):
+
+| 당일 used (`/status`) | 라이브 폴러 |
+|---|---|
+| 6,000 미만 | 정상 주기 `LIVE_POLLER_PERIOD_SEC=15`초 |
+| ≥ `LIVE_POLLER_SLOW_AT=6000` | `LIVE_POLLER_SLOW_PERIOD_SEC=30`초로 강등 |
+| ≥ `LIVE_POLLER_STOP_AT=7000` | UTC 자정까지 정지 |
+
+정상 주기가 이미 15초라 "15초로 강등" 은 강등이 아니었다. 이 값으로 실제 라운드 관측(10-09 18:00 ~ 10-15 00:00 UTC · 백엔드 재시작 0 ·
+라이브 finalize 65/65)을 무중단으로 통과했다 (Phase 2 관문 · 2026-10-15 판정).
+판단 근거는 라이브 폴러·상세 백필 모두 `/status` 의 used 다 — 클라이언트 자체 콜 카운트가 아니다 (`DATA_RULES.md` 6-1).
+`/status` 는 쿼터를 소비하지 않는다 (10-14 하루 13,546회 호출에도 used 가 한도 7,500 에 닿지 않았다).
+`api_quota_snapshots` 는 이 판단에 쓰이지 않는다 (`SCHEMA_DESIGN.md` 3-6).
+예산: API-Football **Pro(7,500콜/일) 유지** (2026-10-15 결정) — 실측 일 최대 2,559콜.
 
 ---
 
@@ -244,8 +261,17 @@ data_flags: has_events · has_lineups · has_team_stats · has_player_stats
 checked_at: 마지막 확인 시각
 ```
 
-단, 결손이 영구적이라고 단정하지 않는다. **종료 후 24시간 이내 경기는 재시도한다** —
-데이터가 늦게 채워지는 경우가 있다. 그 이후는 묻지 않는다.
+~~단, 결손이 영구적이라고 단정하지 않는다. **종료 후 24시간 이내 경기는 재시도한다** —
+데이터가 늦게 채워지는 경우가 있다. 그 이후는 묻지 않는다.~~
+→ **코드는 `has_*` 를 `NULL` 로 되돌리지 않는다. 늦게 채워지는 데이터는 기다려서 흡수한다** — 상세 백필은 킥오프 뒤 24시간이 지난
+경기부터 대상으로 잡고(`RECENT_MATCH_LOCK_MS = 24h` · `detail-retry.ts:27` · 조건 `kickoff_at < now − 24h` · `detail-retry.ts:58`),
+실패하면 마지막 시도 1시간 뒤 · 6시간 뒤 다시 부르고 3회 실패하면 포기한다 (`DETAIL_RETRY_BACKOFF_MS` · `DETAIL_MAX_ATTEMPTS=3` · 5-2).
+
+**선수 명단 없는 라인업도 결손이다 (2026-10-15 실측 · #140).** 하위 리그 팀이 나오는 컵 경기(Coupe de France 등)의
+`/fixtures/lineups` 는 `startXI`·`substitutes` 키 자체가 없고 `formation` 이 null 이다 (예: fixture 1485809).
+L3 lineups 는 모든 팀의 선수가 0명이면 쓰기 없이 `has_lineups=false`(미제공)로 마감한다 (info 로그
+`선수 명단 없는 라인업 N팀 → has_lineups=false (미제공)`). 화면은 "이 경기는 라인업이 제공되지 않았습니다" (`not_provided`).
+API 가 선수 id 를 주지 않은(null·0) 엔트리는 저장하지 않는다 (10-15 #138 · `SCHEMA_DESIGN.md` 2-4).
 
 **② 라운드 컷오프** (2-2). 컵 하위 라운드에 상세 4콜을 던지지 않는다.
 
@@ -279,18 +305,19 @@ checked_at: 마지막 확인 시각
 → 재시작 지점을 기억해야 한다. **다만 그것을 BullMQ 가 아니라 `backfill_jobs` 가 한다 (2026-09-07 확정).**
 "Worker" 는 실행 방식이 아니라 성격이다 — 트리거는 운영 잡과 같은 `@nestjs/schedule` 이어도 된다.
 다른 점은 하나, **자기 진행 위치를 DB 에 남기고 거기서 이어간다**는 것이다.
-아래 5-2 의 `cursor_match_id` 가 DB 체크포인트이고, 워커는 한 Nest 프로세스 안에서
+아래 5-2 의 ~~`cursor_match_id`~~ → 경기 행의 시도 기록(`matches.detail_attempts` · `detail_last_attempt_at` · 2026-10-15)이 DB 체크포인트이고, 워커는 한 Nest 프로세스 안에서
 `@nestjs/schedule` 로 도는 단일 루프다. 1인이 한 번 돌리는 순차 작업에 Redis 인스턴스를
 붙이면 장애 지점과 비용만 는다. `V2_DESIGN` 5-3 의 판별("재시작 지점이 필요하면 승격")은
 **"체크포인트가 DB 에 있으면 승격이 필요 없다"** 로 읽는다. 다중 인스턴스가 필요해지면 그때 pg-boss → BullMQ 순으로 본다.
 
-워커가 지켜야 할 것 하나 — **일일 상한.** `/status` 로 오늘 쓴 콜을 읽어 5,700 을 넘으면 멈추고
+워커가 지켜야 할 것 하나 — **일일 상한.** `/status` 로 오늘 쓴 콜을 읽어 상한 `min(API 한도, BACKFILL_DAILY_CAP)`(기본 5,700 · 운영 env 6,800 — 10-16 확인)에 닿으면 멈추고
 자정 뒤 이어간다. 없으면 첫날 오후에 한도를 다 써서 순위 갱신이 그날 못 돈다 (3-5).
 
 ### 5-2. 작업 단위와 재시작 지점
 
-행 하나는 **대회시즌 하나**다(`competition_season_id UNIQUE`). 그 안에서 진행 지점을
-가리키는 것이 `cursor_match_id` 다 — 실질 작업 단위는 **(대회시즌, 경기)** 가 된다.
+행 하나는 **대회시즌 하나**다(`competition_season_id UNIQUE`). ~~그 안에서 진행 지점을
+가리키는 것이 `cursor_match_id` 다~~ → 진행 지점은 커서가 아니라 경기 행의 시도 기록이다 (2026-10-15 · 아래) —
+실질 작업 단위는 **(대회시즌, 경기)** 가 된다.
 대회 단위로 잡으면 중간 실패 시 되돌아가는 양이 너무 크다.
 
 ```
@@ -308,6 +335,7 @@ backfill_jobs(
 phase 는 영원히 `PENDING` 이었다. `backfill/backfill-job.service.ts` 가
 `begin` · `advance` · `complete` · `fail` 네 메서드로 쓴다. 지금 쓰는 것은 **L6 뿐**이고,
 `cursor_match_id` · `total` · `done` · `failed` 는 백필-2 몫으로 비워 둔다.
+(10-15 — `cursor_match_id` 는 백필-2 도 쓰지 않는다. 이 절 끝 "재시작 지점")
 
 세 가지를 여기 못박는다.
 
@@ -322,6 +350,24 @@ phase 는 영원히 `PENDING` 이었다. `backfill/backfill-job.service.ts` 가
 
 멱등성은 `UNIQUE(match_id, player_id)` 등 기존 제약으로 보장된다.
 **같은 경기를 두 번 처리해도 값이 두 배가 되지 않는다** (`V2_DESIGN` 5-7).
+
+**재시작 지점 — 커서에서 경기 단위 재시도로 (2026-10-15 #139 머지).** 상세 백필은 `cursor_match_id` 로 "id > cursor" 만
+앞으로 갔다. 그래서 id 가 작은데 늦게 끝난 경기와 실패한 경기를 영원히 건너뛰었다. 이제 경기마다
+`matches.detail_attempts`(INTEGER NOT NULL DEFAULT 0) · `detail_last_attempt_at`(TIMESTAMPTZ(6) NULL)을 두고
+(마이그레이션 `20261015120000_match_detail_attempts` + `rollback.sql` · 10-15 운영 적용), 매 판의 대상 SELECT 가 다시 고른다 —
+종료 상태 경기 중 `detail_checked_at IS NULL` 이고 재시도 시점이 된 것, 순서 `kickoff_at asc, id asc`.
+
+| 시도 횟수 | 다시 대상이 되는 때 |
+|---|---|
+| 0회 | 즉시 |
+| 1회 | 마지막 시도 1시간 뒤 |
+| 2회 | 마지막 시도 6시간 뒤 |
+| 3회 | 포기 — warn 에 복구 SQL |
+
+상수는 `backend/src/ingestion/backfill/detail-retry.ts` (`DETAIL_MAX_ATTEMPTS=3` · `DETAIL_RETRY_BACKOFF_MS=[1h,6h]`).
+시도 기록은 raw `UPDATE … RETURNING` 이라 `updated_at` 을 건드리지 않는다. 확정(`detail_checked_at`)은 `has_*` 가 전부 non-null 일 때만이다.
+복구: `UPDATE matches SET detail_attempts = 0, detail_last_attempt_at = NULL WHERE detail_checked_at IS NULL AND detail_attempts >= 3;`
+`cursor_match_id` 컬럼은 남겨 두었지만 상세 백필은 읽지도 쓰지도 않는다. 결과는 5-3.
 
 ### 5-3. 순서 — 최신부터 역순
 
@@ -341,8 +387,19 @@ phase 는 영원히 `PENDING` 이었다. `backfill/backfill-job.service.ts` 가
 나머지 4시즌을 서버에서 무인으로 돌린다. 쓰기 형태가 틀린 채 5시즌을 돌리면 8일을 두 번 쓴다.
 `NEXT_STEPS.md` 8-b · 8-c.
 
-백필-2 가 끝나면 워커의 대상 조건(`detail_eligible AND detail_checked_at IS NULL AND FT`)에는
+백필-2 가 끝나면 워커의 대상 조건(`detail_eligible AND detail_checked_at IS NULL AND FT` + 10-15 부터 재시도 창 · 5-2)에는
 "어제 끝난 경기" 만 남는다. **코드가 아니라 대상이 바뀐다** — L4 없이도 사이트는 하루 지연으로 완전하다.
+
+**실측 (2026-10-15 · #139 경기 단위 재시도)**: 미확정이던 2026 시즌 29경기 + 과거 129경기
+(Coupe de France 127 · UECL 2)가 10-15 09:50 · 11:00 UTC tick 에서 전부 확정됐다. 2025 UCL Play-offs 14경기는 대상 밖이다
+(`detail_eligible` 여부 미확인 — 운영 DB 조회 권한 없음).
+
+**사용량 확인 (2026-10-16 · #141)**: 상세 백필은 대회시즌마다 대상 count 를 먼저 하고, 0 이면 사용량 확인 없이 `no_targets` 로 넘어간다.
+대상이 있을 때만 진입 · 매 경기 앞 · 끝 사유 판정에서 `QuotaService.current()` 를 부른다 — `/status` 로 사용량만 확인 · INSERT 없음 · debug 로그.
+그 전에는 처리할 경기가 있는지 보기 전에 대회시즌마다(~93) 확인했다 — 10-14 하루(EC2 journal · 워커 `*/10` → 144 tick)에
+`QuotaService.snapshot()` 13,546회(상세 백필 13,443) → `/status` 13,546콜 + `api_quota_snapshots` INSERT 13,546행 + 로그 27,092줄
+(그날 전체 로그의 62%). `snapshot()`(INSERT)은 하루 1회 `QuotaSnapshotJob` 과 CLI(`cli/ingest.ts` — `status` 와 l0·l1·l2·l6·backfill·probe-details·probe-players 앞뒤)에만 남는다.
+"구독 만료 임박" warn 은 프로세스당 UTC 하루 1회. 운영 로그의 `API 사용량` 줄은 debug 지만 `main.ts` 가 로거 레벨을 정하지 않아 운영에서도 찍힌다.
 
 ### 5-4. 진행 중 사이트 상태
 
@@ -373,7 +430,7 @@ npm run backup:verify   # 일회용 postgres 컨테이너에 복원해 운영 DB
 
 > **시점: 백필-2 가 끝난 뒤 (2026-09-07 확정).** 이유는 3-2 — 폴링과 백필을 같이 돌리면 8일이
 > 19~45일이 된다. 그리고 FT 뒤에 부를 L5 확정 코드는 백필-2 가 이미 만들어 검증했다.
-> L4 가 하는 일은 그 코드를 하루 지연 대신 10초 지연으로 부르는 것이다.
+> L4 가 하는 일은 그 코드를 하루 지연 대신 ~~10초~~ → 15초 지연(정상 주기 · 6-2)으로 부르는 것이다.
 
 ### 6-1. 폴링 윈도우 — 열고 닫는 근거
 
@@ -388,14 +445,21 @@ npm run backup:verify   # 일회용 postgres 컨테이너에 복원해 운영 DB
 
 근거 데이터는 `BACKEND_FEATURES` L2 #17(오늘의 경기 목록)이다. KST 기준으로 산출한다.
 
-### 6-2. 주기 — 10초로 시작, 15초로 강등
+### 6-2. 주기 — 정상 15초, 6,000 이상 30초로 강등 (2026-10-16 정정)
 
-| 조건 | 주기 |
-|---|---|
-| 기본 | 10초 |
-| 당일 누적 콜이 6,000 초과 | 15초 |
-| 백필 진행 중 | 15초 |
-| 진행 중 경기 1경기 이하 | 15초 |
+| 조건 | ~~설계 (09-04)~~ | 실제 (env 기본값 · 운영 미지정) |
+|---|---|---|
+| 기본 | ~~10초~~ | 15초 (`LIVE_POLLER_PERIOD_SEC`) |
+| 당일 used ≥ 6,000 (`LIVE_POLLER_SLOW_AT`) | ~~15초~~ | 30초 (`LIVE_POLLER_SLOW_PERIOD_SEC`) |
+| 당일 used ≥ 7,000 (`LIVE_POLLER_STOP_AT`) | — | UTC 자정까지 정지 |
+| 백필 진행 중 | ~~15초~~ | — |
+| 진행 중 경기 1경기 이하 | ~~15초~~ | — |
+
+설계 표의 10초 시작·15초 강등은 코드에 없다. 다음 tick 은 이 순서로 정한다 (`live-poller.job.ts:287-303`):
+대상 0 → 60초 뒤 (`LIVE_IDLE_CHECK_SEC = 60` · `live-window.ts:9` · env 아님) · 대상이 있고 used ≥ 7,000 → UTC 자정까지 정지 ·
+used ≥ 6,000 → 30초 · 그 외 15초 (`decidePeriod` · `live-window.ts:137-151`). used 는 `/status` 를 최소 60초 간격으로 읽은 값이고,
+`/status` 를 부르지 않은 tick 은 마지막으로 본 값을 쓴다 (`live-poller.job.ts:186-188` · `:220-223`).
+이 값으로 실제 라운드 관측(10-09 18:00 ~ 10-15 00:00 UTC)을 무중단 통과했다 (3-5).
 
 브라우저에는 WebSocket으로 밀기 때문에 **외부 폴링 주기와 사용자 체감은 분리된다.**
 15초로 내려도 사용자에게는 즉시 반영된다.
@@ -424,7 +488,7 @@ npm run backup:verify   # 일회용 postgres 컨테이너에 복원해 운영 DB
 
 - 실행 중 플래그로 중복 진입을 막는다 (단일 인스턴스). 다중 인스턴스 전에는 Redis 락 불필요
 - **한 주기 처리 시간을 계측해 기록한다.** 주기의 70%를 넘으면 경고
-- Phase 2에서 실제 라운드 1회를 무중단 관측하며 실측한다
+- Phase 2에서 실제 라운드 1회를 무중단 관측하며 실측한다 → **통과 (2026-10-15 사용자 판정)** — 관측 창 10-09 18:00 ~ 10-15 00:00 UTC · 백엔드 재시작 0 · 라이브 finalize 65/65. 업스트림 API 5xx · fetch failed 5건은 다음 tick 에서 회복해 무중단으로 인정. 관측 중 드러난 운영 버그 넷은 #138~#141 로 고쳤다
 - **1판 (관측 모드 · 2026-09-24 배포)**: L4 뼈대 붙임 — `LIVE_POLLER_ENABLED=false` 기본. 켜면 위 규칙대로 폴링하되 **DB 쓰기 없음**. 응답 파싱 후 "쓰면 바뀌었을 필드 수(`wouldWrite`)"만 계측 · `/health` 노출. `LIVE_POLLER_PROBE_FIXTURE_IDS` 로 DB 밖 A매치(KOR 대표팀 등) 를 부팅 시 + 매시 1회 fetch 해 폴링 대상에 합류. 실제 DB 갱신은 2판.
 - **2판 (쓰기 모드 · 역행 가드 · L2 보호 · `/api/live` · 2026-09-26)**: `LIVE_POLLER_MODE=observe|write` (기본 `observe`). `write` 여도 probe 는 쓰지 않는다. 쓰기는 조건부 UPDATE 1건 (D6-a 상태 순위: NS/TBD=0·1H=1·HT=2·2H=3·ET=4·BT=5·P=6·FT/AET/PEN=7·PST/CANC/ABD/AWD/WO=8·SUSP/INT/LIVE 는 현재 rank 유지 · 판정 `newRank>curRank OR (=rank AND coalesce(newElapsed,0)>=coalesce(curElapsed,0))` · 스코어는 조건 밖). 성공 시 `data_version+1 · as_of=now() · updated_at=now()`. L2 매일은 진행 중 행(status ∈ 9종)의 라이브 컬럼을 덮지 않는다 (`batchUpsert.updateWhere`). 조회 `GET /api/live` — 진행 중 + FT/AET/PEN 후 3시간 이내 · `Cache-Control: public, max-age=0, s-maxage=5` (이 경로만).
 - **3판 (FT 즉시 상세 저장 · winner · standings 갱신 · 2026-09-27)**: `LIVE_FT_DETAILS_ENABLED=true` (기본 `false`) 이고 `MODE=write` 일 때, FT/AET/PEN 첫 진입 tick 에서 이미 받은 `/fixtures?ids=` 응답 안 `lineups·events·statistics·players` 배열을 그대로 4서비스(L3 lineups·events · L5 team-stats·player-stats) 의 `persist(matchId, apiFixtureId, items, {promote:false})` 로 넘겨 **추가 콜 0** 으로 저장. 승격(`detail_checked_at·stats_state=CONFIRMED`)은 보류 — 24h 뒤 백필 워커가 4콜로 최종 확정. `live-writer` SET 절에 `winner_team_id = CASE WHEN ${input.statusShort} IN ('FT','AET','PEN') THEN (SELECT id FROM teams WHERE api_team_id=$winnerApiTeamId) ELSE winner_team_id END` (파라미터 판정 · UPDATE 전 컬럼 참조 안 함). tick 끝에서 finalize 된 `competitionSeasonId` 를 dedup 해 L2 `collectStandings` 로 순위표 재계산 1콜 (`Competition.format=KNOCKOUT` 만 스킵, `LEAGUE_PHASE_KNOCKOUT` 은 대상). observer 는 class field `finalized Set<matchId>` 로 tick 사이 중복 방지 · UTC 자정 롤오버 clear. probe 매치는 대상 아님. health `livePoller.finalizedToday·standingsRefreshedToday`. 실측 대조: `/fixtures?ids=` 응답 안 4배열 shape 이 개별 엔드포인트와 27경로 √ 동일 (fixture 1622630 자기 대조 · `backend/test/fixtures/fixture-ids-1622630.json`).
@@ -463,7 +527,7 @@ Supabase 무료 500MB 안에서 5시즌을 유지한다. ~~종전 계산 296MB(5
 | # | 항목 | 결정 시점 |
 |---|---|---|
 | ~~1~~ | ~~컵 라운드 컷오프 경계~~ | **확정 (2026-09-04)** — 라운드 이름이 아니라 1부 팀 참가 + 역순 연속 16팀 이하로 계산한다 (2-2) |
-| 2 | 폴링 주기 10초 유지 여부 | Phase 2 실제 라운드 관측 후 |
+| 2 | 폴링 주기 10초 유지 여부 | Phase 2 실제 라운드 관측 후. **2026-10-15 관측 (결정 아님)**: 운영 정상 주기 15초(`LIVE_POLLER_PERIOD_SEC` env 기본값 · 운영 미지정)로 실제 라운드 관측(10-09 18:00 ~ 10-15 00:00 UTC · 백엔드 재시작 0 · 라이브 finalize 65/65)을 무중단 통과 (6-2 · 3-5) |
 | ~~3~~ | ~~백필을 Phase 몇에 넣을지~~ | **확정 (2026-09-07)** — 실시간 **앞**. 기록(백필-1) → 상세 현재 시즌 → 상세 나머지 → L4. `NEXT_STEPS` 1장 |
 | 4 | H2H 지연 수집 vs 자체 계산 | 경기 상세 화면 설계 시 |
 | ~~5~~ | ~~슈퍼컵 5개 포함 여부~~ | **확정 (2026-09-17 · feat/scope-expansion)** — 포함. 시즌당 11경기·비용 없음 |
