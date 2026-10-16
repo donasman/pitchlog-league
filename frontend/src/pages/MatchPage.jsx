@@ -554,16 +554,17 @@ function PitchView({ homeLineup, awayLineup, homeEvents, awayEvents, vertical, h
 /* ─────────────────────────────────────────────────────────────
    LineupTab
 ───────────────────────────────────────────────────────────── */
-function BenchPanel({ teamName, players, t }) {
+function BenchPanel({ teamName, players, t, className }) {
   if (!players?.length) return null
   return (
-    <div className="pl-card" style={{ overflow: 'hidden' }}>
+    <div className={className ? `pl-card ${className}` : 'pl-card'} style={{ overflow: 'hidden' }}>
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--pl-line)' }}>
         <span className="t-card">{teamName} {t('match.bench')}</span>
       </div>
       {players.map(p => (
         <div
-          key={p.number}
+          // number 는 null 이거나 겹칠 수 있다 — playerRef 우선, 없으면 번호·이름 조합
+          key={p.playerRef ?? `${p.number ?? ''}-${p.name}`}
           style={{
             display: 'grid',
             gridTemplateColumns: '28px 1fr auto',
@@ -660,13 +661,24 @@ function LineupTab({ match, lineup, topRated, t, locale }) {
   const homePlayers = computePitchPositions(lineup.home.startingXI, lineup.home.formation, false)
   const awayPlayers = computePitchPositions(lineup.away.startingXI, lineup.away.formation, true)
 
+  // 우측 칸은 TopRatedPanel 이 그릴 게 있을 때만 둔다 — 없으면 피치 카드가 전체 폭 (빈 300px 칸 방지).
+  // 판정은 TopRatedPanel 의 null 조건(players 비었거나 players[0] 없음)과 같게 맞춘다.
+  const hasTopRated = Boolean(topRated?.length && topRated[0])
+
+  // 벤치 — 한 팀 라인업만 있는 경기는 lineup.home/away 가 null 일 수 있다 (normalize.matchDetail)
+  const homeBench = lineup.home?.substitutes
+  const awayBench = lineup.away?.substitutes
+  const hasBench = Boolean(homeBench?.length || awayBench?.length)
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div
         style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}
-        className="lg-lineup-grid"
+        className={hasTopRated ? 'lg-lineup-grid' : undefined}
       >
-        <style>{`@media(min-width:768px){.lg-lineup-grid{grid-template-columns:1fr 300px!important}}`}</style>
+        {hasTopRated && (
+          <style>{`@media(min-width:768px){.lg-lineup-grid{grid-template-columns:1fr 300px!important}}`}</style>
+        )}
 
         {/* 피치 카드 */}
         <div className="pl-card" style={{ padding: 14, display: 'grid', gap: 10 }}>
@@ -732,16 +744,35 @@ function LineupTab({ match, lineup, topRated, t, locale }) {
           </div>
         </div>
 
-        {/* 우측 패널 (md+) */}
-        <div style={{ display: 'grid', gap: 12 }}>
-          <TopRatedPanel players={topRated} t={t} />
+        {/* 우측 패널 (md+) — 최고 평점만 */}
+        {hasTopRated && (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <TopRatedPanel players={topRated} t={t} />
+          </div>
+        )}
+      </div>
+
+      {/* 벤치 — 모바일 1열(홈 → 원정) · md+ 2열(홈 왼쪽 · 원정 오른쪽) */}
+      {hasBench && (
+        <div
+          style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}
+          className="lg-bench-grid"
+        >
+          {/* 원정 칸 고정 — 홈 벤치가 없어도 원정은 오른쪽에 둔다 */}
+          <style>{`@media(min-width:768px){.lg-bench-grid{grid-template-columns:1fr 1fr!important}.lg-bench-grid>.lg-bench-away{grid-column:2}}`}</style>
           <BenchPanel
             teamName={getLocalizedShortName(match.homeTeam, locale) || match.homeTeam?.shortName}
-            players={lineup.home.substitutes}
+            players={homeBench}
             t={t}
           />
+          <BenchPanel
+            teamName={getLocalizedShortName(match.awayTeam, locale) || match.awayTeam?.shortName}
+            players={awayBench}
+            t={t}
+            className="lg-bench-away"
+          />
         </div>
-      </div>
+      )}
     </div>
   )
 }
