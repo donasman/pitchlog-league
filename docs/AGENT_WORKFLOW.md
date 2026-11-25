@@ -63,7 +63,8 @@ sub 에게 보내는 지시문은 이 여섯 칸을 전부 채운다. 빈 칸이
                   backend-implementer · frontend-implementer       ← 구현 (Edit/Write 있음)
                   backend-verifier · frontend-verifier             ← 검증 (읽기 전용)
                   explorer · implementer · verifier                ← 스택 구분이 없는 작업용 범용 셋
-.claude/skills/   pitchlog-pr-flow · pitchlog-e2e-fixture · pitchlog-docs-sync  ← 반복 절차
+.claude/skills/   pitchlog-agent-run                               ← 파이프라인 실행 순서 (01~07 · 두 번의 멈춤)
+                  pitchlog-pr-flow · pitchlog-e2e-fixture · pitchlog-docs-sync  ← 반복 절차
 CLAUDE.md         항상 읽히는 규칙. 이 문서로의 포인터
 ```
 
@@ -121,6 +122,9 @@ PR 절차 · e2e 픽스처 규칙 · 문서 동기화 — 이 셋은 세션마�
 명령 문자열을 알아볼 수 없게 만드는 우회(base64 · 스크립트 파일로 빼서 실행). 마지막 것은 휴리스틱의 한계이지 규칙의 구멍이 아니다 —
 막힌 이유를 읽고 우회하지 않는 것이 전제다.
 이 둘은 verifier(2층) 와 CI(3층) 가 잡는다. 실측에서 반복되면 그때 훅을 더 건다.
+
+**훅 자체의 회귀 테스트는 `.claude/hooks/__tests__/` 에 있고**, CI(`frontend-verify` 의 '훅 회귀 테스트' 단계)가 PR 마다 돌린다 (2026-11-25).
+09-08 에 규칙 일부가 거꾸로 동작한 것(`71044e6`)을 손 검사에서 기계 검사로 옮긴 것이다.
 
 ## 8. 실측 기록
 

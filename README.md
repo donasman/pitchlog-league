@@ -21,6 +21,34 @@ AI는 데이터베이스나 외부 축구 API에 직접 접근하지 않습니�
 결정적 조회 기능의 결과만 사용하고, 답변에는 데이터 기준 시각과 근거를 함께 제공합니다. 실시간
 데이터는 경기 상태와 임시 값 여부를 표시하며 경기 종료 후 공식 통계로 다시 확정합니다.
 
+## 개발 방식 — AI 에이전트와 일하는 법
+
+Claude Code 서브에이전트 10종(백엔드·프론트 × 탐색·구현·검증 + planner + 범용 탐색·구현·검증)과 프로젝트 스킬 4종으로
+기능 하나를 "탐색 → 결정 → 설계 → 사람 확인 → 구현 → 별도 검증" 순서로 진행한다. 확인 단계(04)에서 반드시 멈춘다.
+코드를 쓴 에이전트는 자기 코드를 검증하지 않는다 — 검증 에이전트에는 Edit·Write 도구가 없고,
+Bash 의 인라인 스크립트(`python -c`·`node -e`·heredoc)로 우회하는 쓰기는 훅이 막는다.
+
+규칙은 지시문이 아니라 세 곳에서 기계적으로 막는다 — Claude Code PreToolUse 훅(`.claude/hooks/`) ·
+git pre-commit(`.githooks/pre-commit`) · CI(`.github/workflows/`). 훅 자체의 회귀 테스트(`.claude/hooks/__tests__/`)도 CI 가 PR 마다 돌린다.
+
+판(작업 단위)마다 `docs/AGENT_RUNS.md` 에 한 줄을 남긴다 — 04 멈춤 · 검증 출력 · 범위 이탈 · 지시문 부담 · 토큰.
+파이프라인 구조는 이 기록에 근거해서만 고친다. 2026-09-08 ~ 10-16 동안 75판이 쌓였다.
+
+출발점은 v1 이다. v1 에서는 규칙이 `CLAUDE.md` 에만 있었고 main 직접 커밋이 77개 중 62개(80%)였다
+([회고 3-7](./docs/RETROSPECTIVE.md)). v2 는 그 규칙을 훅·Ruleset·CI 로 옮겼다.
+
+| 볼 것 | 파일 |
+|---|---|
+| 작업 규칙 | [CLAUDE.md](./CLAUDE.md) |
+| 역할 분리와 환각 규칙 | [docs/AGENT_WORKFLOW.md](./docs/AGENT_WORKFLOW.md) |
+| 판별 실측 기록 | [docs/AGENT_RUNS.md](./docs/AGENT_RUNS.md) |
+| 에이전트 정의 | [.claude/agents/](./.claude/agents) |
+| 반복 절차 스킬 | [.claude/skills/](./.claude/skills) |
+| 훅과 테스트 | [.claude/hooks/](./.claude/hooks) |
+| v1 회고 | [docs/RETROSPECTIVE.md](./docs/RETROSPECTIVE.md) |
+
+제품 안의 AI(어시스턴트)는 Gemini 이고 위 설계 원칙 절이 다룬다. 이 절은 저장소를 만드는 방식이다.
+
 ## 저장소 구조
 
 ```
@@ -54,6 +82,8 @@ cd frontend && npm install && npm run dev         # http://localhost:5173
 - [상세 설계](./docs/V2_DESIGN.md)
 - [백엔드 기술 결정](./docs/ADR-001-NODE-BACKEND.md)
 - [백엔드 개발 기준](./docs/BACKEND_GUIDE.md)
+- [에이전트 작업 방식](./docs/AGENT_WORKFLOW.md)
+- [에이전트 판 실측 기록](./docs/AGENT_RUNS.md)
 - [발표 자료 보관 안내](./archive/README.md)
 
 발표본(`.pptx`)은 저장소에 포함하지 않습니다. 로컬에서 관리하며 배포 시 GitHub Release로 올립니다.
