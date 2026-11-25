@@ -349,7 +349,8 @@ export class GeminiService {
             functionResponse: {
               name,
               // SDK 는 { response: Record<string, unknown> } 를 기대한다.
-              // 모델로는 응답을 압축해서 되돌린다 — 429 근본 대응 (response-compaction.ts).
+              // 모델로는 응답을 압축해서 되돌린다 — 입력 토큰·비용 절감 (response-compaction.ts).
+              // 429 는 RPD 제한이라 압축과 무관하다 (09-11 재판정).
               // 압축은 새 객체를 만들어 반환하므로 result.data 는 mutation 되지 않는다.
               response: { result: compressed, asOf: result.asOf },
             },
