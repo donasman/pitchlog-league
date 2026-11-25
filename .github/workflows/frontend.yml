@@ -69,3 +69,8 @@ jobs:
       - name: 문서 참조 정합성
         working-directory: .
         run: node scripts/check-doc-refs.mjs
+
+      # 훅 회귀 테스트 — 09-08 훅 규칙 일부가 거꾸로 동작했다(71044e6). 손으로 돌리던 케이스를 기계 검사로 옮긴다
+      - name: 훅 회귀 테스트
+        working-directory: .
+        run: node --test .claude/hooks/__tests__/*.test.mjs
